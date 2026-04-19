@@ -8,17 +8,16 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Building2, Plus, MapPin, Users, Flame, SlidersHorizontal,
-  X, AlertTriangle, Ban, Share2, TrendingUp,
-  Activity, ShieldCheck, Handshake,
-  Home, Layers, CircleDollarSign, CalendarDays, BedDouble, Percent,
+  X, AlertTriangle, Ban, Share2, TrendingUp, Check,
 } from "lucide-react";
 import { promotions, getBuildingTypeLabel, type Promotion } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion } from "@/data/developerPromotions";
 import { unitsByPromotion } from "@/data/units";
 import { Tag } from "@/components/ui/Tag";
-import { FilterPill, SortPill } from "@/components/ui/FilterBar";
+import { SortPill } from "@/components/ui/FilterBar";
 import { cn } from "@/lib/utils";
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -302,6 +301,16 @@ export default function Promociones() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sort, setSort] = useState<string>("recent");
 
+  // Drawer de filtros
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // Contador de filtros activos (para badge en el botón)
+  const activeFilterCount =
+    healthFilter.length + activityFilter.length + collabFilter.length +
+    selectedLocations.length + selectedTypes.length + selectedPrices.length +
+    selectedBedrooms.length + selectedDelivery.length + selectedCommissions.length +
+    (buildingTypeFilter !== "All" ? 1 : 0);
+
   /* ─── Dataset combinado (developer-only + legacy) ─── */
   const allPromotions: DevPromotion[] = useMemo(() => {
     return [...developerOnlyPromotions, ...promotions.map(p => ({ ...p } as DevPromotion))];
@@ -560,11 +569,11 @@ export default function Promociones() {
 
       <div className="h-px bg-border/60" />
 
-      {/* ═══════════ Toolbar compacta · status + filtros + count ═══════════ */}
+      {/* ═══════════ Toolbar · solo status + filtros btn + sort + count ═══════════ */}
       <div className="px-4 sm:px-6 lg:px-8 py-2.5">
-        <div className="max-w-[1400px] mx-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="max-w-[1400px] mx-auto flex items-center gap-2 flex-wrap">
           {/* Status tabs */}
-          <div className="flex items-center gap-0.5 shrink-0">
+          <div className="flex items-center gap-0.5">
             {statusFilterOptions.map((opt) => (
               <button
                 key={opt.key}
@@ -581,43 +590,30 @@ export default function Promociones() {
             ))}
           </div>
 
-          <div className="h-5 w-px bg-border shrink-0 mx-1" />
+          {/* Filtros button */}
+          <button
+            onClick={() => setFiltersOpen(true)}
+            className={cn(
+              "inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-[12.5px] font-medium transition-colors",
+              activeFilterCount > 0
+                ? "bg-primary/10 border-primary/30 text-primary hover:bg-primary/15"
+                : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
+            )}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            Filtros
+            {activeFilterCount > 0 && (
+              <span className="ml-0.5 bg-primary text-primary-foreground rounded-full h-4 min-w-[18px] px-1 text-[10px] font-bold grid place-items-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
 
-          {/* Filtros de GESTIÓN del promotor */}
-          <FilterPill icon={ShieldCheck} label="Salud" values={healthFilter} options={healthOptions} onChange={setHealthFilter} />
-          <FilterPill icon={Activity} label="Actividad" values={activityFilter} options={activityOptions} onChange={setActivityFilter} />
-          <FilterPill icon={Handshake} label="Colaboración" values={collabFilter} options={collabOptions} onChange={setCollabFilter} />
-
-          <div className="h-5 w-px bg-border shrink-0 mx-1" />
-
-          {/* Filtros de BÚSQUEDA AVANZADA */}
-          <FilterPill icon={MapPin} label="Zona" values={selectedLocations} options={locationOptions} onChange={setSelectedLocations} />
-          <FilterPill icon={Home} label="Tipología" values={selectedTypes} options={propertyTypeOptions} onChange={setSelectedTypes} />
-          <FilterPill
-            icon={Layers}
-            label="Edificio"
-            values={buildingTypeFilter === "All" ? [] : [buildingTypeFilter]}
-            options={buildingTypeOptions}
-            onChange={(v) => setBuildingTypeFilter(v.length === 0 ? "All" : v[v.length - 1])}
-            multi={false}
-          />
-          <FilterPill icon={CircleDollarSign} label="Precio" values={selectedPrices} options={priceFilterOptions} onChange={setSelectedPrices} />
-          <FilterPill icon={BedDouble} label="Dormitorios" values={selectedBedrooms} options={bedroomOptions} onChange={setSelectedBedrooms} />
-          <FilterPill icon={CalendarDays} label="Entrega" values={selectedDelivery} options={deliveryOptions} onChange={setSelectedDelivery} />
-          <FilterPill icon={Percent} label="Comisión" values={selectedCommissions} options={commissionFilterOptions} onChange={setSelectedCommissions} />
-
-          {/* Limpiar todo + Ordenar */}
-          {hasFilters && (
-            <button onClick={clearAllFilters} className="inline-flex items-center gap-1 h-8 px-3 rounded-full text-[12.5px] font-medium text-destructive hover:bg-destructive/10 transition-colors shrink-0">
-              <X className="h-3.5 w-3.5" /> Limpiar
-            </button>
-          )}
-
-          <div className="h-5 w-px bg-border shrink-0 mx-1 hidden sm:block" />
+          {/* Sort */}
           <SortPill value={sort} options={sortOptions} onChange={setSort} />
 
           {/* Count */}
-          <span className="text-xs text-muted-foreground ml-auto pl-3 shrink-0 hidden sm:inline">
+          <span className="text-xs text-muted-foreground ml-auto shrink-0">
             <span className="font-semibold text-foreground tnum">{sortedAndFiltered.length}</span> promociones
           </span>
         </div>
@@ -845,6 +841,160 @@ export default function Promociones() {
             })
           )}
         </div>
+      </div>
+
+      {/* ═══════════ DRAWER DE FILTROS ═══════════ */}
+      <AnimatePresence>
+        {filtersOpen && (
+          <>
+            {/* Backdrop borroso */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-40 bg-black/25 backdrop-blur-sm"
+              onClick={() => setFiltersOpen(false)}
+            />
+            {/* Panel lateral derecho */}
+            <motion.aside
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "tween", duration: 0.25, ease: "easeOut" }}
+              className="fixed right-0 top-0 bottom-0 z-50 w-full sm:w-[440px] bg-card border-l border-border shadow-soft-lg flex flex-col"
+            >
+              {/* Header */}
+              <header className="h-14 shrink-0 flex items-center justify-between px-5 border-b border-border">
+                <div>
+                  <h2 className="text-[15px] font-semibold tracking-tight">Filtros</h2>
+                  <p className="text-[11.5px] text-muted-foreground mt-0.5">
+                    {activeFilterCount === 0
+                      ? "Ningún filtro aplicado"
+                      : `${activeFilterCount} filtro${activeFilterCount > 1 ? "s" : ""} activo${activeFilterCount > 1 ? "s" : ""}`}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setFiltersOpen(false)}
+                  className="p-2 -mr-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Cerrar filtros"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </header>
+
+              {/* Body · secciones scrollable */}
+              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-7">
+                <div className="space-y-5">
+                  <SectionTitle>Gestión</SectionTitle>
+                  <FilterGroup title="Salud" options={healthOptions} values={healthFilter} onChange={setHealthFilter} />
+                  <FilterGroup title="Actividad" options={activityOptions} values={activityFilter} onChange={setActivityFilter} />
+                  <FilterGroup title="Colaboración" options={collabOptions} values={collabFilter} onChange={setCollabFilter} />
+                </div>
+
+                <div className="h-px bg-border" />
+
+                <div className="space-y-5">
+                  <SectionTitle>Búsqueda avanzada</SectionTitle>
+                  <FilterGroup title="Zona" options={locationOptions} values={selectedLocations} onChange={setSelectedLocations} />
+                  <FilterGroup title="Tipología" options={propertyTypeOptions} values={selectedTypes} onChange={setSelectedTypes} />
+                  <FilterGroup
+                    title="Edificio"
+                    options={buildingTypeOptions}
+                    values={buildingTypeFilter === "All" ? [] : [buildingTypeFilter]}
+                    onChange={(v) => setBuildingTypeFilter(v.length === 0 ? "All" : v[v.length - 1])}
+                    multi={false}
+                  />
+                  <FilterGroup title="Precio" options={priceFilterOptions} values={selectedPrices} onChange={setSelectedPrices} />
+                  <FilterGroup title="Dormitorios" options={bedroomOptions} values={selectedBedrooms} onChange={setSelectedBedrooms} />
+                  <FilterGroup title="Entrega" options={deliveryOptions} values={selectedDelivery} onChange={setSelectedDelivery} />
+                  <FilterGroup title="Comisión" options={commissionFilterOptions} values={selectedCommissions} onChange={setSelectedCommissions} />
+                </div>
+              </div>
+
+              {/* Footer sticky */}
+              <footer className="h-[72px] shrink-0 border-t border-border flex items-center justify-between gap-3 px-5">
+                <button
+                  onClick={clearAllFilters}
+                  disabled={activeFilterCount === 0}
+                  className="text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Limpiar todo
+                </button>
+                <button
+                  onClick={() => setFiltersOpen(false)}
+                  className="inline-flex items-center h-10 px-5 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft"
+                >
+                  Ver {sortedAndFiltered.length} resultado{sortedAndFiltered.length !== 1 ? "s" : ""}
+                </button>
+              </footer>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Sub-componentes del drawer de filtros
+   ═══════════════════════════════════════════════════════════════════ */
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      {children}
+    </p>
+  );
+}
+
+function FilterGroup({
+  title, options, values, onChange, multi = true,
+}: {
+  title: string;
+  options: { value: string; label: string }[];
+  values: string[];
+  onChange: (v: string[]) => void;
+  multi?: boolean;
+}) {
+  const toggle = (v: string) => {
+    if (multi) {
+      onChange(values.includes(v) ? values.filter(x => x !== v) : [...values, v]);
+    } else {
+      onChange(values.includes(v) ? [] : [v]);
+    }
+  };
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-2">
+        <h4 className="text-[13px] font-semibold text-foreground">{title}</h4>
+        {values.length > 0 && (
+          <button
+            onClick={() => onChange([])}
+            className="text-[11px] text-muted-foreground hover:text-destructive transition-colors"
+          >
+            Limpiar
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((opt) => {
+          const selected = values.includes(opt.value);
+          return (
+            <button
+              key={opt.value}
+              onClick={() => toggle(opt.value)}
+              className={cn(
+                "inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-[12.5px] font-medium transition-colors",
+                selected
+                  ? "bg-primary/10 border-primary/30 text-primary"
+                  : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
+              )}
+            >
+              {selected && <Check className="h-3 w-3" strokeWidth={3} />}
+              {opt.label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
