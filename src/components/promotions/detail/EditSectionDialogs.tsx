@@ -1,12 +1,87 @@
+/**
+ * EditSectionDialogs
+ * ------------------
+ * Conjunto de diálogos que editan cada subsección de la ficha de promoción
+ * Byvaro. Todos comparten el wrapper <EditDialogShell> (header + scroll + footer
+ * con Cancelar / Guardar) y el helper <SectionTitle>.
+ *
+ * Diálogos exportados (orden de aparición en el archivo):
+ *   1.  EditMultimediaDialog     -> sube/reordena fotos, videos (YouTube/Vimeo), marca portada.
+ *   2.  EditBasicInfoDialog      -> tipos de vivienda + amenities comunes + features.
+ *   3.  EditStructureDialog      -> fase de obra + % progreso (tipo y estructura read-only).
+ *   4.  EditDescriptionDialog    -> descripción multilingüe con IA (generar + traducir).
+ *   5.  EditLocationDialog       -> dirección única (fuente de verdad del mapa).
+ *   6.  EditPaymentPlanDialog    -> importe reserva, % entrada y etapas de pago dinámicas.
+ *   7.  EditShowHouseDialog      -> piso piloto: disponibilidad, dirección y horario.
+ *   8.  EditDocumentDialog       -> uploader genérico (memoria, planos, brochure, etc.).
+ *   9.  EditContactsDialog       -> web / teléfono / email públicos.
+ *   10. EditSalesOfficesDialog   -> puntos de venta físicos (CRUD inline).
+ *   11. EditInventoryDialog      -> redirección informativa al tab Disponibilidad.
+ *   12. EditBrochureDialog       -> alias legacy de EditDocumentDialog (icon=BookOpen).
+ *   13. PickTeamMembersDialog    -> multi-select visual de miembros + permisos por miembro.
+ *   14. PickSalesOfficesDialog   -> multi-select visual de oficinas ya existentes en la empresa.
+ *
+ * Props clave (firma genérica):
+ *   - open: boolean
+ *   - onOpenChange: (v: boolean) => void
+ *   - onSave: callback tipado por cada diálogo (payload distinto).
+ *   Cada diálogo añade campos iniciales (images, description, location, offices…).
+ *
+ * Dependencias:
+ *   - @/components/ui/dialog     -> Radix dialog wrapper.
+ *   - @/components/ui/button     -> Acciones footer + inline.
+ *   - @/components/ui/input      -> Campos de texto corto.
+ *   - @/components/ui/textarea   -> Descripciones largas multilingües.
+ *   - @/components/ui/switch     -> Toggles (piso piloto).
+ *   - @/components/ui/avatar     -> Tarjetas de miembros del equipo.
+ *   - @/components/ui/checkbox   -> (reservado; no usado actualmente).
+ *   - @/lib/utils (cn)           -> Composición de classnames.
+ *   - lucide-react               -> Iconografía.
+ *
+ * Tokens Byvaro usados:
+ *   - primary / primary/5 / primary/10 / primary/20 / primary/30 / primary/40
+ *   - destructive / destructive/10   (botones destructivos y eliminación)
+ *   - muted / muted-foreground / border/20|30|40|60 / card / foreground / background
+ *   - amber-500 (excepción permitida para "portada" / warnings suaves)
+ *   - bg-foreground/40 / bg-foreground/60  (overlays antes bg-black/X)
+ *   - text-background (antes text-white sobre acentos)
+ *   - shadow-soft / shadow-soft-lg · rounded-2xl (paneles) · rounded-xl (cards)
+ *     · rounded-lg (inputs/botones) · rounded-full (pills/avatars)
+ *
+ * TODO(backend):
+ *   - PATCH /api/promociones/:id/multimedia   (EditMultimediaDialog)
+ *   - PATCH /api/promociones/:id              (EditBasicInfoDialog, EditStructureDialog,
+ *                                              EditLocationDialog, EditContactsDialog,
+ *                                              EditShowHouseDialog)
+ *   - PATCH /api/promociones/:id/descripciones   (EditDescriptionDialog, i18n)
+ *   - POST  /api/ia/describir                 (generador IA de descripción)
+ *   - POST  /api/ia/traducir                  (traducción masiva)
+ *   - PATCH /api/promociones/:id/plan-pagos   (EditPaymentPlanDialog)
+ *   - POST  /api/promociones/:id/documentos   (EditDocumentDialog / EditBrochureDialog)
+ *   - POST  /api/promociones/:id/puntos-venta (EditSalesOfficesDialog, PickSalesOfficesDialog)
+ *   - POST  /api/promociones/:id/miembros     (PickTeamMembersDialog + permisos)
+ * TODO(ui):
+ *   - Drag&drop real en EditMultimediaDialog (hoy es mover con botón ±1).
+ *   - Validación de URL de video antes de guardarla.
+ *   - Validación de teléfono/email/web (zod) en EditContactsDialog.
+ *   - Mostrar diff antes de guardar en diálogos con muchos campos.
+ *   - Feedback de éxito/fallo tras el onSave (toast).
+ */
 import { useState, useRef } from "react";
+// Primitivas del dialog (shadcn wrapper de Radix)
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+// Avatar para tarjetas de miembros del equipo en PickTeamMembersDialog
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
+// Iconografía: acciones (Upload, Trash2, Plus, X, Pencil, Search, Check, UserPlus),
+// tipos de contenido (FileText, BookOpen, Video, Star, Layers, Store, Building2),
+// ubicación/contacto (MapPin, Phone, Mail, Globe), edición textual (PenLine, Sparkles,
+// Languages), miscelánea (GripVertical, Eye).
 import {
   Upload, Trash2, GripVertical, Star, Video,
   Plus, X, MapPin, FileText, Sparkles, Languages, PenLine,
@@ -108,11 +183,11 @@ export function EditMultimediaDialog({ open, onOpenChange, images, onSave }: {
           {photos.map((src, i) => (
             <div key={i} className="group relative rounded-xl overflow-hidden aspect-[4/3] bg-muted border border-border/40">
               <img src={src} alt="" className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                <button onClick={() => setCoverIdx(i)} className="h-8 w-8 rounded-full bg-white/90 flex items-center justify-center hover:bg-white" title="Establecer como principal">
+              <div className="absolute inset-0 bg-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                <button onClick={() => setCoverIdx(i)} className="h-8 w-8 rounded-full bg-background/90 flex items-center justify-center hover:bg-background" title="Establecer como principal">
                   <Star className={`h-3.5 w-3.5 ${coverIdx === i ? "fill-amber-500 text-amber-500" : "text-foreground"}`} />
                 </button>
-                <button onClick={() => movePhoto(i, i - 1)} disabled={i === 0} className="h-8 w-8 rounded-full bg-white/90 flex items-center justify-center hover:bg-white disabled:opacity-30" title="Mover a la izquierda">
+                <button onClick={() => movePhoto(i, i - 1)} disabled={i === 0} className="h-8 w-8 rounded-full bg-background/90 flex items-center justify-center hover:bg-background disabled:opacity-30" title="Mover a la izquierda">
                   <GripVertical className="h-3.5 w-3.5 text-foreground -rotate-90" />
                 </button>
                 <button onClick={() => setPhotos(p => p.filter((_, idx) => idx !== i))} className="h-8 w-8 rounded-full bg-destructive flex items-center justify-center hover:bg-destructive/90" title="Eliminar">
@@ -120,11 +195,11 @@ export function EditMultimediaDialog({ open, onOpenChange, images, onSave }: {
                 </button>
               </div>
               {coverIdx === i && (
-                <div className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                <div className="absolute top-2 left-2 bg-amber-500 text-background text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
                   <Star className="h-2.5 w-2.5 fill-current" /> Portada
                 </div>
               )}
-              <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded">{i + 1}</div>
+              <div className="absolute bottom-2 right-2 bg-foreground/60 text-background text-[10px] font-semibold px-1.5 py-0.5 rounded-lg">{i + 1}</div>
             </div>
           ))}
           <button onClick={() => fileRef.current?.click()} className="aspect-[4/3] rounded-xl border-2 border-dashed border-border/60 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors">
@@ -748,11 +823,22 @@ export function EditSalesOfficesDialog({ open, onOpenChange, offices: initial, o
                     {o.email && <span className="flex items-center gap-1"><Mail className="h-2.5 w-2.5" /> {o.email}</span>}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => setEditing(o)} className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted">
+                {/* Acciones siempre visibles (antes hover-only — invisible en móvil) */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setEditing(o)}
+                    aria-label={`Editar ${o.nombre}`}
+                    className="h-7 w-7 rounded-full inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >
                     <Pencil className="h-3 w-3" />
                   </button>
-                  <button onClick={() => setOffices(offices.filter(x => x.id !== o.id))} className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10">
+                  <button
+                    type="button"
+                    onClick={() => setOffices(offices.filter(x => x.id !== o.id))}
+                    aria-label={`Quitar ${o.nombre}`}
+                    className="h-7 w-7 rounded-full inline-flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                  >
                     <Trash2 className="h-3 w-3" />
                   </button>
                 </div>
@@ -933,7 +1019,7 @@ export function PickTeamMembersDialog({
                   className={cn(
                     "relative flex items-center gap-3 p-3 rounded-xl border text-left transition-all",
                     isSelected
-                      ? "border-primary bg-primary/5 shadow-[0_2px_12px_-4px_hsl(var(--primary)/0.25)]"
+                      ? "border-primary bg-primary/5 shadow-soft-lg"
                       : "border-border/30 bg-background/50 hover:border-border/60 hover:bg-muted/30"
                   )}
                 >
@@ -1136,7 +1222,7 @@ export function PickSalesOfficesDialog({
                   className={cn(
                     "relative rounded-xl border overflow-hidden text-left transition-all group",
                     isSelected
-                      ? "border-primary shadow-[0_2px_12px_-4px_hsl(var(--primary)/0.25)]"
+                      ? "border-primary shadow-soft-lg"
                       : "border-border/30 hover:border-border/60"
                   )}
                 >

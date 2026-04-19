@@ -236,47 +236,77 @@ export function DetallesStep({
 
           {oficinas.length > 0 && (
             <>
-              <SectionLabel>Selecciona qué oficinas comercializarán esta promoción</SectionLabel>
+              <div className="flex items-center justify-between gap-3">
+                <SectionLabel>Selecciona qué oficinas comercializarán esta promoción</SectionLabel>
+                {state.oficinasVentaSeleccionadas.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => update("oficinasVentaSeleccionadas", [])}
+                    className="text-[11px] font-medium text-muted-foreground hover:text-destructive transition-colors inline-flex items-center gap-1"
+                  >
+                    <X className="h-3 w-3" /> Deseleccionar todas
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground -mt-1 mb-1">
+                Puedes seleccionar varias. Haz clic de nuevo sobre una tarjeta (o en la ✕) para quitarla.
+              </p>
               <div className="flex flex-col gap-2">
                 {[...oficinas]
                   .sort((a, b) => (a.esPrincipal === b.esPrincipal ? 0 : a.esPrincipal ? -1 : 1))
                   .map((o) => {
                     const selected = !!state.oficinasVentaSeleccionadas.find(x => x.id === o.id);
                     return (
-                      <button
+                      <div
                         key={o.id}
-                        type="button"
-                        onClick={() => toggleOficina(o)}
                         className={cn(
-                          "flex items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors",
+                          "relative flex items-start gap-3 rounded-xl border px-3 py-2.5 transition-colors",
                           selected
                             ? "border-primary bg-primary/5"
                             : "border-border bg-card hover:border-primary/30",
                         )}
                       >
-                        <div className={cn(
-                          "mt-0.5 flex h-4 w-4 items-center justify-center rounded border shrink-0 transition-colors",
-                          selected ? "bg-primary border-primary text-primary-foreground" : "bg-card border-border",
-                        )}>
-                          {selected && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <p className="text-[13px] font-semibold text-foreground truncate">{o.nombre}</p>
-                            {o.esPrincipal && (
-                              <span className="inline-flex items-center gap-0.5 text-[9.5px] font-bold rounded-full bg-primary/10 text-primary px-1.5 py-0.5">
-                                <Star className="h-2 w-2" strokeWidth={3} /> Principal
-                              </span>
-                            )}
+                        <button
+                          type="button"
+                          onClick={() => toggleOficina(o)}
+                          className="flex items-start gap-3 text-left flex-1 min-w-0"
+                          aria-pressed={selected}
+                        >
+                          <div className={cn(
+                            "mt-0.5 flex h-4 w-4 items-center justify-center rounded border shrink-0 transition-colors",
+                            selected ? "bg-primary border-primary text-primary-foreground" : "bg-card border-border",
+                          )}>
+                            {selected && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
                           </div>
-                          <div className="flex items-center gap-x-3 gap-y-0.5 flex-wrap text-[11px] text-muted-foreground mt-0.5">
-                            {o.direccion && <span className="flex items-center gap-1 truncate"><MapPin className="h-2.5 w-2.5 shrink-0" />{o.direccion}</span>}
-                            {o.telefono && <span className="flex items-center gap-1"><Phone className="h-2.5 w-2.5" />{o.telefono}</span>}
-                            {o.email && <span className="flex items-center gap-1"><Mail className="h-2.5 w-2.5" />{o.email}</span>}
-                            {o.whatsapp && <span className="flex items-center gap-1"><MessageCircle className="h-2.5 w-2.5" />{o.whatsapp}</span>}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="text-[13px] font-semibold text-foreground truncate">{o.nombre}</p>
+                              {o.esPrincipal && (
+                                <span className="inline-flex items-center gap-0.5 text-[9.5px] font-bold rounded-full bg-primary/10 text-primary px-1.5 py-0.5">
+                                  <Star className="h-2 w-2" strokeWidth={3} /> Principal
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-x-3 gap-y-0.5 flex-wrap text-[11px] text-muted-foreground mt-0.5">
+                              {o.direccion && <span className="flex items-center gap-1 truncate"><MapPin className="h-2.5 w-2.5 shrink-0" />{o.direccion}</span>}
+                              {o.telefono && <span className="flex items-center gap-1"><Phone className="h-2.5 w-2.5" />{o.telefono}</span>}
+                              {o.email && <span className="flex items-center gap-1"><Mail className="h-2.5 w-2.5" />{o.email}</span>}
+                              {o.whatsapp && <span className="flex items-center gap-1"><MessageCircle className="h-2.5 w-2.5" />{o.whatsapp}</span>}
+                            </div>
                           </div>
-                        </div>
-                      </button>
+                        </button>
+                        {/* Botón explícito para quitar · siempre visible si está seleccionada (también en touch) */}
+                        {selected && (
+                          <button
+                            type="button"
+                            onClick={() => toggleOficina(o)}
+                            aria-label={`Quitar ${o.nombre}`}
+                            className="absolute top-2 right-2 h-6 w-6 rounded-full inline-flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
                     );
                   })}
               </div>
