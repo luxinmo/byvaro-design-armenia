@@ -13,6 +13,18 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // SPA fallback decoder (contraparte de public/404.html).
+      // Si venimos redirigidos por el 404, recuperamos la URL original
+      // antes de que React Router tome el control.
+      (function () {
+        var r = sessionStorage.getItem('__spa_redirect');
+        if (r) {
+          sessionStorage.removeItem('__spa_redirect');
+          history.replaceState(null, '', r);
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -13,8 +13,12 @@ import Ajustes from "@/pages/Ajustes";
 import PromocionesCardsV1 from "@/pages/design-previews/PromocionesCardsV1";
 
 export default function App() {
+  // import.meta.env.BASE_URL es "/" en dev y "/byvaro-design-armenia/" en el build de Pages.
+  // BrowserRouter necesita el basename SIN la barra final.
+  const basename = import.meta.env.BASE_URL.replace(/\/$/, "");
+
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={basename}>
       <AppLayout>
         <Routes>
           <Route path="/" element={<Navigate to="/inicio" replace />} />
