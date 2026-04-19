@@ -10,6 +10,7 @@ import Contactos from "@/pages/Contactos";
 import Microsites from "@/pages/Microsites";
 import Emails from "@/pages/Emails";
 import Ajustes from "@/pages/Ajustes";
+import PromocionesCardsV1 from "@/pages/design-previews/PromocionesCardsV1";
 
 export default function App() {
   return (
@@ -27,6 +28,8 @@ export default function App() {
           <Route path="/microsites" element={<Microsites />} />
           <Route path="/emails" element={<Emails />} />
           <Route path="/ajustes" element={<Ajustes />} />
+          {/* Previews de diseños alternativos (no en el menú, accesibles por URL) */}
+          <Route path="/preview/promociones-cards-v1" element={<PromocionesCardsV1 />} />
           <Route path="*" element={<Navigate to="/inicio" replace />} />
         </Routes>
       </AppLayout>

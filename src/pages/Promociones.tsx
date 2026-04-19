@@ -1,712 +1,718 @@
-import { useMemo, useState } from "react";
+/**
+ * Promociones · listado (Vista Promotor)
+ *
+ * Port 1:1 del DeveloperPromotions.tsx del repo original.
+ * Funcionalidad idéntica, datos idénticos; solo cambia el vestido visual
+ * al lenguaje Byvaro v2 (tokens HSL, rounded-2xl, shadow-soft, pill buttons).
+ */
+
+import { useState, useRef, useEffect, useMemo } from "react";
 import {
-  Search, Plus, SlidersHorizontal, LayoutGrid, List, ChevronDown,
-  MapPin, Calendar, Percent, TrendingUp, Users2, Star, Sparkles,
-  MoreHorizontal, ArrowUpRight, Check, X, Building2, CircleDollarSign,
+  Search, Building2, Plus, MapPin, Users, Flame, ChevronDown, SlidersHorizontal,
+  X, AlertTriangle, Ban, Share2, TrendingUp,
 } from "lucide-react";
+import { promotions, getBuildingTypeLabel, type Promotion } from "@/data/promotions";
+import { developerOnlyPromotions, type DevPromotion } from "@/data/developerPromotions";
+import { unitsByPromotion } from "@/data/units";
+import { Tag } from "@/components/ui/Tag";
 import { cn } from "@/lib/utils";
 
-/* ══════════════════════════════════════════════════════════════════
-   MOCK DATA (se reemplaza por fetch real cuando haya backend)
-   ══════════════════════════════════════════════════════════════════ */
-
-type PromotionStatus = "active" | "pre-sale" | "draft" | "sold-out";
-
-type Promotion = {
-  id: string;
-  code: string;
-  name: string;
-  location: string;
-  status: PromotionStatus;
-  badge?: "new" | "last-units" | "hot";
-  priceMin: number;
-  priceMax: number;
-  totalUnits: number;
-  availableUnits: number;
-  commission: number;          // %
-  delivery: string;            // "Q2 2026"
-  constructionProgress?: number; // 0-100
-  image: string;
-  propertyTypes: string[];
-  agencyAvatars: string[];
-  agencyCount: number;
-  activity: {
-    registros: number;
-    visitas: number;
-    reservas: number;
-    trend: number;             // -100..+100
-  };
-  updatedAt: string;
-};
-
-const PROMOS: Promotion[] = [
-  {
-    id: "1", code: "PRM-0050", name: "Los Arqueros",
-    location: "Marbella, Costa del Sol",
-    status: "active", badge: "hot",
-    priceMin: 512000, priceMax: 1850000,
-    totalUnits: 36, availableUnits: 8,
-    commission: 5, delivery: "Q3 2026", constructionProgress: 78,
-    image: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&h=500&fit=crop",
-    propertyTypes: ["Villas", "Áticos"],
-    agencyAvatars: [
-      "https://ui-avatars.com/api/?name=EV&background=2563eb&color=fff&size=60&bold=true",
-      "https://ui-avatars.com/api/?name=HM&background=d97706&color=fff&size=60&bold=true",
-      "https://ui-avatars.com/api/?name=KR&background=dc2626&color=fff&size=60&bold=true",
-      "https://ui-avatars.com/api/?name=CB&background=059669&color=fff&size=60&bold=true",
-    ],
-    agencyCount: 6,
-    activity: { registros: 480, visitas: 142, reservas: 28, trend: 18 },
-    updatedAt: "hace 2 h",
-  },
-  {
-    id: "2", code: "PRM-0049", name: "Villas del Pinar",
-    location: "Jávea, Alicante",
-    status: "active",
-    priceMin: 685000, priceMax: 1200000,
-    totalUnits: 24, availableUnits: 10,
-    commission: 4.5, delivery: "Q1 2027", constructionProgress: 58,
-    image: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&h=500&fit=crop",
-    propertyTypes: ["Villas"],
-    agencyAvatars: [
-      "https://ui-avatars.com/api/?name=CB&background=059669&color=fff&size=60&bold=true",
-      "https://ui-avatars.com/api/?name=IB&background=7c3aed&color=fff&size=60&bold=true",
-    ],
-    agencyCount: 4,
-    activity: { registros: 328, visitas: 96, reservas: 14, trend: 8 },
-    updatedAt: "hace 5 h",
-  },
-  {
-    id: "3", code: "PRM-0048", name: "Terrazas del Golf",
-    location: "Mijas, Málaga",
-    status: "active", badge: "last-units",
-    priceMin: 420000, priceMax: 890000,
-    totalUnits: 22, availableUnits: 5,
-    commission: 5, delivery: "Q4 2025", constructionProgress: 92,
-    image: "https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?w=800&h=500&fit=crop",
-    propertyTypes: ["Apartamentos", "Dúplex"],
-    agencyAvatars: [
-      "https://ui-avatars.com/api/?name=EV&background=2563eb&color=fff&size=60&bold=true",
-      "https://ui-avatars.com/api/?name=NR&background=0891b2&color=fff&size=60&bold=true",
-      "https://ui-avatars.com/api/?name=HM&background=d97706&color=fff&size=60&bold=true",
-    ],
-    agencyCount: 5,
-    activity: { registros: 238, visitas: 78, reservas: 17, trend: 12 },
-    updatedAt: "hace 1 día",
-  },
-  {
-    id: "4", code: "PRM-0047", name: "Residencial Aurora",
-    location: "Finestrat, Alicante",
-    status: "pre-sale", badge: "new",
-    priceMin: 310000, priceMax: 620000,
-    totalUnits: 48, availableUnits: 42,
-    commission: 6, delivery: "Q2 2027", constructionProgress: 12,
-    image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&h=500&fit=crop",
-    propertyTypes: ["Apartamentos"],
-    agencyAvatars: [
-      "https://ui-avatars.com/api/?name=IB&background=7c3aed&color=fff&size=60&bold=true",
-      "https://ui-avatars.com/api/?name=CB&background=059669&color=fff&size=60&bold=true",
-    ],
-    agencyCount: 3,
-    activity: { registros: 272, visitas: 34, reservas: 9, trend: 42 },
-    updatedAt: "hace 8 h",
-  },
-  {
-    id: "5", code: "PRM-0046", name: "Altea Hills Residences",
-    location: "Altea, Alicante",
-    status: "active",
-    priceMin: 344000, priceMax: 1400000,
-    totalUnits: 48, availableUnits: 12,
-    commission: 5, delivery: "Q2 2026", constructionProgress: 45,
-    image: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&h=500&fit=crop",
-    propertyTypes: ["Apartamentos", "Áticos"],
-    agencyAvatars: [
-      "https://ui-avatars.com/api/?name=EV&background=2563eb&color=fff&size=60&bold=true",
-      "https://ui-avatars.com/api/?name=MP&background=6b7280&color=fff&size=60&bold=true",
-      "https://ui-avatars.com/api/?name=HM&background=d97706&color=fff&size=60&bold=true",
-    ],
-    agencyCount: 4,
-    activity: { registros: 186, visitas: 48, reservas: 6, trend: 4 },
-    updatedAt: "hace 3 h",
-  },
-  {
-    id: "6", code: "PRM-0045", name: "Marina Bay Towers",
-    location: "Valencia, Playa Malvarrosa",
-    status: "draft",
-    priceMin: 0, priceMax: 0,
-    totalUnits: 80, availableUnits: 80,
-    commission: 0, delivery: "—",
-    image: "https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=800&h=500&fit=crop",
-    propertyTypes: ["Apartamentos"],
-    agencyAvatars: [],
-    agencyCount: 0,
-    activity: { registros: 0, visitas: 0, reservas: 0, trend: 0 },
-    updatedAt: "hace 2 días",
-  },
-  {
-    id: "7", code: "PRM-0044", name: "Sotogrande Golf Villas",
-    location: "San Roque, Cádiz",
-    status: "sold-out",
-    priceMin: 890000, priceMax: 2400000,
-    totalUnits: 16, availableUnits: 0,
-    commission: 4, delivery: "Q3 2025", constructionProgress: 100,
-    image: "https://images.unsplash.com/photo-1613977257363-707ba9348227?w=800&h=500&fit=crop",
-    propertyTypes: ["Villas"],
-    agencyAvatars: [
-      "https://ui-avatars.com/api/?name=EV&background=2563eb&color=fff&size=60&bold=true",
-      "https://ui-avatars.com/api/?name=HM&background=d97706&color=fff&size=60&bold=true",
-    ],
-    agencyCount: 3,
-    activity: { registros: 412, visitas: 134, reservas: 16, trend: 0 },
-    updatedAt: "hace 4 días",
-  },
-  {
-    id: "8", code: "PRM-0043", name: "Costa Norte",
-    location: "Benidorm, Alicante",
-    status: "active", badge: "new",
-    priceMin: 280000, priceMax: 560000,
-    totalUnits: 60, availableUnits: 48,
-    commission: 5.5, delivery: "Q4 2026", constructionProgress: 28,
-    image: "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=500&fit=crop",
-    propertyTypes: ["Apartamentos"],
-    agencyAvatars: [
-      "https://ui-avatars.com/api/?name=KR&background=dc2626&color=fff&size=60&bold=true",
-      "https://ui-avatars.com/api/?name=NR&background=0891b2&color=fff&size=60&bold=true",
-      "https://ui-avatars.com/api/?name=IB&background=7c3aed&color=fff&size=60&bold=true",
-    ],
-    agencyCount: 5,
-    activity: { registros: 627, visitas: 98, reservas: 12, trend: 32 },
-    updatedAt: "hace 6 h",
-  },
+/* ═══════════════════════════════════════════════════════════════════
+   Opciones de filtros (idénticas al original)
+   ═══════════════════════════════════════════════════════════════════ */
+const propertyTypeOptions = ["Apartments", "Villas", "Townhouses", "Penthouses"];
+const priceOptions = [
+  { label: "200k+", value: 200000 },
+  { label: "500k+", value: 500000 },
+  { label: "1M+", value: 1000000 },
+  { label: "2M+", value: 2000000 },
 ];
+const styleOptions = ["Contemporary", "Mediterranean", "Minimalist", "Classic"];
+const deliveryOptions = ["Ready now", "2025", "2026", "2027+"];
+const commissionOptions = [
+  { label: "3%+", value: 3 },
+  { label: "4%+", value: 4 },
+  { label: "5%+", value: 5 },
+];
+const bedroomOptions = ["1", "2", "3", "4+"];
 
-/* ══════════════════════════════════════════════════════════════════
-   HELPERS
-   ══════════════════════════════════════════════════════════════════ */
-const formatEur = (n: number) => {
-  if (n === 0) return "—";
-  if (n >= 1000000) return `${(n / 1000000).toFixed(n % 1000000 === 0 ? 0 : 1)}M€`;
-  if (n >= 1000) return `${Math.round(n / 1000)}K€`;
-  return `${n}€`;
+/* ═══════════════════════════════════════════════════════════════════
+   MultiSelect Dropdown (pill negro cuando tiene selección)
+   ═══════════════════════════════════════════════════════════════════ */
+function MultiSelectDropdown({ label, values, options, onChange }: {
+  label: string; values: string[]; options: string[]; onChange: (v: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const toggle = (opt: string) => {
+    onChange(values.includes(opt) ? values.filter(v => v !== opt) : [...values, opt]);
+  };
+
+  return (
+    <div className="relative shrink-0" ref={ref}>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        className={cn(
+          "inline-flex items-center gap-1 h-8 px-3.5 rounded-full text-[12.5px] font-medium border transition-colors whitespace-nowrap",
+          values.length > 0
+            ? "bg-foreground text-background border-foreground"
+            : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-foreground/40"
+        )}
+      >
+        {label}
+        {values.length > 0 && (
+          <span className="ml-0.5 bg-background/20 text-background rounded-full px-1.5 text-[10px]">
+            {values.length}
+          </span>
+        )}
+        <ChevronDown className="h-3 w-3" />
+      </button>
+      {open && (
+        <div
+          className="absolute top-full left-0 mt-1 bg-popover border border-border rounded-xl shadow-soft-lg z-50 min-w-[180px] py-1.5"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {options.map((opt) => (
+            <div
+              key={opt}
+              className="flex items-center gap-2.5 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/30 transition-colors"
+              onClick={(e) => { e.stopPropagation(); toggle(opt); }}
+            >
+              <div className={cn(
+                "w-3.5 h-3.5 rounded border flex items-center justify-center",
+                values.includes(opt) ? "bg-foreground border-foreground" : "border-muted-foreground/40"
+              )}>
+                {values.includes(opt) && <span className="text-background text-[9px] leading-none">✓</span>}
+              </div>
+              <span className={values.includes(opt) ? "text-foreground font-medium" : "text-muted-foreground"}>
+                {opt}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Filtros avanzados (panel: comisión + dormitorios)
+   ═══════════════════════════════════════════════════════════════════ */
+function FiltersPanel({ minCommission, setMinCommission, bedrooms, setBedrooms }: {
+  minCommission: number | null; setMinCommission: (v: number | null) => void;
+  bedrooms: string | null; setBedrooms: (v: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const activeCount = [minCommission, bedrooms].filter(Boolean).length;
+
+  return (
+    <div className="relative shrink-0" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="relative inline-flex items-center justify-center h-9 w-9 rounded-full border border-border bg-card text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+      >
+        <SlidersHorizontal className="h-3.5 w-3.5" />
+        {activeCount > 0 && (
+          <span className="absolute -top-1 -right-1 bg-foreground text-background text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-semibold">
+            {activeCount}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute top-full right-0 mt-1 bg-popover border border-border rounded-xl shadow-soft-lg z-50 w-[260px] p-4 space-y-4">
+          <div>
+            <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+              Comisión mín.
+            </label>
+            <div className="flex gap-1">
+              {commissionOptions.map(c => (
+                <button
+                  key={c.value}
+                  onClick={() => setMinCommission(minCommission === c.value ? null : c.value)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-md text-xs font-medium transition-colors flex-1",
+                    minCommission === c.value
+                      ? "bg-foreground text-background"
+                      : "bg-muted/40 text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="h-px bg-border/60" />
+          <div>
+            <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+              Dormitorios
+            </label>
+            <div className="flex gap-1">
+              {bedroomOptions.map(b => (
+                <button
+                  key={b}
+                  onClick={() => setBedrooms(bedrooms === b ? null : b)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-md text-xs font-medium transition-colors flex-1",
+                    bedrooms === b
+                      ? "bg-foreground text-background"
+                      : "bg-muted/40 text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {b}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Utilidades (idénticas al original)
+   ═══════════════════════════════════════════════════════════════════ */
+function formatPrice(n: number) {
+  return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+}
+
+function statusTag(status: string) {
+  const map: Record<string, { label: string; variant: "success" | "warning" | "muted" | "danger" }> = {
+    active: { label: "Activa", variant: "success" },
+    incomplete: { label: "Incompleta", variant: "warning" },
+    inactive: { label: "Inactiva", variant: "muted" },
+    "sold-out": { label: "Vendida", variant: "danger" },
+  };
+  return map[status] || map.inactive;
+}
+
+type LastUnitDetail = {
+  id: string;
+  label: string;
+  price: number;
+  bedrooms: number;
+  bathrooms: number;
+  builtArea: number;
+  terrace: number;
+  floor: number;
+  orientation: string;
 };
 
-const statusConfig: Record<PromotionStatus, { label: string; tone: string }> = {
-  active: { label: "Activa", tone: "bg-emerald-50 text-emerald-700 border-emerald-100" },
-  "pre-sale": { label: "Pre-venta", tone: "bg-amber-50 text-amber-700 border-amber-100" },
-  draft: { label: "Borrador", tone: "bg-muted text-muted-foreground border-border" },
-  "sold-out": { label: "Vendida", tone: "bg-primary/10 text-primary border-primary/20" },
-};
+function getAvailableData(promotionId: string) {
+  const units = unitsByPromotion[promotionId];
+  if (!units) return { typologies: [], units: [], lastUnit: null as LastUnitDetail | null };
 
-const badgeConfig = {
-  new: { label: "Nueva", tone: "bg-primary text-primary-foreground", icon: Sparkles },
-  "last-units": { label: "Últimas unidades", tone: "bg-amber-500 text-white", icon: Star },
-  hot: { label: "Top", tone: "bg-gradient-to-br from-orange-500 to-red-500 text-white", icon: TrendingUp },
-};
+  const available = units.filter((u) => u.status === "available");
 
-/* ══════════════════════════════════════════════════════════════════
-   MAIN
-   ══════════════════════════════════════════════════════════════════ */
+  if (available.length === 1) {
+    const u = available[0];
+    const lastUnit: LastUnitDetail = {
+      id: `${u.block}-${u.floor}${u.door}`,
+      label: u.type === "Ático" ? "Ático" : `${u.bedrooms} Hab`,
+      price: u.price,
+      bedrooms: u.bedrooms,
+      bathrooms: u.bathrooms,
+      builtArea: u.builtArea,
+      terrace: u.terrace,
+      floor: u.floor,
+      orientation: u.orientation,
+    };
+    return { typologies: [], units: [], lastUnit };
+  }
+
+  const byType = new Map<string, { price: number; unit: typeof available[0] }[]>();
+  for (const u of available) {
+    const label = u.type === "Ático" ? "Ático" : `${u.bedrooms} Hab`;
+    if (!byType.has(label)) byType.set(label, []);
+    byType.get(label)!.push({ price: u.price, unit: u });
+  }
+
+  for (const [, group] of byType) group.sort((a, b) => a.price - b.price);
+
+  const typologies = Array.from(byType.entries())
+    .map(([label, group]) => ({ label, price: group[0].price }))
+    .sort((a, b) => a.price - b.price)
+    .slice(0, 3);
+
+  const shownUnits: typeof available[0][] = [];
+  const usedIds = new Set<string>();
+
+  for (const [, group] of byType) {
+    const cheapest = group[0].unit;
+    if (!usedIds.has(cheapest.id)) {
+      shownUnits.push(cheapest);
+      usedIds.add(cheapest.id);
+    }
+  }
+
+  for (const u of available.sort((a, b) => a.price - b.price)) {
+    if (shownUnits.length >= 3) break;
+    if (!usedIds.has(u.id)) {
+      shownUnits.push(u);
+      usedIds.add(u.id);
+    }
+  }
+
+  const unitsList = shownUnits
+    .sort((a, b) => a.price - b.price)
+    .slice(0, 3)
+    .map((u) => ({
+      id: `${u.block}-${u.floor}${u.door}`,
+      label: u.type === "Ático" ? "Ático" : `${u.bedrooms} Hab`,
+      price: u.price,
+    }));
+
+  return { typologies, units: unitsList, lastUnit: null as LastUnitDetail | null };
+}
+
+const TRENDING_THRESHOLD = 50;
+
+/* ═══════════════════════════════════════════════════════════════════
+   PÁGINA PRINCIPAL
+   ═══════════════════════════════════════════════════════════════════ */
 export default function Promociones() {
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<PromotionStatus | "all">("all");
-  const [view, setView] = useState<"grid" | "list">("grid");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [selectedPrices, setSelectedPrices] = useState<string[]>([]);
+  const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
+  const [selectedDelivery, setSelectedDelivery] = useState<string[]>([]);
+  const [minCommission, setMinCommission] = useState<number | null>(null);
+  const [bedrooms, setBedrooms] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [buildingTypeFilter, setBuildingTypeFilter] = useState<string>("All");
 
-  const counts = useMemo(() => {
-    return {
-      all: PROMOS.length,
-      active: PROMOS.filter(p => p.status === "active").length,
-      "pre-sale": PROMOS.filter(p => p.status === "pre-sale").length,
-      draft: PROMOS.filter(p => p.status === "draft").length,
-      "sold-out": PROMOS.filter(p => p.status === "sold-out").length,
-    };
+  const allFilters: { key: string; label: string; remove: () => void }[] = [];
+  selectedTypes.forEach(v => allFilters.push({ key: "type", label: v, remove: () => setSelectedTypes(selectedTypes.filter(x => x !== v)) }));
+  selectedPrices.forEach(v => allFilters.push({ key: "price", label: v, remove: () => setSelectedPrices(selectedPrices.filter(x => x !== v)) }));
+  selectedStyles.forEach(v => allFilters.push({ key: "style", label: v, remove: () => setSelectedStyles(selectedStyles.filter(x => x !== v)) }));
+  selectedDelivery.forEach(v => allFilters.push({ key: "delivery", label: v, remove: () => setSelectedDelivery(selectedDelivery.filter(x => x !== v)) }));
+  if (minCommission) allFilters.push({ key: "commission", label: `${minCommission}%+`, remove: () => setMinCommission(null) });
+  if (bedrooms) allFilters.push({ key: "bedrooms", label: `${bedrooms} hab`, remove: () => setBedrooms(null) });
+
+  const hasFilters = allFilters.length > 0;
+  const clearAllFilters = () => {
+    setSearch(""); setSelectedTypes([]); setSelectedPrices([]); setSelectedStyles([]);
+    setSelectedDelivery([]); setMinCommission(null); setBedrooms(null);
+    setStatusFilter("all"); setBuildingTypeFilter("All");
+  };
+
+  const statusFilterOptions = [
+    { key: "all", label: "Todas" },
+    { key: "active", label: "Activas" },
+    { key: "incomplete", label: "Incompletas" },
+    { key: "sold-out", label: "Vendidas" },
+  ] as const;
+
+  const buildingTypeFilterOptions = ["All", "Unifamiliar", "Plurifamiliar"];
+
+  const allPromotions: DevPromotion[] = useMemo(() => {
+    return [...developerOnlyPromotions, ...promotions.map(p => ({ ...p } as DevPromotion))];
   }, []);
 
   const filtered = useMemo(() => {
-    return PROMOS.filter(p => {
-      if (statusFilter !== "all" && p.status !== statusFilter) return false;
-      if (search) {
-        const q = search.toLowerCase();
-        if (!p.name.toLowerCase().includes(q) && !p.location.toLowerCase().includes(q) && !p.code.toLowerCase().includes(q)) return false;
-      }
-      return true;
-    });
-  }, [search, statusFilter]);
+    const q = search.toLowerCase().trim();
+    let result = [...allPromotions];
+    if (statusFilter !== "all") result = result.filter(p => p.status === statusFilter);
+    if (buildingTypeFilter === "Unifamiliar") {
+      result = result.filter(p => p.buildingType === "unifamiliar-single" || p.buildingType === "unifamiliar-multiple");
+    } else if (buildingTypeFilter === "Plurifamiliar") {
+      result = result.filter(p => p.buildingType === "plurifamiliar");
+    }
+    if (q) {
+      result = result.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.location.toLowerCase().includes(q) ||
+        p.code.toLowerCase().includes(q)
+      );
+    }
+    if (selectedTypes.length > 0) {
+      result = result.filter(p => selectedTypes.some(t => p.propertyTypes.some(pt => pt.toLowerCase().includes(t.toLowerCase()))));
+    }
+    if (selectedPrices.length > 0) {
+      const minVal = Math.min(...selectedPrices.map(l => priceOptions.find(o => o.label === l)?.value || 0));
+      result = result.filter(p => p.priceMax >= minVal);
+    }
+    if (selectedDelivery.length > 0) {
+      result = result.filter(p => selectedDelivery.some(d => {
+        if (d === "Ready now") return p.delivery?.includes("2025");
+        return p.delivery?.includes(d.replace("+", ""));
+      }));
+    }
+    if (minCommission) result = result.filter(p => p.commission >= minCommission);
+    return result;
+  }, [search, selectedTypes, selectedPrices, selectedDelivery, minCommission, allPromotions, statusFilter, buildingTypeFilter]);
 
-  const toggleSelect = (id: string) => {
-    setSelected(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
+  const isTrending = (p: DevPromotion) => (p.activity?.trend ?? 0) >= TRENDING_THRESHOLD;
 
   return (
-    <div className="flex-1 flex flex-col min-h-full bg-background">
-      {/* ════ HEADER ════ */}
-      <div className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8">
-        <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-          <div>
+    <div className="flex flex-col min-h-full bg-background">
+      {/* ═══════════ HEADER ═══════════ */}
+      <div className="px-4 sm:px-6 lg:px-8 pt-6 pb-4">
+        <div className="max-w-[1400px] mx-auto">
+          <div className="hidden lg:block mb-4">
             <p className="text-xs text-muted-foreground font-medium">Comercial</p>
-            <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight mt-1 leading-tight">
-              Promociones <span className="text-muted-foreground font-medium text-[18px] sm:text-[22px]">· {counts.all}</span>
-            </h1>
+            <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight mt-1 leading-tight">Promociones</h1>
+            <p className="text-sm text-muted-foreground mt-1">Encuentra promociones y unidades disponibles.</p>
           </div>
+
+          {/* Search + Filters panel + CTA */}
           <div className="flex items-center gap-2">
-            <button className="hidden sm:inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-border text-sm font-medium text-foreground hover:bg-muted transition-colors">
-              <CircleDollarSign className="h-3.5 w-3.5 text-muted-foreground" /> Informe
-            </button>
-            <button className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft">
-              <Plus className="h-3.5 w-3.5" /> Nueva promoción
-            </button>
-          </div>
-        </div>
-      </div>
+            <div className="relative flex-1 min-w-0 max-w-2xl">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60 z-10" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar promoción, promotor, referencia o ubicación..."
+                className="w-full h-9 pl-9 pr-9 text-sm bg-card border border-border rounded-full focus:border-primary outline-none transition-colors"
+              />
+              {search && (
+                <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
 
-      {/* ════ STATS BAR (status tabs) ════ */}
-      <div className="px-4 sm:px-6 lg:px-8 mt-5">
-        <div className="max-w-[1400px] mx-auto">
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
-            <StatTab label="Todas" count={counts.all} active={statusFilter === "all"} onClick={() => setStatusFilter("all")} />
-            <StatTab label="Activas" count={counts.active} active={statusFilter === "active"} onClick={() => setStatusFilter("active")} tone="emerald" />
-            <StatTab label="Pre-venta" count={counts["pre-sale"]} active={statusFilter === "pre-sale"} onClick={() => setStatusFilter("pre-sale")} tone="amber" />
-            <StatTab label="Borradores" count={counts.draft} active={statusFilter === "draft"} onClick={() => setStatusFilter("draft")} tone="muted" />
-            <StatTab label="Vendidas" count={counts["sold-out"]} active={statusFilter === "sold-out"} onClick={() => setStatusFilter("sold-out")} tone="primary" />
-          </div>
-        </div>
-      </div>
-
-      {/* ════ TOOLBAR ════ */}
-      <div className="px-4 sm:px-6 lg:px-8 mt-4">
-        <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-center gap-3">
-
-          {/* Search */}
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nombre, ubicación o código…"
-              className="w-full h-9 pl-9 pr-9 text-sm bg-card border border-border rounded-full focus:border-primary outline-none transition-colors"
+            <FiltersPanel
+              minCommission={minCommission} setMinCommission={setMinCommission}
+              bedrooms={bedrooms} setBedrooms={setBedrooms}
             />
-            {search && (
-              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
 
-          {/* Filter pills */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <FilterPill label="Ubicación" />
-            <FilterPill label="Tipología" />
-            <FilterPill label="Precio" />
-            <FilterPill label="Agencia" />
-            <button className="inline-flex items-center gap-1 h-8 px-3 rounded-full text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-              <SlidersHorizontal className="h-3.5 w-3.5" /> Más
+            <button className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft shrink-0">
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              <span className="hidden sm:inline">Nueva promoción</span>
             </button>
           </div>
 
-          {/* View toggle */}
-          <div className="sm:ml-auto flex items-center gap-1 bg-muted/40 border border-border rounded-full p-0.5">
-            <button
-              onClick={() => setView("grid")}
-              className={cn(
-                "inline-flex items-center justify-center h-7 w-7 rounded-full transition-colors",
-                view === "grid" ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
-              )}
-              aria-label="Vista grid"
-            >
-              <LayoutGrid className="h-3.5 w-3.5" />
-            </button>
-            <button
-              onClick={() => setView("list")}
-              className={cn(
-                "inline-flex items-center justify-center h-7 w-7 rounded-full transition-colors",
-                view === "list" ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
-              )}
-              aria-label="Vista lista"
-            >
-              <List className="h-3.5 w-3.5" />
+          {/* Filter pills row */}
+          <div className="flex items-center gap-1.5 mt-3 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 pb-1">
+            <MultiSelectDropdown label="Tipo" values={selectedTypes} options={propertyTypeOptions} onChange={setSelectedTypes} />
+            <MultiSelectDropdown
+              label={buildingTypeFilter === "All" ? "Edificio" : buildingTypeFilter}
+              values={buildingTypeFilter === "All" ? [] : [buildingTypeFilter]}
+              options={buildingTypeFilterOptions}
+              onChange={(v) => setBuildingTypeFilter(v.length === 0 ? "All" : v[v.length - 1])}
+            />
+            <MultiSelectDropdown label="Precio" values={selectedPrices} options={priceOptions.map(o => o.label)} onChange={setSelectedPrices} />
+            <MultiSelectDropdown label="Estilo" values={selectedStyles} options={styleOptions} onChange={setSelectedStyles} />
+            <MultiSelectDropdown label="Entrega" values={selectedDelivery} options={deliveryOptions} onChange={setSelectedDelivery} />
+
+            <div className="h-5 w-px bg-border shrink-0 hidden lg:block" />
+            <button className="hidden lg:inline-flex items-center justify-center h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0">
+              <MapPin className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* ════ CONTENT ════ */}
-      <div className="px-4 sm:px-6 lg:px-8 mt-5 pb-8">
-        <div className="max-w-[1400px] mx-auto">
+      <div className="h-px bg-border/60" />
 
+      {/* ═══════════ Status tabs + chips + count ═══════════ */}
+      <div className="px-4 sm:px-6 lg:px-8 py-3">
+        <div className="max-w-[1400px] mx-auto flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-0.5 mr-2">
+            {statusFilterOptions.map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setStatusFilter(opt.key)}
+                className={cn(
+                  "px-3 py-1.5 rounded-full text-[12.5px] font-medium transition-colors",
+                  statusFilter === opt.key
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {allFilters.map((f, i) => (
+            <span key={`${f.key}-${f.label}-${i}`} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-foreground text-background text-xs font-medium">
+              {f.label}
+              <button onClick={f.remove} className="hover:opacity-70" aria-label={`Quitar ${f.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          {hasFilters && (
+            <button onClick={clearAllFilters} className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1">
+              Limpiar todo
+            </button>
+          )}
+          <span className="text-xs text-muted-foreground ml-auto">
+            <span className="font-semibold text-foreground tnum">{filtered.length}</span> promociones
+          </span>
+        </div>
+      </div>
+
+      {/* ═══════════ Cards list (horizontal) ═══════════ */}
+      <div className="flex-1 px-4 sm:px-6 lg:px-8 pb-8">
+        <div className="max-w-[1400px] mx-auto flex flex-col gap-3 lg:gap-4">
           {filtered.length === 0 ? (
             <EmptyState />
-          ) : view === "grid" ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              {filtered.map(p => (
-                <PromoCard key={p.id} promo={p} selected={selected.has(p.id)} onToggleSelect={() => toggleSelect(p.id)} />
-              ))}
-            </div>
           ) : (
-            <div className="bg-card border border-border rounded-2xl shadow-soft overflow-hidden">
-              <div className="hidden md:grid grid-cols-[32px_minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1.4fr)_80px] gap-3 px-4 py-3 border-b border-border bg-muted/20">
-                <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground" />
-                <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Promoción</div>
-                <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Estado</div>
-                <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Unidades</div>
-                <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Actividad</div>
-                <div />
-              </div>
-              <div className="divide-y divide-border">
-                {filtered.map(p => (
-                  <PromoRow key={p.id} promo={p} selected={selected.has(p.id)} onToggleSelect={() => toggleSelect(p.id)} />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+            filtered.map((p) => {
+              const badgeLabel = p.badge === "new" ? "Nueva" : p.badge === "last-units" ? "Últimas unidades" : null;
+              const status = statusTag(p.status);
+              const { typologies, units: availableUnits, lastUnit } = getAvailableData(p.id);
+              const trending = isTrending(p);
+              const hasMissing = p.missingSteps && p.missingSteps.length > 0;
 
-      {/* ════ FLOATING SELECTION BAR ════ */}
-      {selected.size > 0 && (
-        <div className="fixed bottom-[72px] lg:bottom-6 left-1/2 -translate-x-1/2 z-40 bg-foreground text-background rounded-full shadow-soft-lg px-2 py-2 flex items-center gap-1">
-          <span className="text-xs font-medium px-3">{selected.size} seleccionada{selected.size > 1 ? "s" : ""}</span>
-          <div className="h-4 w-px bg-background/20" />
-          <button className="px-3 h-8 rounded-full text-xs font-medium hover:bg-background/10 transition-colors">Compartir</button>
-          <button className="px-3 h-8 rounded-full text-xs font-medium hover:bg-background/10 transition-colors">Exportar</button>
-          <button onClick={() => setSelected(new Set())} className="px-3 h-8 rounded-full text-xs font-medium hover:bg-background/10 transition-colors">Cancelar</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════════
-   STAT TAB
-   ══════════════════════════════════════════════════════════════════ */
-function StatTab({ label, count, active, onClick, tone = "default" }: { label: string; count: number; active: boolean; onClick: () => void; tone?: "default" | "emerald" | "amber" | "muted" | "primary" }) {
-  const toneMap = {
-    default: "bg-foreground text-background",
-    emerald: "bg-emerald-600 text-white",
-    amber: "bg-amber-500 text-white",
-    muted: "bg-muted-foreground text-background",
-    primary: "bg-primary text-primary-foreground",
-  };
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "group inline-flex items-center gap-2 h-8 px-3.5 rounded-full text-[12.5px] font-medium whitespace-nowrap transition-all shrink-0",
-        active
-          ? "bg-foreground text-background shadow-soft"
-          : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20"
-      )}
-    >
-      {label}
-      <span className={cn(
-        "tnum text-[11px] font-semibold px-1.5 py-px rounded-md",
-        active ? "bg-background/15 text-background" : toneMap[tone] + " opacity-90"
-      )}>
-        {count}
-      </span>
-    </button>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════════
-   FILTER PILL
-   ══════════════════════════════════════════════════════════════════ */
-function FilterPill({ label }: { label: string }) {
-  return (
-    <button className="inline-flex items-center gap-1 h-8 px-3 rounded-full border border-border bg-card text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors">
-      {label}
-      <ChevronDown className="h-3 w-3" />
-    </button>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════════
-   PROMO CARD (grid)
-   ══════════════════════════════════════════════════════════════════ */
-function PromoCard({ promo, selected, onToggleSelect }: { promo: Promotion; selected: boolean; onToggleSelect: () => void }) {
-  const status = statusConfig[promo.status];
-  const badge = promo.badge ? badgeConfig[promo.badge] : null;
-  const BadgeIcon = badge?.icon;
-  const availablePct = (promo.availableUnits / promo.totalUnits) * 100;
-
-  return (
-    <article
-      className={cn(
-        "group relative bg-card border rounded-2xl overflow-hidden shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer",
-        selected ? "border-primary ring-2 ring-primary/20" : "border-border"
-      )}
-    >
-      {/* Cover */}
-      <div className="relative aspect-[16/9] overflow-hidden bg-muted">
-        <img
-          src={promo.image}
-          alt={promo.name}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-          loading="lazy"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
-
-        {/* Select checkbox */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
-          className={cn(
-            "absolute top-3 left-3 h-6 w-6 rounded-md border-2 grid place-items-center transition-all",
-            selected
-              ? "bg-primary border-primary text-primary-foreground opacity-100"
-              : "bg-white/90 border-white/60 backdrop-blur-sm hover:border-primary opacity-0 group-hover:opacity-100"
-          )}
-          aria-label={selected ? "Deseleccionar" : "Seleccionar"}
-        >
-          {selected && <Check className="h-3.5 w-3.5" />}
-        </button>
-
-        {/* Badges */}
-        <div className="absolute top-3 right-3 flex items-center gap-1.5">
-          {badge && BadgeIcon && (
-            <span className={cn("inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full shadow-soft", badge.tone)}>
-              <BadgeIcon className="h-3 w-3" />
-              {badge.label}
-            </span>
-          )}
-        </div>
-
-        {/* Status */}
-        <div className="absolute bottom-3 left-3">
-          <span className={cn("inline-block text-[10.5px] font-semibold px-2.5 py-1 rounded-full border shadow-soft backdrop-blur-sm", status.tone)}>
-            {status.label}
-          </span>
-        </div>
-
-        {/* More menu */}
-        <button
-          onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-3 right-3 h-8 w-8 rounded-full bg-white/90 backdrop-blur-sm grid place-items-center text-foreground hover:bg-white transition-colors opacity-0 group-hover:opacity-100 shadow-soft"
-          aria-label="Más opciones"
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </button>
-      </div>
-
-      {/* Body */}
-      <div className="p-4 sm:p-5">
-        {/* Title + code */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="text-[15px] font-bold truncate leading-tight">{promo.name}</h3>
-            <div className="flex items-center gap-1.5 mt-1 text-[12px] text-muted-foreground">
-              <MapPin className="h-3 w-3 shrink-0" />
-              <span className="truncate">{promo.location}</span>
-              <span className="opacity-50">·</span>
-              <span className="tnum opacity-80">{promo.code}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Price */}
-        <div className="mt-3 flex items-baseline gap-1">
-          {promo.priceMin > 0 ? (
-            <>
-              <span className="text-[11px] text-muted-foreground">Desde</span>
-              <span className="text-[17px] font-bold tnum tracking-tight">{formatEur(promo.priceMin)}</span>
-              {promo.priceMax !== promo.priceMin && (
-                <span className="text-[12px] text-muted-foreground tnum"> – {formatEur(promo.priceMax)}</span>
-              )}
-            </>
-          ) : (
-            <span className="text-[12px] text-muted-foreground italic">Precio por definir</span>
-          )}
-        </div>
-
-        {/* KPI grid */}
-        <div className="mt-4 grid grid-cols-4 gap-2 py-3 border-y border-border">
-          <KpiCell label="Disponibles" value={`${promo.availableUnits}/${promo.totalUnits}`} />
-          <KpiCell label="Registros" value={promo.activity.registros.toString()} />
-          <KpiCell label="Visitas" value={promo.activity.visitas.toString()} />
-          <KpiCell label="Reservas" value={promo.activity.reservas.toString()} accent />
-        </div>
-
-        {/* Progress + delivery */}
-        {promo.constructionProgress !== undefined && (
-          <div className="mt-3.5">
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                <Building2 className="h-3 w-3" />
-                <span>Obra {promo.constructionProgress}%</span>
-              </span>
-              <span className="inline-flex items-center gap-1 tnum">
-                <Calendar className="h-3 w-3" />
-                <span>{promo.delivery}</span>
-              </span>
-            </div>
-            <div className="mt-1.5 h-1.5 bg-muted rounded-full overflow-hidden">
-              <div
-                className={cn(
-                  "h-full rounded-full transition-all",
-                  promo.constructionProgress === 100 ? "bg-emerald-500" : "bg-gradient-to-r from-primary to-primary/70"
-                )}
-                style={{ width: `${promo.constructionProgress}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Footer: commission + agencies */}
-        <div className="mt-4 flex items-center justify-between gap-3">
-          {promo.commission > 0 ? (
-            <div className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full">
-              <Percent className="h-3 w-3" />
-              {promo.commission}% comisión
-            </div>
-          ) : (
-            <span className="text-[11.5px] text-muted-foreground italic">Sin comisión</span>
-          )}
-
-          {promo.agencyCount > 0 ? (
-            <div className="flex items-center gap-1.5">
-              <div className="flex -space-x-1.5">
-                {promo.agencyAvatars.slice(0, 3).map((a, i) => (
-                  <img key={i} src={a} alt="" className="h-6 w-6 rounded-full ring-2 ring-card bg-white" />
-                ))}
-                {promo.agencyCount > 3 && (
-                  <div className="h-6 w-6 rounded-full ring-2 ring-card bg-muted grid place-items-center text-[9.5px] font-bold text-muted-foreground">
-                    +{promo.agencyCount - 3}
+              return (
+                <article
+                  key={p.id}
+                  onClick={() => alert(`Navegar a /promociones/${p.id}`)}
+                  className={cn(
+                    "group flex flex-col lg:flex-row bg-card border rounded-2xl overflow-hidden shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer",
+                    hasMissing
+                      ? "border-destructive/30 ring-1 ring-destructive/10"
+                      : trending
+                      ? "border-amber-300/60 ring-1 ring-amber-200/40"
+                      : "border-border hover:border-border/80"
+                  )}
+                >
+                  {/* Image */}
+                  <div className="relative w-full lg:w-[420px] h-[180px] sm:h-[220px] lg:h-auto lg:min-h-[320px] shrink-0 overflow-hidden bg-muted">
+                    {p.image ? (
+                      <>
+                        <img
+                          src={p.image}
+                          alt={p.name}
+                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                          loading="lazy"
+                        />
+                        {badgeLabel && (
+                          <Tag variant="overlay" size="sm" shape="pill" className="absolute top-3 left-3 shadow-soft">
+                            {badgeLabel}
+                          </Tag>
+                        )}
+                        {trending && (
+                          <Tag variant="trending" size="sm" shape="pill" icon={<Flame className="h-3 w-3" />} className="absolute top-3 right-3">
+                            Trending
+                          </Tag>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <Building2 className="h-10 w-10 text-muted-foreground/15" />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <span className="text-[11px] text-muted-foreground tnum">{promo.agencyCount}</span>
-            </div>
-          ) : (
-            <span className="text-[11.5px] text-muted-foreground italic inline-flex items-center gap-1">
-              <Users2 className="h-3 w-3" /> Sin colaboradores
-            </span>
+
+                  {/* Content */}
+                  <div className="flex-1 p-4 sm:p-5 lg:p-6 flex flex-col min-w-0">
+                    {/* Top row: location + building type + status */}
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase truncate">
+                          {p.location || "Sin ubicación"}
+                        </p>
+                        {getBuildingTypeLabel(p.buildingType) && (
+                          <Tag variant="default" size="sm" shape="pill" className="shrink-0 hidden sm:inline-flex">
+                            {getBuildingTypeLabel(p.buildingType)}
+                          </Tag>
+                        )}
+                      </div>
+                      <Tag variant={status.variant} size="sm" shape="pill" className="shrink-0">
+                        {status.label}
+                      </Tag>
+                    </div>
+
+                    {/* Name + code + developer + delivery */}
+                    <h3 className="text-[17px] lg:text-[18px] font-bold text-foreground leading-snug mb-1 tracking-tight">
+                      {p.name}
+                    </h3>
+                    <div className="flex flex-wrap items-center gap-x-2 text-[12.5px] text-muted-foreground mb-3">
+                      <span className="tnum opacity-70">{p.code}</span>
+                      {p.developer && <><span className="opacity-40">·</span><span>{p.developer}</span></>}
+                      {p.delivery && <><span className="opacity-40">·</span><span>Entrega {p.delivery}</span></>}
+                    </div>
+
+                    {/* Missing steps warning */}
+                    {hasMissing && (
+                      <div className="flex items-start gap-2.5 mb-3 px-3 py-2.5 rounded-xl bg-destructive/5 border border-destructive/20">
+                        <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-[12.5px] font-semibold text-destructive mb-0.5">Pasos pendientes para publicar</p>
+                          <p className="text-[12px] text-muted-foreground leading-snug">{p.missingSteps!.join(" · ")}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Cannot share warning */}
+                    {p.canShareWithAgencies === false && !hasMissing && (
+                      <div className="flex items-start gap-2.5 mb-3 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200/60">
+                        <Ban className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-[12.5px] font-semibold text-amber-800 mb-0.5">No se puede compartir con agencias</p>
+                          <p className="text-[12px] text-muted-foreground leading-snug">Configura comisiones en Colaboradores para habilitar el share</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Metrics row */}
+                    <div className="flex items-center gap-5 lg:gap-6 mb-3">
+                      <Metric label="Disponibles" value={`${p.availableUnits} / ${p.totalUnits}`} />
+                      <Metric label="Comisión" value={`${p.commission}%`} />
+                      {p.constructionProgress !== undefined && (
+                        <Metric label="Obra" value={`${p.constructionProgress}%`} />
+                      )}
+                    </div>
+
+                    {/* Trending activity box */}
+                    {p.activity && trending && (
+                      <div className="hidden sm:flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200/60">
+                        <div className="flex items-center gap-1 text-amber-600">
+                          <TrendingUp className="h-3.5 w-3.5" />
+                          <span className="text-xs font-semibold tnum">+{p.activity.trend}%</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground tnum"><span className="font-semibold text-foreground">{p.activity.inquiries}</span> consultas</span>
+                        <span className="text-xs text-muted-foreground tnum"><span className="font-semibold text-foreground">{p.activity.reservations}</span> reservas</span>
+                        <span className="text-xs text-muted-foreground tnum"><span className="font-semibold text-foreground">{p.activity.visits}</span> visitas</span>
+                        <span className="text-[10px] text-muted-foreground/60 sm:ml-auto">Últimas 2 semanas</span>
+                      </div>
+                    )}
+
+                    {/* Price */}
+                    <p className="text-lg font-bold text-foreground tracking-tight mb-2 lg:mb-3 tnum">
+                      {lastUnit ? formatPrice(lastUnit.price) : (
+                        <>
+                          {formatPrice(p.priceMin)}
+                          {p.priceMax > p.priceMin && <span className="text-muted-foreground font-normal"> — </span>}
+                          {p.priceMax > p.priceMin && formatPrice(p.priceMax)}
+                        </>
+                      )}
+                    </p>
+
+                    {/* Last unit detail */}
+                    {lastUnit && (
+                      <div className="hidden sm:block rounded-xl border border-border bg-muted/20 p-4 mb-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <p className="text-[12.5px] font-semibold text-foreground">Última unidad disponible</p>
+                            <p className="text-[11.5px] text-muted-foreground">{lastUnit.label} · Unidad {lastUnit.id}</p>
+                          </div>
+                          <p className="text-sm font-bold text-foreground tnum">{formatPrice(lastUnit.price)}</p>
+                        </div>
+                        <div className="h-px bg-border/40 mb-3" />
+                        <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+                          <span className="text-[11.5px] text-muted-foreground tnum">{lastUnit.bedrooms} hab · {lastUnit.bathrooms} baños</span>
+                          <span className="text-[11.5px] text-muted-foreground tnum">{lastUnit.builtArea} m² const.</span>
+                          {lastUnit.terrace > 0 && <span className="text-[11.5px] text-muted-foreground tnum">{lastUnit.terrace} m² terraza</span>}
+                          <span className="text-[11.5px] text-muted-foreground">Planta {lastUnit.floor} · {lastUnit.orientation}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Typologies + available units */}
+                    {!lastUnit && (typologies.length > 0 || availableUnits.length > 0) && (
+                      <div className="hidden sm:grid grid-cols-2 gap-3 mb-4">
+                        {typologies.length > 0 && (
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1.5">Tipologías</p>
+                            <div className="space-y-0.5">
+                              {typologies.map((t) => (
+                                <p key={t.label} className="text-[12.5px] text-foreground tnum">
+                                  {t.label} <span className="text-muted-foreground">desde</span> {formatPrice(t.price)}
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {availableUnits.length > 0 && (
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1.5">Unidades disponibles</p>
+                            <div className="space-y-0.5">
+                              {availableUnits.map((u) => (
+                                <p key={u.id} className="text-[12.5px] text-foreground tnum">
+                                  {u.id} <span className="text-muted-foreground">·</span> {u.label} <span className="text-muted-foreground">·</span> {formatPrice(u.price)}
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Footer */}
+                    <div className="mt-auto pt-3 border-t border-border/60 flex items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11.5px] text-muted-foreground min-w-0">
+                        {p.agencies > 0 && (
+                          <span className="inline-flex items-center gap-1 text-foreground/70 tnum">
+                            <Users className="h-3 w-3" />
+                            {p.agencies} agencias
+                          </span>
+                        )}
+                        {p.constructionProgress !== undefined && p.constructionProgress < 100 && (
+                          <span className="tnum">{p.constructionProgress}% obra</span>
+                        )}
+                        {p.hasShowFlat && <span className="hidden sm:inline">Piso piloto</span>}
+                      </div>
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-primary hover:text-primary/80 transition-colors shrink-0"
+                      >
+                        <Share2 className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Compartir con agencias</span>
+                        <span className="sm:hidden">Compartir</span>
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })
           )}
         </div>
       </div>
-
-      {/* Hover corner arrow */}
-      <div className="absolute bottom-0 right-0 h-10 w-10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-        <div className="absolute bottom-3 right-3 h-7 w-7 rounded-full bg-foreground text-background grid place-items-center shadow-soft">
-          <ArrowUpRight className="h-3.5 w-3.5" />
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function KpiCell({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className="text-center min-w-0">
-      <p className={cn("text-[14px] font-bold tnum leading-none", accent && "text-primary")}>{value}</p>
-      <p className="text-[9.5px] uppercase tracking-wider text-muted-foreground font-semibold mt-1 truncate">{label}</p>
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   PROMO ROW (list)
-   ══════════════════════════════════════════════════════════════════ */
-function PromoRow({ promo, selected, onToggleSelect }: { promo: Promotion; selected: boolean; onToggleSelect: () => void }) {
-  const status = statusConfig[promo.status];
+/* ═══════════════════════════════════════════════════════════════════
+   Sub-componentes
+   ═══════════════════════════════════════════════════════════════════ */
+function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div
-      className={cn(
-        "grid grid-cols-[32px_minmax(0,1fr)_80px] md:grid-cols-[32px_minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1.4fr)_80px] gap-3 px-4 py-3.5 hover:bg-muted/20 transition-colors cursor-pointer items-center",
-        selected && "bg-primary/5"
-      )}
-    >
-      {/* Checkbox */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
-        className={cn(
-          "h-5 w-5 rounded border-2 grid place-items-center transition-all",
-          selected ? "bg-primary border-primary text-primary-foreground" : "border-border hover:border-primary"
-        )}
-        aria-label={selected ? "Deseleccionar" : "Seleccionar"}
-      >
-        {selected && <Check className="h-3 w-3" />}
-      </button>
-
-      {/* Promoción (name + cover + code + location) */}
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="h-11 w-11 rounded-lg bg-cover bg-center ring-1 ring-border shrink-0"
-          style={{ backgroundImage: `url(${promo.image})` }}
-        />
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h4 className="text-[13.5px] font-semibold truncate">{promo.name}</h4>
-            {promo.badge && (
-              <span className={cn("hidden lg:inline-flex items-center text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0", badgeConfig[promo.badge].tone)}>
-                {badgeConfig[promo.badge].label}
-              </span>
-            )}
-          </div>
-          <p className="text-[11.5px] text-muted-foreground mt-0.5 truncate">{promo.location} · {promo.code}</p>
-        </div>
-      </div>
-
-      {/* Estado */}
-      <div className="hidden md:block">
-        <span className={cn("inline-block text-[10.5px] font-semibold px-2.5 py-1 rounded-full border", status.tone)}>
-          {status.label}
-        </span>
-      </div>
-
-      {/* Unidades */}
-      <div className="hidden md:block">
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-sm font-bold tnum">{promo.availableUnits}/{promo.totalUnits}</span>
-          <span className="text-[11px] text-muted-foreground">disponibles</span>
-        </div>
-        <div className="mt-1 h-1 bg-muted rounded-full overflow-hidden w-24">
-          <div
-            className="h-full bg-gradient-to-r from-primary to-primary/70 rounded-full"
-            style={{ width: `${((promo.totalUnits - promo.availableUnits) / promo.totalUnits) * 100}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Actividad */}
-      <div className="hidden md:flex items-center gap-3 text-[12px]">
-        <span className="inline-flex items-center gap-1 text-muted-foreground">
-          <span className="tnum font-semibold text-foreground">{promo.activity.registros}</span> reg
-        </span>
-        <span className="inline-flex items-center gap-1 text-muted-foreground">
-          <span className="tnum font-semibold text-foreground">{promo.activity.reservas}</span> res
-        </span>
-        {promo.activity.trend > 0 && (
-          <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-emerald-600 tnum">
-            <TrendingUp className="h-3 w-3" /> +{promo.activity.trend}%
-          </span>
-        )}
-      </div>
-
-      {/* More */}
-      <button
-        onClick={(e) => e.stopPropagation()}
-        className="justify-self-end p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-        aria-label="Más opciones"
-      >
-        <MoreHorizontal className="h-4 w-4" />
-      </button>
+    <div>
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">{label}</p>
+      <p className="text-[13px] font-semibold text-foreground tnum">{value}</p>
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   EMPTY STATE
-   ══════════════════════════════════════════════════════════════════ */
 function EmptyState() {
   return (
-    <div className="py-16 text-center">
+    <div className="py-20 text-center">
       <div className="h-12 w-12 rounded-2xl bg-muted grid place-items-center mx-auto mb-4">
         <Search className="h-5 w-5 text-muted-foreground" />
       </div>
-      <h3 className="text-sm font-semibold">No hay promociones que coincidan</h3>
+      <h3 className="text-sm font-semibold">Sin resultados</h3>
       <p className="text-[12.5px] text-muted-foreground mt-1">Prueba a cambiar los filtros o la búsqueda.</p>
     </div>
   );
 }
+
+/* El import de Promotion se queda por si más adelante necesitamos tipar a fondo */
+export type { Promotion };
