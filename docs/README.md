@@ -38,6 +38,12 @@ contract, permisos, estados.
 | `/marketplace` (Agencia) | [`agencia-marketplace.md`](screens/agencia-marketplace.md) | ⬜ |
 | Resto | — | 🎨 placeholders |
 
+## Preguntas abiertas
+
+- **`open-questions.md`** — **🛑 LEER ANTES DE IMPLEMENTAR.** Lista de
+  decisiones de producto y técnicas **no tomadas aún**. Si te topas con
+  ambigüedad, revísalo antes de inventar.
+
 ## Log y roadmap
 
 - **`../DECISIONS.md`** — 29 ADRs con decisiones tomadas

@@ -3,6 +3,11 @@
 > Consulta este archivo **antes** de cada implementación. Es la fuente canónica
 > de reglas y convenciones del proyecto. Si cambian, actualiza este archivo
 > en el mismo commit.
+>
+> 🛑 **IMPORTANTE**: si al implementar una pantalla/feature te encuentras con
+> una decisión ambigua, **NO inventes**. Revisa primero `docs/open-questions.md`
+> — si la pregunta está listada ahí, detente y pregunta a Arman. Si no está,
+> añádela como `Qnueva` en ese mismo documento en el PR actual.
 
 ---
 
