@@ -29,6 +29,7 @@ import { PromotionAvailabilityFull } from "@/components/promotions/detail/Promot
 import { unitsByPromotion } from "@/data/units";
 import { ClientRegistrationDialog } from "@/components/promotions/detail/ClientRegistrationDialog";
 import { PromotionRecords } from "@/components/promotions/detail/PromotionRecords";
+import { PromotionAgenciesV2 } from "@/components/promotions/detail/PromotionAgenciesV2"; // diseño alternativo del tab Agencias (cards + red por nacionalidad)
 import {
   EditMultimediaDialog, EditBasicInfoDialog, EditStructureDialog,
   EditDescriptionDialog, EditLocationDialog, EditPaymentPlanDialog,
@@ -100,6 +101,10 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const { id } = useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(0);
+  // Toggle entre dos diseños del tab Agencias:
+  //  · "v1-lista" = tabla tradicional (AgenciesTab interna en este mismo archivo)
+  //  · "v2-red"   = cards por agencia + chips por nacionalidad (PromotionAgenciesV2)
+  const [agenciesView, setAgenciesView] = useState<"v1-lista" | "v2-red">("v2-red");
   const [_availabilityVersion, _setAvailabilityVersion] = useState<"v1" | "v2">("v2");
   const [viewAsCollaborator, setViewAsCollaborator] = useState(agentMode);
   const [addComercialOpen, setAddComercialOpen] = useState(false);
@@ -823,7 +828,46 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           </div>
         )}
 
-        {activeTabKey === "Agencies" && !viewAsCollaborator && <AgenciesTab promotionId={p.id} navigate={navigate} />}
+        {activeTabKey === "Agencies" && !viewAsCollaborator && (
+          <div className="space-y-4">
+            {/* Switcher entre diseños v1 (lista) y v2 (red por nacionalidad).
+                No persistimos la elección: es un prototipo para comparar. */}
+            <div className="flex items-center justify-end gap-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mr-1">Vista</span>
+              <button
+                type="button"
+                onClick={() => setAgenciesView("v2-red")}
+                className={`inline-flex items-center h-7 px-3 rounded-full text-xs font-medium transition-colors ${
+                  agenciesView === "v2-red"
+                    ? "bg-foreground text-background shadow-soft"
+                    : "border border-border bg-card text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Red
+              </button>
+              <button
+                type="button"
+                onClick={() => setAgenciesView("v1-lista")}
+                className={`inline-flex items-center h-7 px-3 rounded-full text-xs font-medium transition-colors ${
+                  agenciesView === "v1-lista"
+                    ? "bg-foreground text-background shadow-soft"
+                    : "border border-border bg-card text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Lista
+              </button>
+            </div>
+
+            {agenciesView === "v2-red" ? (
+              <PromotionAgenciesV2
+                promotionId={p.id}
+                onInviteAgency={() => navigate("/colaboradores")}
+              />
+            ) : (
+              <AgenciesTab promotionId={p.id} navigate={navigate} />
+            )}
+          </div>
+        )}
 
         {/* ═══ TAB: COMISIONES ═══ */}
         {activeTabKey === "Comisiones" && (
