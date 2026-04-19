@@ -1114,14 +1114,14 @@ function ViewToggleBtn({
     <button
       onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-1 h-6 px-2.5 rounded-full font-medium transition-all",
+        "inline-flex items-center justify-center h-8 w-8 rounded-full transition-all",
         active ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
       )}
       aria-label={`Vista ${label.toLowerCase()}`}
+      title={label}
       aria-pressed={active}
     >
-      <Icon className="h-3 w-3" />
-      <span className="hidden sm:inline">{label}</span>
+      <Icon className="h-4 w-4" />
     </button>
   );
 }
