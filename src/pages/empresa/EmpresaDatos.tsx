@@ -15,7 +15,7 @@
 
 import { useState, useRef } from "react";
 import {
-  Building2, CheckCircle2, AlertCircle, Upload, Palette,
+  Building2, AlertCircle, Upload, Palette,
   Mail, Phone, Globe as GlobeIcon, Linkedin, FileText,
   MapPin, Coins, Languages, Clock, Image as ImageIcon, X,
 } from "lucide-react";
@@ -103,38 +103,25 @@ export default function EmpresaDatos() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <Toaster position="top-center" richColors />
 
-      {/* ═════ Cabecera ═════ */}
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* ═════ Subcabecera con botón Guardar ═════ */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Administración · Empresa</p>
-          <h1 className="text-[24px] font-bold tracking-tight leading-tight mt-1">Datos de empresa</h1>
-          <p className="text-[13px] text-muted-foreground mt-1 max-w-xl">
-            Identidad fiscal, contacto público y preferencias de tu cuenta.
-            Se guardan automáticamente y se usan en tus microsites, contratos y comunicación con agencias.
+          <h2 className="text-[17px] font-bold tracking-tight">Datos de empresa</h2>
+          <p className="text-[12px] text-muted-foreground mt-0.5">
+            Identidad fiscal, contacto público y preferencias. Se guardan automáticamente.
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {empresa.onboardingCompleto ? (
-            <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold rounded-full bg-primary/10 text-primary px-3 py-1.5">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Empresa configurada
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-500 px-3 py-1.5">
-              <AlertCircle className="h-3.5 w-3.5" /> Pendiente de completar
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={handleSave}
-            className="h-9 px-4 rounded-full bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 transition-colors shadow-soft"
-          >
-            Guardar
-          </button>
-        </div>
-      </header>
+        <button
+          type="button"
+          onClick={handleSave}
+          className="h-9 px-4 rounded-full bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 transition-colors shadow-soft shrink-0"
+        >
+          Guardar cambios
+        </button>
+      </div>
 
       {/* ═════ Banner onboarding ═════ */}
       {!empresa.onboardingCompleto && (

@@ -343,16 +343,15 @@ export default function EmpresaOficinas() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <Toaster position="top-center" richColors />
 
-      {/* ═════ Cabecera ═════ */}
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* ═════ Subcabecera ═════ */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Administración · Empresa</p>
-          <h1 className="text-[24px] font-bold tracking-tight leading-tight mt-1">Oficinas</h1>
-          <p className="text-[13px] text-muted-foreground mt-1 max-w-xl">
-            Los puntos de venta físicos de tu empresa. Se usan en los microsites, en el footer de emails comerciales y como ubicaciones disponibles al crear una promoción.
+          <h2 className="text-[17px] font-bold tracking-tight">Oficinas</h2>
+          <p className="text-[12px] text-muted-foreground mt-0.5 max-w-xl">
+            Los puntos de venta físicos de tu empresa. Se usan en tus microsites, en el footer de emails y al crear una promoción.
           </p>
         </div>
         {!isAdding && !editingId && (
@@ -365,7 +364,7 @@ export default function EmpresaOficinas() {
             Añadir oficina
           </button>
         )}
-      </header>
+      </div>
 
       {/* ═════ Formulario crear ═════ */}
       {isAdding && (

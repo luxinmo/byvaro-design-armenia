@@ -11,6 +11,7 @@ import Microsites from "@/pages/Microsites";
 import Emails from "@/pages/Emails";
 import Ajustes from "@/pages/Ajustes";
 import CrearPromocion from "@/pages/CrearPromocion";
+import EmpresaLayout from "@/pages/empresa/EmpresaLayout";
 import EmpresaDatos from "@/pages/empresa/EmpresaDatos";
 import EmpresaOficinas from "@/pages/empresa/EmpresaOficinas";
 import PromocionesCardsV1 from "@/pages/design-previews/PromocionesCardsV1";
@@ -39,10 +40,12 @@ export default function App() {
                 <Route path="/microsites" element={<Microsites />} />
                 <Route path="/emails" element={<Emails />} />
                 <Route path="/ajustes" element={<Ajustes />} />
-                {/* Empresa (administración) */}
-                <Route path="/empresa" element={<Navigate to="/empresa/datos" replace />} />
-                <Route path="/empresa/datos" element={<EmpresaDatos />} />
-                <Route path="/empresa/oficinas" element={<EmpresaOficinas />} />
+                {/* Empresa (administración) — rutas anidadas dentro del layout */}
+                <Route path="/empresa" element={<EmpresaLayout />}>
+                  <Route index element={<Navigate to="/empresa/datos" replace />} />
+                  <Route path="datos" element={<EmpresaDatos />} />
+                  <Route path="oficinas" element={<EmpresaOficinas />} />
+                </Route>
                 {/* Previews de diseños alternativos (no en el menú, accesibles por URL) */}
                 <Route path="/preview/promociones-cards-v1" element={<PromocionesCardsV1 />} />
                 <Route path="*" element={<Navigate to="/inicio" replace />} />
