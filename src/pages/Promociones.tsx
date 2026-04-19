@@ -7,6 +7,7 @@
  */
 
 import { useState, useRef, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Search, Building2, Plus, MapPin, Users, Flame, ChevronDown, SlidersHorizontal,
   X, AlertTriangle, Ban, Share2, TrendingUp,
@@ -292,6 +293,7 @@ const TRENDING_THRESHOLD = 50;
    PÁGINA PRINCIPAL
    ═══════════════════════════════════════════════════════════════════ */
 export default function Promociones() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedPrices, setSelectedPrices] = useState<string[]>([]);
@@ -400,7 +402,10 @@ export default function Promociones() {
             bedrooms={bedrooms} setBedrooms={setBedrooms}
           />
 
-          <button className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft shrink-0">
+          <button
+            onClick={() => navigate("/crear-promocion")}
+            className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft shrink-0"
+          >
             <Plus className="h-3.5 w-3.5" strokeWidth={2} />
             <span className="hidden md:inline">Nueva promoción</span>
             <span className="md:hidden">Nueva</span>
