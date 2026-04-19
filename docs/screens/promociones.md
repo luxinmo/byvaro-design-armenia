@@ -1,5 +1,16 @@
 # Pantalla · Promociones (`/promociones`)
 
+> **Última revisión (post-rediseño de filtros · commit pending):**
+> - Header con buscador + botón "Filtros" + CTA "Nueva promoción"
+> - Toolbar: status tabs + sort + toggle **3 vistas (Lista · Cuadrícula · Mapa)**
+> - Filtros viven en un **drawer lateral derecho** que se abre con backdrop
+>   borroso (patrón Linear/Airbnb)
+> - Filtros: Actividad · Colaboración (+ agencia específica buscable) ·
+>   Ubicación (buscable) · Tipología · Edificio · Precio (min/max con
+>   separador miles) · Dormitorios (umbral 1+/2+/3+/4+) · Entrega · Comisión
+> - Vista **Mapa** real con Leaflet + OpenStreetMap, markers por promoción
+
+
 ## Propósito
 
 Listado completo de promociones del promotor. Filtrable, ordenable,

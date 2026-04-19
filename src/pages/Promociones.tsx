@@ -11,14 +11,16 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Building2, Plus, MapPin, Users, Flame, SlidersHorizontal,
-  X, AlertTriangle, Ban, Share2, TrendingUp, Check,
+  X, AlertTriangle, Ban, Share2, TrendingUp, Check, ChevronDown,
+  List, Map as MapIcon, LayoutGrid, type LucideIcon,
 } from "lucide-react";
 import { promotions, getBuildingTypeLabel, type Promotion } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion } from "@/data/developerPromotions";
 import { unitsByPromotion } from "@/data/units";
+import { agencies, type Agency } from "@/data/agencies";
 import { Tag } from "@/components/ui/Tag";
+import { PromocionesMap } from "@/components/promociones/PromocionesMap";
 import { cn } from "@/lib/utils";
-import { ChevronDown } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════
    Opciones estáticas (las dinámicas se derivan de los datos en el componente)
@@ -291,24 +293,32 @@ export default function Promociones() {
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [buildingTypeFilter, setBuildingTypeFilter] = useState<string>("All");
-  const [selectedPrices, setSelectedPrices] = useState<string[]>([]);
-  const [selectedBedrooms, setSelectedBedrooms] = useState<string[]>([]);
+  const [priceMin, setPriceMin] = useState<number | null>(null);
+  const [priceMax, setPriceMax] = useState<number | null>(null);
+  const [minBedrooms, setMinBedrooms] = useState<number | null>(null);
   const [selectedDelivery, setSelectedDelivery] = useState<string[]>([]);
   const [selectedCommissions, setSelectedCommissions] = useState<string[]>([]);
 
-  // Estado y orden
+  // Agencia específica (solo si collabFilter incluye "with-agencies")
+  const [agencyFilter, setAgencyFilter] = useState<string | null>(null);
+
+  // Estado, orden, vista
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sort, setSort] = useState<string>("recent");
+  const [viewMode, setViewMode] = useState<"list" | "grid" | "map">("list");
 
   // Drawer de filtros
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  // Contador de filtros activos (para badge en el botón)
+  // Contador de filtros activos (para badge)
   const activeFilterCount =
     activityFilter.length + collabFilter.length +
-    selectedLocations.length + selectedTypes.length + selectedPrices.length +
-    selectedBedrooms.length + selectedDelivery.length + selectedCommissions.length +
-    (buildingTypeFilter !== "All" ? 1 : 0);
+    selectedLocations.length + selectedTypes.length +
+    selectedDelivery.length + selectedCommissions.length +
+    (buildingTypeFilter !== "All" ? 1 : 0) +
+    (priceMin !== null || priceMax !== null ? 1 : 0) +
+    (minBedrooms !== null ? 1 : 0) +
+    (agencyFilter !== null ? 1 : 0);
 
   /* ─── Dataset combinado (developer-only + legacy) ─── */
   const allPromotions: DevPromotion[] = useMemo(() => {
@@ -325,7 +335,6 @@ export default function Promociones() {
   const collabOptions = [
     { value: "with-agencies", label: "Con agencias" },
     { value: "without", label: "Sin agencias" },
-    { value: "many", label: "5+ agencias" },
   ];
 
   /* ─── Opciones estáticas de BÚSQUEDA AVANZADA ─── */
@@ -335,10 +344,10 @@ export default function Promociones() {
     { value: "Mixto", label: "Mixto" },
   ];
   const bedroomOptions = [
-    { value: "1", label: "1 hab" },
-    { value: "2", label: "2 hab" },
-    { value: "3", label: "3 hab" },
-    { value: "4+", label: "4+ hab" },
+    { value: "1", label: "1+ hab" },
+    { value: "2", label: "2+ hab" },
+    { value: "3", label: "3+ hab" },
+    { value: "4", label: "4+ hab" },
   ];
   const commissionFilterOptions = [
     { value: "3", label: "3%+" },
@@ -375,17 +384,14 @@ export default function Promociones() {
   }, [allPromotions]);
 
   /* ─── "Limpiar todo" ─── */
-  const hasFilters = activityFilter.length + collabFilter.length
-    + selectedLocations.length + selectedTypes.length + selectedPrices.length
-    + selectedBedrooms.length + selectedDelivery.length + selectedCommissions.length > 0
-    || buildingTypeFilter !== "All";
+  const hasFilters = activeFilterCount > 0;
 
   const clearAllFilters = () => {
     setSearch("");
-    setActivityFilter([]); setCollabFilter([]);
+    setActivityFilter([]); setCollabFilter([]); setAgencyFilter(null);
     setSelectedLocations([]); setSelectedTypes([]); setBuildingTypeFilter("All");
-    setSelectedPrices([]); setSelectedBedrooms([]); setSelectedDelivery([]);
-    setSelectedCommissions([]);
+    setPriceMin(null); setPriceMax(null); setMinBedrooms(null);
+    setSelectedDelivery([]); setSelectedCommissions([]);
     setStatusFilter("all");
   };
 
@@ -428,10 +434,15 @@ export default function Promociones() {
         const ok = collabFilter.some(f => {
           if (f === "with-agencies") return n >= 1;
           if (f === "without") return n === 0;
-          if (f === "many") return n >= 5;
           return false;
         });
         if (!ok) return false;
+      }
+
+      // Agencia específica (solo aplica si se eligió)
+      if (agencyFilter !== null) {
+        const ag = agencies.find(a => a.id === agencyFilter);
+        if (!ag || !ag.promotionsCollaborating.includes(p.id)) return false;
       }
 
       // ──────── Búsqueda avanzada ────────
@@ -439,10 +450,9 @@ export default function Promociones() {
       if (buildingTypeFilter !== "All" && !matchesBuildingType(p.buildingType, buildingTypeFilter)) return false;
       if (selectedTypes.length > 0 && !selectedTypes.some(t => p.propertyTypes.includes(t))) return false;
 
-      if (selectedPrices.length > 0) {
-        const minVal = Math.min(...selectedPrices.map(v => parseInt(v, 10)));
-        if (p.priceMax < minVal) return false;
-      }
+      // Precio min/max (inputs numéricos)
+      if (priceMin !== null && p.priceMax < priceMin) return false;
+      if (priceMax !== null && p.priceMin > priceMax) return false;
 
       if (selectedDelivery.length > 0) {
         const promoYear = getDeliveryYear(p.delivery);
@@ -458,22 +468,20 @@ export default function Promociones() {
         if (p.commission < minCom) return false;
       }
 
-      if (selectedBedrooms.length > 0) {
+      // Dormitorios: umbral mínimo, la promo tiene al menos 1 unidad con >= minBedrooms habs
+      if (minBedrooms !== null) {
         const units = unitsByPromotion[p.id] ?? [];
-        const ok = selectedBedrooms.some(b => {
-          if (b === "4+") return units.some(u => u.bedrooms >= 4);
-          return units.some(u => u.bedrooms === parseInt(b, 10));
-        });
-        if (!ok) return false;
+        if (!units.some(u => u.bedrooms >= minBedrooms)) return false;
       }
 
       return true;
     });
   }, [
     allPromotions, search, statusFilter,
-    activityFilter, collabFilter,
+    activityFilter, collabFilter, agencyFilter,
     selectedLocations, buildingTypeFilter, selectedTypes,
-    selectedPrices, selectedDelivery, selectedCommissions, selectedBedrooms,
+    priceMin, priceMax, minBedrooms,
+    selectedDelivery, selectedCommissions,
   ]);
 
   /* ─── Ordenación ─── */
@@ -515,33 +523,51 @@ export default function Promociones() {
             <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight leading-tight mt-1">Promociones</h1>
           </div>
 
-          {/* Controles: búsqueda + filter panel + CTA */}
-          <div className="flex items-center gap-2 sm:ml-auto flex-1 sm:flex-initial sm:max-w-[560px]">
-          {/* Search */}
-          <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60 z-10" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar promoción, promotor, referencia o ubicación..."
-              className="w-full h-9 pl-9 pr-9 text-sm bg-card border border-border rounded-full focus:border-primary outline-none transition-colors"
-            />
-            {search && (
-              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
+          {/* Controles: búsqueda + FILTROS (al lado) + CTA */}
+          <div className="flex items-center gap-2 sm:ml-auto flex-1 sm:flex-initial sm:max-w-[640px]">
+            {/* Search */}
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60 z-10" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar promoción, promotor, ubicación..."
+                className="w-full h-9 pl-9 pr-9 text-sm bg-card border border-border rounded-full focus:border-primary outline-none transition-colors"
+              />
+              {search && (
+                <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
 
-          <button
-            onClick={() => navigate("/crear-promocion")}
-            className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft shrink-0"
-          >
-            <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-            <span className="hidden md:inline">Nueva promoción</span>
-            <span className="md:hidden">Nueva</span>
-          </button>
+            {/* Filtros (al lado del buscador) */}
+            <button
+              onClick={() => setFiltersOpen(true)}
+              className={cn(
+                "inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-full border text-sm font-medium transition-colors shrink-0",
+                activeFilterCount > 0
+                  ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90"
+                  : "bg-card border-border text-foreground hover:border-foreground/30"
+              )}
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Filtros</span>
+              {activeFilterCount > 0 && (
+                <span className="ml-0.5 bg-primary-foreground/20 rounded-full h-5 min-w-[20px] px-1 text-[11px] font-bold grid place-items-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => navigate("/crear-promocion")}
+              className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft shrink-0"
+            >
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              <span className="hidden md:inline">Nueva promoción</span>
+            </button>
           </div>
         </div>
       </div>
@@ -569,36 +595,52 @@ export default function Promociones() {
             ))}
           </div>
 
-          {/* Derecha: contador + sort minimalista + filtros */}
-          <div className="ml-auto flex items-center gap-4">
+          {/* Derecha: contador + sort + 3 vistas */}
+          <div className="ml-auto flex items-center gap-3 sm:gap-4">
             <span className="text-xs text-muted-foreground hidden sm:inline">
               <span className="font-semibold text-foreground tnum">{sortedAndFiltered.length}</span> resultados
             </span>
 
             <MinimalSort value={sort} options={sortOptions} onChange={setSort} />
 
-            <button
-              onClick={() => setFiltersOpen(true)}
-              className={cn(
-                "inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full border text-[12.5px] font-medium transition-colors",
-                activeFilterCount > 0
-                  ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90"
-                  : "bg-card border-border text-foreground hover:border-foreground/30"
-              )}
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5" />
-              Filtros
-              {activeFilterCount > 0 && (
-                <span className="ml-0.5 bg-primary-foreground/20 rounded-full h-4 min-w-[18px] px-1 text-[10px] font-bold grid place-items-center">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
+            {/* Toggle Lista / Cuadrícula / Mapa */}
+            <div className="inline-flex items-center bg-muted/40 border border-border rounded-full p-0.5 text-xs">
+              <ViewToggleBtn active={viewMode === "list"} onClick={() => setViewMode("list")} icon={List} label="Lista" />
+              <ViewToggleBtn active={viewMode === "grid"} onClick={() => setViewMode("grid")} icon={LayoutGrid} label="Cuadrícula" />
+              <ViewToggleBtn active={viewMode === "map"} onClick={() => setViewMode("map")} icon={MapIcon} label="Mapa" />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ═══════════ Cards list (horizontal) ═══════════ */}
+      {/* ═══════════ Vista MAPA ═══════════ */}
+      {viewMode === "map" && (
+        <div className="flex-1 px-4 sm:px-6 lg:px-8 pb-8">
+          <div className="max-w-[1400px] mx-auto">
+            <PromocionesMap promotions={sortedAndFiltered} />
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ Vista CUADRÍCULA ═══════════ */}
+      {viewMode === "grid" && (
+        <div className="flex-1 px-4 sm:px-6 lg:px-8 pb-8">
+          <div className="max-w-[1400px] mx-auto">
+            {sortedAndFiltered.length === 0 ? (
+              <EmptyState />
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                {sortedAndFiltered.map(p => (
+                  <PromoCardCompact key={p.id} promo={p} isTrending={isTrending(p)} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ Vista LISTA (horizontal cards) ═══════════ */}
+      {viewMode === "list" && (
       <div className="flex-1 px-4 sm:px-6 lg:px-8 pb-8">
         <div className="max-w-[1400px] mx-auto flex flex-col gap-3 lg:gap-4">
           {sortedAndFiltered.length === 0 ? (
@@ -821,6 +863,7 @@ export default function Promociones() {
           )}
         </div>
       </div>
+      )}
 
       {/* ═══════════ DRAWER DE FILTROS ═══════════ */}
       <AnimatePresence>
@@ -868,14 +911,32 @@ export default function Promociones() {
                   <SectionTitle>Gestión</SectionTitle>
                   <FilterGroup title="Actividad" options={activityOptions} values={activityFilter} onChange={setActivityFilter} />
                   <FilterGroup title="Colaboración" options={collabOptions} values={collabFilter} onChange={setCollabFilter} />
+
+                  {/* Buscador de agencia específica (solo si 'Con agencias' está activo) */}
+                  {collabFilter.includes("with-agencies") && (
+                    <AgencySearcher
+                      agencies={agencies}
+                      value={agencyFilter}
+                      onChange={setAgencyFilter}
+                    />
+                  )}
                 </div>
 
                 <div className="h-px bg-border" />
 
                 <div className="space-y-5">
                   <SectionTitle>Búsqueda avanzada</SectionTitle>
-                  <FilterGroup title="Zona" options={locationOptions} values={selectedLocations} onChange={setSelectedLocations} />
+
+                  <SearchableFilterGroup
+                    title="Ubicación"
+                    options={locationOptions}
+                    values={selectedLocations}
+                    onChange={setSelectedLocations}
+                    placeholder="Buscar zona (Marbella, Alicante...)"
+                  />
+
                   <FilterGroup title="Tipología" options={propertyTypeOptions} values={selectedTypes} onChange={setSelectedTypes} />
+
                   <FilterGroup
                     title="Edificio"
                     options={buildingTypeOptions}
@@ -883,8 +944,16 @@ export default function Promociones() {
                     onChange={(v) => setBuildingTypeFilter(v.length === 0 ? "All" : v[v.length - 1])}
                     multi={false}
                   />
-                  <FilterGroup title="Precio" options={priceFilterOptions} values={selectedPrices} onChange={setSelectedPrices} />
-                  <FilterGroup title="Dormitorios" options={bedroomOptions} values={selectedBedrooms} onChange={setSelectedBedrooms} />
+
+                  <PriceRangeFilter
+                    min={priceMin}
+                    max={priceMax}
+                    onMinChange={setPriceMin}
+                    onMaxChange={setPriceMax}
+                  />
+
+                  <BedroomsThresholdFilter value={minBedrooms} onChange={setMinBedrooms} />
+
                   <FilterGroup title="Entrega" options={deliveryOptions} values={selectedDelivery} onChange={setSelectedDelivery} />
                   <FilterGroup title="Comisión" options={commissionFilterOptions} values={selectedCommissions} onChange={setSelectedCommissions} />
                 </div>
@@ -1035,6 +1104,339 @@ function FilterGroup({
 /* ═══════════════════════════════════════════════════════════════════
    Sub-componentes
    ═══════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════
+   ViewToggleBtn · botón de segmento del toggle Lista/Cuadrícula/Mapa
+   ═══════════════════════════════════════════════════════════════════ */
+function ViewToggleBtn({
+  active, onClick, icon: Icon, label,
+}: { active: boolean; onClick: () => void; icon: LucideIcon; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-1 h-6 px-2.5 rounded-full font-medium transition-all",
+        active ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
+      )}
+      aria-label={`Vista ${label.toLowerCase()}`}
+      aria-pressed={active}
+    >
+      <Icon className="h-3 w-3" />
+      <span className="hidden sm:inline">{label}</span>
+    </button>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SearchableFilterGroup · chips con buscador arriba (para listas largas)
+   Se usa para Ubicación (muchas zonas posibles).
+   ═══════════════════════════════════════════════════════════════════ */
+function SearchableFilterGroup({
+  title, options, values, onChange, placeholder = "Buscar…",
+}: {
+  title: string;
+  options: { value: string; label: string }[];
+  values: string[];
+  onChange: (v: string[]) => void;
+  placeholder?: string;
+}) {
+  const [q, setQ] = useState("");
+  const filtered = useMemo(() => {
+    const qq = q.toLowerCase().trim();
+    if (!qq) return options;
+    return options.filter(o => o.label.toLowerCase().includes(qq));
+  }, [q, options]);
+  const toggle = (v: string) =>
+    onChange(values.includes(v) ? values.filter(x => x !== v) : [...values, v]);
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-2">
+        <h4 className="text-[13px] font-semibold text-foreground">{title}</h4>
+        {values.length > 0 && (
+          <button onClick={() => onChange([])} className="text-[11px] text-muted-foreground hover:text-destructive">
+            Limpiar
+          </button>
+        )}
+      </div>
+      <div className="relative mb-2">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
+        <input
+          type="text"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={placeholder}
+          className="w-full h-8 pl-8 pr-8 text-[12.5px] bg-muted/30 border border-border rounded-full focus:bg-background focus:border-primary outline-none transition-colors"
+        />
+        {q && (
+          <button onClick={() => setQ("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+            <X className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto">
+        {filtered.length === 0 ? (
+          <p className="text-[11.5px] text-muted-foreground italic px-1">Sin coincidencias</p>
+        ) : (
+          filtered.map(opt => {
+            const selected = values.includes(opt.value);
+            return (
+              <button
+                key={opt.value}
+                onClick={() => toggle(opt.value)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-[12.5px] font-medium transition-colors",
+                  selected
+                    ? "bg-primary/10 border-primary/30 text-primary"
+                    : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
+                )}
+              >
+                {selected && <Check className="h-3 w-3" strokeWidth={3} />}
+                {opt.label}
+              </button>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PriceRangeFilter · inputs numéricos min/max con formato español 500.000
+   ═══════════════════════════════════════════════════════════════════ */
+function PriceRangeFilter({
+  min, max, onMinChange, onMaxChange,
+}: {
+  min: number | null;
+  max: number | null;
+  onMinChange: (v: number | null) => void;
+  onMaxChange: (v: number | null) => void;
+}) {
+  const fmt = (v: number | null) => v === null ? "" : v.toLocaleString("es-ES");
+  const parse = (s: string): number | null => {
+    const digits = s.replace(/\D/g, "");
+    if (!digits) return null;
+    return parseInt(digits, 10);
+  };
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-2">
+        <h4 className="text-[13px] font-semibold text-foreground">Precio</h4>
+        {(min !== null || max !== null) && (
+          <button
+            onClick={() => { onMinChange(null); onMaxChange(null); }}
+            className="text-[11px] text-muted-foreground hover:text-destructive"
+          >
+            Limpiar
+          </button>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="relative">
+          <input
+            type="text"
+            inputMode="numeric"
+            value={fmt(min)}
+            onChange={(e) => onMinChange(parse(e.target.value))}
+            placeholder="Mín."
+            className="w-full h-9 pl-3 pr-8 text-sm bg-card border border-border rounded-xl focus:border-primary outline-none transition-colors tnum"
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">€</span>
+        </div>
+        <div className="relative">
+          <input
+            type="text"
+            inputMode="numeric"
+            value={fmt(max)}
+            onChange={(e) => onMaxChange(parse(e.target.value))}
+            placeholder="Máx."
+            className="w-full h-9 pl-3 pr-8 text-sm bg-card border border-border rounded-xl focus:border-primary outline-none transition-colors tnum"
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">€</span>
+        </div>
+      </div>
+      <p className="text-[11px] text-muted-foreground mt-1.5">
+        Formato: <span className="tnum">500.000</span> (separador de miles automático)
+      </p>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BedroomsThresholdFilter · radio-style con umbrales 1+ / 2+ / 3+ / 4+
+   Seleccionar "2+" significa "al menos 2 dormitorios" → incluye 3+, 4+
+   ═══════════════════════════════════════════════════════════════════ */
+function BedroomsThresholdFilter({
+  value, onChange,
+}: {
+  value: number | null;
+  onChange: (v: number | null) => void;
+}) {
+  const thresholds = [1, 2, 3, 4];
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-2">
+        <h4 className="text-[13px] font-semibold text-foreground">Dormitorios mínimos</h4>
+        {value !== null && (
+          <button onClick={() => onChange(null)} className="text-[11px] text-muted-foreground hover:text-destructive">
+            Limpiar
+          </button>
+        )}
+      </div>
+      <div className="flex gap-1.5">
+        {thresholds.map(n => {
+          const selected = value === n;
+          return (
+            <button
+              key={n}
+              onClick={() => onChange(selected ? null : n)}
+              className={cn(
+                "flex-1 inline-flex items-center justify-center h-9 rounded-xl border text-sm font-medium transition-colors",
+                selected
+                  ? "bg-primary/10 border-primary/30 text-primary"
+                  : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
+              )}
+            >
+              {n}+ hab
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   AgencySearcher · buscador + lista de agencias colaboradoras
+   Solo se renderiza cuando collabFilter incluye "with-agencies".
+   Selecciona una única agencia (o null) para filtrar promos donde
+   esa agencia concreta colabora.
+   ═══════════════════════════════════════════════════════════════════ */
+function AgencySearcher({
+  agencies: items, value, onChange,
+}: {
+  agencies: Agency[];
+  value: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const [q, setQ] = useState("");
+  const filtered = useMemo(() => {
+    const qq = q.toLowerCase().trim();
+    if (!qq) return items;
+    return items.filter(a => a.name.toLowerCase().includes(qq) || a.location.toLowerCase().includes(qq));
+  }, [q, items]);
+  const selected = value ? items.find(a => a.id === value) : null;
+
+  return (
+    <div className="pt-1">
+      <div className="flex items-baseline justify-between mb-2">
+        <h4 className="text-[13px] font-semibold text-foreground">Agencia específica</h4>
+        {value && (
+          <button onClick={() => onChange(null)} className="text-[11px] text-muted-foreground hover:text-destructive">
+            Quitar filtro
+          </button>
+        )}
+      </div>
+      {selected ? (
+        <div className="flex items-center gap-2.5 p-2.5 rounded-xl border border-primary/30 bg-primary/5">
+          <img src={selected.logo} alt="" className="h-8 w-8 rounded-full bg-white shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-semibold text-foreground truncate">{selected.name}</p>
+            <p className="text-[11px] text-muted-foreground truncate">{selected.location}</p>
+          </div>
+          <button onClick={() => onChange(null)} className="p-1 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="relative mb-2">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
+            <input
+              type="text"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar agencia por nombre o ubicación..."
+              className="w-full h-8 pl-8 pr-8 text-[12.5px] bg-muted/30 border border-border rounded-full focus:bg-background focus:border-primary outline-none transition-colors"
+            />
+            {q && (
+              <button onClick={() => setQ("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+          <div className="space-y-1 max-h-[160px] overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="text-[11.5px] text-muted-foreground italic px-1 py-2">Sin coincidencias</p>
+            ) : (
+              filtered.map(ag => (
+                <button
+                  key={ag.id}
+                  onClick={() => onChange(ag.id)}
+                  className="w-full flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted/40 transition-colors text-left"
+                >
+                  <img src={ag.logo} alt="" className="h-7 w-7 rounded-full bg-white shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12.5px] font-medium text-foreground truncate">{ag.name}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{ag.location}</p>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PromoCardCompact · tarjeta vertical para vista Cuadrícula
+   ═══════════════════════════════════════════════════════════════════ */
+function PromoCardCompact({ promo: p, isTrending }: { promo: DevPromotion; isTrending: boolean }) {
+  const fmt = (n: number) =>
+    new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+  return (
+    <article className={cn(
+      "group bg-card border rounded-2xl overflow-hidden shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer",
+      isTrending ? "border-border ring-1 ring-amber-300/50" : "border-border"
+    )}>
+      <div className="relative aspect-[16/10] overflow-hidden bg-muted">
+        {p.image && <img src={p.image} alt={p.name} className="h-full w-full object-cover group-hover:scale-[1.02] transition-transform duration-500" loading="lazy" />}
+        {isTrending && (
+          <Tag variant="trending" size="sm" shape="pill" icon={<Flame className="h-3 w-3" />} className="absolute top-3 right-3">
+            Trending
+          </Tag>
+        )}
+        {p.badge && (
+          <Tag variant="overlay" size="sm" shape="pill" className="absolute top-3 left-3 shadow-soft">
+            {p.badge === "new" ? "Nueva" : "Últimas unidades"}
+          </Tag>
+        )}
+      </div>
+      <div className="p-4">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground truncate">{p.location}</p>
+        <h3 className="text-[15px] font-bold text-foreground mt-0.5 truncate">{p.name}</h3>
+        <p className="text-[11.5px] text-muted-foreground mt-0.5 truncate">
+          {p.developer} · {p.delivery}
+        </p>
+        <p className="text-lg font-bold text-foreground mt-2 tnum">
+          {fmt(p.priceMin)}
+          {p.priceMax > p.priceMin && <span className="text-muted-foreground font-normal"> — {fmt(p.priceMax)}</span>}
+        </p>
+        <div className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[11.5px]">
+          <span className="text-muted-foreground"><span className="font-semibold text-foreground tnum">{p.availableUnits}/{p.totalUnits}</span> disp.</span>
+          <span className="text-muted-foreground"><span className="font-semibold text-foreground tnum">{p.commission}%</span> com.</span>
+          {p.agencies > 0 && (
+            <span className="text-muted-foreground inline-flex items-center gap-1">
+              <Users className="h-3 w-3" /> <span className="tnum">{p.agencies}</span>
+            </span>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
