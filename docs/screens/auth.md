@@ -81,17 +81,42 @@ Casos:
   "Email o contraseña incorrectos."
 - **Rate-limit** (backend) → banner "Demasiados intentos. Prueba en X min."
 
-### Register · éxito
-1. Usuario rellena nombre, email, password (≥8), confirmación, acepta ToS.
-2. Click en "Crear cuenta gratis" → `submitting=true`.
-3. `POST /api/v1/auth/register` (hoy mockeado con `setTimeout(700)`).
-4. Toast verde "Cuenta creada · Te hemos enviado un email de verificación."
-5. `navigate("/inicio", { replace: true })`. **TODO**: cuando exista
-   `/onboarding`, redirigir ahí en su lugar.
+### Register · wizard de 2 pasos + rama company-exists
+
+**Step 1 · rol + email**
+1. Usuario elige rol (Promotor/Agencia/Propietario) entre 3 cards pill.
+2. Introduce email profesional + nombre comercial de empresa (opcional).
+3. Click en "Continuar":
+   - Se ejecuta `getCompanyFromEmail(email)` (mock local, futuro
+     `GET /api/v1/companies/lookup?domain=<x>`).
+   - Si el dominio matchea → rama **company-exists**.
+   - Si no → **Step 2**.
+
+**Rama company-exists**
+1. Card con logo Clearbit de la empresa detectada + nombre.
+2. Email en read-only con botón "Editar" que vuelve a Step 1.
+3. Click en "Solicitar acceso":
+   - Dispara `POST /api/v1/companies/join-request` (hoy `setRequestSent(true)`).
+   - Se renderiza pantalla final "Solicitud enviada" con el email del
+     administrador enmascarado (`a*****n@luxinmo.com`).
+4. Link "Volver al inicio de sesión" lleva a `/login`.
+
+**Step 2 · datos personales**
+1. Selector sub-rol (Propietario/Director · Empleado) pill group.
+2. Nombre completo · email read-only editable · teléfono.
+3. Password (con medidor de fuerza de 4 barras) + confirmación + ToS.
+4. Click en "Crear cuenta":
+   - `POST /api/v1/auth/register` (hoy mock `setTimeout(700)`).
+   - Toast "Cuenta creada · Te hemos enviado un email de verificación."
+   - `navigate("/inicio", { replace: true })`. **TODO(onboarding)**:
+     redirigir a `/onboarding` cuando exista.
 
 ### Register · error
+- **Step 1 · rol no seleccionado** → banner "Selecciona tu rol."
+- **Step 1 · email inválido** → inline + banner.
+- **Step 2 · sub-rol no seleccionado** → banner.
 - **Nombre < 2 chars** → banner "Escribe tu nombre completo."
-- **Email inválido** → inline + banner.
+- **Teléfono < 6 chars** → banner.
 - **Password < 8** → banner + meter en "Muy débil/Débil".
 - **Passwords no coinciden** → mensaje inline bajo "Confirmar" + banner.
 - **ToS no aceptado** → banner.
@@ -117,20 +142,41 @@ Casos:
 | password | password | ✅ | longitud ≥ 6 |
 | remember | checkbox | ⬜ | — (default `true`) |
 
-### Register
+### Register (wizard completo)
+
+**Step 1**
 
 | Campo | Tipo | Required | Validación cliente |
 |---|---|---|---|
-| name | text | ✅ | `trim().length >= 2` |
+| role | enum `developer` \| `agency` \| `owner` | ✅ | seleccionado |
 | email | email | ✅ | formato `x@y.z` |
-| company | text | ⬜ | libre (opcional) |
+| companyName | text | ⬜ | libre (opcional) |
+
+**Rama company-exists**
+
+| Campo | Tipo | Required | Nota |
+|---|---|---|---|
+| email | email (read-only) | ✅ | heredado de Step 1, "Editar" vuelve |
+
+**Step 2**
+
+| Campo | Tipo | Required | Validación cliente |
+|---|---|---|---|
+| subRole | enum `director` \| `employee` | ✅ | seleccionado |
+| name | text | ✅ | `trim().length >= 2` |
+| email | email (read-only) | ✅ | heredado, "Editar" vuelve a Step 1 |
+| phone | tel | ✅ | `trim().length >= 6` |
 | password | password | ✅ | longitud ≥ 8 |
 | confirm | password | ✅ | `=== password` |
 | acceptTos | checkbox | ✅ | debe estar marcado |
 
-**Password strength meter** (Register): 4 heurísticas — ≥8 chars,
+**Password strength meter** (Step 2): 4 heurísticas — ≥8 chars,
 mayúscula, número, símbolo. Pinta 4 barras (destructive → amber →
-primary → emerald).
+primary → primary).
+
+**Mock de empresas** (Step 1 · detección por dominio de email):
+`luxinmo.com`, `kronoshomes.com`, `metrovacesa.com`. En producción
+sustituir por lookup server-side.
 
 ## API endpoints esperados
 
@@ -155,19 +201,44 @@ Response 429: { "error": "rate_limited", "retryAfterSec": 180 }
 POST /api/v1/auth/register
 Request:
 {
+  "role": "developer" | "agency" | "owner",
+  "subRole": "director" | "employee",
   "name": "Ana Gómez",
   "email": "ana@empresa.com",
-  "company": "Luxinmo",            // opcional
+  "phone": "+34 600 000 000",
+  "companyName": "Luxinmo",             // opcional · informativo
   "password": "********"
 }
 Response 201:
 {
   "user": { "id": "usr_...", "email": "...", "verified": false },
   "session": { "token": "...", "expiresAt": "..." },
-  "onboarding": { "required": true, "nextStep": "role" }
+  "onboarding": { "required": true, "nextStep": "company-setup" }
 }
 Response 409: { "error": "email_exists" }
 Response 422: { "error": "weak_password" | "invalid_email" }
+```
+
+```
+GET /api/v1/companies/lookup?domain=luxinmo.com
+Response 200:
+{
+  "company": { "id": "co_...", "name": "Luxinmo Real Estate",
+               "logo": "https://logo.clearbit.com/luxinmo.com",
+               "adminEmail": "a*****n@luxinmo.com" }
+}
+Response 404 si no match.
+```
+
+```
+POST /api/v1/companies/join-request
+Request:
+{
+  "email": "arman@luxinmo.com",
+  "companyId": "co_..."
+}
+Response 200: { "status": "sent" }
+Response 409: { "status": "already-member" }
 ```
 
 ```
