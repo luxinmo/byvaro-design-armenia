@@ -27,12 +27,14 @@ import {
   roleOptions, tipoOptions, subUniOptions, subVariasOptions,
   estadoOptions, faseConstruccionOptions, estiloViviendaOptions,
 } from "@/components/crear-promocion/options";
-import { OptionCard, InlineStepper } from "@/components/crear-promocion/SharedWidgets";
+import { OptionCard, NumericStepper, InlineStepper, TotalSummary } from "@/components/crear-promocion/SharedWidgets";
 import { StepTimeline, getAllSteps } from "@/components/crear-promocion/StepTimeline";
+import { Switch } from "@/components/ui/Switch";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { cn } from "@/lib/utils";
 import {
   FileCheck, FileX, Calendar as CalendarIconLucide, Home as HomeIcon, Store as StoreIcon,
-  Minus, Plus,
+  Minus, Archive, Car,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -90,6 +92,21 @@ export default function CrearPromocion() {
   /* Flags derivados del estado (usados en conditionals) */
   const isSingleHome = state.tipo === "unifamiliar" && state.subUni === "una_sola";
   const isVariasUni = state.tipo === "unifamiliar" && state.subUni === "varias";
+
+  /* Cálculos derivados para config_edificio y extras */
+  const totalEscaleras = useMemo(
+    () => state.escalerasPorBloque.reduce((sum, n) => sum + n, 0),
+    [state.escalerasPorBloque]
+  );
+  const multiplier = totalEscaleras;
+  const totalViviendas = state.plantas * state.aptosPorPlanta * multiplier;
+  const totalLocales = state.locales * multiplier;
+  const summaryItems = [
+    { label: "viviendas", count: totalViviendas },
+    { label: "locales", count: totalLocales },
+    { label: "trasteros", count: state.trasteros },
+    { label: "plazas parking", count: state.parkings },
+  ];
 
   /* Opciones de trimestre (año actual +2) */
   const currentYear = new Date().getFullYear();
@@ -164,6 +181,8 @@ export default function CrearPromocion() {
       }
       return !!state.subVarias && !!state.estiloVivienda;
     }
+    if (step === "config_edificio") return state.numBloques >= 1;
+    if (step === "extras") return true;
     if (step === "estado") return !!state.estado;
     if (step === "detalles") return true;
     // Pasos aún no portados: siempre permitimos pasar
@@ -392,6 +411,177 @@ export default function CrearPromocion() {
                   </div>
                 )}
 
+                {/* ─── Step: config_edificio ─── */}
+                {step === "config_edificio" && (
+                  <div className="flex flex-col gap-3">
+                    <SectionLabel>Bloques y escaleras</SectionLabel>
+
+                    <NumericStepper
+                      label="Número de bloques"
+                      value={state.numBloques}
+                      min={1}
+                      onChange={(v) => {
+                        update("numBloques", v);
+                        const current = state.escalerasPorBloque;
+                        if (v > current.length) {
+                          update("escalerasPorBloque", [...current, ...Array(v - current.length).fill(1)]);
+                        } else {
+                          update("escalerasPorBloque", current.slice(0, v));
+                        }
+                      }}
+                    />
+
+                    {state.numBloques === 1 ? (
+                      <NumericStepper
+                        label="Escaleras"
+                        value={state.escalerasPorBloque[0] || 1}
+                        min={1}
+                        onChange={(v) => update("escalerasPorBloque", [v])}
+                      />
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {state.escalerasPorBloque.map((esc, i) => (
+                          <NumericStepper
+                            key={i}
+                            label={`Escaleras en Bloque ${i + 1}`}
+                            value={esc}
+                            min={1}
+                            onChange={(v) => {
+                              const next = [...state.escalerasPorBloque];
+                              next[i] = v;
+                              update("escalerasPorBloque", next);
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="h-px bg-border my-1" />
+                    <SectionLabel>Distribución</SectionLabel>
+                    <NumericStepper label="Plantas sobre rasante" value={state.plantas} min={1}
+                      onChange={(v) => update("plantas", v)} />
+                    <NumericStepper label="Viviendas por planta (por escalera)" value={state.aptosPorPlanta} min={1}
+                      onChange={(v) => update("aptosPorPlanta", v)} />
+
+                    <div className="h-px bg-border my-1" />
+                    <SectionLabel>Planta baja (planta 0)</SectionLabel>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <PlantaBajaCard icon={Minus} title="Sin uso residencial" desc="Nada en PB"
+                        selected={state.plantaBajaTipo === null}
+                        onClick={() => update("plantaBajaTipo", null)} />
+                      <PlantaBajaCard icon={StoreIcon} title="Locales comerciales" desc="Espacios comerciales"
+                        selected={state.plantaBajaTipo === "locales"}
+                        onClick={() => update("plantaBajaTipo", "locales")} />
+                      <PlantaBajaCard icon={HomeIcon} title="Viviendas (bajos)" desc="Viviendas tipo bajo"
+                        selected={state.plantaBajaTipo === "viviendas"}
+                        onClick={() => update("plantaBajaTipo", "viviendas")} />
+                    </div>
+
+                    {state.plantaBajaTipo === "locales" && (
+                      <NumericStepper label="Nº de locales en planta baja" value={state.locales} min={0}
+                        onChange={(v) => update("locales", v)} />
+                    )}
+
+                    {/* Summary */}
+                    <div className="rounded-xl bg-muted/40 border border-border px-4 py-3 text-xs text-muted-foreground leading-relaxed mt-1">
+                      {state.plantaBajaTipo === "viviendas" && (
+                        <><span className="font-semibold text-foreground">Bajos:</span> Se generarán {state.aptosPorPlanta * multiplier} viviendas tipo bajo en planta 0. </>
+                      )}
+                      {state.plantaBajaTipo === "locales" && (
+                        <><span className="font-semibold text-foreground">Planta 0:</span> Zona de locales. Las viviendas empiezan en planta 1. </>
+                      )}
+                      {state.plantaBajaTipo === null && (
+                        <><span className="font-semibold text-foreground">Planta 0:</span> Sin uso residencial. Las viviendas empiezan en planta 1. </>
+                      )}
+                      <br />
+                      <span className="font-semibold text-foreground">Total:</span>{" "}
+                      <span className="tnum">{totalViviendas} viviendas</span>
+                      {state.numBloques > 1 && <> en <span className="tnum">{state.numBloques}</span> bloques</>}
+                      {totalEscaleras > 1 && <> (<span className="tnum">{totalEscaleras}</span> escaleras)</>}
+                    </div>
+                  </div>
+                )}
+
+                {/* ─── Step: extras ─── */}
+                {step === "extras" && (
+                  <div className="flex flex-col gap-3">
+                    <SectionLabel>Anejos por vivienda</SectionLabel>
+
+                    {/* Trasteros */}
+                    <ExtraBox
+                      icon={Archive}
+                      title="Trastero incluido"
+                      desc="Cada vivienda incluye trastero"
+                      active={state.trasteros > 0}
+                      onToggle={(v) => {
+                        if (v) {
+                          update("trasterosIncluidosPorVivienda", 1);
+                          update("trasteros", totalViviendas);
+                        } else {
+                          update("trasteros", 0);
+                        }
+                      }}
+                    >
+                      <ExtraRow label="Trasteros incluidos por vivienda"
+                        value={state.trasterosIncluidosPorVivienda}
+                        min={1}
+                        onChange={(v) => {
+                          update("trasterosIncluidosPorVivienda", v);
+                          const extra = Math.max(0, state.trasteros - totalViviendas * state.trasterosIncluidosPorVivienda);
+                          update("trasteros", totalViviendas * v + extra);
+                        }} />
+                      <Checkbox
+                        id="trasteros-precio"
+                        checked={state.trasterosIncluidosPrecio}
+                        onCheckedChange={(v) => update("trasterosIncluidosPrecio", v)}
+                        label="Incluido en el precio de la vivienda"
+                      />
+                      <ExtraRow label="Trasteros adicionales"
+                        value={Math.max(0, state.trasteros - totalViviendas * state.trasterosIncluidosPorVivienda)}
+                        min={0}
+                        onChange={(extra) => update("trasteros", totalViviendas * state.trasterosIncluidosPorVivienda + extra)} />
+                    </ExtraBox>
+
+                    {/* Parking */}
+                    <ExtraBox
+                      icon={Car}
+                      title="Plaza de parking"
+                      desc="Cada vivienda incluye plaza de parking"
+                      active={state.parkings > 0}
+                      onToggle={(v) => {
+                        if (v) {
+                          update("parkingsIncluidosPorVivienda", 1);
+                          update("parkings", totalViviendas);
+                        } else {
+                          update("parkings", 0);
+                        }
+                      }}
+                    >
+                      <ExtraRow label="Plazas incluidas por vivienda"
+                        value={state.parkingsIncluidosPorVivienda}
+                        min={1}
+                        onChange={(v) => {
+                          update("parkingsIncluidosPorVivienda", v);
+                          const extra = Math.max(0, state.parkings - totalViviendas * state.parkingsIncluidosPorVivienda);
+                          update("parkings", totalViviendas * v + extra);
+                        }} />
+                      <Checkbox
+                        id="parkings-precio"
+                        checked={state.parkingsIncluidosPrecio}
+                        onCheckedChange={(v) => update("parkingsIncluidosPrecio", v)}
+                        label="Incluido en el precio de la vivienda"
+                      />
+                      <ExtraRow label="Plazas adicionales"
+                        value={Math.max(0, state.parkings - totalViviendas * state.parkingsIncluidosPorVivienda)}
+                        min={0}
+                        onChange={(extra) => update("parkings", totalViviendas * state.parkingsIncluidosPorVivienda + extra)} />
+                    </ExtraBox>
+
+                    <TotalSummary items={summaryItems} />
+                  </div>
+                )}
+
                 {/* ─── Step: estado ─── */}
                 {step === "estado" && (
                   <div className="flex flex-col gap-4">
@@ -511,7 +701,7 @@ export default function CrearPromocion() {
                 )}
 
                 {/* ─── Placeholder para pasos aún no portados ─── */}
-                {!["role", "tipo", "sub_uni", "sub_varias", "estado", "detalles"].includes(step) && (
+                {!["role", "tipo", "sub_uni", "sub_varias", "config_edificio", "extras", "estado", "detalles"].includes(step) && (
                   <UpcomingStep step={step} />
                 )}
               </motion.div>
@@ -625,6 +815,72 @@ function ToggleRow({
         )} style={{ transform: checked ? "translateX(18px)" : "translateX(2px)" }} />
       </div>
     </button>
+  );
+}
+
+function PlantaBajaCard({
+  icon: Icon, title, desc, selected, onClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string; desc: string; selected: boolean; onClick: () => void;
+}) {
+  return (
+    <button onClick={onClick}
+      className={cn(
+        "flex flex-col items-center gap-1.5 rounded-2xl border p-3 text-center transition-colors",
+        selected ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/30"
+      )}
+    >
+      <div className={cn(
+        "flex h-9 w-9 items-center justify-center rounded-xl",
+        selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+      )}>
+        <Icon className="h-4 w-4" />
+      </div>
+      <p className="text-[13px] font-medium text-foreground">{title}</p>
+      <p className="text-[11px] text-muted-foreground leading-snug">{desc}</p>
+    </button>
+  );
+}
+
+function ExtraBox({
+  icon: Icon, title, desc, active, onToggle, children,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string; desc: string; active: boolean;
+  onToggle: (v: boolean) => void; children?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+            <Icon className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-foreground">{title}</p>
+            <p className="text-xs text-muted-foreground">{desc}</p>
+          </div>
+        </div>
+        <Switch checked={active} onCheckedChange={onToggle} ariaLabel={title} />
+      </div>
+      {active && (
+        <div className="mt-3 pt-3 border-t border-border flex flex-col gap-2.5">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExtraRow({
+  label, value, min, onChange,
+}: { label: string; value: number; min: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <InlineStepper value={value} min={min} onChange={onChange} />
+    </div>
   );
 }
 
