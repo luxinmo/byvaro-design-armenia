@@ -1,12 +1,32 @@
+import { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Home, Tag, FileText, CircleDollarSign, CalendarDays,
   Handshake, Contact, Globe, Mail, Settings, ChevronsUpDown,
+  Building2, ChevronRight, MapPin, Users, Shield, CreditCard, Plug, Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useEmpresa } from "@/lib/empresa";
 
 type NavItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }>; badge?: string | number; accent?: boolean };
 type NavGroup = { label: string; items: NavItem[] };
+
+/* ─── Submenu de "Empresa" ────────────────────────────────────────── */
+type EmpresaSubItem = {
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  disabled?: boolean;     // próximamente
+};
+
+const empresaSubItems: EmpresaSubItem[] = [
+  { title: "Datos de empresa", url: "/empresa/datos", icon: Building2 },
+  { title: "Oficinas", url: "/empresa/oficinas", icon: MapPin },
+  { title: "Usuarios", url: "/empresa/usuarios", icon: Users, disabled: true },
+  { title: "Permisos", url: "/empresa/permisos", icon: Shield, disabled: true },
+  { title: "Facturación", url: "/empresa/facturacion", icon: CreditCard, disabled: true },
+  { title: "Integraciones", url: "/empresa/integraciones", icon: Plug, disabled: true },
+];
 
 const groups: NavGroup[] = [
   {
@@ -40,6 +60,16 @@ const groups: NavGroup[] = [
 
 export function AppSidebar() {
   const location = useLocation();
+  const { empresa } = useEmpresa();
+  const onEmpresaRoute = location.pathname.startsWith("/empresa");
+
+  // Submenu se abre automáticamente si estamos en una ruta /empresa/*
+  // y se queda recordando el último estado manual cuando salimos.
+  const [empresaOpen, setEmpresaOpen] = useState(() => onEmpresaRoute);
+  useEffect(() => { if (onEmpresaRoute) setEmpresaOpen(true); }, [onEmpresaRoute]);
+
+  // Aviso de onboarding
+  const necesitaOnboarding = !empresa.onboardingCompleto;
 
   return (
     <aside className="hidden lg:flex flex-col w-[236px] shrink-0 border-r border-sidebar-border bg-sidebar sticky top-0 h-screen">
@@ -89,6 +119,79 @@ export function AppSidebar() {
             })}
           </div>
         ))}
+
+        {/* ═════ Administración ═════ */}
+        <div className="mb-5">
+          <div className="px-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/50 mb-2">
+            Administración
+          </div>
+
+          {/* Empresa (expandible) */}
+          <button
+            type="button"
+            onClick={() => setEmpresaOpen((v) => !v)}
+            className={cn(
+              "w-full relative flex items-center gap-3 px-5 py-2 text-sm transition-colors text-left",
+              onEmpresaRoute
+                ? "bg-sidebar-accent/70 text-sidebar-accent-foreground font-medium nav-item-active"
+                : "text-sidebar-foreground hover:bg-sidebar-accent/40"
+            )}
+            aria-expanded={empresaOpen}
+          >
+            <Building2 className="h-[18px] w-[18px] shrink-0" />
+            <span>Empresa</span>
+            {necesitaOnboarding && (
+              <span className="ml-auto flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" aria-hidden />
+                <span className="text-[10px] font-semibold text-primary/90">!</span>
+              </span>
+            )}
+            <ChevronRight
+              className={cn(
+                "h-3.5 w-3.5 text-sidebar-foreground/50 transition-transform",
+                empresaOpen ? "rotate-90" : "rotate-0",
+                necesitaOnboarding ? "ml-1" : "ml-auto",
+              )}
+            />
+          </button>
+
+          {empresaOpen && (
+            <div className="mt-0.5 mb-1">
+              {empresaSubItems.map((sub) => {
+                const isActive = location.pathname === sub.url;
+                const Icon = sub.icon;
+                if (sub.disabled) {
+                  return (
+                    <div
+                      key={sub.url}
+                      className="flex items-center gap-2.5 pl-[44px] pr-5 py-1.5 text-[12.5px] text-sidebar-foreground/40 cursor-not-allowed select-none"
+                      title={`${sub.title} · próximamente`}
+                    >
+                      <Icon className="h-3.5 w-3.5 shrink-0" />
+                      <span className="flex-1">{sub.title}</span>
+                      <Lock className="h-2.5 w-2.5 shrink-0" />
+                    </div>
+                  );
+                }
+                return (
+                  <NavLink
+                    key={sub.url}
+                    to={sub.url}
+                    className={cn(
+                      "flex items-center gap-2.5 pl-[44px] pr-5 py-1.5 text-[12.5px] transition-colors",
+                      isActive
+                        ? "text-primary font-semibold bg-sidebar-accent/50"
+                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent/40 hover:text-sidebar-accent-foreground"
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                    <span>{sub.title}</span>
+                  </NavLink>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </nav>
 
       {/* Footer */}
@@ -112,7 +215,9 @@ export function AppSidebar() {
             </div>
             <div className="text-left min-w-0 flex-1">
               <div className="text-[13px] font-semibold text-foreground truncate leading-tight">Arman Rahmanov</div>
-              <div className="text-[11px] text-muted-foreground truncate">Luxinmo · Promotor</div>
+              <div className="text-[11px] text-muted-foreground truncate">
+                {empresa.nombreComercial ? `${empresa.nombreComercial} · Promotor` : "Luxinmo · Promotor"}
+              </div>
             </div>
             <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           </button>

@@ -36,6 +36,7 @@ import { PhaseTimeline } from "@/components/crear-promocion/PhaseTimeline";
 import { AutoSaveIndicator } from "@/components/crear-promocion/AutoSaveIndicator";
 import { WizardPreviewPanel } from "@/components/crear-promocion/WizardPreviewPanel";
 import { InfoBasicaStep } from "@/components/crear-promocion/InfoBasicaStep";
+import { DetallesStep } from "@/components/crear-promocion/DetallesStep";
 import { Switch } from "@/components/ui/Switch";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { cn } from "@/lib/utils";
@@ -804,28 +805,11 @@ export default function CrearPromocion() {
 
                 {/* ─── Step: detalles ─── */}
                 {step === "detalles" && (
-                  <div className="flex flex-col gap-3">
-                    {!isSingleHome && (
-                      <ToggleRow
-                        icon={HomeIcon}
-                        title="Piso piloto"
-                        desc="¿Hay piso piloto disponible para visitas?"
-                        checked={state.pisoPiloto}
-                        onChange={(v) => update("pisoPiloto", v)}
-                      />
-                    )}
-                    <ToggleRow
-                      icon={StoreIcon}
-                      title="Oficinas de venta propias"
-                      desc="¿Tienes una oficina donde recibes a los clientes?"
-                      checked={state.oficinaVentas}
-                      onChange={(v) => update("oficinaVentas", v)}
-                    />
-                    <p className="text-[11.5px] text-muted-foreground px-1 leading-relaxed">
-                      Los puntos de venta concretos (direcciones, teléfonos, WhatsApp) se configuran
-                      más adelante en la ficha de la promoción.
-                    </p>
-                  </div>
+                  <DetallesStep
+                    state={state}
+                    update={update}
+                    trimestreOptions={trimestreOptions}
+                  />
                 )}
 
                 {/* ─── Step: info_basica ─── */}
