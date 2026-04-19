@@ -12,8 +12,8 @@ contract, permisos, estados, enlaces salientes.
 |---|---|---|---|
 | Inicio | `/inicio` | [`inicio.md`](inicio.md) | ✅ diseñada |
 | Promociones | `/promociones` | [`promociones.md`](promociones.md) | ✅ diseñada |
-| Crear promoción | `/crear-promocion` | [`crear-promocion.md`](crear-promocion.md) | 🟡 Fase 1 |
-| Promoción · detalle | `/promociones/:id` | (pendiente) | ⬜ |
+| Crear promoción | `/crear-promocion` | [`crear-promocion.md`](crear-promocion.md) | ✅ diseñada (15 pasos) |
+| Promoción · detalle | `/promociones/:id` | [`promocion-detalle.md`](promocion-detalle.md) | ✅ diseñada |
 | Registros | `/registros` | (pendiente) | 🎨 placeholder |
 | Ventas | `/ventas` | (pendiente) | 🎨 placeholder |
 | Calendario | `/calendario` | (pendiente) | 🎨 placeholder |
