@@ -1,21 +1,24 @@
 /**
- * Crear promoción · Wizard multi-paso (Fase 1: shell + pasos role/tipo)
+ * Crear promoción · Wizard multi-paso — REDISEÑO v3
  *
- * Port del CreatePromotion.tsx del repo original con el lenguaje visual Byvaro v2.
- * Estructura:
- *   - Timeline lateral izquierdo con los pasos visibles según el estado
- *   - Área central con el contenido del paso actual
- *   - Footer fijo con Atrás / Guardar borrador / Siguiente
- *   - Auto-save a localStorage en cada cambio
+ * Shell reconstruida (Commit 1 del rediseño):
+ *   - Sidebar izquierda: PhaseTimeline con 6 fases colapsables
+ *   - Topbar: título del paso, AutoSaveIndicator, botón "Publicar rápido",
+ *     cierre
+ *   - Contenido central: el paso actual (transición framer-motion)
+ *   - Panel derecho (xl+): WizardPreviewPanel con tarjeta mini + microsite
+ *   - Footer: Atrás · Omitir (condicional) · Siguiente/Publicar
+ *   - Auto-save a localStorage con timestamp visible
  *
- * Pasos implementados en Fase 1: role, tipo.
- * El resto muestra un placeholder hasta que se portenen Fases 2-4.
+ * Los pasos ya portados del original Lovable se mantienen intactos. Los
+ * nuevos pasos del rediseño (info_basica revamped, multimedia, descripción,
+ * etc.) se irán añadiendo en commits C3–C9.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronRight, X, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Sparkles, Rocket, SkipForward } from "lucide-react";
 import { Toaster, toast } from "sonner";
 
 import type {
@@ -28,7 +31,10 @@ import {
   estadoOptions, faseConstruccionOptions, estiloViviendaOptions,
 } from "@/components/crear-promocion/options";
 import { OptionCard, NumericStepper, InlineStepper, TotalSummary } from "@/components/crear-promocion/SharedWidgets";
-import { StepTimeline, getAllSteps } from "@/components/crear-promocion/StepTimeline";
+import { getAllSteps } from "@/components/crear-promocion/StepTimeline";
+import { PhaseTimeline } from "@/components/crear-promocion/PhaseTimeline";
+import { AutoSaveIndicator } from "@/components/crear-promocion/AutoSaveIndicator";
+import { WizardPreviewPanel } from "@/components/crear-promocion/WizardPreviewPanel";
 import { Switch } from "@/components/ui/Switch";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { cn } from "@/lib/utils";
@@ -68,7 +74,45 @@ const stepMeta: Record<StepId, { title: string; subtitle: string }> = {
   crear_unidades: { title: "Crear unidades", subtitle: "Configura las unidades de la promoción" },
   colaboradores: { title: "Colaboración", subtitle: "Define cómo se compensará a las agencias colaboradoras" },
   plan_pagos: { title: "Plan de pagos", subtitle: "Define cómo pagará el comprador durante el proceso de compra" },
+  revision: { title: "Revisión y publicación", subtitle: "Últimos ajustes antes de lanzar tu promoción" },
 };
+
+/* ═══════════════════════════════════════════════════════════════════
+   Qué pasos admiten "Omitir" (se guardan con null/vacío y generan un
+   warning amarillo en la revisión final). No se puede omitir nada
+   estructural: rol, tipo, configuración del edificio, estado e info
+   básica son obligatorios para poder publicar.
+   ═══════════════════════════════════════════════════════════════════ */
+const SKIPPABLE_STEPS: ReadonlySet<StepId> = new Set<StepId>([
+  "extras",
+  "detalles",
+  "multimedia",
+  "descripcion",
+  "colaboradores",
+  "plan_pagos",
+]);
+
+/* ═══════════════════════════════════════════════════════════════════
+   Condición mínima para "Publicar rápido". Se cumple cuando la
+   promoción tiene la información imprescindible: rol, tipo, una
+   configuración válida según la ramificación, estado y un nombre +
+   ciudad de ubicación.
+   ═══════════════════════════════════════════════════════════════════ */
+function hasPublishMinimums(s: WizardState): boolean {
+  if (!s.role || !s.tipo || !s.estado) return false;
+  if (!s.nombrePromocion?.trim()) return false;
+  if (!s.direccionPromocion.ciudad?.trim()) return false;
+
+  if (s.tipo === "unifamiliar") {
+    if (!s.subUni) return false;
+    if (s.subUni === "una_sola" && (!s.subVarias || !s.estiloVivienda)) return false;
+    if (s.subUni === "varias" && (s.tipologiasSeleccionadas.length === 0 || s.estilosSeleccionados.length === 0)) return false;
+  }
+  if (s.tipo === "plurifamiliar" || s.tipo === "mixto") {
+    if (s.numBloques < 1 || s.plantas < 1 || s.aptosPorPlanta < 1) return false;
+  }
+  return true;
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    Página principal
@@ -80,11 +124,34 @@ export default function CrearPromocion() {
   const initialStep = (searchParams.get("step") as StepId) || "role";
   const [step, setStep] = useState<StepId>(initialStep);
 
+  // Indicador de autoguardado
+  const [savedAt, setSavedAt] = useState<number | null>(() => (loadDraft() ? Date.now() : null));
+  const [saving, setSaving] = useState(false);
+  const saveTimeoutRef = useRef<number | null>(null);
+  const isFirstRenderRef = useRef(true);
+
   const update = useCallback(<K extends keyof WizardState>(key: K, value: WizardState[K]) => {
     setState(prev => ({ ...prev, [key]: value }));
   }, []);
 
-  useEffect(() => { saveDraftLS(state); }, [state]);
+  // Auto-save con debounce (~400ms). Evita escribir localStorage en cada
+  // keypress y da tiempo a mostrar el estado "Guardando…".
+  useEffect(() => {
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      return;
+    }
+    setSaving(true);
+    if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = window.setTimeout(() => {
+      saveDraftLS(state);
+      setSavedAt(Date.now());
+      setSaving(false);
+    }, 400);
+    return () => {
+      if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
+    };
+  }, [state]);
 
   /* Pasos visibles según ramificación (depende de tipo/subUni) */
   const visibleSteps = useMemo(() => getAllSteps(state).map(s => s.id), [state]);
@@ -206,11 +273,36 @@ export default function CrearPromocion() {
   };
   const handleSaveDraft = () => {
     saveDraftLS(state);
+    setSavedAt(Date.now());
     toast.success("Borrador guardado");
   };
   const handleClose = () => {
     if (confirm("¿Salir del asistente? El borrador se conserva.")) navigate("/promociones");
   };
+
+  /* "Omitir" — salta el paso actual sin validación. Útil en pasos
+     opcionales (multimedia, descripción, colaboradores, plan de pagos…). */
+  const handleSkip = () => {
+    const next = getNext();
+    if (next) {
+      setStep(next);
+      toast.info("Paso omitido", { description: "Puedes volver a completarlo antes de publicar." });
+    }
+  };
+
+  /* "Publicar rápido" — publica con los mínimos cuando se cumplen. Se
+     muestra solo cuando hasPublishMinimums(state) === true. */
+  const handleQuickPublish = () => {
+    if (!hasPublishMinimums(state)) return;
+    clearDraft();
+    toast.success("Promoción publicada", {
+      description: "Has publicado con los datos mínimos. Podrás completar el resto desde la ficha.",
+    });
+    navigate("/promociones");
+  };
+
+  const canSkipCurrentStep = SKIPPABLE_STEPS.has(step);
+  const publishReady = hasPublishMinimums(state);
 
   /* Selección de tipo reinicia sub-pasos */
   const handleTipoSelect = (v: string) => {
@@ -223,38 +315,67 @@ export default function CrearPromocion() {
     <div className="fixed inset-0 z-40 flex bg-background">
       <Toaster position="top-center" richColors />
 
-      {/* ═══════════ Sidebar Timeline ═══════════ */}
-      <aside className="hidden lg:flex w-[280px] shrink-0 flex-col border-r border-border bg-card">
+      {/* ═══════════ Sidebar · PhaseTimeline ═══════════ */}
+      <aside className="hidden lg:flex w-[300px] shrink-0 flex-col border-r border-border bg-card">
         <div className="h-14 flex items-center gap-2.5 px-5 border-b border-border">
           <div className="w-8 h-8 rounded-xl bg-primary grid place-items-center text-primary-foreground font-bold text-sm">B</div>
           <div className="font-bold text-[15px] tracking-tight">Byvaro</div>
         </div>
-        <div className="flex-1 overflow-y-auto p-5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-4">
+        <div className="flex-1 overflow-y-auto p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-3 px-1">
             Crear promoción
           </p>
-          <StepTimeline state={state} currentStep={step} onGoToStep={setStep} />
+          <PhaseTimeline state={state} currentStep={step} onGoToStep={setStep} />
+        </div>
+        <div className="border-t border-border p-3">
+          <button
+            onClick={handleSaveDraft}
+            className="w-full text-[11.5px] font-medium text-muted-foreground hover:text-foreground transition-colors rounded-lg py-2 hover:bg-muted/60"
+          >
+            Guardar borrador y salir
+          </button>
         </div>
       </aside>
 
       {/* ═══════════ Main area ═══════════ */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar (mobile + desktop) */}
-        <header className="h-14 shrink-0 flex items-center justify-between px-4 sm:px-6 border-b border-border bg-background/95 backdrop-blur">
-          <div className="lg:hidden flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-primary grid place-items-center text-primary-foreground font-bold text-[13px]">B</div>
-            <span className="font-bold text-[14px] tracking-tight">Crear promoción</span>
+        <header className="h-14 shrink-0 flex items-center justify-between gap-3 px-4 sm:px-6 border-b border-border bg-background/95 backdrop-blur">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="lg:hidden flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-primary grid place-items-center text-primary-foreground font-bold text-[13px]">B</div>
+              <span className="font-bold text-[14px] tracking-tight">Crear promoción</span>
+            </div>
+            <div className="hidden lg:flex items-baseline gap-2 min-w-0">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Paso {visibleSteps.indexOf(step) + 1}/{visibleSteps.length}
+              </span>
+              <span className="text-muted-foreground/40">·</span>
+              <span className="text-[13px] font-semibold text-foreground truncate">{meta.title}</span>
+            </div>
           </div>
-          <div className="hidden lg:block text-xs text-muted-foreground">
-            Paso {visibleSteps.indexOf(step) + 1} de {visibleSteps.length}
+
+          <div className="flex items-center gap-3 shrink-0">
+            <AutoSaveIndicator savedAt={savedAt} saving={saving} className="hidden sm:inline-flex" />
+            {publishReady && (
+              <button
+                onClick={handleQuickPublish}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-primary text-primary-foreground text-[12px] font-semibold hover:bg-primary/90 transition-colors shadow-soft"
+                title="Publica ya con los datos mínimos. Podrás completar el resto después."
+              >
+                <Rocket className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Publicar rápido</span>
+                <span className="sm:hidden">Publicar</span>
+              </button>
+            )}
+            <button
+              onClick={handleClose}
+              className="p-2 -mr-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Cerrar asistente"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            onClick={handleClose}
-            className="p-2 -mr-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Cerrar asistente"
-          >
-            <X className="h-4 w-4" />
-          </button>
         </header>
 
         {/* Content area */}
@@ -710,7 +831,7 @@ export default function CrearPromocion() {
         </main>
 
         {/* ═══════════ Footer nav ═══════════ */}
-        <footer className="h-16 shrink-0 flex items-center justify-between px-4 sm:px-6 lg:px-10 border-t border-border bg-card">
+        <footer className="h-16 shrink-0 flex items-center justify-between gap-2 px-4 sm:px-6 lg:px-10 border-t border-border bg-card">
           <button
             onClick={handleBack}
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -720,12 +841,20 @@ export default function CrearPromocion() {
           </button>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleSaveDraft}
-              className="hidden sm:inline-flex items-center h-9 px-4 rounded-full text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            >
-              Guardar borrador
-            </button>
+            {/* Indicador móvil de autoguardado (visible solo cuando el header no lo muestra) */}
+            <AutoSaveIndicator savedAt={savedAt} saving={saving} className="sm:hidden" />
+
+            {canSkipCurrentStep && getNext() && (
+              <button
+                onClick={handleSkip}
+                className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-full text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-colors"
+                title="Saltar este paso — podrás completarlo antes de publicar"
+              >
+                <SkipForward className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Omitir</span>
+              </button>
+            )}
+
             <button
               onClick={handleContinue}
               disabled={!canContinue()}
@@ -737,6 +866,9 @@ export default function CrearPromocion() {
           </div>
         </footer>
       </div>
+
+      {/* ═══════════ Preview lateral (desktop xl+) ═══════════ */}
+      <WizardPreviewPanel state={state} className="hidden xl:flex" />
     </div>
   );
 }

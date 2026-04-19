@@ -104,7 +104,22 @@ export type StepId =
   | "descripcion"
   | "crear_unidades"
   | "colaboradores"
-  | "plan_pagos";
+  | "plan_pagos"
+  | "revision";
+
+/**
+ * 6 fases del wizard (agrupación visual de los pasos en la timeline).
+ * La ramificación entre pasos sigue igual que en el original Lovable;
+ * estas fases solo agrupan para no abrumar al usuario con 14+ items sueltos.
+ */
+export type PhaseId = "tipologia" | "estructura" | "comercializacion" | "marketing" | "operativa" | "revision";
+
+export interface PhaseDef {
+  id: PhaseId;
+  label: string;
+  description: string;
+  steps: StepId[];
+}
 
 export interface CardOption<T extends string> {
   value: T;
