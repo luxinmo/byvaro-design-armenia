@@ -15,20 +15,20 @@ export function OptionCard<T extends string>({
   return (
     <button
       onClick={() => onSelect(option.value)}
-      className={`group relative flex flex-col items-center gap-2.5 rounded-xl border p-5 text-center transition-all duration-150 cursor-pointer
+      className={`group relative flex flex-col items-center gap-2.5 rounded-2xl border p-4 sm:p-5 text-center shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer
         ${selected
-          ? "border-primary bg-primary/5 shadow-sm"
-          : "border-border bg-card hover:border-primary/30 hover:bg-muted/30"
+          ? "border-primary bg-primary/5"
+          : "border-border bg-card hover:border-primary/30"
         }`}
     >
       <div
-        className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors
+        className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors
         ${selected
           ? "bg-primary text-primary-foreground"
           : "bg-muted text-muted-foreground group-hover:text-foreground"
         }`}
       >
-        <Icon className="h-5 w-5" strokeWidth={1.5} />
+        <Icon className="h-4 w-4" />
       </div>
       <div>
         <p className="text-sm font-medium text-foreground">{option.label}</p>
@@ -122,7 +122,7 @@ export function InlineStepper({
 export function TotalSummary({ items }: { items: { label: string; count: number }[] }) {
   const total = items.reduce((s, i) => s + i.count, 0);
   return (
-    <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+    <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-semibold text-foreground">Total de propiedades</span>
         <span className="text-lg font-bold text-primary tabular-nums">{total}</span>

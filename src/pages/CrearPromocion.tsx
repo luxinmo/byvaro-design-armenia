@@ -139,7 +139,7 @@ export default function CrearPromocion() {
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-4">
             Crear promoción
           </p>
-          <StepTimeline state={state} currentStep={step} onStepClick={setStep} />
+          <StepTimeline state={state} currentStep={step} onGoToStep={setStep} />
         </div>
       </aside>
 
