@@ -485,16 +485,16 @@ export default function Promociones() {
                   key={p.id}
                   onClick={() => alert(`Navegar a /promociones/${p.id}`)}
                   className={cn(
-                    "group flex flex-col lg:flex-row bg-card border rounded-2xl overflow-hidden shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer",
+                    "group flex flex-col lg:flex-row bg-card border rounded-xl lg:rounded-2xl overflow-hidden shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 transition-all duration-300 cursor-pointer",
                     hasMissing
                       ? "border-destructive/30 ring-1 ring-destructive/10"
                       : trending
                       ? "border-amber-300/60 ring-1 ring-amber-200/40"
-                      : "border-border hover:border-border/80"
+                      : "border-border/40 hover:border-border/60"
                   )}
                 >
                   {/* Image */}
-                  <div className="relative w-full lg:w-[420px] h-[180px] sm:h-[220px] lg:h-auto lg:min-h-[320px] shrink-0 overflow-hidden bg-muted">
+                  <div className="relative w-full lg:w-[550px] h-[160px] sm:h-[220px] lg:h-[400px] shrink-0 overflow-hidden bg-muted">
                     {p.image ? (
                       <>
                         <img
@@ -524,56 +524,60 @@ export default function Promociones() {
                   {/* Content */}
                   <div className="flex-1 p-4 sm:p-5 lg:p-6 flex flex-col min-w-0">
                     {/* Top row: location + building type + status */}
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <div className="flex items-center justify-between gap-2 mb-1">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <p className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase truncate">
+                        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase truncate">
                           {p.location || "Sin ubicación"}
                         </p>
                         {getBuildingTypeLabel(p.buildingType) && (
-                          <Tag variant="default" size="sm" shape="pill" className="shrink-0 hidden sm:inline-flex">
+                          <Tag variant="default" size="sm" className="shrink-0 hidden sm:inline-flex">
                             {getBuildingTypeLabel(p.buildingType)}
                           </Tag>
                         )}
                       </div>
-                      <Tag variant={status.variant} size="sm" shape="pill" className="shrink-0">
+                      <Tag variant={status.variant} size="sm" className="shrink-0">
                         {status.label}
                       </Tag>
                     </div>
 
-                    {/* Name + code + developer + delivery */}
-                    <h3 className="text-[17px] lg:text-[18px] font-bold text-foreground leading-snug mb-1 tracking-tight">
+                    {/* Name + developer + delivery */}
+                    <h3 className="text-lg lg:text-base font-bold text-foreground leading-snug mb-1">
                       {p.name}
                     </h3>
-                    <div className="flex flex-wrap items-center gap-x-2 text-[12.5px] text-muted-foreground mb-3">
-                      <span className="tnum opacity-70">{p.code}</span>
-                      {p.developer && <><span className="opacity-40">·</span><span>{p.developer}</span></>}
-                      {p.delivery && <><span className="opacity-40">·</span><span>Entrega {p.delivery}</span></>}
+                    <div className="flex flex-wrap items-center gap-x-2 text-sm lg:text-xs text-muted-foreground mb-2 lg:mb-3">
+                      {p.developer && <span>{p.developer}</span>}
+                      {p.delivery && (
+                        <>
+                          <span className="text-border">·</span>
+                          <span>Entrega {p.delivery}</span>
+                        </>
+                      )}
                     </div>
 
                     {/* Missing steps warning */}
                     {hasMissing && (
-                      <div className="flex items-start gap-2.5 mb-3 px-3 py-2.5 rounded-xl bg-destructive/5 border border-destructive/20">
+                      <div className="flex items-start gap-2.5 mb-3 px-3 py-2.5 rounded-lg bg-destructive/5 border border-destructive/20">
                         <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
                         <div>
-                          <p className="text-[12.5px] font-semibold text-destructive mb-0.5">Pasos pendientes para publicar</p>
-                          <p className="text-[12px] text-muted-foreground leading-snug">{p.missingSteps!.join(" · ")}</p>
+                          <p className="text-sm lg:text-xs font-semibold text-destructive mb-0.5">Pasos pendientes para publicar</p>
+                          <p className="text-sm lg:text-xs text-muted-foreground">{p.missingSteps!.join(" · ")}</p>
                         </div>
                       </div>
                     )}
 
                     {/* Cannot share warning */}
                     {p.canShareWithAgencies === false && !hasMissing && (
-                      <div className="flex items-start gap-2.5 mb-3 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200/60">
+                      <div className="flex items-start gap-2.5 mb-3 px-3 py-2.5 rounded-lg bg-amber-50/60 border border-amber-200/40">
                         <Ban className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                         <div>
-                          <p className="text-[12.5px] font-semibold text-amber-800 mb-0.5">No se puede compartir con agencias</p>
-                          <p className="text-[12px] text-muted-foreground leading-snug">Configura comisiones en Colaboradores para habilitar el share</p>
+                          <p className="text-sm lg:text-xs font-semibold text-amber-700 mb-0.5">No se puede compartir con agencias</p>
+                          <p className="text-sm lg:text-xs text-muted-foreground">Configura comisiones en Colaboradores para habilitar el share</p>
                         </div>
                       </div>
                     )}
 
                     {/* Metrics row */}
-                    <div className="flex items-center gap-5 lg:gap-6 mb-3">
+                    <div className="flex items-center gap-5 lg:gap-6 mb-2 lg:mb-3">
                       <Metric label="Disponibles" value={`${p.availableUnits} / ${p.totalUnits}`} />
                       <Metric label="Comisión" value={`${p.commission}%`} />
                       {p.constructionProgress !== undefined && (
@@ -583,20 +587,20 @@ export default function Promociones() {
 
                     {/* Trending activity box */}
                     {p.activity && trending && (
-                      <div className="hidden sm:flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200/60">
+                      <div className="hidden sm:flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 px-3 py-2 rounded-lg bg-amber-50/60 border border-amber-200/40">
                         <div className="flex items-center gap-1 text-amber-600">
                           <TrendingUp className="h-3.5 w-3.5" />
-                          <span className="text-xs font-semibold tnum">+{p.activity.trend}%</span>
+                          <span className="text-xs font-semibold">+{p.activity.trend}%</span>
                         </div>
-                        <span className="text-xs text-muted-foreground tnum"><span className="font-semibold text-foreground">{p.activity.inquiries}</span> consultas</span>
-                        <span className="text-xs text-muted-foreground tnum"><span className="font-semibold text-foreground">{p.activity.reservations}</span> reservas</span>
-                        <span className="text-xs text-muted-foreground tnum"><span className="font-semibold text-foreground">{p.activity.visits}</span> visitas</span>
+                        <span className="text-xs text-muted-foreground">{p.activity.inquiries} consultas</span>
+                        <span className="text-xs text-muted-foreground">{p.activity.reservations} reservas</span>
+                        <span className="text-xs text-muted-foreground">{p.activity.visits} visitas</span>
                         <span className="text-[10px] text-muted-foreground/60 sm:ml-auto">Últimas 2 semanas</span>
                       </div>
                     )}
 
                     {/* Price */}
-                    <p className="text-lg font-bold text-foreground tracking-tight mb-2 lg:mb-3 tnum">
+                    <p className="text-lg font-bold text-foreground tracking-tight mb-1 lg:mb-3">
                       {lastUnit ? formatPrice(lastUnit.price) : (
                         <>
                           {formatPrice(p.priceMin)}
@@ -608,20 +612,20 @@ export default function Promociones() {
 
                     {/* Last unit detail */}
                     {lastUnit && (
-                      <div className="hidden sm:block rounded-xl border border-border bg-muted/20 p-4 mb-4">
+                      <div className="hidden sm:block rounded-lg border border-border/50 bg-muted/20 p-4 mb-4">
                         <div className="flex items-center justify-between mb-3">
                           <div>
-                            <p className="text-[12.5px] font-semibold text-foreground">Última unidad disponible</p>
-                            <p className="text-[11.5px] text-muted-foreground">{lastUnit.label} · Unidad {lastUnit.id}</p>
+                            <p className="text-xs font-medium text-foreground">Última unidad disponible</p>
+                            <p className="text-xs text-muted-foreground">{lastUnit.label} · Unidad {lastUnit.id}</p>
                           </div>
-                          <p className="text-sm font-bold text-foreground tnum">{formatPrice(lastUnit.price)}</p>
+                          <p className="text-sm font-semibold text-foreground">{formatPrice(lastUnit.price)}</p>
                         </div>
                         <div className="h-px bg-border/40 mb-3" />
                         <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-                          <span className="text-[11.5px] text-muted-foreground tnum">{lastUnit.bedrooms} hab · {lastUnit.bathrooms} baños</span>
-                          <span className="text-[11.5px] text-muted-foreground tnum">{lastUnit.builtArea} m² const.</span>
-                          {lastUnit.terrace > 0 && <span className="text-[11.5px] text-muted-foreground tnum">{lastUnit.terrace} m² terraza</span>}
-                          <span className="text-[11.5px] text-muted-foreground">Planta {lastUnit.floor} · {lastUnit.orientation}</span>
+                          <span className="text-xs text-muted-foreground">{lastUnit.bedrooms} hab · {lastUnit.bathrooms} baños</span>
+                          <span className="text-xs text-muted-foreground">{lastUnit.builtArea} m² const.</span>
+                          {lastUnit.terrace > 0 && <span className="text-xs text-muted-foreground">{lastUnit.terrace} m² terraza</span>}
+                          <span className="text-xs text-muted-foreground">Planta {lastUnit.floor} · {lastUnit.orientation}</span>
                         </div>
                       </div>
                     )}
@@ -631,10 +635,10 @@ export default function Promociones() {
                       <div className="hidden sm:grid grid-cols-2 gap-3 mb-4">
                         {typologies.length > 0 && (
                           <div>
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1.5">Tipologías</p>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Tipologías</p>
                             <div className="space-y-0.5">
                               {typologies.map((t) => (
-                                <p key={t.label} className="text-[12.5px] text-foreground tnum">
+                                <p key={t.label} className="text-xs text-foreground">
                                   {t.label} <span className="text-muted-foreground">desde</span> {formatPrice(t.price)}
                                 </p>
                               ))}
@@ -643,10 +647,10 @@ export default function Promociones() {
                         )}
                         {availableUnits.length > 0 && (
                           <div>
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1.5">Unidades disponibles</p>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Unidades disponibles</p>
                             <div className="space-y-0.5">
                               {availableUnits.map((u) => (
-                                <p key={u.id} className="text-[12.5px] text-foreground tnum">
+                                <p key={u.id} className="text-xs text-foreground">
                                   {u.id} <span className="text-muted-foreground">·</span> {u.label} <span className="text-muted-foreground">·</span> {formatPrice(u.price)}
                                 </p>
                               ))}
@@ -657,22 +661,22 @@ export default function Promociones() {
                     )}
 
                     {/* Footer */}
-                    <div className="mt-auto pt-3 border-t border-border/60 flex items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11.5px] text-muted-foreground min-w-0">
+                    <div className="mt-auto pt-2 lg:pt-3 border-t border-border/30 flex items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground/60 min-w-0">
                         {p.agencies > 0 && (
-                          <span className="inline-flex items-center gap-1 text-foreground/70 tnum">
-                            <Users className="h-3 w-3" />
+                          <span className="text-foreground/70 flex items-center gap-1">
+                            <Users className="h-3.5 w-3.5 lg:h-3 lg:w-3" />
                             {p.agencies} agencias
                           </span>
                         )}
                         {p.constructionProgress !== undefined && p.constructionProgress < 100 && (
-                          <span className="tnum">{p.constructionProgress}% obra</span>
+                          <span>{p.constructionProgress}% obra</span>
                         )}
                         {p.hasShowFlat && <span className="hidden sm:inline">Piso piloto</span>}
                       </div>
                       <button
                         onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-primary hover:text-primary/80 transition-colors shrink-0"
+                        className="text-sm lg:text-xs font-medium text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-1 shrink-0"
                       >
                         <Share2 className="h-3.5 w-3.5" />
                         <span className="hidden sm:inline">Compartir con agencias</span>
@@ -696,8 +700,8 @@ export default function Promociones() {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">{label}</p>
-      <p className="text-[13px] font-semibold text-foreground tnum">{value}</p>
+      <p className="text-xs lg:text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">{label}</p>
+      <p className="text-sm font-semibold text-foreground">{value}</p>
     </div>
   );
 }
