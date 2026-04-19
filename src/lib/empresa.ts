@@ -40,6 +40,7 @@ export interface Empresa {
   fundadaEn: string;            // "2012"
   subtitle: string;             // "{Town}, {Province}, {Country} · Founded in {year}"
   // Descripciones
+  tagline: string;              // slogan corto bajo el nombre del hero ("Inversión segura en la Costa del Sol")
   overview: string;             // corta (Home → Overview card)
   aboutOverview: string;        // larga (About → Overview card)
   quote: string;                // lema
@@ -51,11 +52,26 @@ export interface Empresa {
   sitioWeb: string;             // www.luxinmo.com
   linkedin: string;
   // KPIs editables en Home
-  oficinasCount: string;        // "01" (guardado como string para coincidir con original)
+  aniosOperando: string;        // "13"
+  oficinasCount: string;        // "01"
   agentesCount: string;         // "01"
+  promocionesCount: string;     // "42"
+  unidadesVendidas: string;     // "250"
+  agenciasColaboradoras: string;// "47"
   ventasAnuales: string;        // "0"
   ingresosAnuales: string;      // "0"
   portfolio: string;            // "0"
+  // Zonas y especialidades
+  zonasOperacion: string[];     // ["Costa del Sol", "Costa Blanca"]
+  especialidades: string[];     // ["Luxury", "Coastal", "Residencial"]
+  idiomasAtencion: string[];    // ["es","en","de","fr"]
+  // Términos de colaboración por defecto
+  comisionNacionalDefault: number;      // 3
+  comisionInternacionalDefault: number; // 5
+  plazoPagoComisionDias: number;        // 30
+  // Certificaciones y testimonios
+  certificaciones: { nombre: string; logoUrl?: string; desde?: string }[];
+  testimonios: { autor: string; empresa: string; texto: string; rating: number }[];
   // Fiscal
   direccionFiscal: DireccionFiscal;
   // Preferencias
@@ -100,6 +116,7 @@ export const defaultEmpresa: Empresa = {
   colorCorporativo: "#AA2417",       // brand Byvaro por defecto
   fundadaEn: "",
   subtitle: "",
+  tagline: "",
   overview: "",
   aboutOverview: "",
   quote: "",
@@ -109,11 +126,23 @@ export const defaultEmpresa: Empresa = {
   horario: "",
   sitioWeb: "",
   linkedin: "",
+  aniosOperando: "0",
   oficinasCount: "0",
   agentesCount: "0",
+  promocionesCount: "0",
+  unidadesVendidas: "0",
+  agenciasColaboradoras: "0",
   ventasAnuales: "0",
   ingresosAnuales: "0",
   portfolio: "0",
+  zonasOperacion: [],
+  especialidades: [],
+  idiomasAtencion: ["es"],
+  comisionNacionalDefault: 3,
+  comisionInternacionalDefault: 5,
+  plazoPagoComisionDias: 30,
+  certificaciones: [],
+  testimonios: [],
   direccionFiscal: { pais: "", provincia: "", ciudad: "", direccion: "", codigoPostal: "" },
   moneda: "EUR",
   idiomaDefault: "es",

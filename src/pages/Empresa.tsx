@@ -195,16 +195,30 @@ export default function Empresa() {
 
             {/* Nombre + website */}
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pt-[56px] sm:pt-[68px] pb-4">
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-[18px] sm:text-[20px] font-bold text-foreground leading-snug">
+                  <h1 className="text-[20px] sm:text-[24px] font-bold text-foreground leading-tight tracking-tight">
                     {empresa.nombreComercial || "Tu empresa"}
                   </h1>
                   {empresa.verificada && (
                     <CheckCircle2 className="h-[18px] w-[18px] text-primary shrink-0" />
                   )}
                 </div>
-                <p className="text-[13px] text-muted-foreground mt-1 truncate">
+                {empresa.tagline ? (
+                  <p className="text-[14px] font-medium text-primary mt-1 leading-snug" style={{ color: empresa.colorCorporativo || undefined }}>
+                    {empresa.tagline}
+                  </p>
+                ) : viewMode === "edit" && (
+                  <input
+                    type="text"
+                    value={empresa.tagline}
+                    onChange={(e) => update("tagline", e.target.value)}
+                    placeholder="Añade un slogan · Ej. Inversión segura en la Costa del Sol"
+                    className="mt-1 w-full max-w-lg text-[14px] font-medium text-primary bg-transparent outline-none border-b border-dashed border-border focus:border-primary placeholder:text-muted-foreground/50 placeholder:font-normal transition-colors pb-0.5"
+                    maxLength={120}
+                  />
+                )}
+                <p className="text-[12.5px] text-muted-foreground mt-1.5 truncate">
                   {subtitleDisplay || "Completa la ubicación y año de fundación para personalizar tu perfil"}
                 </p>
               </div>

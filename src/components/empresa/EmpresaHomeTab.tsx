@@ -10,6 +10,12 @@ import {
 import type { Empresa } from "@/lib/empresa";
 import { EditableSection, InfoItem } from "./EditableSection";
 import { OfficesSection } from "./OfficesSection";
+import { HeroStatsStrip } from "./HeroStatsStrip";
+import { QuickActionsBar } from "./QuickActionsBar";
+import { ZonasEspecialidadesCard } from "./ZonasEspecialidadesCard";
+import { TerminosColaboracionCard } from "./TerminosColaboracionCard";
+import { TestimoniosCard } from "./TestimoniosCard";
+import { PortfolioShowcase } from "./PortfolioShowcase";
 import { cn } from "@/lib/utils";
 
 /* ─── Datos mock (agents + collab) ────────────────────────────────── */
@@ -63,6 +69,12 @@ export function EmpresaHomeTab({
 }) {
   return (
     <div className="flex flex-col gap-5">
+      {/* ═════ Stats de credibilidad ═════ */}
+      <HeroStatsStrip empresa={empresa} />
+
+      {/* ═════ Quick actions (solo en modo edit / promotor dueño) ═════ */}
+      {viewMode === "edit" && <QuickActionsBar empresa={empresa} />}
+
       {/* ═════ Overview ═════ */}
       <EditableSection
         title="Resumen"
@@ -202,8 +214,20 @@ export function EmpresaHomeTab({
         </div>
       </EditableSection>
 
+      {/* ═════ Portfolio destacado ═════ */}
+      <PortfolioShowcase viewMode={viewMode} />
+
+      {/* ═════ Zonas y especialidades ═════ */}
+      <ZonasEspecialidadesCard viewMode={viewMode} empresa={empresa} update={update} />
+
+      {/* ═════ Términos de colaboración ═════ */}
+      <TerminosColaboracionCard viewMode={viewMode} empresa={empresa} update={update} />
+
       {/* ═════ Offices ═════ */}
       <OfficesSection viewMode={viewMode} />
+
+      {/* ═════ Testimonios ═════ */}
+      <TestimoniosCard viewMode={viewMode} empresa={empresa} update={update} />
     </div>
   );
 }
