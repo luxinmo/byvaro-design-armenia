@@ -12,7 +12,6 @@ import { EditableSection, InfoItem } from "./EditableSection";
 import { OfficesSection } from "./OfficesSection";
 import { HeroStatsStrip } from "./HeroStatsStrip";
 import { ZonasEspecialidadesCard } from "./ZonasEspecialidadesCard";
-import { TerminosColaboracionCard } from "./TerminosColaboracionCard";
 import { TestimoniosCard } from "./TestimoniosCard";
 import { PortfolioShowcase } from "./PortfolioShowcase";
 import { cn } from "@/lib/utils";
@@ -199,9 +198,6 @@ export function EmpresaHomeTab({
 
       {/* ═════ Zonas y especialidades ═════ */}
       <ZonasEspecialidadesCard viewMode={viewMode} empresa={empresa} update={update} />
-
-      {/* ═════ Términos de colaboración ═════ */}
-      <TerminosColaboracionCard viewMode={viewMode} empresa={empresa} update={update} />
 
       {/* ═════ Offices ═════ */}
       <OfficesSection viewMode={viewMode} />
