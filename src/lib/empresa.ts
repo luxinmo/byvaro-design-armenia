@@ -30,24 +30,41 @@ export interface DireccionFiscal {
 }
 
 export interface Empresa {
-  // Identidad
+  // Identidad pública
   nombreComercial: string;
   razonSocial: string;
   cif: string;
   logoUrl: string;              // data: URL o URL externa
+  coverUrl: string;             // portada grande del perfil público
   colorCorporativo: string;     // hex "#AA2417"
+  fundadaEn: string;            // "2012"
+  subtitle: string;             // "{Town}, {Province}, {Country} · Founded in {year}"
+  // Descripciones
+  overview: string;             // corta (Home → Overview card)
+  aboutOverview: string;        // larga (About → Overview card)
+  quote: string;                // lema
+  quoteDescription: string;     // descripción del lema
   // Contacto
   email: string;
   telefono: string;
-  sitioWeb: string;
+  horario: string;              // "L-V 9:30-14:00 / 16:30-19:00"
+  sitioWeb: string;             // www.luxinmo.com
   linkedin: string;
-  descripcion: string;
+  // KPIs editables en Home
+  oficinasCount: string;        // "01" (guardado como string para coincidir con original)
+  agentesCount: string;         // "01"
+  ventasAnuales: string;        // "0"
+  ingresosAnuales: string;      // "0"
+  portfolio: string;            // "0"
   // Fiscal
   direccionFiscal: DireccionFiscal;
   // Preferencias
   moneda: "EUR" | "USD" | "GBP";
   idiomaDefault: "es" | "en" | "fr" | "de" | "pt" | "it" | "nl" | "ar";
   zonaHoraria: string;          // "Europe/Madrid"
+  // Verificación
+  verificada: boolean;
+  verificadaEl: string;         // ISO date
   // Meta
   onboardingCompleto: boolean;  // true cuando nombreComercial + razonSocial + cif están
   updatedAt: number;            // timestamp ms
@@ -57,12 +74,17 @@ export interface Oficina {
   id: string;
   nombre: string;
   direccion: string;
+  ciudad: string;
+  provincia: string;
   telefono: string;
+  phonePrefix: string;          // "+34"
   email: string;
   whatsapp: string;
   horario: string;              // free-text, ej "L-V 9:00-18:00"
+  logoUrl: string;              // logo de oficina (opcional)
+  coverUrl: string;             // portada de oficina (opcional)
   esPrincipal: boolean;
-  activa: boolean;
+  activa: boolean;              // alias de "visible" en el perfil público
   createdAt: number;
 }
 
@@ -74,16 +96,30 @@ export const defaultEmpresa: Empresa = {
   razonSocial: "",
   cif: "",
   logoUrl: "",
+  coverUrl: "",
   colorCorporativo: "#AA2417",       // brand Byvaro por defecto
+  fundadaEn: "",
+  subtitle: "",
+  overview: "",
+  aboutOverview: "",
+  quote: "",
+  quoteDescription: "",
   email: "",
   telefono: "",
+  horario: "",
   sitioWeb: "",
   linkedin: "",
-  descripcion: "",
+  oficinasCount: "0",
+  agentesCount: "0",
+  ventasAnuales: "0",
+  ingresosAnuales: "0",
+  portfolio: "0",
   direccionFiscal: { pais: "", provincia: "", ciudad: "", direccion: "", codigoPostal: "" },
   moneda: "EUR",
   idiomaDefault: "es",
   zonaHoraria: "Europe/Madrid",
+  verificada: false,
+  verificadaEl: "",
   onboardingCompleto: false,
   updatedAt: 0,
 };
@@ -96,10 +132,15 @@ export function createOficinaSemilla(): Oficina {
     id: `ofc-${Date.now()}`,
     nombre: "Sede principal",
     direccion: "",
+    ciudad: "",
+    provincia: "",
     telefono: "",
+    phonePrefix: "+34",
     email: "",
     whatsapp: "",
     horario: "L-V 9:00-18:00",
+    logoUrl: "",
+    coverUrl: "",
     esPrincipal: true,
     activa: true,
     createdAt: Date.now(),
@@ -217,18 +258,23 @@ export function useOficinas() {
   };
 
   /** Crear nueva oficina. Si es la primera, se marca principal automáticamente. */
-  const addOficina = useCallback((data: Omit<Oficina, "id" | "createdAt" | "esPrincipal" | "activa"> & Partial<Pick<Oficina, "esPrincipal" | "activa">>) => {
+  const addOficina = useCallback((data: Partial<Oficina> & { nombre: string }) => {
     const list = loadOficinas();
     const nuevaId = `ofc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const esPrincipal = list.length === 0 ? true : !!data.esPrincipal;
     const next: Oficina = {
       id: nuevaId,
       nombre: data.nombre,
-      direccion: data.direccion,
-      telefono: data.telefono,
-      email: data.email,
-      whatsapp: data.whatsapp,
-      horario: data.horario,
+      direccion: data.direccion ?? "",
+      ciudad: data.ciudad ?? "",
+      provincia: data.provincia ?? "",
+      telefono: data.telefono ?? "",
+      phonePrefix: data.phonePrefix ?? "+34",
+      email: data.email ?? "",
+      whatsapp: data.whatsapp ?? "",
+      horario: data.horario ?? "L-V 9:00-18:00",
+      logoUrl: data.logoUrl ?? "",
+      coverUrl: data.coverUrl ?? "",
       esPrincipal,
       activa: data.activa ?? true,
       createdAt: Date.now(),
