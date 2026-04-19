@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Byvaro · Auditoría & Propuesta de IA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FAFAFA;--surface:#FFFFFF;--ink:#0A0A0A;--ink-2:#1A1A1A;
+    --muted:#6B7280;--muted-2:#9CA3AF;--border:#ECECEC;--border-2:#E5E7EB;
+    --brand:#0F0F0F;
+    --ok:#059669;--ok-bg:#ECFDF5;
+    --warn:#D97706;--warn-bg:#FFFBEB;
+    --bad:#DC2626;--bad-bg:#FEF2F2;
+    --info:#2563EB;--info-bg:#EFF6FF;
+    --accent:#6366F1;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;font-feature-settings:'cv11','ss01';-webkit-font-smoothing:antialiased;line-height:1.55}
+  .container{max-width:1180px;margin:0 auto;padding:0 28px}
+  .hero{padding:56px 0 32px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fff 0%,var(--bg) 100%)}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:600;padding:4px 10px;background:#fff;border:1px solid var(--border-2);border-radius:999px}
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  h1{font-size:36px;font-weight:800;letter-spacing:-.025em;margin-top:14px;line-height:1.15}
+  .lead{font-size:16px;color:#4b5563;margin-top:14px;max-width:700px}
+  .meta{margin-top:20px;display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+  .meta span strong{color:var(--ink);font-weight:600;margin-right:4px}
+
+  section{padding:48px 0;border-bottom:1px solid var(--border)}
+  h2{font-size:22px;font-weight:700;letter-spacing:-.02em}
+  h2 .num{display:inline-block;width:28px;height:28px;border-radius:8px;background:var(--ink);color:#fff;font-size:13px;font-weight:700;text-align:center;line-height:28px;margin-right:10px;vertical-align:middle}
+  h3{font-size:14px;font-weight:600;margin-top:0;color:var(--ink)}
+  .sec-lead{color:#4b5563;font-size:14px;margin-top:10px;max-width:740px}
+
+  /* Stats */
+  .stats{margin-top:28px;display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px}
+  .stat-num{font-size:28px;font-weight:800;letter-spacing:-.02em}
+  .stat-num.ok{color:var(--ok)}
+  .stat-num.warn{color:var(--warn)}
+  .stat-num.bad{color:var(--bad)}
+  .stat-lbl{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-top:6px}
+  .stat-sub{font-size:12.5px;color:var(--muted);margin-top:4px}
+
+  /* Finding cards */
+  .findings{margin-top:28px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .finding{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px}
+  .finding-head{display:flex;gap:12px;align-items:flex-start}
+  .finding-icon{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;flex-shrink:0;font-weight:700;font-size:14px}
+  .finding-icon.bad{background:var(--bad-bg);color:var(--bad)}
+  .finding-icon.warn{background:var(--warn-bg);color:var(--warn)}
+  .finding-icon.info{background:var(--info-bg);color:var(--info)}
+  .finding-icon.ok{background:var(--ok-bg);color:var(--ok)}
+  .finding h3{margin-bottom:4px}
+  .finding p{font-size:13px;color:#4b5563}
+  .finding ul{margin-top:10px;padding-left:16px;font-size:12.5px;color:#4b5563}
+  .finding ul li{margin:4px 0}
+  .finding code{background:#F4F4F5;padding:1px 6px;border-radius:4px;font-size:12px;font-family:ui-monospace,SFMono-Regular,monospace;color:var(--ink-2)}
+
+  /* Tables */
+  .table-wrap{margin-top:22px;background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{text-align:left;font-weight:600;color:var(--muted-2);font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:12px 16px;background:#FAFAFA;border-bottom:1px solid var(--border)}
+  tbody td{padding:12px 16px;border-bottom:1px solid #F4F4F5;vertical-align:top}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#FAFAFA}
+  .file{font-family:ui-monospace,SFMono-Regular,monospace;font-size:12px;color:var(--ink-2)}
+  .path{font-family:ui-monospace,SFMono-Regular,monospace;font-size:11.5px;color:var(--muted);background:#F4F4F5;padding:2px 6px;border-radius:4px;display:inline-block}
+  .chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:500;line-height:1.4}
+  .chip.ok{background:var(--ok-bg);color:var(--ok)}
+  .chip.warn{background:var(--warn-bg);color:var(--warn)}
+  .chip.bad{background:var(--bad-bg);color:var(--bad)}
+  .chip.info{background:var(--info-bg);color:var(--info)}
+  .chip.neu{background:#F4F4F5;color:#4b5563}
+  .persona{font-size:11px;font-weight:500;padding:2px 8px;border-radius:999px}
+  .persona.promotor{background:#EEF2FF;color:#4338CA}
+  .persona.agencia{background:#ECFDF5;color:#047857}
+  .persona.both{background:#FEF3C7;color:#92400E}
+  .persona.auth{background:#FCE7F3;color:#9D174D}
+  .persona.admin{background:#F3E8FF;color:#6D28D9}
+  .persona.ds{background:#F4F4F5;color:#4b5563}
+
+  /* Groups */
+  .group-list{margin-top:22px;display:flex;flex-direction:column;gap:12px}
+  .group{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
+  .group-head{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+  .group-title{font-size:14px;font-weight:600}
+  .group-hint{font-size:12px;color:var(--muted)}
+  .group-items{display:flex;flex-direction:column;gap:4px}
+  .group-item{display:grid;grid-template-columns:260px 1fr auto;align-items:center;gap:12px;padding:6px 0;font-size:13px;border-top:1px solid #F4F4F5}
+  .group-item:first-child{border-top:none}
+  .group-item .file{font-weight:500}
+  .group-item .note{color:var(--muted);font-size:12.5px}
+
+  /* Menu comparison */
+  .menu-compare{margin-top:28px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .menu-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px;position:relative}
+  .menu-card.before{background:#FAFAFA}
+  .menu-card.after{border-color:#0A0A0A;box-shadow:0 4px 16px rgba(0,0,0,.06)}
+  .menu-tag{position:absolute;top:-10px;left:20px;background:#fff;padding:3px 10px;border:1px solid var(--border);border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  .menu-card.after .menu-tag{background:#0A0A0A;color:#fff;border-color:#0A0A0A}
+  .menu-card h3{font-size:16px;font-weight:700;margin-bottom:4px;letter-spacing:-.01em}
+  .menu-card .sub{font-size:12.5px;color:var(--muted);margin-bottom:18px}
+  .menu-group{margin-top:14px}
+  .menu-group-label{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted-2);font-weight:600;margin-bottom:6px;padding-left:10px}
+  .menu-item{display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:8px;font-size:13px;color:var(--ink-2);margin:1px 0}
+  .menu-card.before .menu-item.broken{color:#9CA3AF;text-decoration:line-through;text-decoration-color:var(--bad)}
+  .menu-card.before .menu-item.dup::after{content:'V1/V2';background:var(--warn-bg);color:var(--warn);font-size:9.5px;padding:1px 6px;border-radius:999px;font-weight:600;margin-left:auto}
+  .menu-card.after .menu-item{font-weight:500}
+  .menu-card.after .menu-item.new::after{content:'NUEVO';background:var(--info-bg);color:var(--info);font-size:9.5px;padding:1px 6px;border-radius:999px;font-weight:700;letter-spacing:.04em;margin-left:auto}
+  .menu-card.after .menu-item.renamed::after{content:'RENOMBRADA';background:#F3E8FF;color:#6D28D9;font-size:9.5px;padding:1px 6px;border-radius:999px;font-weight:700;letter-spacing:.04em;margin-left:auto}
+  .menu-card.after .menu-item.moved::after{content:'REUBICADA';background:var(--ok-bg);color:var(--ok);font-size:9.5px;padding:1px 6px;border-radius:999px;font-weight:700;letter-spacing:.04em;margin-left:auto}
+  .menu-item .icon{width:16px;height:16px;display:inline-grid;place-items:center;color:var(--muted-2);flex-shrink:0}
+
+  /* Principles list */
+  .princ-grid{margin-top:22px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .princ{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;display:flex;gap:14px;align-items:flex-start}
+  .princ-num{flex-shrink:0;width:28px;height:28px;border-radius:8px;background:var(--ink);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px}
+  .princ h3{margin-bottom:4px}
+  .princ p{font-size:13px;color:#4b5563}
+
+  /* Priorities */
+  .prio{margin-top:22px;display:flex;flex-direction:column;gap:10px}
+  .prio-row{display:grid;grid-template-columns:36px 1fr auto auto;gap:14px;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:12px;align-items:center}
+  .prio-num{width:28px;height:28px;border-radius:50%;background:#F4F4F5;color:var(--ink);font-weight:700;font-size:13px;display:grid;place-items:center}
+  .prio-row.p0 .prio-num{background:var(--bad);color:#fff}
+  .prio-row.p1 .prio-num{background:var(--warn);color:#fff}
+  .prio-row.p2 .prio-num{background:var(--ok);color:#fff}
+  .prio-title{font-weight:600;font-size:14px}
+  .prio-desc{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .prio-tag{font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em}
+  .prio-tag.p0{background:var(--bad-bg);color:var(--bad)}
+  .prio-tag.p1{background:var(--warn-bg);color:var(--warn)}
+  .prio-tag.p2{background:var(--ok-bg);color:var(--ok)}
+  .prio-est{font-size:12px;color:var(--muted);font-weight:500}
+
+  /* Next steps */
+  .next{margin-top:26px;background:linear-gradient(135deg,#0A0A0A,#1F2937);color:#fff;border-radius:18px;padding:32px}
+  .next h3{color:#fff;font-size:18px;font-weight:700;letter-spacing:-.015em}
+  .next p{color:#D1D5DB;font-size:14px;margin-top:8px;max-width:620px}
+  .next ol{margin-top:20px;padding-left:22px;counter-reset:step}
+  .next ol li{color:#D1D5DB;font-size:14px;margin:8px 0;line-height:1.6}
+  .next ol li strong{color:#fff;font-weight:600}
+
+  @media(max-width:960px){
+    .stats,.findings,.princ-grid,.menu-compare{grid-template-columns:1fr}
+    .group-item{grid-template-columns:1fr}
+    h1{font-size:28px}
+  }
+  @media print{
+    body{background:#fff}
+    section{page-break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="container">
+    <span class="eyebrow"><span class="dot"></span>Byvaro · Fase 1 de 4</span>
+    <h1>Auditoría de la app actual<br/>+ propuesta de nueva IA</h1>
+    <p class="lead">Mapa completo de lo que hay hoy en <code style="font-family:ui-monospace,monospace;background:#f4f4f5;padding:1px 6px;border-radius:4px;font-size:14px">figgy-friend-forge</code>, qué funciona, qué está roto, y una propuesta concreta de cómo reestructurar el menú del Promotor antes de entrar a diseñar pantallas.</p>
+    <div class="meta">
+      <span><strong>Alcance:</strong> Vista Promotor (Developer)</span>
+      <span><strong>Stack analizado:</strong> Vite · React 18 · Tailwind · shadcn/ui</span>
+      <span><strong>Pantallas revisadas:</strong> 42</span>
+      <span><strong>Fecha:</strong> 19 abril 2026</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== SECCIÓN 1: ESTADO ACTUAL ===================== -->
+<section>
+  <div class="container">
+    <h2><span class="num">1</span>Estado actual, en números</h2>
+    <p class="sec-lead">Panorámica rápida: cuánto código hay, cuánto está vivo, cuánto no.</p>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-num">42</div>
+        <div class="stat-lbl">Pantallas totales</div>
+        <div class="stat-sub">Archivos en <code>src/pages/</code></div>
+      </div>
+      <div class="stat">
+        <div class="stat-num ok">30</div>
+        <div class="stat-lbl">Activas</div>
+        <div class="stat-sub">Con ruta y usadas</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num warn">8</div>
+        <div class="stat-lbl">Huérfanas</div>
+        <div class="stat-sub">Sin ruta — inalcanzables</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num bad">4</div>
+        <div class="stat-lbl">Vacías</div>
+        <div class="stat-sub">Archivo existe, sin contenido</div>
+      </div>
+    </div>
+
+    <div class="findings">
+      <div class="finding">
+        <div class="finding-head">
+          <div class="finding-icon bad">!</div>
+          <div>
+            <h3>Menú Promotor con 7 enlaces rotos</h3>
+            <p>El sidebar actual muestra 11 items para el Promotor. 7 apuntan a rutas que no existen en <code>App.tsx</code>:</p>
+            <ul>
+              <li><code>/dashboard</code> · <code>/websites</code> · <code>/emails</code> · <code>/files</code> · <code>/operations</code> · <code>/sales</code></li>
+              <li>Hacer click en cualquiera de ellos lleva al <code>NotFound</code>.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="finding">
+        <div class="finding-head">
+          <div class="finding-icon warn">≡</div>
+          <div>
+            <h3>Duplicados por todas partes</h3>
+            <p>Varias funcionalidades tienen V1/V2/App conviviendo. Ejemplos:</p>
+            <ul>
+              <li><code>AgenciesDeveloper</code> (v1) y <code>AgenciesDeveloperV2</code> — ambas en rutas activas (<code>/agencies</code> y <code>/agencies2</code>).</li>
+              <li><code>Contacts</code> vs <code>ContactsApp</code> — dos implementaciones en paralelo.</li>
+              <li><code>PromotionDetailV4</code> · <code>PromotionsAgentV1</code> · <code>ComponentLibraryV1</code> — huérfanas pero aún en el repo.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="finding">
+        <div class="finding-head">
+          <div class="finding-icon info">Aa</div>
+          <div>
+            <h3>Idioma mezclado en el menú</h3>
+            <p>El sidebar actual mezcla español e inglés sin patrón: <code>Correos electrónicos</code> al lado de <code>Operations</code>, <code>Sales</code>, <code>My Files</code>, <code>Calendar</code>. Incoherente para un usuario hispanohablante.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="finding">
+        <div class="finding-head">
+          <div class="finding-icon ok">✓</div>
+          <div>
+            <h3>Lo que está bien hecho</h3>
+            <p>No todo son malas noticias. Hay bases sólidas sobre las que construir:</p>
+            <ul>
+              <li>Sistema de tokens HSL correcto y completo (<code>index.css</code>).</li>
+              <li>Reglas de diseño documentadas en <code>CLAUDE.md</code>.</li>
+              <li>Patrón <em>dual-mode</em> (props <code>agentMode</code>/<code>agencyMode</code>) bien resuelto.</li>
+              <li><code>AgenciesDeveloperV2</code> es la referencia estética: premium, bien calibrada.</li>
+              <li>Página de detalle de promoción (<code>DeveloperPromotionDetail</code>) completa y rica.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== SECCIÓN 2: MAPA DE PANTALLAS ===================== -->
+<section>
+  <div class="container">
+    <h2><span class="num">2</span>Mapa de pantallas del Promotor</h2>
+    <p class="sec-lead">Las pantallas que tiene hoy la vista Promotor, agrupadas por área. Marcado: qué está activa, qué es duplicado y qué está vacía.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Archivo</th>
+            <th>Ruta</th>
+            <th>Persona</th>
+            <th>Área</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="file">DeveloperPromotions.tsx</span></td><td><span class="path">/developer-promotions</span></td><td><span class="persona promotor">Promotor</span></td><td>Promociones · listado</td><td><span class="chip ok">Activa</span></td></tr>
+          <tr><td><span class="file">DeveloperPromotionDetail.tsx</span></td><td><span class="path">/developer-promotions/:id</span></td><td><span class="persona both">Dual</span></td><td>Promociones · detalle</td><td><span class="chip ok">Activa</span></td></tr>
+          <tr><td><span class="file">CreatePromotion.tsx</span></td><td><span class="path">/create-promotion</span></td><td><span class="persona promotor">Promotor</span></td><td>Promociones · crear</td><td><span class="chip ok">Activa</span></td></tr>
+          <tr><td><span class="file">PromotionDetailV4.tsx</span></td><td><span class="path">—</span></td><td><span class="persona promotor">Promotor</span></td><td>Promociones · detalle</td><td><span class="chip warn">Huérfana (V4 antigua)</span></td></tr>
+          <tr><td><span class="file">PromotionAvailabilityPro.tsx</span></td><td><span class="path">—</span></td><td><span class="persona promotor">Promotor</span></td><td>Promociones · disponibilidad</td><td><span class="chip bad">Huérfana + vacía</span></td></tr>
+
+          <tr><td><span class="file">AgenciesDeveloper.tsx</span></td><td><span class="path">/agencies</span></td><td><span class="persona promotor">Promotor</span></td><td>Colaboradores</td><td><span class="chip warn">Activa (V1)</span></td></tr>
+          <tr><td><span class="file">AgenciesDeveloperV2.tsx</span></td><td><span class="path">/agencies2</span></td><td><span class="persona promotor">Promotor</span></td><td>Colaboradores</td><td><span class="chip ok">Activa (V2 · referencia)</span></td></tr>
+
+          <tr><td><span class="file">Records4.tsx</span></td><td><span class="path">/records</span></td><td><span class="persona promotor">Promotor</span></td><td>Registros</td><td><span class="chip ok">Activa</span></td></tr>
+
+          <tr><td><span class="file">Contacts.tsx</span></td><td><span class="path">/contacts</span></td><td><span class="persona both">Dual</span></td><td>Contactos</td><td><span class="chip ok">Activa</span></td></tr>
+          <tr><td><span class="file">ContactDetail.tsx</span></td><td><span class="path">/contacts/:id</span></td><td><span class="persona both">Dual</span></td><td>Contactos · detalle</td><td><span class="chip ok">Activa</span></td></tr>
+          <tr><td><span class="file">ContactCreate.tsx</span></td><td><span class="path">/contacts/new</span></td><td><span class="persona both">Dual</span></td><td>Contactos · crear</td><td><span class="chip ok">Activa</span></td></tr>
+          <tr><td><span class="file">ContactEdit.tsx</span></td><td><span class="path">/contacts/:id/edit</span></td><td><span class="persona both">Dual</span></td><td>Contactos · editar</td><td><span class="chip ok">Activa</span></td></tr>
+          <tr><td><span class="file">ContactsApp.tsx</span></td><td><span class="path">/contacts-app</span></td><td><span class="persona both">Dual</span></td><td>Contactos · variante app</td><td><span class="chip warn">Duplicado de Contacts</span></td></tr>
+          <tr><td><span class="file">ContactDetailApp.tsx</span></td><td><span class="path">/contacts-app/:id</span></td><td><span class="persona both">Dual</span></td><td>Contactos · variante app</td><td><span class="chip warn">Duplicado</span></td></tr>
+
+          <tr><td><span class="file">CalendarVisits.tsx</span></td><td><span class="path">/calendar</span></td><td><span class="persona both">Dual</span></td><td>Calendario</td><td><span class="chip ok">Activa</span></td></tr>
+
+          <tr><td><span class="file">CompanyProfile.tsx</span></td><td><span class="path">/company</span></td><td><span class="persona both">Dual</span></td><td>Empresa</td><td><span class="chip ok">Activa</span></td></tr>
+          <tr><td><span class="file">TeamMembers.tsx</span></td><td><span class="path">/users</span></td><td><span class="persona both">Dual</span></td><td>Equipo</td><td><span class="chip ok">Activa</span></td></tr>
+          <tr><td><span class="file">Settings.tsx</span></td><td><span class="path">/settings</span></td><td><span class="persona both">Dual</span></td><td>Ajustes</td><td><span class="chip ok">Activa</span></td></tr>
+          <tr><td><span class="file">Integrations.tsx</span></td><td><span class="path">/settings/integrations</span></td><td><span class="persona both">Dual</span></td><td>Ajustes · integraciones</td><td><span class="chip ok">Activa</span></td></tr>
+
+          <tr><td colspan="5" style="background:var(--bad-bg);color:var(--bad);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.06em;padding:10px 16px">Menú Promotor — rutas sin pantalla</td></tr>
+          <tr><td><span class="file">—</span></td><td><span class="path">/dashboard</span></td><td><span class="persona promotor">Promotor</span></td><td>Analítica / Inicio</td><td><span class="chip bad">Rota · sin pantalla</span></td></tr>
+          <tr><td><span class="file">—</span></td><td><span class="path">/websites</span></td><td><span class="persona promotor">Promotor</span></td><td>Microsites</td><td><span class="chip bad">Rota · sin pantalla</span></td></tr>
+          <tr><td><span class="file">—</span></td><td><span class="path">/emails</span></td><td><span class="persona promotor">Promotor</span></td><td>Emails · campañas</td><td><span class="chip bad">Rota · sin pantalla</span></td></tr>
+          <tr><td><span class="file">—</span></td><td><span class="path">/files</span></td><td><span class="persona promotor">Promotor</span></td><td>Documentos globales</td><td><span class="chip bad">Rota · sin pantalla</span></td></tr>
+          <tr><td><span class="file">—</span></td><td><span class="path">/operations</span></td><td><span class="persona promotor">Promotor</span></td><td>Operaciones</td><td><span class="chip bad">Rota · sin pantalla</span></td></tr>
+          <tr><td><span class="file">—</span></td><td><span class="path">/sales</span></td><td><span class="persona promotor">Promotor</span></td><td>Ventas</td><td><span class="chip bad">Rota · sin pantalla</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:32px;font-size:14px;color:var(--ink);font-weight:600">Grupos de duplicados que hay que resolver</h3>
+    <div class="group-list">
+      <div class="group">
+        <div class="group-head">
+          <div class="group-title">Gestión de colaboradores / agencias</div>
+          <div class="group-hint">Dos versiones activas</div>
+        </div>
+        <div class="group-items">
+          <div class="group-item"><span class="file">AgenciesDeveloper.tsx</span> <span class="note">V1 antigua, activa en <code>/agencies</code></span> <span class="chip warn">Deprecar</span></div>
+          <div class="group-item"><span class="file">AgenciesDeveloperV2.tsx</span> <span class="note">V2 mejor estética, activa en <code>/agencies2</code></span> <span class="chip ok">Mantener como base</span></div>
+        </div>
+      </div>
+      <div class="group">
+        <div class="group-head">
+          <div class="group-title">Contactos / CRM</div>
+          <div class="group-hint">Dos implementaciones en paralelo</div>
+        </div>
+        <div class="group-items">
+          <div class="group-item"><span class="file">Contacts.tsx + ContactDetail.tsx</span> <span class="note">Implementación principal con dual-mode</span> <span class="chip ok">Mantener</span></div>
+          <div class="group-item"><span class="file">ContactsApp.tsx + ContactDetailApp.tsx</span> <span class="note">Variante "app" — propósito poco claro</span> <span class="chip warn">Decidir: fusionar o eliminar</span></div>
+        </div>
+      </div>
+      <div class="group">
+        <div class="group-head">
+          <div class="group-title">Promociones — archivos antiguos</div>
+          <div class="group-hint">Huérfanos, se pueden eliminar</div>
+        </div>
+        <div class="group-items">
+          <div class="group-item"><span class="file">PromotionDetailV4.tsx</span> <span class="note">Detalle antiguo, sin ruta</span> <span class="chip bad">Eliminar</span></div>
+          <div class="group-item"><span class="file">PromotionsAgentV1.tsx</span> <span class="note">Listado antiguo, sin ruta</span> <span class="chip bad">Eliminar</span></div>
+          <div class="group-item"><span class="file">Index.tsx</span> <span class="note">Home legacy, sin ruta</span> <span class="chip bad">Eliminar</span></div>
+          <div class="group-item"><span class="file">PromotionAvailabilityPro.tsx</span> <span class="note">Vacía</span> <span class="chip bad">Eliminar</span></div>
+        </div>
+      </div>
+      <div class="group">
+        <div class="group-head">
+          <div class="group-title">Librerías de componentes huérfanas</div>
+          <div class="group-hint">Archivos sin ruta, referencia interna</div>
+        </div>
+        <div class="group-items">
+          <div class="group-item"><span class="file">ComponentLibrary.tsx</span> <span class="note">Útil como referencia</span> <span class="chip warn">Mover al Design System oficial</span></div>
+          <div class="group-item"><span class="file">ComponentLibraryV1.tsx</span> <span class="note">V1 antigua</span> <span class="chip bad">Eliminar</span></div>
+          <div class="group-item"><span class="file">DevApprovedDesigns.tsx</span> <span class="note">Vacía</span> <span class="chip bad">Eliminar</span></div>
+          <div class="group-item"><span class="file">DevAvailabilityComparison.tsx</span> <span class="note">Vacía</span> <span class="chip bad">Eliminar</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== SECCIÓN 3: PROPUESTA DE MENÚ ===================== -->
+<section>
+  <div class="container">
+    <h2><span class="num">3</span>Propuesta de nuevo menú</h2>
+    <p class="sec-lead">IA replanteada para la Vista Promotor: menos items, agrupados por actividad, en español, sin enlaces rotos. Objetivo: que el usuario sepa dónde está cada cosa en menos de 2 segundos.</p>
+
+    <div class="princ-grid">
+      <div class="princ">
+        <div class="princ-num">1</div>
+        <div>
+          <h3>Agrupar por actividad, no por feature</h3>
+          <p>"Qué hace el usuario" en lugar de "qué módulo es". Resultado: 4 grupos claros en lugar de una lista plana de 11 items.</p>
+        </div>
+      </div>
+      <div class="princ">
+        <div class="princ-num">2</div>
+        <div>
+          <h3>Un solo idioma: español</h3>
+          <p>Todo el menú en español. Los términos técnicos (CRM, Dashboard) solo si no tienen buena traducción comercial.</p>
+        </div>
+      </div>
+      <div class="princ">
+        <div class="princ-num">3</div>
+        <div>
+          <h3>Nombres por comportamiento del usuario</h3>
+          <p><code>Colaboradores</code> (mejor que <code>Agencies</code>), <code>Registros</code> (mejor que <code>Records</code>), <code>Microsites</code> (mejor que <code>Websites</code>).</p>
+        </div>
+      </div>
+      <div class="princ">
+        <div class="princ-num">4</div>
+        <div>
+          <h3>Inicio con contenido real</h3>
+          <p>El item <code>/dashboard</code> roto se convierte en <code>Inicio</code>: dashboard global con KPIs cruzados (registros, ventas, mercados, colaboradores).</p>
+        </div>
+      </div>
+      <div class="princ">
+        <div class="princ-num">5</div>
+        <div>
+          <h3>Admin separada del trabajo diario</h3>
+          <p>Empresa, equipo, integraciones y ajustes bajan al pie del sidebar o a un menú secundario. No compiten con el flujo comercial.</p>
+        </div>
+      </div>
+      <div class="princ">
+        <div class="princ-num">6</div>
+        <div>
+          <h3>Eliminar lo aspiracional</h3>
+          <p>Los items del menú actual que apuntan a páginas que no existen desaparecen. Se reintroducen solo cuando la pantalla esté diseñada.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="menu-compare">
+      <div class="menu-card before">
+        <span class="menu-tag">Antes</span>
+        <h3>Menú actual</h3>
+        <div class="sub">11 items planos · 7 enlaces rotos · idioma mezclado</div>
+
+        <div class="menu-group">
+          <div class="menu-group-label">Developer View</div>
+          <div class="menu-item">🏷️ Promotions</div>
+          <div class="menu-item broken">📊 Dashboard</div>
+          <div class="menu-item broken">🌐 Websites</div>
+          <div class="menu-item">👥 Contacts</div>
+          <div class="menu-item dup">🤝 Agencies</div>
+          <div class="menu-item">📄 Records</div>
+          <div class="menu-item broken">📧 Correos electrónicos</div>
+          <div class="menu-item broken">📁 My Files</div>
+          <div class="menu-item broken">💼 Operations</div>
+          <div class="menu-item broken">💰 Sales</div>
+          <div class="menu-item">📅 Calendar</div>
+        </div>
+        <div class="menu-group">
+          <div class="menu-group-label">Your Company</div>
+          <div class="menu-item">👤 Team members</div>
+          <div class="menu-item">🏢 Company</div>
+          <div class="menu-item">⚙️ Settings</div>
+          <div class="menu-item">🔌 Integraciones</div>
+        </div>
+      </div>
+
+      <div class="menu-card after">
+        <span class="menu-tag">Propuesta</span>
+        <h3>Menú Byvaro · Promotor</h3>
+        <div class="sub">4 grupos · 11 items · todo en español · sin rotos</div>
+
+        <div class="menu-group">
+          <div class="menu-group-label">General</div>
+          <div class="menu-item new">🏠 Inicio</div>
+        </div>
+
+        <div class="menu-group">
+          <div class="menu-group-label">Comercial</div>
+          <div class="menu-item">🏷️ Promociones</div>
+          <div class="menu-item">📄 Registros</div>
+          <div class="menu-item new">💰 Ventas</div>
+          <div class="menu-item">📅 Calendario</div>
+        </div>
+
+        <div class="menu-group">
+          <div class="menu-group-label">Red</div>
+          <div class="menu-item renamed">🤝 Colaboradores</div>
+          <div class="menu-item">👥 Contactos</div>
+        </div>
+
+        <div class="menu-group">
+          <div class="menu-group-label">Contenido</div>
+          <div class="menu-item renamed">🌐 Microsites</div>
+          <div class="menu-item new">📧 Emails</div>
+          <div class="menu-item new">📁 Documentos</div>
+        </div>
+
+        <div class="menu-group">
+          <div class="menu-group-label">Administración · pie del sidebar</div>
+          <div class="menu-item moved">🏢 Empresa</div>
+          <div class="menu-item moved">👤 Equipo</div>
+          <div class="menu-item moved">🔌 Integraciones</div>
+          <div class="menu-item moved">⚙️ Ajustes</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;background:var(--info-bg);border:1px solid #BFDBFE;border-radius:12px;padding:18px;font-size:13px;color:#1E3A8A">
+      <strong style="color:#1E3A8A">Decisiones abiertas para validar contigo:</strong>
+      <ul style="margin-top:10px;padding-left:20px;line-height:1.7">
+        <li><strong>¿Dashboard global <em>versus</em> dashboards por área?</strong> Propongo un solo <code>/inicio</code> con tarjetas-resumen que enlazan a los dashboards de cada área (Colaboradores, Ventas, Registros). Evita duplicación.</li>
+        <li><strong>¿Qué va exactamente en Ventas?</strong> Pipeline de oportunidades, cerradas, comisiones pendientes… o es la matriz Agencia×Nacionalidad del dashboard que ya diseñamos. Posibilidad: Ventas = pipeline + reservas, el análisis va en Colaboradores.</li>
+        <li><strong>¿Fusionamos "Contactos" y "Contactos app"?</strong> Propongo sí: una sola pantalla Contactos con dos vistas (lista / tarjetas).</li>
+        <li><strong>¿"Calendario" dentro de Comercial o como item propio?</strong> Propongo Comercial, porque las visitas están ligadas a registros y promociones.</li>
+        <li><strong>¿Necesitas el ítem "Documentos" global?</strong> Ya existen documentos dentro de cada Promoción. Este sería el "drive" del promotor (brochures maestros, plantillas, etc.). Si no lo usas, lo eliminamos.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== SECCIÓN 4: PANTALLAS A REDISEÑAR ===================== -->
+<section>
+  <div class="container">
+    <h2><span class="num">4</span>Lista priorizada de pantallas a rediseñar</h2>
+    <p class="sec-lead">Qué pantallas atacamos primero, agrupadas por impacto. P0 = imprescindible, P1 = alto valor, P2 = secundario.</p>
+
+    <div class="prio">
+      <div class="prio-row p0">
+        <div class="prio-num">1</div>
+        <div>
+          <div class="prio-title">Sidebar + Layout general (AppShell)</div>
+          <div class="prio-desc">Base sobre la que vive todo. Implementa el menú nuevo, tipografía, densidad, tokens refinados.</div>
+        </div>
+        <span class="prio-tag p0">P0</span>
+        <span class="prio-est">~1 iteración</span>
+      </div>
+      <div class="prio-row p0">
+        <div class="prio-num">2</div>
+        <div>
+          <div class="prio-title">Inicio (nuevo dashboard global)</div>
+          <div class="prio-desc">Primer pantallazo al entrar. KPIs cruzados, actividad reciente, accesos rápidos.</div>
+        </div>
+        <span class="prio-tag p0">P0</span>
+        <span class="prio-est">~1 iteración</span>
+      </div>
+      <div class="prio-row p0">
+        <div class="prio-num">3</div>
+        <div>
+          <div class="prio-title">Promociones · listado</div>
+          <div class="prio-desc">La pantalla más visitada. Hoy es <code>DeveloperPromotions.tsx</code>, funcional pero mejorable.</div>
+        </div>
+        <span class="prio-tag p0">P0</span>
+        <span class="prio-est">~1 iteración</span>
+      </div>
+      <div class="prio-row p0">
+        <div class="prio-num">4</div>
+        <div>
+          <div class="prio-title">Promociones · detalle (ficha)</div>
+          <div class="prio-desc">La pantalla más compleja. Tabs múltiples. Refactorizar densidad, jerarquía y navegación interna.</div>
+        </div>
+        <span class="prio-tag p0">P0</span>
+        <span class="prio-est">~2 iteraciones</span>
+      </div>
+
+      <div class="prio-row p1">
+        <div class="prio-num">5</div>
+        <div>
+          <div class="prio-title">Colaboradores · listado + analítica</div>
+          <div class="prio-desc">Fusionar <code>AgenciesDeveloper</code> V1+V2, añadir las 3 tabs del dashboard que diseñamos (Registros/Ventas/Eficiencia).</div>
+        </div>
+        <span class="prio-tag p1">P1</span>
+        <span class="prio-est">~1,5 iteraciones</span>
+      </div>
+      <div class="prio-row p1">
+        <div class="prio-num">6</div>
+        <div>
+          <div class="prio-title">Registros</div>
+          <div class="prio-desc">Pantalla crítica para aprobar/rechazar leads. Aplicar nuevo lenguaje manteniendo la funcionalidad actual.</div>
+        </div>
+        <span class="prio-tag p1">P1</span>
+        <span class="prio-est">~1 iteración</span>
+      </div>
+      <div class="prio-row p1">
+        <div class="prio-num">7</div>
+        <div>
+          <div class="prio-title">Contactos (fusión de ambas variantes)</div>
+          <div class="prio-desc">Resolver la duplicidad <code>Contacts</code> vs <code>ContactsApp</code>. Dos vistas (lista/tarjetas) en una sola pantalla.</div>
+        </div>
+        <span class="prio-tag p1">P1</span>
+        <span class="prio-est">~1 iteración</span>
+      </div>
+      <div class="prio-row p1">
+        <div class="prio-num">8</div>
+        <div>
+          <div class="prio-title">Calendario de visitas</div>
+          <div class="prio-desc">Aplicar nuevo lenguaje, mejorar densidad visual.</div>
+        </div>
+        <span class="prio-tag p1">P1</span>
+        <span class="prio-est">~0,5 iteración</span>
+      </div>
+
+      <div class="prio-row p2">
+        <div class="prio-num">9</div>
+        <div>
+          <div class="prio-title">Ventas (nueva)</div>
+          <div class="prio-desc">Pipeline + reservas + comisiones. Definir funcionalidad antes de diseñar.</div>
+        </div>
+        <span class="prio-tag p2">P2</span>
+        <span class="prio-est">~1 iteración</span>
+      </div>
+      <div class="prio-row p2">
+        <div class="prio-num">10</div>
+        <div>
+          <div class="prio-title">Microsites (renombrado Websites)</div>
+          <div class="prio-desc">Gestor de webs públicas por promoción. Alcance a definir.</div>
+        </div>
+        <span class="prio-tag p2">P2</span>
+        <span class="prio-est">~1 iteración</span>
+      </div>
+      <div class="prio-row p2">
+        <div class="prio-num">11</div>
+        <div>
+          <div class="prio-title">Emails · plantillas + campañas</div>
+          <div class="prio-desc">Hay <code>src/email-templates/</code> en el repo. Diseño de gestor.</div>
+        </div>
+        <span class="prio-tag p2">P2</span>
+        <span class="prio-est">~1 iteración</span>
+      </div>
+      <div class="prio-row p2">
+        <div class="prio-num">12</div>
+        <div>
+          <div class="prio-title">Admin (Empresa, Equipo, Integraciones, Ajustes)</div>
+          <div class="prio-desc">Menos prioridad visual. Aplicar lenguaje al final.</div>
+        </div>
+        <span class="prio-tag p2">P2</span>
+        <span class="prio-est">~1 iteración</span>
+      </div>
+      <div class="prio-row p2">
+        <div class="prio-num">13</div>
+        <div>
+          <div class="prio-title">Auth (Login, Register, etc.)</div>
+          <div class="prio-desc">Ya están bastante bien. Aplicar el nuevo lenguaje al final del proceso.</div>
+        </div>
+        <span class="prio-tag p2">P2</span>
+        <span class="prio-est">~0,5 iteración</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== SIGUIENTES PASOS ===================== -->
+<section style="border-bottom:none">
+  <div class="container">
+    <h2><span class="num">→</span>Siguientes pasos</h2>
+
+    <div class="next">
+      <h3>Qué necesito de ti para arrancar la Fase 2</h3>
+      <p>Con este documento aprobado, el siguiente entregable es la <strong>Style Tile</strong>: tipografía, paleta refinada, densidad, botones, tarjetas, tablas, estados, iconografía — la base sobre la que se diseñará todo lo demás.</p>
+
+      <ol>
+        <li><strong>Valida la propuesta de menú</strong> y las 5 decisiones abiertas de la sección 3 (dashboard único, scope de Ventas, fusión Contactos, ubicación de Calendario, necesidad de Documentos global).</li>
+        <li><strong>Envíame 2-3 referencias visuales</strong> de productos que te gusten. Para calibrar la personalidad del refresh. Algunas opciones: Linear (frío, técnico), Attio (CRM premium), Notion (cálido, editorial), Stripe (corporativo confiable), Pipedrive (comercial directo), Intercom (humano cercano).</li>
+        <li><strong>Confirma el idioma de trabajo</strong> (todo español en la UI final, asumo que sí).</li>
+        <li><strong>Decide si quieres modo oscuro</strong> desde el inicio o lo dejamos para una segunda fase.</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<footer style="padding:36px 0;text-align:center;font-size:12px;color:var(--muted)">
+  Byvaro · Auditoría Fase 1 · Vista Promotor · 19 abril 2026
+</footer>
+
+</body>
+</html>

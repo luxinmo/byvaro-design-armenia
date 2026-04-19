@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Byvaro · Inicio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script>
+  // Tailwind config mirroring Byvaro tokens (index.css)
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      container: { center: true, padding: '1rem', screens: { '2xl': '1400px' } },
+      extend: {
+        fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        colors: {
+          border: 'hsl(var(--border))',
+          input: 'hsl(var(--input))',
+          ring: 'hsl(var(--ring))',
+          background: 'hsl(var(--background))',
+          foreground: 'hsl(var(--foreground))',
+          primary: { DEFAULT: 'hsl(var(--primary))', foreground: 'hsl(var(--primary-foreground))' },
+          secondary: { DEFAULT: 'hsl(var(--secondary))', foreground: 'hsl(var(--secondary-foreground))' },
+          destructive: { DEFAULT: 'hsl(var(--destructive))', foreground: 'hsl(var(--destructive-foreground))' },
+          muted: { DEFAULT: 'hsl(var(--muted))', foreground: 'hsl(var(--muted-foreground))' },
+          accent: { DEFAULT: 'hsl(var(--accent))', foreground: 'hsl(var(--accent-foreground))' },
+          popover: { DEFAULT: 'hsl(var(--popover))', foreground: 'hsl(var(--popover-foreground))' },
+          card: { DEFAULT: 'hsl(var(--card))', foreground: 'hsl(var(--card-foreground))' },
+          sidebar: {
+            DEFAULT: 'hsl(var(--sidebar-background))',
+            foreground: 'hsl(var(--sidebar-foreground))',
+            primary: 'hsl(var(--sidebar-primary))',
+            'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
+            accent: 'hsl(var(--sidebar-accent))',
+            'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
+            border: 'hsl(var(--sidebar-border))',
+          },
+        },
+        borderRadius: {
+          lg: 'var(--radius)',
+          md: 'calc(var(--radius) - 2px)',
+          sm: 'calc(var(--radius) - 4px)',
+        },
+        boxShadow: {
+          soft: '0 2px 16px -6px rgba(0,0,0,0.06)',
+          'soft-lg': '0 4px 24px -8px rgba(0,0,0,0.1)',
+        },
+      },
+    },
+  };
+</script>
+<style>
+  :root {
+    /* Byvaro tokens — identical to src/index.css */
+    --background: 210 14% 98%;
+    --foreground: 220 15% 20%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 20%;
+    --primary: 215 72% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 20% 20%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 8% 52%;
+    --accent: 215 72% 55%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 70% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 215 72% 55%;
+    --radius: 1rem;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 10% 40%;
+    --sidebar-primary: 215 72% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 72% 97%;
+    --sidebar-accent-foreground: 215 72% 50%;
+    --sidebar-border: 220 13% 93%;
+  }
+
+  * { font-family: 'Inter', system-ui, sans-serif; }
+  body { font-feature-settings: 'cv11','ss01'; -webkit-font-smoothing: antialiased; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* Subtle focus ring */
+  :focus-visible { outline: 2px solid hsl(var(--ring) / 0.5); outline-offset: 2px; border-radius: 6px; }
+
+  /* Active sidebar item left bar */
+  .nav-item-active::before {
+    content: ''; position: absolute; left: 0; top: 6px; bottom: 6px;
+    width: 3px; background: hsl(var(--sidebar-primary)); border-radius: 0 3px 3px 0;
+  }
+
+  /* Entry animation */
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: translateY(0) } }
+  .animate-in { animation: fadeUp .4s ease both; }
+  .d-1 { animation-delay: .04s } .d-2 { animation-delay: .08s } .d-3 { animation-delay: .12s }
+  .d-4 { animation-delay: .16s } .d-5 { animation-delay: .2s }
+
+  /* Mobile drawer */
+  .drawer-backdrop { background: rgba(0,0,0,0.4); }
+</style>
+</head>
+<body class="bg-background text-foreground antialiased min-h-screen">
+
+<!-- ============================================================ -->
+<!-- APP SHELL                                                    -->
+<!-- ============================================================ -->
+<div class="flex min-h-screen">
+
+  <!-- ============== SIDEBAR (desktop) ============== -->
+  <aside class="hidden lg:flex flex-col w-[236px] shrink-0 border-r border-sidebar-border bg-sidebar sticky top-0 h-screen">
+    <!-- Logo -->
+    <div class="h-14 flex items-center gap-2.5 px-5 border-b border-sidebar-border">
+      <div class="w-8 h-8 rounded-xl bg-primary grid place-items-center text-primary-foreground font-bold text-sm">B</div>
+      <div class="font-bold text-[15px] tracking-tight text-foreground">Byvaro</div>
+    </div>
+
+    <!-- Nav scrollable -->
+    <nav class="flex-1 overflow-y-auto py-4 no-scrollbar">
+      <!-- Group: General -->
+      <div class="mb-5">
+        <div class="px-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/50 mb-2">General</div>
+        <a href="#" class="relative flex items-center gap-3 px-5 py-2 text-sm text-sidebar-accent-foreground bg-sidebar-accent/70 font-medium nav-item-active">
+          <i data-lucide="home" class="h-[18px] w-[18px] shrink-0"></i><span>Inicio</span>
+        </a>
+      </div>
+
+      <!-- Group: Comercial -->
+      <div class="mb-5">
+        <div class="px-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/50 mb-2">Comercial</div>
+        <a href="#" class="flex items-center gap-3 px-5 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent/40 transition-colors">
+          <i data-lucide="tag" class="h-[18px] w-[18px] shrink-0"></i><span>Promociones</span>
+          <span class="ml-auto text-[11px] tabular-nums text-sidebar-foreground/50">12</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-5 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent/40 transition-colors">
+          <i data-lucide="file-text" class="h-[18px] w-[18px] shrink-0"></i><span>Registros</span>
+          <span class="ml-auto text-[11px] font-semibold text-primary bg-primary/10 px-1.5 py-px rounded-md">8</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-5 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent/40 transition-colors">
+          <i data-lucide="circle-dollar-sign" class="h-[18px] w-[18px] shrink-0"></i><span>Ventas</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-5 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent/40 transition-colors">
+          <i data-lucide="calendar-days" class="h-[18px] w-[18px] shrink-0"></i><span>Calendario</span>
+        </a>
+      </div>
+
+      <!-- Group: Red -->
+      <div class="mb-5">
+        <div class="px-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/50 mb-2">Red</div>
+        <a href="#" class="flex items-center gap-3 px-5 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent/40 transition-colors">
+          <i data-lucide="handshake" class="h-[18px] w-[18px] shrink-0"></i><span>Colaboradores</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-5 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent/40 transition-colors">
+          <i data-lucide="contact" class="h-[18px] w-[18px] shrink-0"></i><span>Contactos</span>
+        </a>
+      </div>
+
+      <!-- Group: Contenido -->
+      <div>
+        <div class="px-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/50 mb-2">Contenido</div>
+        <a href="#" class="flex items-center gap-3 px-5 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent/40 transition-colors">
+          <i data-lucide="globe" class="h-[18px] w-[18px] shrink-0"></i><span>Microsites</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-5 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent/40 transition-colors">
+          <i data-lucide="mail" class="h-[18px] w-[18px] shrink-0"></i><span>Emails</span>
+        </a>
+      </div>
+    </nav>
+
+    <!-- Admin footer -->
+    <div class="border-t border-sidebar-border py-3">
+      <a href="#" class="flex items-center gap-3 px-5 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent/40 transition-colors">
+        <i data-lucide="settings" class="h-[18px] w-[18px] shrink-0"></i><span>Ajustes</span>
+      </a>
+      <div class="px-4 mt-2 pt-3 border-t border-sidebar-border/60">
+        <button class="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-sidebar-accent/40 transition-colors">
+          <div class="w-8 h-8 rounded-full bg-primary/15 text-primary grid place-items-center font-semibold text-xs tnum shrink-0">AR</div>
+          <div class="text-left min-w-0 flex-1">
+            <div class="text-[13px] font-semibold text-foreground truncate leading-tight">Arman Rahmanov</div>
+            <div class="text-[11px] text-muted-foreground truncate">Luxinmo · Promotor</div>
+          </div>
+          <i data-lucide="chevrons-up-down" class="h-3.5 w-3.5 text-muted-foreground shrink-0"></i>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============== MAIN AREA ============== -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- ========= MOBILE HEADER ========= -->
+    <header class="lg:hidden sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border">
+      <div class="h-14 px-4 flex items-center justify-between gap-3">
+        <button id="mobileMenuBtn" class="p-2 -ml-2 rounded-lg hover:bg-muted text-foreground" aria-label="Menú">
+          <i data-lucide="menu" class="h-5 w-5"></i>
+        </button>
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg bg-primary grid place-items-center text-primary-foreground font-bold text-[13px]">B</div>
+          <span class="font-bold text-[15px] tracking-tight">Byvaro</span>
+        </div>
+        <button class="relative p-2 -mr-2 rounded-lg hover:bg-muted text-foreground" aria-label="Notificaciones">
+          <i data-lucide="bell" class="h-5 w-5"></i>
+          <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary ring-2 ring-background"></span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ========= DESKTOP HEADER ========= -->
+    <header class="hidden lg:flex h-14 sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border px-6 items-center justify-between gap-4">
+      <!-- Breadcrumbs -->
+      <div class="flex items-center gap-2 text-sm text-muted-foreground">
+        <i data-lucide="home" class="h-4 w-4"></i>
+        <span class="font-medium text-foreground">Inicio</span>
+      </div>
+      <!-- Actions -->
+      <div class="flex items-center gap-2">
+        <div class="relative">
+          <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70"></i>
+          <input type="text" placeholder="Buscar promociones, contactos…"
+            class="w-[320px] h-9 pl-9 pr-16 text-sm bg-muted/40 border border-transparent rounded-full focus:bg-background focus:border-border outline-none transition-colors"/>
+          <span class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-muted-foreground/70 bg-background border border-border rounded px-1.5 py-0.5">⌘K</span>
+        </div>
+        <button class="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+          <i data-lucide="bell" class="h-[18px] w-[18px]"></i>
+        </button>
+        <div class="w-px h-6 bg-border mx-1"></div>
+        <button class="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft">
+          <i data-lucide="plus" class="h-3.5 w-3.5"></i> Nueva promoción
+        </button>
+      </div>
+    </header>
+
+    <!-- ========= PAGE CONTENT ========= -->
+    <main class="flex-1 overflow-auto pb-24 lg:pb-10">
+
+      <!-- ====== PAGE HEADER ====== -->
+      <div class="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 animate-in">
+        <div class="max-w-[1400px] mx-auto">
+          <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+            <div>
+              <p class="text-xs text-muted-foreground font-medium">Domingo 19 abril · Semana 16</p>
+              <h1 class="text-[22px] sm:text-[28px] font-bold tracking-tight mt-1 leading-tight">
+                Hola, Arman <span class="text-muted-foreground font-medium">· resumen de tu semana</span>
+              </h1>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="inline-flex items-center gap-1 bg-muted/40 border border-border rounded-full p-0.5 text-xs">
+                <button class="px-3 py-1 rounded-full bg-background text-foreground font-medium shadow-soft">Esta semana</button>
+                <button class="px-3 py-1 rounded-full text-muted-foreground hover:text-foreground transition-colors">Mes</button>
+                <button class="px-3 py-1 rounded-full text-muted-foreground hover:text-foreground transition-colors">Trimestre</button>
+              </div>
+              <button class="hidden sm:inline-flex items-center justify-center h-8 w-8 rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                <i data-lucide="sliders-horizontal" class="h-4 w-4"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== CONTENT ====== -->
+      <div class="px-4 sm:px-6 lg:px-8 mt-6 space-y-6">
+        <div class="max-w-[1400px] mx-auto space-y-6">
+
+        <!-- ====== KPIs (4) ====== -->
+        <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 animate-in d-1">
+
+          <!-- KPI: Registros -->
+          <div class="group bg-card border border-border rounded-2xl p-4 sm:p-5 shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer">
+            <div class="flex items-start justify-between mb-3.5">
+              <div class="h-9 w-9 rounded-xl bg-primary/10 grid place-items-center shrink-0">
+                <i data-lucide="file-text" class="h-4 w-4 text-primary"></i>
+              </div>
+              <!-- sparkline -->
+              <svg width="64" height="22" class="text-primary opacity-70 group-hover:opacity-100 transition-opacity" viewBox="0 0 64 22">
+                <polygon points="0,22 0,18 10,14 20,16 30,10 40,12 50,6 64,4 64,22" fill="currentColor" opacity="0.12"/>
+                <polyline points="0,18 10,14 20,16 30,10 40,12 50,6 64,4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="64" cy="4" r="2" fill="currentColor"/>
+              </svg>
+            </div>
+            <p class="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Registros</p>
+            <div class="flex items-baseline gap-2 mt-1.5">
+              <p class="text-[26px] sm:text-[28px] font-bold leading-none tnum tracking-tight">142</p>
+              <span class="text-[11px] font-semibold tnum text-emerald-600 inline-flex items-center gap-0.5">
+                <i data-lucide="trending-up" class="h-3 w-3"></i> +18%
+              </span>
+            </div>
+            <p class="text-[11px] text-muted-foreground mt-2">8 pendientes de decisión</p>
+          </div>
+
+          <!-- KPI: Ventas -->
+          <div class="group bg-card border border-border rounded-2xl p-4 sm:p-5 shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer">
+            <div class="flex items-start justify-between mb-3.5">
+              <div class="h-9 w-9 rounded-xl bg-emerald-500/10 grid place-items-center shrink-0">
+                <i data-lucide="circle-dollar-sign" class="h-4 w-4 text-emerald-600"></i>
+              </div>
+              <svg width="64" height="22" class="text-emerald-500 opacity-70 group-hover:opacity-100 transition-opacity" viewBox="0 0 64 22">
+                <polygon points="0,22 0,16 10,18 20,14 30,12 40,10 50,8 64,3 64,22" fill="currentColor" opacity="0.12"/>
+                <polyline points="0,16 10,18 20,14 30,12 40,10 50,8 64,3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="64" cy="3" r="2" fill="currentColor"/>
+              </svg>
+            </div>
+            <p class="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Ventas · volumen</p>
+            <div class="flex items-baseline gap-2 mt-1.5">
+              <p class="text-[26px] sm:text-[28px] font-bold leading-none tnum tracking-tight">€3,2M</p>
+              <span class="text-[11px] font-semibold tnum text-emerald-600 inline-flex items-center gap-0.5">
+                <i data-lucide="trending-up" class="h-3 w-3"></i> +24%
+              </span>
+            </div>
+            <p class="text-[11px] text-muted-foreground mt-2">9 operaciones · ticket medio €355K</p>
+          </div>
+
+          <!-- KPI: Visitas -->
+          <div class="group bg-card border border-border rounded-2xl p-4 sm:p-5 shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer">
+            <div class="flex items-start justify-between mb-3.5">
+              <div class="h-9 w-9 rounded-xl bg-violet-500/10 grid place-items-center shrink-0">
+                <i data-lucide="calendar-check" class="h-4 w-4 text-violet-600"></i>
+              </div>
+              <svg width="64" height="22" class="text-violet-500 opacity-70 group-hover:opacity-100 transition-opacity" viewBox="0 0 64 22">
+                <polygon points="0,22 0,12 10,14 20,10 30,8 40,10 50,12 64,8 64,22" fill="currentColor" opacity="0.12"/>
+                <polyline points="0,12 10,14 20,10 30,8 40,10 50,12 64,8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="64" cy="8" r="2" fill="currentColor"/>
+              </svg>
+            </div>
+            <p class="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Visitas programadas</p>
+            <div class="flex items-baseline gap-2 mt-1.5">
+              <p class="text-[26px] sm:text-[28px] font-bold leading-none tnum tracking-tight">38</p>
+              <span class="text-[11px] font-semibold tnum text-muted-foreground">esta semana</span>
+            </div>
+            <p class="text-[11px] text-muted-foreground mt-2">12 hoy · 3 sin confirmar</p>
+          </div>
+
+          <!-- KPI: Red -->
+          <div class="group bg-card border border-border rounded-2xl p-4 sm:p-5 shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer">
+            <div class="flex items-start justify-between mb-3.5">
+              <div class="h-9 w-9 rounded-xl bg-amber-500/10 grid place-items-center shrink-0">
+                <i data-lucide="handshake" class="h-4 w-4 text-amber-600"></i>
+              </div>
+              <svg width="64" height="22" class="text-amber-500 opacity-70 group-hover:opacity-100 transition-opacity" viewBox="0 0 64 22">
+                <polygon points="0,22 0,16 10,14 20,12 30,12 40,10 50,9 64,7 64,22" fill="currentColor" opacity="0.12"/>
+                <polyline points="0,16 10,14 20,12 30,12 40,10 50,9 64,7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="64" cy="7" r="2" fill="currentColor"/>
+              </svg>
+            </div>
+            <p class="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Colaboradores activos</p>
+            <div class="flex items-baseline gap-2 mt-1.5">
+              <p class="text-[26px] sm:text-[28px] font-bold leading-none tnum tracking-tight">17</p>
+              <span class="text-[11px] font-semibold text-primary">+2 nuevos</span>
+            </div>
+            <p class="text-[11px] text-muted-foreground mt-2">2 solicitudes pendientes</p>
+          </div>
+        </section>
+
+        <!-- ====== AI INSIGHTS BANNER ====== -->
+        <section class="animate-in d-2">
+          <div class="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.06] via-primary/[0.02] to-transparent p-4 sm:p-5">
+            <div class="absolute -top-16 -right-16 h-48 w-48 rounded-full bg-primary/10 blur-3xl pointer-events-none"></div>
+            <div class="relative flex flex-col sm:flex-row sm:items-center gap-4">
+              <div class="flex items-center gap-3 flex-1 min-w-0">
+                <div class="h-10 w-10 rounded-2xl bg-primary/10 border border-primary/20 grid place-items-center shrink-0">
+                  <i data-lucide="sparkles" class="h-[18px] w-[18px] text-primary"></i>
+                </div>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <h3 class="text-sm font-semibold">Byvaro ha detectado 3 oportunidades esta semana</h3>
+                    <span class="text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full uppercase tracking-wider">IA</span>
+                  </div>
+                  <p class="text-[12.5px] text-muted-foreground mt-0.5 leading-relaxed">Engel & Völkers está dominando el mercado ruso en Los Arqueros — cuota 61% · conversión 9,1%.</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <button class="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-3 h-8 rounded-full">Descartar</button>
+                <button class="inline-flex items-center gap-1.5 h-8 px-4 rounded-full bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">
+                  Ver todas <i data-lucide="arrow-up-right" class="h-3 w-3"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====== MAIN GRID (2 cols desktop, 1 col mobile) ====== -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
+
+          <!-- ====== LEFT: Activity + Top promociones (2/3) ====== -->
+          <div class="lg:col-span-2 space-y-4 sm:space-y-5">
+
+            <!-- Actividad reciente -->
+            <section class="bg-card border border-border rounded-2xl shadow-soft overflow-hidden animate-in d-3">
+              <header class="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-border">
+                <div>
+                  <h3 class="text-sm font-semibold">Actividad reciente</h3>
+                  <p class="text-[11.5px] text-muted-foreground mt-0.5">Lo último de tu red</p>
+                </div>
+                <button class="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1">
+                  Ver todo <i data-lucide="arrow-up-right" class="h-3 w-3"></i>
+                </button>
+              </header>
+
+              <ul class="divide-y divide-border">
+                <!-- item 1 -->
+                <li class="px-4 sm:px-5 py-3.5 flex items-start gap-3 hover:bg-muted/20 transition-colors cursor-pointer">
+                  <div class="h-9 w-9 rounded-full bg-emerald-500/10 text-emerald-600 grid place-items-center shrink-0">
+                    <i data-lucide="check" class="h-4 w-4"></i>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-sm leading-snug">
+                      <span class="font-semibold">Venta cerrada</span> — <span class="text-muted-foreground">Dmitri Volkov</span> 🇷🇺 ha comprado el ático 4º-B en <span class="font-medium">Los Arqueros</span>
+                    </p>
+                    <div class="flex items-center gap-2 mt-1 text-[11.5px] text-muted-foreground flex-wrap">
+                      <span class="inline-flex items-center gap-1"><div class="w-4 h-4 rounded-full bg-primary/15"></div>Engel & Völkers</span>
+                      <span>·</span><span>€ 512.000</span>
+                      <span>·</span><span>hace 2 h</span>
+                    </div>
+                  </div>
+                </li>
+                <!-- item 2 -->
+                <li class="px-4 sm:px-5 py-3.5 flex items-start gap-3 hover:bg-muted/20 transition-colors cursor-pointer">
+                  <div class="h-9 w-9 rounded-full bg-primary/10 text-primary grid place-items-center shrink-0">
+                    <i data-lucide="file-text" class="h-4 w-4"></i>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-sm leading-snug">
+                      <span class="font-semibold">Registro pendiente</span> — Ahmed Al-Rashid 🇸🇦 en <span class="font-medium">Residencial Costa Brava</span>
+                    </p>
+                    <div class="flex items-center gap-2 mt-1 text-[11.5px] text-muted-foreground flex-wrap">
+                      <span class="inline-flex items-center gap-1 text-amber-700"><i data-lucide="alert-triangle" class="h-3 w-3"></i> Coincidencia 85% con registro previo</span>
+                      <span>·</span><span>hace 3 h</span>
+                    </div>
+                  </div>
+                  <button class="h-8 px-3 rounded-full border border-border bg-background text-xs font-medium hover:bg-muted transition-colors shrink-0 hidden sm:inline-flex items-center">Revisar</button>
+                </li>
+                <!-- item 3 -->
+                <li class="px-4 sm:px-5 py-3.5 flex items-start gap-3 hover:bg-muted/20 transition-colors cursor-pointer">
+                  <div class="h-9 w-9 rounded-full bg-violet-500/10 text-violet-600 grid place-items-center shrink-0">
+                    <i data-lucide="calendar" class="h-4 w-4"></i>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-sm leading-snug">
+                      <span class="font-semibold">Visita confirmada</span> — María García 🇪🇸 · mañana 11:00 en <span class="font-medium">Torres del Puerto</span>
+                    </p>
+                    <div class="flex items-center gap-2 mt-1 text-[11.5px] text-muted-foreground flex-wrap">
+                      <span>Iberia Homes</span><span>·</span><span>Pedro Navarro</span><span>·</span><span>hace 5 h</span>
+                    </div>
+                  </div>
+                </li>
+                <!-- item 4 -->
+                <li class="px-4 sm:px-5 py-3.5 flex items-start gap-3 hover:bg-muted/20 transition-colors cursor-pointer">
+                  <div class="h-9 w-9 rounded-full bg-amber-500/10 text-amber-600 grid place-items-center shrink-0">
+                    <i data-lucide="handshake" class="h-4 w-4"></i>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-sm leading-snug">
+                      <span class="font-semibold">Nueva solicitud</span> — Iberia Luxury Homes 🇵🇹 quiere colaborar en <span class="font-medium">2 promociones</span>
+                    </p>
+                    <div class="flex items-center gap-2 mt-1 text-[11.5px] text-muted-foreground flex-wrap">
+                      <span>Lisboa, Porto</span><span>·</span><span>hace 1 día</span>
+                    </div>
+                  </div>
+                  <div class="hidden sm:flex gap-1.5 shrink-0">
+                    <button class="h-8 px-3 rounded-full bg-foreground text-background text-xs font-medium hover:bg-foreground/90 transition-colors inline-flex items-center gap-1">
+                      <i data-lucide="check" class="h-3 w-3"></i>Aprobar
+                    </button>
+                    <button class="h-8 px-3 rounded-full border border-border text-xs font-medium hover:bg-muted transition-colors">Rechazar</button>
+                  </div>
+                </li>
+              </ul>
+            </section>
+
+            <!-- Top promociones -->
+            <section class="bg-card border border-border rounded-2xl shadow-soft overflow-hidden animate-in d-4">
+              <header class="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-border">
+                <div>
+                  <h3 class="text-sm font-semibold">Promociones activas</h3>
+                  <p class="text-[11.5px] text-muted-foreground mt-0.5">Rendimiento de las 4 más activas</p>
+                </div>
+                <button class="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1">
+                  Ver todas <i data-lucide="arrow-up-right" class="h-3 w-3"></i>
+                </button>
+              </header>
+              <div class="divide-y divide-border">
+
+                <!-- promo row -->
+                <article class="p-4 sm:p-5 hover:bg-muted/20 transition-colors cursor-pointer">
+                  <div class="flex items-start gap-3 sm:gap-4">
+                    <div class="h-12 w-12 rounded-xl bg-[url('https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=200&h=200&fit=crop')] bg-cover bg-center shrink-0 ring-1 ring-border/60"></div>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-start justify-between gap-2 flex-wrap">
+                        <div class="min-w-0">
+                          <h4 class="text-sm font-semibold truncate">Los Arqueros</h4>
+                          <p class="text-[11.5px] text-muted-foreground mt-0.5 flex items-center gap-1"><i data-lucide="map-pin" class="h-3 w-3"></i> Marbella, Costa del Sol</p>
+                        </div>
+                        <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 shrink-0">Activa</span>
+                      </div>
+                      <div class="mt-3 grid grid-cols-4 gap-2 sm:gap-3">
+                        <div>
+                          <p class="text-[9.5px] uppercase tracking-wider text-muted-foreground font-semibold">Reservadas</p>
+                          <p class="text-sm font-bold tnum mt-0.5">28/36</p>
+                        </div>
+                        <div>
+                          <p class="text-[9.5px] uppercase tracking-wider text-muted-foreground font-semibold">Registros</p>
+                          <p class="text-sm font-bold tnum mt-0.5">480</p>
+                        </div>
+                        <div>
+                          <p class="text-[9.5px] uppercase tracking-wider text-muted-foreground font-semibold">Conversión</p>
+                          <p class="text-sm font-bold tnum mt-0.5 text-emerald-600">8,3%</p>
+                        </div>
+                        <div>
+                          <p class="text-[9.5px] uppercase tracking-wider text-muted-foreground font-semibold">Volumen</p>
+                          <p class="text-sm font-bold tnum mt-0.5">€24,1M</p>
+                        </div>
+                      </div>
+                      <!-- progress -->
+                      <div class="mt-3 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div class="h-full bg-gradient-to-r from-primary to-primary/60 rounded-full" style="width:78%"></div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <!-- promo row -->
+                <article class="p-4 sm:p-5 hover:bg-muted/20 transition-colors cursor-pointer">
+                  <div class="flex items-start gap-3 sm:gap-4">
+                    <div class="h-12 w-12 rounded-xl bg-[url('https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=200&h=200&fit=crop')] bg-cover bg-center shrink-0 ring-1 ring-border/60"></div>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-start justify-between gap-2 flex-wrap">
+                        <div class="min-w-0">
+                          <h4 class="text-sm font-semibold truncate">Villas del Pinar</h4>
+                          <p class="text-[11.5px] text-muted-foreground mt-0.5 flex items-center gap-1"><i data-lucide="map-pin" class="h-3 w-3"></i> Jávea, Alicante</p>
+                        </div>
+                        <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 shrink-0">Activa</span>
+                      </div>
+                      <div class="mt-3 grid grid-cols-4 gap-2 sm:gap-3">
+                        <div><p class="text-[9.5px] uppercase tracking-wider text-muted-foreground font-semibold">Reservadas</p><p class="text-sm font-bold tnum mt-0.5">14/24</p></div>
+                        <div><p class="text-[9.5px] uppercase tracking-wider text-muted-foreground font-semibold">Registros</p><p class="text-sm font-bold tnum mt-0.5">328</p></div>
+                        <div><p class="text-[9.5px] uppercase tracking-wider text-muted-foreground font-semibold">Conversión</p><p class="text-sm font-bold tnum mt-0.5 text-amber-600">4,3%</p></div>
+                        <div><p class="text-[9.5px] uppercase tracking-wider text-muted-foreground font-semibold">Volumen</p><p class="text-sm font-bold tnum mt-0.5">€12,8M</p></div>
+                      </div>
+                      <div class="mt-3 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div class="h-full bg-gradient-to-r from-primary to-primary/60 rounded-full" style="width:58%"></div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <!-- promo row -->
+                <article class="p-4 sm:p-5 hover:bg-muted/20 transition-colors cursor-pointer">
+                  <div class="flex items-start gap-3 sm:gap-4">
+                    <div class="h-12 w-12 rounded-xl bg-[url('https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=200&h=200&fit=crop')] bg-cover bg-center shrink-0 ring-1 ring-border/60"></div>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-start justify-between gap-2 flex-wrap">
+                        <div class="min-w-0">
+                          <h4 class="text-sm font-semibold truncate">Residencial Aurora</h4>
+                          <p class="text-[11.5px] text-muted-foreground mt-0.5 flex items-center gap-1"><i data-lucide="map-pin" class="h-3 w-3"></i> Finestrat, Alicante</p>
+                        </div>
+                        <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 shrink-0">Pre-venta</span>
+                      </div>
+                      <div class="mt-3 grid grid-cols-4 gap-2 sm:gap-3">
+                        <div><p class="text-[9.5px] uppercase tracking-wider text-muted-foreground font-semibold">Reservadas</p><p class="text-sm font-bold tnum mt-0.5">9/48</p></div>
+                        <div><p class="text-[9.5px] uppercase tracking-wider text-muted-foreground font-semibold">Registros</p><p class="text-sm font-bold tnum mt-0.5">272</p></div>
+                        <div><p class="text-[9.5px] uppercase tracking-wider text-muted-foreground font-semibold">Conversión</p><p class="text-sm font-bold tnum mt-0.5 text-primary">3,3%</p></div>
+                        <div><p class="text-[9.5px] uppercase tracking-wider text-muted-foreground font-semibold">Volumen</p><p class="text-sm font-bold tnum mt-0.5">€4,9M</p></div>
+                      </div>
+                      <div class="mt-3 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div class="h-full bg-gradient-to-r from-primary to-primary/60 rounded-full" style="width:19%"></div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <!-- promo row -->
+                <article class="p-4 sm:p-5 hover:bg-muted/20 transition-colors cursor-pointer">
+                  <div class="flex items-start gap-3 sm:gap-4">
+                    <div class="h-12 w-12 rounded-xl bg-[url('https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?w=200&h=200&fit=crop')] bg-cover bg-center shrink-0 ring-1 ring-border/60"></div>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-start justify-between gap-2 flex-wrap">
+                        <div class="min-w-0">
+                          <h4 class="text-sm font-semibold truncate">Terrazas del Golf</h4>
+                          <p class="text-[11.5px] text-muted-foreground mt-0.5 flex items-center gap-1"><i data-lucide="map-pin" class="h-3 w-3"></i> Mijas, Málaga</p>
+                        </div>
+                        <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 shrink-0">Activa</span>
+                      </div>
+                      <div class="mt-3 grid grid-cols-4 gap-2 sm:gap-3">
+                        <div><p class="text-[9.5px] uppercase tracking-wider text-muted-foreground font-semibold">Reservadas</p><p class="text-sm font-bold tnum mt-0.5">17/22</p></div>
+                        <div><p class="text-[9.5px] uppercase tracking-wider text-muted-foreground font-semibold">Registros</p><p class="text-sm font-bold tnum mt-0.5">238</p></div>
+                        <div><p class="text-[9.5px] uppercase tracking-wider text-muted-foreground font-semibold">Conversión</p><p class="text-sm font-bold tnum mt-0.5 text-emerald-600">7,1%</p></div>
+                        <div><p class="text-[9.5px] uppercase tracking-wider text-muted-foreground font-semibold">Volumen</p><p class="text-sm font-bold tnum mt-0.5">€16,2M</p></div>
+                      </div>
+                      <div class="mt-3 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div class="h-full bg-gradient-to-r from-primary to-primary/60 rounded-full" style="width:77%"></div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </section>
+          </div>
+
+          <!-- ====== RIGHT: Today + Top agencies + Shortcuts (1/3) ====== -->
+          <div class="space-y-4 sm:space-y-5">
+
+            <!-- Hoy -->
+            <section class="bg-card border border-border rounded-2xl shadow-soft overflow-hidden animate-in d-3">
+              <header class="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-border">
+                <div>
+                  <h3 class="text-sm font-semibold">Hoy</h3>
+                  <p class="text-[11.5px] text-muted-foreground mt-0.5">19 abril · 3 visitas</p>
+                </div>
+                <button class="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1">
+                  Agenda <i data-lucide="arrow-up-right" class="h-3 w-3"></i>
+                </button>
+              </header>
+              <ul class="p-2">
+                <li class="flex items-start gap-3 p-2.5 rounded-xl hover:bg-muted/30 transition-colors cursor-pointer">
+                  <div class="w-12 shrink-0 text-center">
+                    <div class="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">AHORA</div>
+                    <div class="text-sm font-bold mt-0.5 tnum">11:00</div>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-[13px] font-semibold truncate">Visita · María García 🇪🇸</p>
+                    <p class="text-[11.5px] text-muted-foreground mt-0.5 truncate">Torres del Puerto · ático 7º</p>
+                  </div>
+                  <div class="w-1 self-stretch rounded-full bg-primary shrink-0"></div>
+                </li>
+                <li class="flex items-start gap-3 p-2.5 rounded-xl hover:bg-muted/30 transition-colors cursor-pointer">
+                  <div class="w-12 shrink-0 text-center">
+                    <div class="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">12:30</div>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-[13px] font-semibold truncate">Llamada · Dmitri Volkov 🇷🇺</p>
+                    <p class="text-[11.5px] text-muted-foreground mt-0.5 truncate">Firma de reserva</p>
+                  </div>
+                </li>
+                <li class="flex items-start gap-3 p-2.5 rounded-xl hover:bg-muted/30 transition-colors cursor-pointer">
+                  <div class="w-12 shrink-0 text-center">
+                    <div class="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">16:00</div>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-[13px] font-semibold truncate">Visita · Hans Müller 🇩🇪</p>
+                    <p class="text-[11.5px] text-muted-foreground mt-0.5 truncate">Los Arqueros · villa 12</p>
+                  </div>
+                </li>
+                <li class="flex items-start gap-3 p-2.5 rounded-xl hover:bg-muted/30 transition-colors cursor-pointer">
+                  <div class="w-12 shrink-0 text-center">
+                    <div class="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">18:30</div>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-[13px] font-semibold truncate">Reunión · Equipo comercial</p>
+                    <p class="text-[11.5px] text-muted-foreground mt-0.5 truncate">Cierre semanal</p>
+                  </div>
+                </li>
+              </ul>
+            </section>
+
+            <!-- Top colaboradores -->
+            <section class="bg-card border border-border rounded-2xl shadow-soft overflow-hidden animate-in d-4">
+              <header class="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-border">
+                <div>
+                  <h3 class="text-sm font-semibold">Top colaboradores</h3>
+                  <p class="text-[11.5px] text-muted-foreground mt-0.5">Esta semana · por ventas</p>
+                </div>
+              </header>
+              <ul class="p-2 space-y-0.5">
+                <li class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/30 transition-colors cursor-pointer">
+                  <div class="h-7 w-7 rounded-full bg-gradient-to-br from-amber-400 to-amber-500 text-white grid place-items-center text-[11px] font-bold shadow-soft shrink-0">1</div>
+                  <div class="h-9 w-9 rounded-full bg-primary/15 text-primary grid place-items-center font-semibold text-[11px] shrink-0">EV</div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-[13px] font-semibold truncate">Engel & Völkers</p>
+                    <p class="text-[11.5px] text-muted-foreground mt-0.5">3 ventas · 61% cuota 🇷🇺</p>
+                  </div>
+                  <p class="text-sm font-bold tnum shrink-0">€1,2M</p>
+                </li>
+                <li class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/30 transition-colors cursor-pointer">
+                  <div class="h-7 w-7 rounded-full bg-gradient-to-br from-zinc-300 to-zinc-400 text-white grid place-items-center text-[11px] font-bold shadow-soft shrink-0">2</div>
+                  <div class="h-9 w-9 rounded-full bg-emerald-500/15 text-emerald-600 grid place-items-center font-semibold text-[11px] shrink-0">NH</div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-[13px] font-semibold truncate">Nordic Home Finders</p>
+                    <p class="text-[11.5px] text-muted-foreground mt-0.5">2 ventas · 74% cuota 🇸🇪🇳🇴</p>
+                  </div>
+                  <p class="text-sm font-bold tnum shrink-0">€0,9M</p>
+                </li>
+                <li class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/30 transition-colors cursor-pointer">
+                  <div class="h-7 w-7 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 text-white grid place-items-center text-[11px] font-bold shadow-soft shrink-0">3</div>
+                  <div class="h-9 w-9 rounded-full bg-amber-500/15 text-amber-700 grid place-items-center font-semibold text-[11px] shrink-0">DB</div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-[13px] font-semibold truncate">Dutch & Belgian Realty</p>
+                    <p class="text-[11.5px] text-muted-foreground mt-0.5">2 ventas · 68% cuota 🇧🇪🇳🇱</p>
+                  </div>
+                  <p class="text-sm font-bold tnum shrink-0">€0,7M</p>
+                </li>
+              </ul>
+            </section>
+
+            <!-- Quick actions -->
+            <section class="bg-card border border-border rounded-2xl shadow-soft p-4 sm:p-5 animate-in d-5">
+              <h3 class="text-sm font-semibold mb-3">Acciones rápidas</h3>
+              <div class="grid grid-cols-2 gap-2">
+                <button class="flex items-center gap-2 p-2.5 rounded-xl border border-border hover:bg-muted/30 hover:border-primary/40 transition-colors text-left">
+                  <div class="h-8 w-8 rounded-lg bg-primary/10 text-primary grid place-items-center shrink-0">
+                    <i data-lucide="plus" class="h-4 w-4"></i>
+                  </div>
+                  <span class="text-[12.5px] font-medium leading-tight">Nueva<br>promoción</span>
+                </button>
+                <button class="flex items-center gap-2 p-2.5 rounded-xl border border-border hover:bg-muted/30 hover:border-primary/40 transition-colors text-left">
+                  <div class="h-8 w-8 rounded-lg bg-emerald-500/10 text-emerald-600 grid place-items-center shrink-0">
+                    <i data-lucide="user-plus" class="h-4 w-4"></i>
+                  </div>
+                  <span class="text-[12.5px] font-medium leading-tight">Registrar<br>cliente</span>
+                </button>
+                <button class="flex items-center gap-2 p-2.5 rounded-xl border border-border hover:bg-muted/30 hover:border-primary/40 transition-colors text-left">
+                  <div class="h-8 w-8 rounded-lg bg-violet-500/10 text-violet-600 grid place-items-center shrink-0">
+                    <i data-lucide="calendar-plus" class="h-4 w-4"></i>
+                  </div>
+                  <span class="text-[12.5px] font-medium leading-tight">Programar<br>visita</span>
+                </button>
+                <button class="flex items-center gap-2 p-2.5 rounded-xl border border-border hover:bg-muted/30 hover:border-primary/40 transition-colors text-left">
+                  <div class="h-8 w-8 rounded-lg bg-amber-500/10 text-amber-600 grid place-items-center shrink-0">
+                    <i data-lucide="mail" class="h-4 w-4"></i>
+                  </div>
+                  <span class="text-[12.5px] font-medium leading-tight">Enviar<br>campaña</span>
+                </button>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        </div><!-- /max width -->
+      </div><!-- /px -->
+    </main>
+
+    <!-- ========= MOBILE BOTTOM NAV ========= -->
+    <nav class="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-background/95 backdrop-blur border-t border-border">
+      <div class="grid grid-cols-5 h-[60px]" style="padding-bottom:env(safe-area-inset-bottom)">
+        <a href="#" class="flex flex-col items-center justify-center gap-0.5 text-primary">
+          <i data-lucide="home" class="h-[20px] w-[20px]"></i>
+          <span class="text-[10px] font-semibold">Inicio</span>
+        </a>
+        <a href="#" class="flex flex-col items-center justify-center gap-0.5 text-muted-foreground">
+          <i data-lucide="tag" class="h-[20px] w-[20px]"></i>
+          <span class="text-[10px] font-medium">Promos</span>
+        </a>
+        <a href="#" class="flex flex-col items-center justify-center">
+          <div class="h-11 w-11 rounded-full bg-foreground text-background grid place-items-center shadow-soft-lg -mt-5 ring-4 ring-background">
+            <i data-lucide="plus" class="h-5 w-5"></i>
+          </div>
+        </a>
+        <a href="#" class="flex flex-col items-center justify-center gap-0.5 text-muted-foreground">
+          <i data-lucide="handshake" class="h-[20px] w-[20px]"></i>
+          <span class="text-[10px] font-medium">Red</span>
+        </a>
+        <a href="#" class="flex flex-col items-center justify-center gap-0.5 text-muted-foreground">
+          <i data-lucide="user" class="h-[20px] w-[20px]"></i>
+          <span class="text-[10px] font-medium">Yo</span>
+        </a>
+      </div>
+    </nav>
+
+  </div><!-- /main area -->
+</div><!-- /app shell -->
+
+<!-- ============ MOBILE DRAWER (sidebar duplicate) ============ -->
+<div id="mobileDrawer" class="fixed inset-0 z-50 hidden lg:hidden">
+  <div class="drawer-backdrop absolute inset-0" id="drawerBackdrop"></div>
+  <aside class="absolute left-0 top-0 bottom-0 w-[280px] bg-sidebar shadow-2xl flex flex-col">
+    <div class="h-14 flex items-center justify-between px-5 border-b border-sidebar-border">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-xl bg-primary grid place-items-center text-primary-foreground font-bold text-sm">B</div>
+        <div class="font-bold text-[15px] tracking-tight">Byvaro</div>
+      </div>
+      <button id="drawerClose" class="p-2 -mr-2 rounded-lg hover:bg-muted">
+        <i data-lucide="x" class="h-5 w-5"></i>
+      </button>
+    </div>
+    <nav class="flex-1 overflow-y-auto py-4">
+      <div class="mb-5">
+        <div class="px-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/50 mb-2">General</div>
+        <a href="#" class="relative flex items-center gap-3 px-5 py-2 text-sm bg-sidebar-accent/70 text-sidebar-accent-foreground font-medium nav-item-active">
+          <i data-lucide="home" class="h-[18px] w-[18px]"></i>Inicio
+        </a>
+      </div>
+      <div class="mb-5">
+        <div class="px-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/50 mb-2">Comercial</div>
+        <a href="#" class="flex items-center gap-3 px-5 py-2 text-sm text-sidebar-foreground"><i data-lucide="tag" class="h-[18px] w-[18px]"></i>Promociones</a>
+        <a href="#" class="flex items-center gap-3 px-5 py-2 text-sm text-sidebar-foreground"><i data-lucide="file-text" class="h-[18px] w-[18px]"></i>Registros</a>
+        <a href="#" class="flex items-center gap-3 px-5 py-2 text-sm text-sidebar-foreground"><i data-lucide="circle-dollar-sign" class="h-[18px] w-[18px]"></i>Ventas</a>
+        <a href="#" class="flex items-center gap-3 px-5 py-2 text-sm text-sidebar-foreground"><i data-lucide="calendar-days" class="h-[18px] w-[18px]"></i>Calendario</a>
+      </div>
+      <div class="mb-5">
+        <div class="px-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/50 mb-2">Red</div>
+        <a href="#" class="flex items-center gap-3 px-5 py-2 text-sm text-sidebar-foreground"><i data-lucide="handshake" class="h-[18px] w-[18px]"></i>Colaboradores</a>
+        <a href="#" class="flex items-center gap-3 px-5 py-2 text-sm text-sidebar-foreground"><i data-lucide="contact" class="h-[18px] w-[18px]"></i>Contactos</a>
+      </div>
+      <div>
+        <div class="px-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/50 mb-2">Contenido</div>
+        <a href="#" class="flex items-center gap-3 px-5 py-2 text-sm text-sidebar-foreground"><i data-lucide="globe" class="h-[18px] w-[18px]"></i>Microsites</a>
+        <a href="#" class="flex items-center gap-3 px-5 py-2 text-sm text-sidebar-foreground"><i data-lucide="mail" class="h-[18px] w-[18px]"></i>Emails</a>
+      </div>
+    </nav>
+  </aside>
+</div>
+
+<script>
+  lucide.createIcons();
+  const drawer = document.getElementById('mobileDrawer');
+  document.getElementById('mobileMenuBtn')?.addEventListener('click', () => { drawer.classList.remove('hidden'); lucide.createIcons(); });
+  document.getElementById('drawerClose')?.addEventListener('click', () => drawer.classList.add('hidden'));
+  document.getElementById('drawerBackdrop')?.addEventListener('click', () => drawer.classList.add('hidden'));
+</script>
+</body>
+</html>
