@@ -106,10 +106,10 @@ export function EmpresaHomeTab({
           </div>
         }
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-3">
             <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Información proporcionada por la empresa</span>
-            <div className="flex items-center gap-6 flex-wrap">
+            <div className="grid grid-cols-3 gap-4">
               <InfoItem icon={Building2} label="Oficinas" value={empresa.oficinasCount || "0"} />
               <InfoItem icon={Users} label="Agentes" value={empresa.agentesCount || "0"} />
               <div>
@@ -120,7 +120,7 @@ export function EmpresaHomeTab({
           </div>
           <div className="flex flex-col gap-3">
             <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Rendimiento</span>
-            <div className="flex items-center gap-6 flex-wrap">
+            <div className="grid grid-cols-3 gap-4">
               <InfoItem icon={TrendingUp} label="Ventas" value={empresa.ventasAnuales || "0"} />
               <InfoItem icon={TrendingUp} label="Ingresos" value={empresa.ingresosAnuales || "0"} />
               <InfoItem icon={FolderOpen} label="Cartera" value={empresa.portfolio || "0"} />

@@ -77,10 +77,10 @@ export default function Empresa() {
   ];
 
   return (
-    <div className="min-h-full -mx-4 sm:-mx-6 lg:-mx-10 -my-6 sm:-my-8 lg:-my-10">
+    <div className="flex flex-col min-h-full bg-background">
       {/* ═════ Banner onboarding ═════ */}
       {isIncomplete && viewMode === "edit" && (
-        <div className="bg-amber-500/10 border-b border-amber-500/30 px-5 sm:px-8 lg:px-10 py-3 flex items-center gap-3 flex-wrap">
+        <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 sm:px-6 lg:px-10 py-3 flex items-center gap-3 flex-wrap">
           <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0" />
           <p className="text-[11.5px] text-foreground flex-1 min-w-0">
             <span className="font-semibold">Tu perfil de empresa está al {completionPercent}%.</span>{" "}
@@ -95,7 +95,7 @@ export default function Empresa() {
         </div>
       )}
 
-      <div className="px-5 sm:px-8 lg:px-10 pt-4 pb-10 max-w-[1250px] mx-auto">
+      <div className="px-4 sm:px-6 lg:px-10 pt-4 pb-10 max-w-[1250px] mx-auto w-full">
         {/* ═════ Breadcrumb + toggle ═════ */}
         <div className="flex items-center justify-between mb-4 gap-2">
           <span className="text-[11px] text-muted-foreground">‹ Administración</span>
