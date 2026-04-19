@@ -1,21 +1,64 @@
+/**
+ * PromotionHero · cabecera visual de la ficha de promoción.
+ *
+ * Responsabilidades:
+ *   1. Galería en mosaico 2×2 + hero grande (1 imagen principal + 4 thumbnails).
+ *      El último thumbnail muestra un overlay "+N fotos" que (en el producto
+ *      final) abriría un lightbox.
+ *   2. Badge contextual en la imagen principal: "Alta demanda" · "Exclusiva" ·
+ *      "Nueva", derivado de `promotion.badge`.
+ *   3. Título de la promoción + código interno + ubicación + tipos de
+ *      propiedad + promotor responsable.
+ *   4. Barra de acciones del promotor: Compartir · Imprimir · Crear landing +
+ *      toggle favorito.
+ *
+ * Props:
+ *   - promotion: objeto `Promotion` (ver src/data/promotions.ts) con todos los
+ *     datos ya cargados.
+ *
+ * Dependencias:
+ *   - `@/data/promotions`  → tipo `Promotion` (shape de la promoción).
+ *   - `@/components/ui/button` → primitiva Button Byvaro (pill por defecto tras
+ *     la adaptación fase 2). Variantes usadas: `outline` + `ghost`.
+ *   - `lucide-react`     → iconos (MapPin, Share2, Heart, Printer, ExternalLink).
+ *
+ * Tokens Byvaro usados (todos HSL en src/index.css):
+ *   - bg-card / text-foreground / text-muted-foreground / border-border
+ *   - bg-primary/10 text-primary (para badges "Nueva")
+ *   - bg-destructive/10 text-destructive (para badges "Alta demanda")
+ *   - bg-accent/10 text-accent-foreground (para badges "Exclusiva")
+ *   - shadow-soft · rounded-2xl (panel galería) · rounded-full (pills)
+ *
+ * TODOs:
+ *   - TODO(ui): lightbox al hacer click en cualquier imagen de la galería.
+ *   - TODO(backend): endpoint GET /api/promociones/:id/gallery (5+ imágenes
+ *     con metadata — alt, orden, tipo). Ahora mockeado con Unsplash.
+ *   - TODO(feature): persistir favorito — POST /api/me/favorites/:id.
+ */
+
 import { Promotion } from "@/data/promotions";
 import { MapPin, Share2, Heart, Printer, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 
-const badgeStyles = {
-  hot: "bg-orange-500/10 text-orange-600 border-orange-200",
-  exclusive: "bg-violet-500/10 text-violet-600 border-violet-200",
-  new: "bg-emerald-500/10 text-emerald-600 border-emerald-200",
+/**
+ * Badges contextuales con tokens HSL Byvaro (no hex ni Tailwind crudos).
+ * Los labels incluyen emojis ligeros — coherente con los badges del listado
+ * `src/pages/Promociones.tsx` y las cards del microsite.
+ */
+const badgeStyles: Record<NonNullable<Promotion["badge"]>, string> = {
+  hot: "bg-destructive/10 text-destructive border border-destructive/20",
+  exclusive: "bg-accent/10 text-accent-foreground border border-accent/20",
+  new: "bg-primary/10 text-primary border border-primary/20",
 };
 
-const badgeLabels = {
+const badgeLabels: Record<NonNullable<Promotion["badge"]>, string> = {
   hot: "🔥 Alta demanda",
   exclusive: "⭐ Exclusiva",
   new: "✨ Nueva",
 };
 
 export function PromotionHero({ promotion: p }: { promotion: Promotion }) {
+  // Mock de 5 imágenes — en producción vendrán de `GET /api/promociones/:id/gallery`.
   const galleryImages = [
     p.image || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&h=500&fit=crop",
     "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=300&fit=crop",
@@ -26,56 +69,76 @@ export function PromotionHero({ promotion: p }: { promotion: Promotion }) {
 
   return (
     <div className="space-y-4">
-      {/* Gallery */}
-      <div className="grid grid-cols-4 grid-rows-2 gap-1.5 h-[340px] rounded-2xl overflow-hidden">
+      {/* ═════ Galería en mosaico ═════ */}
+      <div className="grid grid-cols-4 grid-rows-2 gap-1.5 h-[340px] rounded-2xl overflow-hidden shadow-soft">
+        {/* Imagen principal: ocupa 2×2 */}
         <div className="col-span-2 row-span-2 relative group cursor-pointer">
-          <img src={galleryImages[0]} alt={p.name} className="w-full h-full object-cover" />
+          <img src={galleryImages[0]} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
           {p.badge && (
-            <Badge className={`absolute top-3 left-3 ${badgeStyles[p.badge]} border font-medium text-xs`}>
+            <span
+              className={`absolute top-3 left-3 inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold backdrop-blur-sm ${badgeStyles[p.badge]}`}
+            >
               {badgeLabels[p.badge]}
-            </Badge>
+            </span>
           )}
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+          {/* Overlay sutil al pasar el cursor — usa token foreground en vez de negro literal */}
+          <div className="absolute inset-0 bg-foreground/0 group-hover:bg-foreground/10 transition-colors" />
         </div>
+
+        {/* 3 thumbnails intermedios */}
         {galleryImages.slice(1, 4).map((src, i) => (
           <div key={i} className="overflow-hidden cursor-pointer group">
-            <img src={src} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+            <img
+              src={src}
+              alt=""
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              loading="lazy"
+            />
           </div>
         ))}
+
+        {/* Último thumbnail con overlay "+N fotos" */}
         <div className="relative overflow-hidden cursor-pointer group">
-          <img src={galleryImages[4]} alt="" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-            <span className="text-white text-xs font-semibold">+12 fotos</span>
+          <img src={galleryImages[4]} alt="" className="w-full h-full object-cover" loading="lazy" />
+          <div className="absolute inset-0 bg-foreground/55 flex items-center justify-center">
+            <span className="text-background text-xs font-semibold">+12 fotos</span>
           </div>
         </div>
       </div>
 
-      {/* Title row */}
-      <div className="flex items-start justify-between gap-8">
-        <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            <h1 className="text-lg font-semibold text-foreground tracking-tight">{p.name}</h1>
-            <span className="text-[10px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">{p.code}</span>
+      {/* ═════ Título + acciones ═════ */}
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 lg:gap-8">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight text-foreground leading-tight">
+              {p.name}
+            </h1>
+            <span className="text-[10px] text-muted-foreground bg-muted rounded-md px-1.5 py-0.5 tnum">
+              {p.code}
+            </span>
           </div>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <MapPin className="h-3.5 w-3.5" />
+          <div className="flex items-center gap-2 text-muted-foreground flex-wrap">
+            <MapPin className="h-3.5 w-3.5 shrink-0" />
             <span className="text-sm">{p.location}, España</span>
-            <span className="text-xs">·</span>
+            <span className="text-xs text-border">·</span>
             <span className="text-sm">{p.propertyTypes.join(", ")}</span>
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">Desarrollado por <span className="font-medium text-foreground">{p.developer}</span></p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Desarrollado por <span className="font-medium text-foreground">{p.developer}</span>
+          </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8">
+
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <Button variant="outline" size="sm" className="gap-1.5">
             <Share2 className="h-3 w-3" /> Compartir
           </Button>
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8">
+          <Button variant="outline" size="sm" className="gap-1.5">
             <Printer className="h-3 w-3" /> Imprimir
           </Button>
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8">
+          <Button variant="outline" size="sm" className="gap-1.5">
             <ExternalLink className="h-3 w-3" /> Crear mi landing
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8">
+          <Button variant="ghost" size="icon" aria-label="Añadir a favoritos">
             <Heart className="h-3.5 w-3.5" />
           </Button>
         </div>

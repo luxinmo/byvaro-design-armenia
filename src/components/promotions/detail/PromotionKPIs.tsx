@@ -1,69 +1,107 @@
+/**
+ * PromotionKPIs · fila de 5 KPIs resumen de la ficha de promoción.
+ *
+ * Lo que muestra (izquierda a derecha):
+ *   1. Rango de precios (min – max) + coste de reserva como detalle.
+ *   2. Disponibilidad (N de M) + barra de progreso del % vendido.
+ *   3. Comisión para el colaborador + rango estimado en €.
+ *   4. Fecha de entrega estimada.
+ *   5. Coste de reserva.
+ *
+ * Cada KPI es una card `rounded-xl` con hover lift (`-translate-y-0.5`)
+ * + `shadow-soft` → `shadow-soft-lg`. El icono va en un cuadrado
+ * coloreado con tokens semánticos (bg-primary/10, bg-accent/10, etc.)
+ * en vez de la paleta plana blue/emerald/amber/violet/rose original.
+ *
+ * Props:
+ *   - promotion: objeto `Promotion` (ver src/data/promotions.ts).
+ *
+ * Dependencias:
+ *   - `@/data/promotions`        → tipo `Promotion`.
+ *   - `@/components/ui/progress` → primitiva Radix Progress (barra fina).
+ *   - `lucide-react`             → iconos.
+ *
+ * TODOs:
+ *   - TODO(backend): cuando haya analítica real de mercado, el KPI "Tu
+ *     comisión" puede añadir un sparkline con últimos 30 días.
+ *   - TODO(ui): hacer cada KPI clicable y saltar al tab relevante
+ *     (disponibilidad → tab Disponibilidad, etc.).
+ */
+
 import { Promotion } from "@/data/promotions";
-import { TrendingUp, Home, Calendar, Euro, Banknote, Users } from "lucide-react";
+import { TrendingUp, Home, Calendar, Euro, Banknote } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
 function formatPrice(n: number) {
-  return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat("es-ES", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(n);
 }
 
 export function PromotionKPIs({ promotion: p }: { promotion: Promotion }) {
   const occupancy = Math.round(((p.totalUnits - p.availableUnits) / p.totalUnits) * 100);
 
+  // Todos los tintes usan tokens HSL: primary, accent, destructive, muted.
+  // Si necesitas un nuevo tinte, créalo como variable CSS en src/index.css.
   const kpis = [
     {
       icon: Euro,
       label: "Rango de precios",
       value: `${formatPrice(p.priceMin)} – ${formatPrice(p.priceMax)}`,
       detail: `${formatPrice(p.reservationCost)} reserva`,
-      color: "text-blue-600 bg-blue-50",
+      iconClass: "text-primary bg-primary/10",
     },
     {
       icon: Home,
       label: "Disponibilidad",
       value: `${p.availableUnits} de ${p.totalUnits}`,
       detail: `${occupancy}% vendido`,
-      color: "text-emerald-600 bg-emerald-50",
+      iconClass: "text-primary bg-primary/10",
       progress: occupancy,
     },
     {
       icon: TrendingUp,
       label: "Tu comisión",
       value: `${p.commission}%`,
-      detail: `~${formatPrice(p.priceMin * p.commission / 100)} – ${formatPrice(p.priceMax * p.commission / 100)}`,
-      color: "text-amber-600 bg-amber-50",
+      detail: `~${formatPrice((p.priceMin * p.commission) / 100)} – ${formatPrice((p.priceMax * p.commission) / 100)}`,
+      iconClass: "text-accent-foreground bg-accent/10",
     },
     {
       icon: Calendar,
       label: "Entrega estimada",
       value: p.delivery || "Por confirmar",
       detail: "Desde firma de contrato",
-      color: "text-violet-600 bg-violet-50",
+      iconClass: "text-muted-foreground bg-muted",
     },
     {
       icon: Banknote,
       label: "Coste de reserva",
       value: formatPrice(p.reservationCost),
       detail: "Señal inicial",
-      color: "text-rose-600 bg-rose-50",
+      iconClass: "text-destructive bg-destructive/10",
     },
-    // "Agencias colaborando" KPI is only visible for promotor view, hidden in agency view
   ];
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 2xl:gap-4">
       {kpis.map((kpi) => (
-        <div key={kpi.label} className="rounded-2xl border border-border/40 bg-card p-3.5 2xl:p-5 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_24px_-8px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 transition-all duration-200">
-          <div className="flex items-center gap-2 mb-2">
-            <div className={`h-7 w-7 2xl:h-9 2xl:w-9 rounded-lg flex items-center justify-center ${kpi.color}`}>
-              <kpi.icon className="h-3.5 w-3.5 2xl:h-4 2xl:w-4" />
-            </div>
+        <div
+          key={kpi.label}
+          className="rounded-xl border border-border bg-card p-4 shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200"
+        >
+          <div
+            className={`h-8 w-8 rounded-lg flex items-center justify-center ${kpi.iconClass} mb-2`}
+          >
+            <kpi.icon className="h-4 w-4" strokeWidth={1.5} />
           </div>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">{kpi.label}</p>
-          <p className="text-sm 2xl:text-base font-semibold text-foreground leading-tight tabular-nums">{kpi.value}</p>
-          {kpi.progress !== undefined && (
-            <Progress value={kpi.progress} className="h-1 mt-1.5" />
-          )}
-          <p className="text-[10px] text-muted-foreground mt-1">{kpi.detail}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-0.5">
+            {kpi.label}
+          </p>
+          <p className="text-sm font-semibold text-foreground leading-tight tnum">{kpi.value}</p>
+          {kpi.progress !== undefined && <Progress value={kpi.progress} className="h-1 mt-1.5" />}
+          <p className="text-[10px] text-muted-foreground mt-1 tnum">{kpi.detail}</p>
         </div>
       ))}
     </div>
