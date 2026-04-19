@@ -26,6 +26,7 @@ import type {
   SubUni, SubVarias, EstadoPromocion, FaseConstruccion, EstiloVivienda,
 } from "@/components/crear-promocion/types";
 import { defaultWizardState } from "@/components/crear-promocion/types";
+import { canPublishWizard } from "@/lib/publicationRequirements"; // valida requisitos (fotos, unidades, plan pagos, ubicación, entrega, estado, comisiones)
 import {
   roleOptions, tipoOptions, subUniOptions, subVariasOptions,
   estadoOptions, faseConstruccionOptions, estiloViviendaOptions,
@@ -107,10 +108,14 @@ const SKIPPABLE_STEPS: ReadonlySet<StepId> = new Set<StepId>([
    ciudad de ubicación.
    ═══════════════════════════════════════════════════════════════════ */
 function hasPublishMinimums(s: WizardState): boolean {
-  if (!s.role || !s.tipo || !s.estado) return false;
-  if (!s.nombrePromocion?.trim()) return false;
-  if (!s.direccionPromocion.ciudad?.trim()) return false;
-
+  // Requisitos duros para publicar — delegamos en la fuente única de
+  // verdad en src/lib/publicationRequirements.ts para que el wizard y
+  // la ficha apliquen exactamente las mismas reglas.
+  //
+  // Además mantenemos chequeos estructurales básicos del wizard (rol,
+  // tipo y ramificación) porque sin ellos los pasos posteriores ni se
+  // generan.
+  if (!s.role || !s.tipo) return false;
   if (s.tipo === "unifamiliar") {
     if (!s.subUni) return false;
     if (s.subUni === "una_sola" && (!s.subVarias || !s.estiloVivienda)) return false;
@@ -119,7 +124,11 @@ function hasPublishMinimums(s: WizardState): boolean {
   if (s.tipo === "plurifamiliar" || s.tipo === "mixto") {
     if (s.numBloques < 1 || s.plantas < 1 || s.aptosPorPlanta < 1) return false;
   }
-  return true;
+  if (!s.nombrePromocion?.trim()) return false;
+
+  // Requisitos de negocio (fotos, unidades, plan pago, ubicación, entrega,
+  // estado construcción, comisiones si colabora):
+  return canPublishWizard(s);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -265,6 +274,11 @@ export default function CrearPromocion() {
       return !!state.nombrePromocion.trim()
         && !!state.direccionPromocion.pais.trim()
         && !!state.direccionPromocion.ciudad.trim();
+    }
+    if (step === "revision") {
+      // El botón Publicar solo se habilita si se cumplen TODOS los
+      // requisitos obligatorios (ver src/lib/publicationRequirements.ts).
+      return canPublishWizard(state);
     }
     // Pasos aún no portados: siempre permitimos pasar
     return true;

@@ -12,8 +12,9 @@ import {
   Plus, Phone, Mail, MessageCircle, Store, UserPlus,
   Check, X, ExternalLink, Zap, Star, Search, ChevronDown, Info,
   Lock, Unlock, FolderOpen, Folder, Download, BookOpen, Upload, MoreHorizontal, FilePlus, ArrowRight,
-  Trophy, Sparkles, ArrowUpRight, FileCheck2,
+  Trophy, Sparkles, ArrowUpRight, FileCheck2, Rocket,
 } from "lucide-react";
+import { getMissingForPromotion } from "@/lib/publicationRequirements"; // fuente única de verdad de requisitos para publicar
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -40,6 +41,7 @@ import {
 import { activeTeamMembers } from "@/data/teamMembers";
 import { companyOffices } from "@/data/companyOffices";
 import { SendEmailDialog } from "@/components/email/SendEmailDialog";
+import { toast, Toaster } from "sonner"; // feedback tras publicar
 
 function formatPrice(n: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
@@ -149,7 +151,17 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     );
   }
 
-  const status = statusConfig(p.status);
+  // Requisitos mínimos para publicar (fotos, unidades, plan pagos, ubicación,
+  // entrega, estado construcción, comisiones si colabora). Fuente única de
+  // verdad en src/lib/publicationRequirements.ts.
+  const publishMissing = getMissingForPromotion(p);
+  const isIncomplete = publishMissing.length > 0;
+  const canPublish = !isIncomplete && p.status !== "active";
+
+  const baseStatus = statusConfig(p.status);
+  const status = isIncomplete
+    ? { label: "Incompleta", variant: "warning" as const }
+    : baseStatus;
   const hasMissing = p.missingSteps && p.missingSteps.length > 0;
   const missingSet = new Set(p.missingSteps || []);
   const completedSteps = allSteps.filter(s => !missingSet.has(s));
@@ -219,6 +231,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           - Tabs con subrayado (mismo patrón que /empresa) en vez de pills
             con fondo. El <Separator> desaparece porque el borde inferior
             del <nav> hace de separador visual. */}
+      <Toaster position="top-center" richColors closeButton />
       <header className="px-5 sm:px-8 lg:px-10 pt-6 pb-0">
         {/* Breadcrumb / eyebrow */}
         <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-3">
@@ -276,6 +289,46 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               <Button size="sm" variant="outline" onClick={() => setSendEmailOpen(true)} className="gap-1.5">
                 <Mail className="h-3.5 w-3.5" strokeWidth={1.5} /> Enviar
               </Button>
+
+              {/* Botón Publicar · aparece si la promoción aún no está activa
+                  O si está activa pero le faltan requisitos (estado real de
+                  "incompleta"). Se deshabilita mientras haya requisitos
+                  pendientes y muestra el listado en el tooltip.
+                  TODO(backend): POST /api/promociones/:id/publish */}
+              {(p.status !== "active" || isIncomplete) && (
+                <TooltipProvider delayDuration={120}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Button
+                          size="sm"
+                          variant={isIncomplete ? "outline" : "default"}
+                          disabled={!canPublish}
+                          onClick={() => {
+                            if (!canPublish) return;
+                            toast.success("Promoción publicada", {
+                              description: `${p.name} ya es visible en el catálogo.`,
+                            });
+                            // TODO(backend): actualizar p.status = "active" tras confirmación del backend.
+                          }}
+                          className="gap-1.5"
+                        >
+                          <Rocket className="h-3.5 w-3.5" strokeWidth={1.5} /> Publicar
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    {isIncomplete && (
+                      <TooltipContent side="bottom" align="end" className="max-w-xs">
+                        <p className="text-xs font-semibold mb-1">Faltan {publishMissing.length} requisito{publishMissing.length > 1 ? "s" : ""}</p>
+                        <ul className="text-[11px] space-y-0.5 list-disc pl-3.5">
+                          {publishMissing.map(m => <li key={m.key}>{m.label}</li>)}
+                        </ul>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+
               <Button size="sm" onClick={() => setRegisterClientOpen(true)} className="gap-1.5">
                 <Users className="h-3.5 w-3.5" strokeWidth={1.5} /> Registrar cliente
               </Button>
