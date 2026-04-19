@@ -14,7 +14,7 @@ type Props = {
 export function PromotionCommissions({ commission, priceMin, priceMax }: Props) {
   const tiers = [
     { range: "1–3 ventas", rate: `${commission}%`, bonus: "—" },
-    { range: "4–8 ventas", rate: `${commission + 0.5}%`, bonus: "+0.5% bonus" },
+    { range: "4–8 ventas", rate: `${commission + 0.5}%`, bonus: "+0,5% bonus" },
     { range: "9+ ventas", rate: `${commission + 1}%`, bonus: "+1% bonus" },
   ];
 

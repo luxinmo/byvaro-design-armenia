@@ -45,12 +45,12 @@ function formatPrice(n: number) {
 }
 
 const stepConfig: Record<string, { icon: typeof Camera; label: string; description: string; wizardStep: string }> = {
-  "Basic info": { icon: Settings, label: "Basic info", description: "Name, address and amenities", wizardStep: "info_basica" },
-  "Multimedia": { icon: Camera, label: "Multimedia", description: "Photos and videos", wizardStep: "multimedia" },
-  "Description": { icon: FileText, label: "Description", description: "Project description", wizardStep: "descripcion" },
-  "Units": { icon: Layers, label: "Units", description: "Configure available units", wizardStep: "crear_unidades" },
-  "Collaborators": { icon: Handshake, label: "Collaborators", description: "Commissions and agencies", wizardStep: "colaboradores" },
-  "Payment plan": { icon: CreditCard, label: "Payment plan", description: "Buyer payment structure", wizardStep: "plan_pagos" },
+  "Basic info": { icon: Settings, label: "Información básica", description: "Nombre, dirección y amenities", wizardStep: "info_basica" },
+  "Multimedia": { icon: Camera, label: "Multimedia", description: "Fotos y vídeos", wizardStep: "multimedia" },
+  "Description": { icon: FileText, label: "Descripción", description: "Descripción del proyecto", wizardStep: "descripcion" },
+  "Units": { icon: Layers, label: "Unidades", description: "Configurar unidades disponibles", wizardStep: "crear_unidades" },
+  "Collaborators": { icon: Handshake, label: "Colaboradores", description: "Comisiones y agencias", wizardStep: "colaboradores" },
+  "Payment plan": { icon: CreditCard, label: "Plan de pagos", description: "Estructura de pagos del comprador", wizardStep: "plan_pagos" },
 };
 
 function getWizardUrl(step?: string, returnTo?: string) {
@@ -61,10 +61,10 @@ function getWizardUrl(step?: string, returnTo?: string) {
 
 function statusConfig(status: string) {
   const map: Record<string, { label: string; variant: "success" | "warning" | "muted" | "danger" }> = {
-    active: { label: "Active", variant: "success" },
-    incomplete: { label: "Incomplete", variant: "warning" },
-    inactive: { label: "Inactive", variant: "muted" },
-    "sold-out": { label: "Sold out", variant: "danger" },
+    active: { label: "Activa", variant: "success" },
+    incomplete: { label: "Incompleta", variant: "warning" },
+    inactive: { label: "Inactiva", variant: "muted" },
+    "sold-out": { label: "Agotada", variant: "danger" },
   };
   return map[status] || map.inactive;
 }
@@ -73,11 +73,20 @@ const tabKeys = ["Overview", "Availability", "Agencies", "Comisiones", "Records"
 const collabTabKeys = ["Overview", "Availability", "Comisiones", "Documents"];
 const allSteps = ["Basic info", "Multimedia", "Description", "Units", "Collaborators", "Payment plan"];
 
+const tabLabels: Record<string, string> = {
+  Overview: "Vista general",
+  Availability: "Disponibilidad",
+  Agencies: "Agencias",
+  Comisiones: "Comisiones",
+  Records: "Registros",
+  Documents: "Documentos",
+};
+
 const conditionLabels: Record<string, string> = {
-  nombre_completo: "Full name",
-  ultimas_4_cifras: "Last 4 digits phone",
-  nacionalidad: "Nationality",
-  email_completo: "Full email",
+  nombre_completo: "Nombre completo",
+  ultimas_4_cifras: "Últimas 4 cifras del teléfono",
+  nacionalidad: "Nacionalidad",
+  email_completo: "Email completo",
 };
 
 // Mock contacts for the footer
@@ -125,10 +134,10 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center space-y-3">
-          <p className="text-lg font-semibold text-foreground">Promotion not found</p>
+          <p className="text-lg font-semibold text-foreground">Promoción no encontrada</p>
           <Button variant="outline" onClick={() => navigate("/developer-promotions")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to promotions
+            Volver a promociones
           </Button>
         </div>
       </div>
@@ -146,8 +155,8 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const website = `${p.name.toLowerCase().replace(/\s+/g, "-")}.byvaro.com`;
 
   const constructionPhaseLabel = p.constructionProgress !== undefined
-    ? p.constructionProgress >= 100 ? "Completed" : p.constructionProgress >= 80 ? "Finishing" : p.constructionProgress >= 50 ? "Installations" : p.constructionProgress >= 20 ? "Structure" : "Starting"
-    : "Project phase";
+    ? p.constructionProgress >= 100 ? "Terminada" : p.constructionProgress >= 80 ? "Acabados" : p.constructionProgress >= 50 ? "Instalaciones" : p.constructionProgress >= 20 ? "Estructura" : "Inicio"
+    : "Fase de proyecto";
 
   const galleryImages = [
     p.image || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&h=500&fit=crop",
@@ -159,12 +168,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
   // KPI data with optional click handler to switch tabs
   const allKpis = [
-    { icon: Euro, label: "Price range", value: `${formatPrice(p.priceMin)}${p.priceMax > p.priceMin ? ` – ${formatPrice(p.priceMax)}` : ""}`, detail: `${formatPrice(p.reservationCost)} reservation`, color: "text-blue-600 bg-blue-50", empty: false },
-    { icon: Home, label: "Availability", value: `${p.availableUnits} / ${p.totalUnits}`, detail: `${occupancy}% sold`, color: "text-emerald-600 bg-emerald-50", progress: occupancy, empty: false },
-    { icon: TrendingUp, label: "Commission", value: p.commission > 0 ? `${p.commission}%` : "—", detail: p.commission > 0 ? `~${formatPrice(p.priceMin * p.commission / 100)}` : "Not configured", color: "text-amber-600 bg-amber-50", onClick: () => setActiveTab(visibleTabs.indexOf("Comisiones")), empty: p.commission === 0 },
-    { icon: Calendar, label: "Delivery", value: p.delivery || "TBD", detail: "Estimated", color: "text-violet-600 bg-violet-50", empty: !p.delivery },
-    { icon: HardHat, label: "Construction", value: p.constructionProgress !== undefined ? `${p.constructionProgress}%` : "—", detail: constructionPhaseLabel, color: "text-orange-600 bg-orange-50", empty: p.constructionProgress === undefined },
-    ...(!viewAsCollaborator ? [{ icon: Users, label: "Agencies", value: `${p.agencies}`, detail: p.agencies > 0 ? "Collaborating" : "None yet", color: "text-indigo-600 bg-indigo-50", onClick: () => setActiveTab(2), empty: false }] : []),
+    { icon: Euro, label: "Rango de precios", value: `${formatPrice(p.priceMin)}${p.priceMax > p.priceMin ? ` – ${formatPrice(p.priceMax)}` : ""}`, detail: `${formatPrice(p.reservationCost)} de reserva`, color: "text-blue-600 bg-blue-50", empty: false },
+    { icon: Home, label: "Disponibilidad", value: `${p.availableUnits} / ${p.totalUnits}`, detail: `${occupancy}% vendido`, color: "text-emerald-600 bg-emerald-50", progress: occupancy, empty: false },
+    { icon: TrendingUp, label: "Comisión", value: p.commission > 0 ? `${p.commission}%` : "—", detail: p.commission > 0 ? `~${formatPrice(p.priceMin * p.commission / 100)}` : "Sin configurar", color: "text-amber-600 bg-amber-50", onClick: () => setActiveTab(visibleTabs.indexOf("Comisiones")), empty: p.commission === 0 },
+    { icon: Calendar, label: "Entrega", value: p.delivery || "Por definir", detail: "Estimada", color: "text-violet-600 bg-violet-50", empty: !p.delivery },
+    { icon: HardHat, label: "Construcción", value: p.constructionProgress !== undefined ? `${p.constructionProgress}%` : "—", detail: constructionPhaseLabel, color: "text-orange-600 bg-orange-50", empty: p.constructionProgress === undefined },
+    ...(!viewAsCollaborator ? [{ icon: Users, label: "Agencias", value: `${p.agencies}`, detail: p.agencies > 0 ? "Colaborando" : "Ninguna aún", color: "text-indigo-600 bg-indigo-50", onClick: () => setActiveTab(2), empty: false }] : []),
   ];
   const kpis = viewAsCollaborator ? allKpis.filter(k => !k.empty) : allKpis;
 
@@ -199,7 +208,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       {/* Header */}
       <div className="px-5 sm:px-8 lg:px-10 pt-6 pb-0">
         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
-          <button onClick={() => navigate(agentMode ? "/promotions-agent" : "/developer-promotions")} className="hover:text-foreground transition-colors">Promotions</button>
+          <button onClick={() => navigate(agentMode ? "/promotions-agent" : "/developer-promotions")} className="hover:text-foreground transition-colors">Promociones</button>
           <span>/</span>
           <span className="text-foreground font-medium">{p.name}</span>
         </div>
@@ -214,7 +223,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <MapPin className="h-3 w-3" />
-              <span>{p.location || "No location set"}</span>
+              <span>{p.location || "Sin ubicación"}</span>
             </div>
           </div>
           {!agentMode && !viewAsCollaborator && activeTabKey !== "Agencies" && (
@@ -223,16 +232,16 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 <Eye className="h-3.5 w-3.5" strokeWidth={1.5} /> Vista colaborador
               </button>
               <button onClick={() => setSendEmailOpen(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium text-foreground hover:bg-muted transition-colors">
-                <Mail className="h-3.5 w-3.5" strokeWidth={1.5} /> Send
+                <Mail className="h-3.5 w-3.5" strokeWidth={1.5} /> Enviar
               </button>
               <button onClick={() => setRegisterClientOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
-                <Users className="h-4 w-4" strokeWidth={1.5} /> Register client
+                <Users className="h-4 w-4" strokeWidth={1.5} /> Registrar cliente
               </button>
             </div>
           )}
           {viewAsCollaborator && (
             <div className="flex items-center gap-2 shrink-0">
-              <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8 rounded-full" onClick={() => setSendEmailOpen(true)}><Mail className="h-3 w-3" /> Send</Button>
+              <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8 rounded-full" onClick={() => setSendEmailOpen(true)}><Mail className="h-3 w-3" /> Enviar</Button>
               <Button size="sm" className="gap-1.5 text-xs h-8 rounded-full" onClick={() => setRegisterClientOpen(true)}><Users className="h-3 w-3" /> Registrar cliente</Button>
             </div>
           )}
@@ -244,7 +253,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             return (
               <button key={tab} onClick={() => setActiveTab(i)}
                 className={`px-3.5 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${activeTab === i ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/40"}`}>
-                {tab}
+                {tabLabels[tab] || tab}
                 {requestCount > 0 && (
                   <span className="h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">{requestCount}</span>
                 )}
@@ -284,7 +293,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 <div className="col-span-2 row-span-2 relative group cursor-pointer">
                   <img src={galleryImages[0]} alt={p.name} className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                  <Tag variant="overlay" size="sm" className="absolute bottom-3 left-3"><Image className="h-3 w-3" /> 12 photos</Tag>
+                  <Tag variant="overlay" size="sm" className="absolute bottom-3 left-3"><Image className="h-3 w-3" /> 12 fotos</Tag>
                 </div>
                 {galleryImages.slice(1, 4).map((src, i) => (
                   <div key={i} className="overflow-hidden cursor-pointer group">
@@ -294,7 +303,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 <div className="relative overflow-hidden cursor-pointer group bg-muted/30 flex items-center justify-center">
                   <div className="text-center">
                     <Video className="h-5 w-5 text-muted-foreground/40 mx-auto mb-1" />
-                    <span className="text-xs text-muted-foreground">2 videos</span>
+                    <span className="text-xs text-muted-foreground">2 vídeos</span>
                   </div>
                 </div>
               </div>
@@ -303,7 +312,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             {/* ── 2. KEY DATA ── */}
             <div className={`grid gap-3 2xl:gap-4 grid-cols-2 ${kpis.length <= 3 ? "md:grid-cols-3" : kpis.length <= 4 ? "md:grid-cols-4" : kpis.length <= 5 ? "md:grid-cols-3 lg:grid-cols-5" : "md:grid-cols-3 lg:grid-cols-6"}`}>
               {kpis.map((kpi) => {
-                const isAgencies = kpi.label === "Agencies";
+                const isAgencies = kpi.label === "Agencias";
                 return (
                   <div key={kpi.label}
                     onClick={kpi.onClick}
@@ -317,7 +326,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     {kpi.empty ? (
                       <p className="text-[10px] mt-1 flex items-center gap-1 text-rose-600 font-medium">
                         <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                        Missing
+                        Falta
                       </p>
                     ) : (
                       <p className="text-[10px] text-muted-foreground mt-1">{kpi.detail}</p>
@@ -325,7 +334,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     {isAgencies && (
                       <div className="absolute inset-0 bg-card/95 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                         <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                          <Plus className="h-3.5 w-3.5" strokeWidth={2} /> Add agencies
+                          <Plus className="h-3.5 w-3.5" strokeWidth={2} /> Invitar agencias
                         </span>
                       </div>
                     )}
@@ -335,26 +344,26 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             </div>
 
             {/* ── 3. STRUCTURE & CONSTRUCTION ── */}
-            <SectionCard title="Structure & Construction" stepName="Basic info" missing={false} onEdit={() => setEditOpen("structure")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Estructura y construcción" stepName="Basic info" missing={false} onEdit={() => setEditOpen("structure")} hideEdit={viewAsCollaborator}>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <InfoItem icon={Building2} label="Type" value={typeLabel || "Not set"} />
-                <InfoItem icon={Layers} label="Structure" value={p.totalUnits > 10 ? "Multi-block" : "Single block"} />
-                <InfoItem icon={HardHat} label="Construction" value={constructionPhaseLabel} sub={p.constructionProgress !== undefined ? `${p.constructionProgress}% complete` : undefined} />
-                <InfoItem icon={Calendar} label="Delivery" value={p.delivery || "TBD"} />
+                <InfoItem icon={Building2} label="Tipo" value={typeLabel || "Sin definir"} />
+                <InfoItem icon={Layers} label="Estructura" value={p.totalUnits > 10 ? "Multibloque" : "Bloque único"} />
+                <InfoItem icon={HardHat} label="Construcción" value={constructionPhaseLabel} sub={p.constructionProgress !== undefined ? `${p.constructionProgress}% completado` : undefined} />
+                <InfoItem icon={Calendar} label="Entrega" value={p.delivery || "Por definir"} />
               </div>
               <div className="h-px bg-border/40 my-4" />
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <InfoItem icon={Home} label="Total units" value={`${p.totalUnits}`} />
-                <InfoItem icon={Car} label="Parking" value={p.totalUnits > 0 ? `${p.totalUnits} spaces` : "—"} sub="Included in price" />
-                <InfoItem icon={Archive} label="Storage" value={p.totalUnits > 0 ? `${Math.floor(p.totalUnits * 0.8)} units` : "—"} sub="Included in price" />
-                <InfoItem icon={Shield} label="License" value="Granted" />
+                <InfoItem icon={Home} label="Unidades totales" value={`${p.totalUnits}`} />
+                <InfoItem icon={Car} label="Parking" value={p.totalUnits > 0 ? `${p.totalUnits} plazas` : "—"} sub="Incluido en el precio" />
+                <InfoItem icon={Archive} label="Trastero" value={p.totalUnits > 0 ? `${Math.floor(p.totalUnits * 0.8)} unidades` : "—"} sub="Incluido en el precio" />
+                <InfoItem icon={Shield} label="Licencia" value="Concedida" />
               </div>
               {p.constructionProgress !== undefined && (
                 <>
                   <div className="h-px bg-border/40 my-4" />
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs text-muted-foreground">Construction progress</span>
+                      <span className="text-xs text-muted-foreground">Progreso de construcción</span>
                       <span className="text-xs font-semibold text-foreground">{p.constructionProgress}%</span>
                     </div>
                     <Progress value={p.constructionProgress} className="h-2" />
@@ -364,12 +373,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             </SectionCard>
 
             {/* ── 4. BASIC INFORMATION (no Location — has its own section) ── */}
-            <SectionCard title="Basic information" stepName="Basic info" missing={missingSet.has("Basic info")} onEdit={() => setEditOpen("basicInfo")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Información básica" stepName="Basic info" missing={missingSet.has("Basic info")} onEdit={() => setEditOpen("basicInfo")} hideEdit={viewAsCollaborator}>
               <div className="space-y-4">
                 <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Property types</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Tipologías</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {(p.propertyTypes.length > 0 ? p.propertyTypes : ["Not set"]).map(t => (
+                    {(p.propertyTypes.length > 0 ? p.propertyTypes : ["Sin definir"]).map(t => (
                       <Tag key={t} variant="default" size="sm">{t}</Tag>
                     ))}
                   </div>
@@ -378,15 +387,15 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Amenities</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {["Pool", "Gym", "Garden", "Security", "Parking"].map(a => (
+                    {["Piscina", "Gimnasio", "Jardín", "Seguridad", "Parking"].map(a => (
                       <Tag key={a} variant="default" size="sm">{a}</Tag>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Home features</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Características del hogar</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {["Equipped kitchen", "Air conditioning", "Terrace", "Smart home"].map(f => (
+                    {["Cocina equipada", "Aire acondicionado", "Terraza", "Smart home"].map(f => (
                       <Tag key={f} variant="default" size="sm">{f}</Tag>
                     ))}
                   </div>
@@ -410,13 +419,13 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                         <Eye className="h-3.5 w-3.5 text-emerald-600" />
                       </div>
                       <div>
-                        <h2 className="text-base font-semibold text-foreground">Show House</h2>
-                        <p className="text-[10px] text-muted-foreground">Model unit available for visits</p>
+                        <h2 className="text-base font-semibold text-foreground">Piso piloto</h2>
+                        <p className="text-[10px] text-muted-foreground">Unidad modelo disponible para visitas</p>
                       </div>
                     </div>
                     {!viewAsCollaborator && showFlatUnit && (
                       <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 rounded-full" onClick={() => setShowFlatPickerOpen(true)}>
-                        <Pencil className="h-3 w-3" /> Change unit
+                        <Pencil className="h-3 w-3" /> Cambiar unidad
                       </Button>
                     )}
                   </div>
@@ -424,15 +433,15 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     {showFlatUnit ? (
                       <div className="flex gap-4 p-4 rounded-xl border border-emerald-200/60 bg-emerald-50/30">
                         <div className="w-[180px] h-[130px] rounded-xl overflow-hidden shrink-0 relative group cursor-pointer">
-                          <img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=400&h=300&fit=crop" alt="Show House" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                          <img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=400&h=300&fit=crop" alt="Piso piloto" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                           <div className="absolute top-2 left-2">
-                            <Tag variant="overlay" size="sm"><Star className="h-2.5 w-2.5" /> Show House</Tag>
+                            <Tag variant="overlay" size="sm"><Star className="h-2.5 w-2.5" /> Piso piloto</Tag>
                           </div>
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-2">
                             <h3 className="text-sm font-bold text-foreground">{showFlatUnit.block} - P{showFlatUnit.floor} {showFlatUnit.door}</h3>
-                            <Tag variant="success" size="sm">Show House</Tag>
+                            <Tag variant="success" size="sm">Piso piloto</Tag>
                           </div>
                           <p className="text-lg font-bold text-foreground mb-3">{formatPrice(showFlatUnit.price)}</p>
                           <div className="grid grid-cols-3 gap-3">
@@ -450,18 +459,18 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                             </div>
                           </div>
                           <div className="flex items-center gap-3 mt-3 text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Mon–Fri, 10:00 - 18:00</span>
-                            <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> By appointment</span>
+                            <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Lun–Vie, 10:00 - 18:00</span>
+                            <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> Con cita previa</span>
                           </div>
                         </div>
                       </div>
                     ) : !viewAsCollaborator ? (
                       <div className="flex flex-col items-center justify-center py-8 text-center rounded-xl border border-dashed border-border/40 bg-muted/10">
                         <Eye className="h-8 w-8 text-muted-foreground/20 mb-2" />
-                        <p className="text-sm font-medium text-muted-foreground">No show house selected</p>
-                        <p className="text-xs text-muted-foreground/60 mt-0.5 mb-3">Pick a unit from the availability list</p>
+                        <p className="text-sm font-medium text-muted-foreground">Sin piso piloto seleccionado</p>
+                        <p className="text-xs text-muted-foreground/60 mt-0.5 mb-3">Elige una unidad del listado de disponibilidad</p>
                         <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8 rounded-full" onClick={() => setShowFlatPickerOpen(true)}>
-                          <Plus className="h-3 w-3" /> Select unit
+                          <Plus className="h-3 w-3" /> Seleccionar unidad
                         </Button>
                       </div>
                     ) : null}
@@ -481,7 +490,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   </div>
                   {!viewAsCollaborator && (
                     <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 opacity-0 group-hover/section:opacity-100 transition-opacity rounded-full" onClick={() => setEditOpen("memoria")}>
-                      <Upload className="h-3 w-3" /> Upload
+                      <Upload className="h-3 w-3" /> Subir
                     </Button>
                   )}
                 </div>
@@ -510,7 +519,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     </div>
                     {!viewAsCollaborator && (
                       <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 opacity-0 group-hover/section:opacity-100 transition-opacity rounded-full" onClick={() => setEditOpen("planos")}>
-                        <Upload className="h-3 w-3" /> Upload
+                        <Upload className="h-3 w-3" /> Subir
                       </Button>
                     )}
                   </div>
@@ -539,7 +548,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     </div>
                   {!viewAsCollaborator && (
                     <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 opacity-0 group-hover/section:opacity-100 transition-opacity rounded-full" onClick={() => setEditOpen("brochure")}>
-                      <Upload className="h-3 w-3" /> Upload
+                      <Upload className="h-3 w-3" /> Subir
                     </Button>
                   )}
                 </div>
@@ -560,36 +569,36 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
             {/* ── 5. UNITS / PAYMENT PLAN / COMMISSIONS ── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <SectionCard title="Units & Availability" stepName="Units" missing={missingSet.has("Units")} onEdit={() => setEditOpen("inventory")} hideEdit={viewAsCollaborator}>
+              <SectionCard title="Unidades y disponibilidad" stepName="Units" missing={missingSet.has("Units")} onEdit={() => setEditOpen("inventory")} hideEdit={viewAsCollaborator}>
                 <PromotionAvailabilitySummary promotionId={p.id} onViewAll={() => setActiveTab(1)} />
               </SectionCard>
 
-              <SectionCard title="Payment plan" stepName="Payment plan" missing={missingSet.has("Payment plan")} onEdit={() => setEditOpen("paymentPlan")} hideEdit={viewAsCollaborator}>
+              <SectionCard title="Plan de pagos" stepName="Payment plan" missing={missingSet.has("Payment plan")} onEdit={() => setEditOpen("paymentPlan")} hideEdit={viewAsCollaborator}>
                 {p.reservationCost > 0 ? (
                   <div className="space-y-4">
                     {/* Summary row */}
                     <div className="grid grid-cols-3 gap-3 pb-3 border-b border-border/40">
                       <div>
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Reservation</p>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Reserva</p>
                         <p className="text-sm font-semibold text-foreground tabular-nums">{formatPrice(p.reservationCost)}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Validity</p>
-                        <p className="text-sm font-semibold text-foreground">60 days</p>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Validez</p>
+                        <p className="text-sm font-semibold text-foreground">60 días</p>
                       </div>
                       <div>
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Method</p>
-                        <p className="text-sm font-semibold text-foreground">Milestones</p>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Método</p>
+                        <p className="text-sm font-semibold text-foreground">Hitos</p>
                       </div>
                     </div>
 
                     {/* Milestones — minimal list */}
                     <div className="space-y-2">
                       {[
-                        { pct: "10%", label: "Reservation signing" },
-                        { pct: "20%", label: "Structure completion" },
-                        { pct: "30%", label: "Installations" },
-                        { pct: "40%", label: "Notary (keys)" },
+                        { pct: "10%", label: "Firma de reserva" },
+                        { pct: "20%", label: "Finalización de estructura" },
+                        { pct: "30%", label: "Instalaciones" },
+                        { pct: "40%", label: "Notaría (llaves)" },
                       ].map((m, i) => (
                         <div key={i} className="flex items-center justify-between text-xs">
                           <div className="flex items-center gap-2.5">
@@ -611,14 +620,14 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                         >
                           <div className="flex items-center gap-2">
                             <span className={`h-1.5 w-1.5 rounded-full ${commissionMissing ? "bg-rose-500" : "bg-emerald-500"}`} />
-                            <span className="text-xs text-muted-foreground">Commissions</span>
+                            <span className="text-xs text-muted-foreground">Comisiones</span>
                             {commissionMissing && (
-                              <span className="text-[10px] font-medium text-rose-600">Missing</span>
+                              <span className="text-[10px] font-medium text-rose-600">Falta</span>
                             )}
                           </div>
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs font-medium text-foreground tabular-nums">
-                              {commissionMissing ? "Not set" : `${p.commission}%`}
+                              {commissionMissing ? "Sin definir" : `${p.commission}%`}
                             </span>
                             <ArrowRight className="h-3 w-3 text-muted-foreground" />
                           </div>
@@ -627,7 +636,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     })()}
                   </div>
                 ) : (
-                  <EmptyState icon={CreditCard} message="No payment plan defined" sub="Define how buyers will pay" />
+                  <EmptyState icon={CreditCard} message="Sin plan de pagos definido" sub="Define cómo pagarán los compradores" />
                 )}
               </SectionCard>
             </div>
@@ -637,27 +646,27 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
 
             {/* ── 8. DESCRIPTION ── */}
-            <SectionCard title="Description" stepName="Description" missing={missingSet.has("Description")} onEdit={() => setEditOpen("description")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Descripción" stepName="Description" missing={missingSet.has("Description")} onEdit={() => setEditOpen("description")} hideEdit={viewAsCollaborator}>
               <div className="space-y-3">
                 <div className="flex items-center gap-2 mb-2">
                   <Tag variant="default" size="sm"><Globe className="h-3 w-3" /> ES</Tag>
                   <Tag variant="default" size="sm"><Globe className="h-3 w-3" /> EN</Tag>
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  {p.name} is a {typeLabel?.toLowerCase() || "residential"} development located in {p.location || "Spain"}.
-                  {p.developer && ` Developed by ${p.developer}.`}
-                  {p.totalUnits > 0 && ` The project comprises ${p.totalUnits} units with delivery estimated for ${p.delivery || "TBD"}.`}
-                  {p.propertyTypes.length > 0 && ` Property types include ${p.propertyTypes.join(", ").toLowerCase()}.`}
+                  {p.name} es una promoción {typeLabel?.toLowerCase() || "residencial"} situada en {p.location || "España"}.
+                  {p.developer && ` Desarrollada por ${p.developer}.`}
+                  {p.totalUnits > 0 && ` El proyecto consta de ${p.totalUnits} unidades con entrega estimada para ${p.delivery || "por definir"}.`}
+                  {p.propertyTypes.length > 0 && ` Las tipologías incluyen ${p.propertyTypes.join(", ").toLowerCase()}.`}
                 </p>
               </div>
             </SectionCard>
 
             {/* ── 9. LOCATION ── */}
-            <SectionCard title="Location" stepName="Basic info" missing={false} onEdit={() => setEditOpen("location")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Ubicación" stepName="Basic info" missing={false} onEdit={() => setEditOpen("location")} hideEdit={viewAsCollaborator}>
               <div className="rounded-xl overflow-hidden h-[200px] bg-muted/30 flex items-center justify-center">
                 <div className="text-center">
                   <MapPin className="h-6 w-6 text-muted-foreground/30 mx-auto mb-2" />
-                  <p className="text-xs text-muted-foreground">{p.location || "No location set"}, Spain</p>
+                  <p className="text-xs text-muted-foreground">{p.location || "Sin ubicación"}, España</p>
                 </div>
               </div>
             </SectionCard>
@@ -679,13 +688,13 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               {/* ── RIGHT RAIL: icon dock (md/lg) → labeled card (2xl) ── */}
               {!viewAsCollaborator && (() => {
                 const items: { icon: typeof Users; label: string; hint?: string; onClick?: () => void; danger?: boolean; info?: boolean }[] = [
-                  { icon: Users, label: "Add agencies", hint: "Invite collaborators", onClick: () => setActiveTab(visibleTabs.indexOf("Agencies")) },
-                  { icon: Share2, label: "Share", hint: "Share with collaborators", onClick: () => setActiveTab(visibleTabs.indexOf("Agencies")) },
-                  { icon: FileText, label: "Brochure", hint: "Download brochure", onClick: () => {} },
-                  { icon: Download, label: "Price list", hint: "Download as PDF", onClick: () => {} },
-                  { icon: MessageCircle, label: "Contact sales", hint: "Talk to sales team", onClick: () => {} },
-                  ...(hasMissing ? [{ icon: AlertTriangle, label: "Incomplete", hint: `${completedSteps.length}/${allSteps.length} steps · Click to complete`, onClick: () => navigate(getWizardUrl(p.missingSteps?.[0], returnPath)), danger: true }] : []),
-                  { icon: Info, label: "Live data", hint: "Prices and availability update in real time. Confirm before closing.", info: true },
+                  { icon: Users, label: "Invitar agencias", hint: "Invitar colaboradores", onClick: () => setActiveTab(visibleTabs.indexOf("Agencies")) },
+                  { icon: Share2, label: "Compartir", hint: "Compartir con colaboradores", onClick: () => setActiveTab(visibleTabs.indexOf("Agencies")) },
+                  { icon: FileText, label: "Brochure", hint: "Descargar brochure", onClick: () => {} },
+                  { icon: Download, label: "Listado de precios", hint: "Descargar en PDF", onClick: () => {} },
+                  { icon: MessageCircle, label: "Contactar ventas", hint: "Habla con el equipo comercial", onClick: () => {} },
+                  ...(hasMissing ? [{ icon: AlertTriangle, label: "Incompleta", hint: `${completedSteps.length}/${allSteps.length} pasos · Click para completar`, onClick: () => navigate(getWizardUrl(p.missingSteps?.[0], returnPath)), danger: true }] : []),
+                  { icon: Info, label: "Datos en vivo", hint: "Precios y disponibilidad se actualizan en tiempo real. Confirma antes de cerrar.", info: true },
                 ];
                 return (
                   <TooltipProvider delayDuration={150}>
@@ -713,7 +722,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                         {/* Labeled side card — visible only on 2xl (≥1536px, MacBook 16") */}
                         <div className="hidden 2xl:flex flex-col rounded-2xl bg-card border border-border/40 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
                           <div className="px-4 pt-4 pb-2">
-                            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Quick actions</p>
+                            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Acciones rápidas</p>
                           </div>
                           <div className="px-2 pb-2 flex flex-col gap-0.5">
                             {items.filter(i => !i.info && !i.danger).map((item, i) => (
@@ -822,11 +831,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             {/* Commission structure card */}
             <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
               <div className="px-5 pt-4 pb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-foreground">Commission structure</h2>
+                <h2 className="text-sm font-semibold text-foreground">Estructura de comisiones</h2>
                 {!viewAsCollaborator && (
                   <button onClick={() => navigate(getWizardUrl("Collaborators", returnPath))}
                     className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm transition-colors">
-                    <Pencil className="h-3 w-3" /> Edit
+                    <Pencil className="h-3 w-3" /> Editar
                   </button>
                 )}
               </div>
@@ -839,14 +848,14 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                           <div className="flex items-center justify-between p-2.5 rounded-lg border border-primary/30 bg-primary/5">
                             <div className="flex items-center gap-2.5">
                               <Globe className="h-3.5 w-3.5 text-primary" />
-                              <span className="text-xs text-foreground">International clients</span>
+                              <span className="text-xs text-foreground">Clientes internacionales</span>
                             </div>
                             <span className="text-sm font-bold text-foreground">{p.collaboration.comisionInternacional}%</span>
                           </div>
                           <div className="flex items-center justify-between p-2.5 rounded-lg border border-border/40">
                             <div className="flex items-center gap-2.5">
                               <Home className="h-3.5 w-3.5 text-muted-foreground" />
-                              <span className="text-xs text-foreground">National clients</span>
+                              <span className="text-xs text-foreground">Clientes nacionales</span>
                             </div>
                             <span className="text-sm font-bold text-foreground">{p.collaboration.comisionNacional}%</span>
                           </div>
@@ -855,7 +864,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                         <div className="flex items-center justify-between p-3 rounded-lg border border-primary/30 bg-primary/5">
                           <div className="flex items-center gap-2.5">
                             <Handshake className="h-3.5 w-3.5 text-primary" />
-                            <span className="text-xs text-foreground">Commission rate</span>
+                            <span className="text-xs text-foreground">Porcentaje de comisión</span>
                           </div>
                           <span className="text-sm font-bold text-foreground">{p.collaboration.comisionInternacional}%</span>
                         </div>
@@ -865,26 +874,26 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     <div className="h-px bg-border/40" />
 
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      <InfoItem icon={Banknote} label="Payment method"
-                        value={p.collaboration.formaPagoComision === "escritura" ? "At notary signing"
-                          : p.collaboration.formaPagoComision === "proporcional" ? "Proportional"
-                          : p.collaboration.formaPagoComision === "personalizado" ? "Custom milestones" : "Not set"} />
-                      <InfoItem icon={Globe} label="Client classification"
-                        value={p.collaboration.diferenciarNacionalInternacional ? "National & International" : "Unified"}
-                        sub={p.collaboration.agenciasRefusarNacional ? "Agencies can reject national" : undefined} />
-                      <InfoItem icon={Shield} label="VAT" value={p.collaboration.ivaIncluido ? "Included in commission" : "Not included"} />
+                      <InfoItem icon={Banknote} label="Forma de pago"
+                        value={p.collaboration.formaPagoComision === "escritura" ? "En firma de escritura"
+                          : p.collaboration.formaPagoComision === "proporcional" ? "Proporcional"
+                          : p.collaboration.formaPagoComision === "personalizado" ? "Hitos personalizados" : "Sin definir"} />
+                      <InfoItem icon={Globe} label="Clasificación de clientes"
+                        value={p.collaboration.diferenciarNacionalInternacional ? "Nacional e internacional" : "Unificada"}
+                        sub={p.collaboration.agenciasRefusarNacional ? "Las agencias pueden rechazar nacionales" : undefined} />
+                      <InfoItem icon={Shield} label="IVA" value={p.collaboration.ivaIncluido ? "Incluido en la comisión" : "No incluido"} />
                     </div>
 
                     {p.collaboration.formaPagoComision === "personalizado" && p.collaboration.hitosComision.length > 0 && (
                       <>
                         <div className="h-px bg-border/40" />
                         <div>
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Commission milestones</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Hitos de comisión</p>
                           <div className="space-y-1.5">
                             {p.collaboration.hitosComision.map((h, i) => (
                               <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-border/40">
-                                <span className="text-xs text-foreground">Client pays {h.pagoCliente}%</span>
-                                <span className="text-xs font-bold text-foreground">{h.pagoColaborador}% commission</span>
+                                <span className="text-xs text-foreground">El cliente paga {h.pagoCliente}%</span>
+                                <span className="text-xs font-bold text-foreground">{h.pagoColaborador}% de comisión</span>
                               </div>
                             ))}
                           </div>
@@ -894,13 +903,13 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
                     <div className="p-2.5 rounded-lg bg-muted/50">
                       <p className="text-xs text-muted-foreground">
-                        <span className="font-medium text-foreground">Estimated per sale:</span>{" "}
+                        <span className="font-medium text-foreground">Estimado por venta:</span>{" "}
                         {formatPrice(p.priceMin * p.collaboration.comisionInternacional / 100)} – {formatPrice(p.priceMax * p.collaboration.comisionInternacional / 100)}
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <EmptyState icon={Handshake} message="No commission structure defined" sub="Configure commissions to start collaborating" />
+                  <EmptyState icon={Handshake} message="Sin estructura de comisiones definida" sub="Configura las comisiones para empezar a colaborar" />
                 )}
               </div>
             </div>
@@ -908,18 +917,18 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             {/* Registration conditions card */}
             <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
               <div className="px-5 pt-4 pb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-foreground">Client registration conditions</h2>
+                <h2 className="text-sm font-semibold text-foreground">Condiciones de registro de clientes</h2>
                 {!viewAsCollaborator && (
                   <button onClick={() => navigate(getWizardUrl("Collaborators", returnPath))}
                     className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm transition-colors">
-                    <Pencil className="h-3 w-3" /> Edit
+                    <Pencil className="h-3 w-3" /> Editar
                   </button>
                 )}
               </div>
               <div className="px-5 pb-5">
                 {p.collaboration && p.collaboration.condicionesRegistro.length > 0 ? (
                   <div className="space-y-4">
-                    <p className="text-xs text-muted-foreground">Agencies must provide the following data when registering a client for this promotion:</p>
+                    <p className="text-xs text-muted-foreground">Las agencias deben proporcionar los siguientes datos al registrar un cliente para esta promoción:</p>
                     <div className="space-y-1.5">
                       {p.collaboration.condicionesRegistro.map(c => (
                         <div key={c} className="flex items-center gap-2.5 p-2.5 rounded-lg border border-border/40">
@@ -928,7 +937,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                           </div>
                           <span className="text-xs font-medium text-foreground">{conditionLabels[c] || c}</span>
                           {["nombre_completo", "ultimas_4_cifras", "nacionalidad"].includes(c) && (
-                            <Tag variant="warning" size="sm" className="ml-auto">Required</Tag>
+                            <Tag variant="warning" size="sm" className="ml-auto">Obligatorio</Tag>
                           )}
                         </div>
                       ))}
@@ -944,7 +953,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     </div>
                   </div>
                 ) : (
-                  <EmptyState icon={ClipboardList} message="No registration conditions set" sub="Define what data agencies need to provide" />
+                  <EmptyState icon={ClipboardList} message="Sin condiciones de registro definidas" sub="Define qué datos deben proporcionar las agencias" />
                 )}
               </div>
             </div>
@@ -989,14 +998,14 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       {/* ═══ EDIT SECTION DIALOGS ═══ */}
       <EditMultimediaDialog open={editOpen === "multimedia"} onOpenChange={(v) => setEditOpen(v ? "multimedia" : null)} images={galleryImages} onSave={() => {}} />
       <EditBasicInfoDialog open={editOpen === "basicInfo"} onOpenChange={(v) => setEditOpen(v ? "basicInfo" : null)} propertyTypes={p.propertyTypes || []} onSave={() => {}} />
-      <EditStructureDialog open={editOpen === "structure"} onOpenChange={(v) => setEditOpen(v ? "structure" : null)} type={typeLabel || ""} structure={p.totalUnits > 10 ? "Multi-block" : "Single block"} phase={constructionPhaseLabel} progress={p.constructionProgress || 0} onSave={() => {}} onOpenWizard={() => navigate(getWizardUrl("Basic info", returnPath))} />
+      <EditStructureDialog open={editOpen === "structure"} onOpenChange={(v) => setEditOpen(v ? "structure" : null)} type={typeLabel || ""} structure={p.totalUnits > 10 ? "Multibloque" : "Bloque único"} phase={constructionPhaseLabel} progress={p.constructionProgress || 0} onSave={() => {}} onOpenWizard={() => navigate(getWizardUrl("Basic info", returnPath))} />
       <EditDescriptionDialog open={editOpen === "description"} onOpenChange={(v) => setEditOpen(v ? "description" : null)} description={(p as any).description || ""} onSave={() => {}} />
       <EditLocationDialog open={editOpen === "location"} onOpenChange={(v) => setEditOpen(v ? "location" : null)} location={p.location || ""} onSave={() => {}} />
       <EditPaymentPlanDialog open={editOpen === "paymentPlan"} onOpenChange={(v) => setEditOpen(v ? "paymentPlan" : null)} onSave={() => {}} />
       <EditShowHouseDialog open={editOpen === "showHouse"} onOpenChange={(v) => setEditOpen(v ? "showHouse" : null)} onSave={() => {}} />
-      <EditDocumentDialog open={editOpen === "memoria"} onOpenChange={(v) => setEditOpen(v ? "memoria" : null)} title="Upload quality specs" description="Upload the quality specifications PDF for this promotion." icon={FileText} onSave={() => {}} />
-      <EditDocumentDialog open={editOpen === "planos"} onOpenChange={(v) => setEditOpen(v ? "planos" : null)} title="Upload general floorplans" description="Upload general floorplans (PDF or images)." icon={Layers} accept=".pdf,.jpg,.png" multiple onSave={() => {}} />
-      <EditDocumentDialog open={editOpen === "brochure"} onOpenChange={(v) => setEditOpen(v ? "brochure" : null)} title="Upload brochure" description="Upload the official PDF brochure for buyers and agents." icon={BookOpen} onSave={() => {}} />
+      <EditDocumentDialog open={editOpen === "memoria"} onOpenChange={(v) => setEditOpen(v ? "memoria" : null)} title="Subir memoria de calidades" description="Sube el PDF de la memoria de calidades de esta promoción." icon={FileText} onSave={() => {}} />
+      <EditDocumentDialog open={editOpen === "planos"} onOpenChange={(v) => setEditOpen(v ? "planos" : null)} title="Subir planos generales" description="Sube planos generales (PDF o imágenes)." icon={Layers} accept=".pdf,.jpg,.png" multiple onSave={() => {}} />
+      <EditDocumentDialog open={editOpen === "brochure"} onOpenChange={(v) => setEditOpen(v ? "brochure" : null)} title="Subir brochure" description="Sube el PDF oficial del brochure para compradores y agencias." icon={BookOpen} onSave={() => {}} />
       <EditContactsDialog open={editOpen === "contacts"} onOpenChange={(v) => setEditOpen(v ? "contacts" : null)} website={website} onSave={() => {}} />
       <EditInventoryDialog open={editOpen === "inventory"} onOpenChange={(v) => setEditOpen(v ? "inventory" : null)} onGoAvailability={() => setActiveTab(visibleTabs.indexOf("Availability"))} />
       <EditSalesOfficesDialog open={editOpen === "salesOffices"} onOpenChange={(v) => setEditOpen(v ? "salesOffices" : null)} offices={salesOffices} onSave={setSalesOffices} />
@@ -1092,6 +1101,16 @@ function formatCompact(n: number) {
 
 const agencyStatusOptions = ["Active", "Pending", "Expired"];
 const agencyTypeOptions = ["Agency", "Broker", "Network"];
+const agencyStatusLabels: Record<string, string> = {
+  Active: "Activa",
+  Pending: "Pendiente",
+  Expired: "Expirada",
+};
+const agencyTypeLabels: Record<string, string> = {
+  Agency: "Agencia",
+  Broker: "Broker",
+  Network: "Red",
+};
 
 /* ─────────── Sparkline ─────────── */
 function Sparkline({ data, color = "currentColor" }: { data: number[]; color?: string }) {
@@ -1191,7 +1210,7 @@ function TopPerformers({ list }: { list: Agency[] }) {
           <div className="h-7 w-7 rounded-lg bg-amber-500/10 flex items-center justify-center">
             <Trophy className="h-3.5 w-3.5 text-amber-500" strokeWidth={2} />
           </div>
-          <h3 className="text-sm font-semibold text-foreground">Top performers</h3>
+          <h3 className="text-sm font-semibold text-foreground">Mejores colaboradores</h3>
           <span className="text-[10px] text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full font-medium">En esta promoción</span>
         </div>
       </div>
@@ -1334,8 +1353,8 @@ function AgenciesTab({ promotionId, navigate }: { promotionId: string; navigate:
                 </button>
               )}
             </div>
-            <AgencyFilterPill label="Estado" values={statusFilter} options={agencyStatusOptions} onChange={setStatusFilter} />
-            <AgencyFilterPill label="Tipo" values={typeFilter} options={agencyTypeOptions} onChange={setTypeFilter} />
+            <AgencyFilterPill label="Estado" values={statusFilter} options={agencyStatusOptions} onChange={setStatusFilter} labels={agencyStatusLabels} />
+            <AgencyFilterPill label="Tipo" values={typeFilter} options={agencyTypeOptions} onChange={setTypeFilter} labels={agencyTypeLabels} />
           </div>
           <div className="flex items-center gap-3">
             {selected.size > 0 && <span className="text-xs text-primary font-medium">{selected.size} seleccionadas</span>}
@@ -1362,7 +1381,7 @@ function AgenciesTab({ promotionId, navigate }: { promotionId: string; navigate:
           {filtered.length === 0 && allRelevant.length > 0 && (
             <div className="py-16 text-center">
               <Building2 className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
-              <p className="text-muted-foreground text-sm">No agencies match your search</p>
+              <p className="text-muted-foreground text-sm">Ninguna agencia coincide con tu búsqueda</p>
             </div>
           )}
 
@@ -1539,7 +1558,7 @@ function AgencyCard({ agency: ag, promotionId, selected, onToggleSelect }: { age
   );
 }
 
-function AgencyFilterPill({ label, values, options, onChange }: { label: string; values: string[]; options: string[]; onChange: (v: string[]) => void }) {
+function AgencyFilterPill({ label, values, options, onChange, labels }: { label: string; values: string[]; options: string[]; onChange: (v: string[]) => void; labels?: Record<string, string> }) {
   const [open, setOpen] = useState(false);
   const toggle = (opt: string) => {
     onChange(values.includes(opt) ? values.filter(v => v !== opt) : [...values, opt]);
@@ -1571,7 +1590,7 @@ function AgencyFilterPill({ label, values, options, onChange }: { label: string;
                 <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${values.includes(opt) ? "bg-foreground border-foreground" : "border-muted-foreground/40"}`}>
                   {values.includes(opt) && <span className="text-background text-[9px] leading-none">✓</span>}
                 </div>
-                <span className={values.includes(opt) ? "text-foreground font-medium" : "text-muted-foreground"}>{opt}</span>
+                <span className={values.includes(opt) ? "text-foreground font-medium" : "text-muted-foreground"}>{labels?.[opt] || opt}</span>
               </div>
             ))}
           </div>
@@ -1984,8 +2003,8 @@ function CollaborationStatusBanner({ isIncomplete, isShared, agencyCount, activi
             <Lock className="h-3.5 w-3.5 2xl:h-4 2xl:w-4 text-amber-600" />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground leading-tight">Cannot share yet</p>
-            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Complete all steps to be able to share with agencies.</p>
+            <p className="text-sm font-semibold text-foreground leading-tight">Todavía no se puede compartir</p>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Completa todos los pasos para poder compartir con agencias.</p>
           </div>
         </div>
       </div>
@@ -2004,22 +2023,22 @@ function CollaborationStatusBanner({ isIncomplete, isShared, agencyCount, activi
             <Users className="h-3.5 w-3.5 2xl:h-4 2xl:w-4 text-emerald-600" />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground leading-tight">Shared with <span className="tabular-nums">{agencyCount}</span> {agencyCount === 1 ? "agency" : "agencies"}</p>
-            <p className="text-xs text-muted-foreground mt-0.5 leading-snug">Your promotion is being marketed by external collaborators.</p>
+            <p className="text-sm font-semibold text-foreground leading-tight">Compartida con <span className="tabular-nums">{agencyCount}</span> {agencyCount === 1 ? "agencia" : "agencias"}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-snug">Tu promoción está siendo comercializada por colaboradores externos.</p>
           </div>
         </div>
         <div className="border-t border-border/30 px-3.5 2xl:px-5 py-2.5 2xl:py-3.5 grid grid-cols-3 gap-2">
           <div className="text-center">
             <p className="text-sm 2xl:text-base font-semibold text-foreground tabular-nums leading-none">{mockVisits}</p>
-            <p className="text-[10px] text-muted-foreground mt-1">Visits</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Visitas</p>
           </div>
           <div className="text-center">
             <p className="text-sm 2xl:text-base font-semibold text-foreground tabular-nums leading-none">{mockSales}</p>
-            <p className="text-[10px] text-muted-foreground mt-1">Sales</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Ventas</p>
           </div>
           <div className="text-center">
             <p className="text-sm 2xl:text-base font-semibold text-foreground tabular-nums leading-none">{mockRegistrations}</p>
-            <p className="text-[10px] text-muted-foreground mt-1">Registrations</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Registros</p>
           </div>
         </div>
         <div className="border-t border-border/30 px-3.5 2xl:px-5 py-2 2xl:py-2.5">
@@ -2027,7 +2046,7 @@ function CollaborationStatusBanner({ isIncomplete, isShared, agencyCount, activi
             onClick={onShare}
             className="w-full flex items-center justify-center gap-2 text-xs 2xl:text-sm font-medium text-muted-foreground hover:text-foreground transition-colors py-0.5"
           >
-            <Share2 className="h-3.5 w-3.5" strokeWidth={1.5} /> Share with more
+            <Share2 className="h-3.5 w-3.5" strokeWidth={1.5} /> Compartir con más
           </button>
         </div>
       </div>
@@ -2042,8 +2061,8 @@ function CollaborationStatusBanner({ isIncomplete, isShared, agencyCount, activi
           <CheckCircle2 className="h-3.5 w-3.5 2xl:h-4 2xl:w-4 text-emerald-600" />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-foreground leading-tight">Ready to share!</p>
-          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Share with agencies to start receiving clients.</p>
+          <p className="text-sm font-semibold text-foreground leading-tight">¡Lista para compartir!</p>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Compártela con agencias para empezar a recibir clientes.</p>
         </div>
       </div>
       <div className="border-t border-emerald-200/40 px-4 2xl:px-5 py-3">
@@ -2051,7 +2070,7 @@ function CollaborationStatusBanner({ isIncomplete, isShared, agencyCount, activi
           onClick={onShare}
           className="w-full flex items-center justify-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors py-1"
         >
-          <Share2 className="h-3.5 w-3.5" strokeWidth={1.5} /> Share with collaborators
+          <Share2 className="h-3.5 w-3.5" strokeWidth={1.5} /> Compartir con colaboradores
         </button>
       </div>
     </div>
@@ -2069,13 +2088,13 @@ function SectionCard({ title, stepName, missing, onEdit, children, hideEdit, flu
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
             <h2 className="text-base font-semibold text-foreground">{title}</h2>
-            <Tag variant="danger" size="sm">Missing</Tag>
+            <Tag variant="danger" size="sm">Falta</Tag>
           </div>
           <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7" onClick={onEdit}>
-            <Pencil className="h-3 w-3" /> Complete
+            <Pencil className="h-3 w-3" /> Completar
           </Button>
         </div>
-        <EmptyState icon={stepConfig[stepName]?.icon || Settings} message={`${title} not configured`} sub={`Click "Complete" to set up ${title.toLowerCase()}`} />
+        <EmptyState icon={stepConfig[stepName]?.icon || Settings} message={`${title} sin configurar`} sub={`Pulsa "Completar" para configurar ${title.toLowerCase()}`} />
       </div>
     );
   }
@@ -2087,7 +2106,7 @@ function SectionCard({ title, stepName, missing, onEdit, children, hideEdit, flu
           {!hideEdit && (
             <button onClick={onEdit}
               className="absolute top-3 right-3 z-10 opacity-0 group-hover/section:opacity-100 transition-opacity inline-flex items-center gap-1 px-2 py-1 rounded-md bg-background/90 backdrop-blur-sm border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm">
-              <Pencil className="h-3 w-3" /> Edit
+              <Pencil className="h-3 w-3" /> Editar
             </button>
           )}
           {children}
@@ -2169,12 +2188,12 @@ function ContactFooter({ contacts, website, puntosDeVenta, comerciales, onAddMem
           )}
           {onAddMember && !hideManagement && (
             <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 rounded-full" onClick={onAddMember}>
-              <UserPlus className="h-3 w-3" /> Add member
+              <UserPlus className="h-3 w-3" /> Añadir miembro
             </Button>
           )}
           {onAddOffice && !hideManagement && (
             <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 rounded-full" onClick={onAddOffice}>
-              <Store className="h-3 w-3" /> Add office
+              <Store className="h-3 w-3" /> Añadir oficina
             </Button>
           )}
         </div>
@@ -2187,7 +2206,7 @@ function ContactFooter({ contacts, website, puntosDeVenta, comerciales, onAddMem
             <ContactCard contact={visibleContacts[0]} large />
             {offices.length > 0 && (
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Sales offices · {offices.length}</p>
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Oficinas de venta · {offices.length}</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {offices.map((o) => <OfficeMiniCard key={o.id} office={o} />)}
                 </div>
@@ -2220,9 +2239,9 @@ function ContactFooter({ contacts, website, puntosDeVenta, comerciales, onAddMem
                     <p className="text-[10px] text-muted-foreground">{c.email}</p>
                   </div>
                   <div className="flex items-center gap-1">
-                    {c.permissions.canRegister && <Tag variant="default" size="sm">Register</Tag>}
-                    {c.permissions.canShareWithAgencies && <Tag variant="default" size="sm">Share</Tag>}
-                    {c.permissions.canEdit && <Tag variant="default" size="sm">Edit</Tag>}
+                    {c.permissions.canRegister && <Tag variant="default" size="sm">Registrar</Tag>}
+                    {c.permissions.canShareWithAgencies && <Tag variant="default" size="sm">Compartir</Tag>}
+                    {c.permissions.canEdit && <Tag variant="default" size="sm">Editar</Tag>}
                   </div>
                 </div>
               ))}
@@ -2241,7 +2260,7 @@ function ContactFooter({ contacts, website, puntosDeVenta, comerciales, onAddMem
             <ExternalLink className="h-2.5 w-2.5 opacity-50" strokeWidth={1.5} />
           </a>
           {!isSingle && offices.length > 0 && (
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Sales offices · {offices.length}</p>
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Oficinas de venta · {offices.length}</p>
           )}
         </div>
         {!isSingle && offices.length > 0 && (

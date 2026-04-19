@@ -15,7 +15,7 @@ import {
 
 // ═══ SHARED WRAPPER ═══
 function EditDialogShell({
-  open, onOpenChange, title, description, onSave, onCancel, children, maxWidth = "max-w-2xl", saveLabel = "Save changes",
+  open, onOpenChange, title, description, onSave, onCancel, children, maxWidth = "max-w-2xl", saveLabel = "Guardar cambios",
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -36,7 +36,7 @@ function EditDialogShell({
         </DialogHeader>
         <div className="flex-1 overflow-y-auto p-6 space-y-5">{children}</div>
         <DialogFooter className="px-6 py-4 border-t border-border/30 gap-2 sm:gap-2">
-          <Button variant="ghost" size="sm" onClick={onCancel} className="rounded-full text-sm h-9 px-4">Cancel</Button>
+          <Button variant="ghost" size="sm" onClick={onCancel} className="rounded-full text-sm h-9 px-4">Cancelar</Button>
           <Button size="sm" onClick={onSave} className="rounded-full text-sm h-9 px-5">{saveLabel}</Button>
         </DialogFooter>
       </DialogContent>
@@ -86,8 +86,8 @@ export function EditMultimediaDialog({ open, onOpenChange, images, onSave }: {
     <EditDialogShell
       open={open}
       onOpenChange={onOpenChange}
-      title="Edit multimedia"
-      description="Upload, reorder and manage photos and videos."
+      title="Editar multimedia"
+      description="Sube, reordena y gestiona fotografías y videos."
       onCancel={() => onOpenChange(false)}
       onSave={() => { onSave(photos); onOpenChange(false); }}
       maxWidth="max-w-3xl"
@@ -95,11 +95,11 @@ export function EditMultimediaDialog({ open, onOpenChange, images, onSave }: {
       <div className="rounded-2xl bg-card border border-border/20 p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <SectionTitle>Photos · {photos.length}</SectionTitle>
-            <p className="text-xs text-muted-foreground mt-1">Hover to reorder. The starred photo is the cover.</p>
+            <SectionTitle>Fotografías · {photos.length}</SectionTitle>
+            <p className="text-xs text-muted-foreground mt-1">Pasa el cursor para reordenar. La foto con estrella es la portada.</p>
           </div>
           <Button size="sm" variant="outline" className="rounded-full h-9 gap-1.5 text-sm" onClick={() => fileRef.current?.click()}>
-            <Upload className="h-3.5 w-3.5" /> Upload photos
+            <Upload className="h-3.5 w-3.5" /> Subir fotos
           </Button>
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
         </div>
@@ -109,19 +109,19 @@ export function EditMultimediaDialog({ open, onOpenChange, images, onSave }: {
             <div key={i} className="group relative rounded-xl overflow-hidden aspect-[4/3] bg-muted border border-border/40">
               <img src={src} alt="" className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                <button onClick={() => setCoverIdx(i)} className="h-8 w-8 rounded-full bg-white/90 flex items-center justify-center hover:bg-white" title="Set as cover">
+                <button onClick={() => setCoverIdx(i)} className="h-8 w-8 rounded-full bg-white/90 flex items-center justify-center hover:bg-white" title="Establecer como principal">
                   <Star className={`h-3.5 w-3.5 ${coverIdx === i ? "fill-amber-500 text-amber-500" : "text-foreground"}`} />
                 </button>
-                <button onClick={() => movePhoto(i, i - 1)} disabled={i === 0} className="h-8 w-8 rounded-full bg-white/90 flex items-center justify-center hover:bg-white disabled:opacity-30" title="Move left">
+                <button onClick={() => movePhoto(i, i - 1)} disabled={i === 0} className="h-8 w-8 rounded-full bg-white/90 flex items-center justify-center hover:bg-white disabled:opacity-30" title="Mover a la izquierda">
                   <GripVertical className="h-3.5 w-3.5 text-foreground -rotate-90" />
                 </button>
-                <button onClick={() => setPhotos(p => p.filter((_, idx) => idx !== i))} className="h-8 w-8 rounded-full bg-destructive flex items-center justify-center hover:bg-destructive/90" title="Delete">
+                <button onClick={() => setPhotos(p => p.filter((_, idx) => idx !== i))} className="h-8 w-8 rounded-full bg-destructive flex items-center justify-center hover:bg-destructive/90" title="Eliminar">
                   <Trash2 className="h-3.5 w-3.5 text-destructive-foreground" />
                 </button>
               </div>
               {coverIdx === i && (
                 <div className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <Star className="h-2.5 w-2.5 fill-current" /> Cover
+                  <Star className="h-2.5 w-2.5 fill-current" /> Portada
                 </div>
               )}
               <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded">{i + 1}</div>
@@ -129,24 +129,24 @@ export function EditMultimediaDialog({ open, onOpenChange, images, onSave }: {
           ))}
           <button onClick={() => fileRef.current?.click()} className="aspect-[4/3] rounded-xl border-2 border-dashed border-border/60 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors">
             <Plus className="h-5 w-5" />
-            <span className="text-xs font-medium">Add photo</span>
+            <span className="text-xs font-medium">Añadir foto</span>
           </button>
         </div>
       </div>
 
       <div className="rounded-2xl bg-card border border-border/20 p-5">
         <SectionTitle>Videos · {videoUrls.length}</SectionTitle>
-        <p className="text-xs text-muted-foreground mt-1 mb-3">YouTube or Vimeo URL.</p>
+        <p className="text-xs text-muted-foreground mt-1 mb-3">URL de YouTube o Vimeo.</p>
         <div className="flex gap-2 mb-3">
           <Input value={newVideo} onChange={e => setNewVideo(e.target.value)} placeholder="https://youtube.com/..." className="h-9 rounded-full text-sm flex-1" />
           <Button size="sm" variant="outline" className="rounded-full h-9 gap-1.5 text-sm" onClick={addVideo}>
-            <Plus className="h-3.5 w-3.5" /> Add
+            <Plus className="h-3.5 w-3.5" /> Añadir
           </Button>
         </div>
         {videoUrls.length === 0 ? (
           <div className="text-xs text-muted-foreground py-6 text-center border border-dashed border-border/40 rounded-xl">
             <Video className="h-5 w-5 mx-auto mb-2 text-muted-foreground/40" />
-            No videos yet
+            Aún no hay videos
           </div>
         ) : (
           <div className="space-y-2">
@@ -167,9 +167,9 @@ export function EditMultimediaDialog({ open, onOpenChange, images, onSave }: {
 }
 
 // ═══ BASIC INFORMATION EDIT (NO location — that has its own dialog) ═══
-const ALL_AMENITIES = ["Pool", "Gym", "Garden", "Security", "Parking", "Spa", "Concierge", "Padel court", "Co-working", "Kids area"];
-const ALL_FEATURES = ["Equipped kitchen", "Air conditioning", "Terrace", "Smart home", "Underfloor heating", "Walk-in closet", "Sea views", "Private garden"];
-const PROPERTY_TYPES = ["Apartment", "Penthouse", "Villa", "Townhouse", "Studio", "Duplex", "Chalet"];
+const ALL_AMENITIES = ["Piscina", "Gimnasio", "Jardín", "Seguridad", "Parking", "Spa", "Conserje", "Pista de pádel", "Co-working", "Zona infantil"];
+const ALL_FEATURES = ["Cocina equipada", "Aire acondicionado", "Terraza", "Domótica", "Suelo radiante", "Vestidor", "Vistas al mar", "Jardín privado"];
+const PROPERTY_TYPES = ["Apartamento", "Ático", "Villa", "Adosado", "Estudio", "Dúplex", "Chalet"];
 
 export function EditBasicInfoDialog({ open, onOpenChange, propertyTypes, amenities = [], features = [], onSave }: {
   open: boolean;
@@ -180,8 +180,8 @@ export function EditBasicInfoDialog({ open, onOpenChange, propertyTypes, ameniti
   onSave: (data: { propertyTypes: string[]; amenities: string[]; features: string[] }) => void;
 }) {
   const [types, setTypes] = useState(propertyTypes);
-  const [ams, setAms] = useState(amenities.length ? amenities : ["Pool", "Gym", "Garden", "Security", "Parking"]);
-  const [feats, setFeats] = useState(features.length ? features : ["Equipped kitchen", "Air conditioning", "Terrace", "Smart home"]);
+  const [ams, setAms] = useState(amenities.length ? amenities : ["Piscina", "Gimnasio", "Jardín", "Seguridad", "Parking"]);
+  const [feats, setFeats] = useState(features.length ? features : ["Cocina equipada", "Aire acondicionado", "Terraza", "Domótica"]);
 
   const toggle = (arr: string[], setArr: (v: string[]) => void, val: string) => {
     setArr(arr.includes(val) ? arr.filter(a => a !== val) : [...arr, val]);
@@ -191,13 +191,13 @@ export function EditBasicInfoDialog({ open, onOpenChange, propertyTypes, ameniti
     <EditDialogShell
       open={open}
       onOpenChange={onOpenChange}
-      title="Edit basic information"
-      description="Property types, amenities and home features. Use the Location section to change the address."
+      title="Editar información básica"
+      description="Tipos de vivienda, amenities y características de la vivienda. Usa la sección Ubicación para cambiar la dirección."
       onCancel={() => onOpenChange(false)}
       onSave={() => { onSave({ propertyTypes: types, amenities: ams, features: feats }); onOpenChange(false); }}
     >
       <div className="rounded-2xl bg-card border border-border/20 p-5">
-        <SectionTitle>Property types</SectionTitle>
+        <SectionTitle>Tipos de vivienda</SectionTitle>
         <div className="flex flex-wrap gap-1.5 mt-2">
           {PROPERTY_TYPES.map(t => (
             <button key={t} onClick={() => toggle(types, setTypes, t)}
@@ -210,8 +210,8 @@ export function EditBasicInfoDialog({ open, onOpenChange, propertyTypes, ameniti
       </div>
 
       <div className="rounded-2xl bg-card border border-border/20 p-5">
-        <SectionTitle>Common amenities</SectionTitle>
-        <p className="text-xs text-muted-foreground mt-1 mb-3">Shared spaces and services.</p>
+        <SectionTitle>Amenities comunes</SectionTitle>
+        <p className="text-xs text-muted-foreground mt-1 mb-3">Espacios y servicios compartidos.</p>
         <div className="flex flex-wrap gap-1.5">
           {ALL_AMENITIES.map(a => (
             <button key={a} onClick={() => toggle(ams, setAms, a)}
@@ -224,8 +224,8 @@ export function EditBasicInfoDialog({ open, onOpenChange, propertyTypes, ameniti
       </div>
 
       <div className="rounded-2xl bg-card border border-border/20 p-5">
-        <SectionTitle>Home features</SectionTitle>
-        <p className="text-xs text-muted-foreground mt-1 mb-3">Features included in each individual home.</p>
+        <SectionTitle>Características de la vivienda</SectionTitle>
+        <p className="text-xs text-muted-foreground mt-1 mb-3">Características incluidas en cada vivienda.</p>
         <div className="flex flex-wrap gap-1.5">
           {ALL_FEATURES.map(f => (
             <button key={f} onClick={() => toggle(feats, setFeats, f)}
@@ -241,7 +241,7 @@ export function EditBasicInfoDialog({ open, onOpenChange, propertyTypes, ameniti
 }
 
 // ═══ STRUCTURE & CONSTRUCTION (read-only summary + edit construction progress only) ═══
-const CONSTRUCTION_PHASES = ["Planning", "Foundations", "Structure", "Finishes", "Completed"];
+const CONSTRUCTION_PHASES = ["Planificación", "Cimentación", "Estructura", "Acabados", "Finalizada"];
 
 export function EditStructureDialog({ open, onOpenChange, type, structure, phase, progress, onSave, onOpenWizard }: {
   open: boolean;
@@ -260,30 +260,30 @@ export function EditStructureDialog({ open, onOpenChange, type, structure, phase
     <EditDialogShell
       open={open}
       onOpenChange={onOpenChange}
-      title="Edit construction status"
-      description="Update construction phase and progress. Property type and structure are defined when creating the promotion."
+      title="Editar estado de construcción"
+      description="Actualiza la fase de obra y el progreso. El tipo de vivienda y la estructura se definen al crear la promoción."
       onCancel={() => onOpenChange(false)}
       onSave={() => { onSave({ phase: ph, progress: pr }); onOpenChange(false); }}
     >
       <div className="rounded-2xl bg-card border border-border/20 p-5 grid grid-cols-2 gap-4">
         <div>
-          <SectionTitle>Property type</SectionTitle>
+          <SectionTitle>Tipo de vivienda</SectionTitle>
           <div className="mt-2 h-9 rounded-full bg-muted/40 border border-border/30 px-4 flex items-center text-sm text-muted-foreground">{type || "—"}</div>
         </div>
         <div>
-          <SectionTitle>Structure</SectionTitle>
+          <SectionTitle>Estructura</SectionTitle>
           <div className="mt-2 h-9 rounded-full bg-muted/40 border border-border/30 px-4 flex items-center text-sm text-muted-foreground">{structure || "—"}</div>
         </div>
         {onOpenWizard && (
           <button onClick={onOpenWizard} className="col-span-2 text-[10px] text-primary hover:underline text-left -mt-1">
-            Change in promotion setup wizard →
+            Cambiar en el asistente de configuración de la promoción →
           </button>
         )}
       </div>
 
       <div className="rounded-2xl bg-card border border-border/20 p-5 space-y-4">
         <div>
-          <SectionTitle>Construction phase</SectionTitle>
+          <SectionTitle>Fase de construcción</SectionTitle>
           <div className="flex flex-wrap gap-1.5 mt-2">
             {CONSTRUCTION_PHASES.map(p => (
               <button key={p} onClick={() => setPh(p)}
@@ -296,7 +296,7 @@ export function EditStructureDialog({ open, onOpenChange, type, structure, phase
         </div>
         <div>
           <div className="flex items-center justify-between mb-2">
-            <SectionTitle>Progress</SectionTitle>
+            <SectionTitle>Progreso</SectionTitle>
             <span className="text-sm font-semibold text-foreground tabular-nums">{pr}%</span>
           </div>
           <input type="range" min={0} max={100} value={pr} onChange={e => setPr(Number(e.target.value))} className="w-full accent-primary" />
@@ -341,7 +341,7 @@ export function EditDescriptionDialog({ open, onOpenChange, description, descrip
   const handleGenerate = () => {
     setIsGenerating(true);
     setTimeout(() => {
-      setBase("This is a luxurious development located in a privileged area, offering exceptional architecture, premium amenities and unbeatable views. Each unit has been carefully designed to combine elegance, comfort and functionality, providing a unique living experience for the most discerning buyers.");
+      setBase("Esta es una promoción de lujo situada en una zona privilegiada, con arquitectura excepcional, amenities premium y vistas inmejorables. Cada unidad ha sido cuidadosamente diseñada para combinar elegancia, confort y funcionalidad, ofreciendo una experiencia única a los compradores más exigentes.");
       setIsGenerating(false);
     }, 900);
   };
@@ -364,32 +364,32 @@ export function EditDescriptionDialog({ open, onOpenChange, description, descrip
     <EditDialogShell
       open={open}
       onOpenChange={onOpenChange}
-      title="Edit description"
-      description="Write or generate the public description. Translate to multiple languages with AI."
+      title="Editar descripción"
+      description="Escribe o genera la descripción pública. Traduce a varios idiomas con IA."
       onCancel={() => onOpenChange(false)}
       onSave={() => { onSave({ description: base, descriptions: translations }); onOpenChange(false); }}
       maxWidth="max-w-3xl"
     >
       {/* Mode selector */}
       <div className="rounded-2xl bg-card border border-border/20 p-5">
-        <SectionTitle>Generation mode</SectionTitle>
+        <SectionTitle>Modo de generación</SectionTitle>
         <div className="flex gap-2 mt-3">
           <button onClick={() => setMode("manual")}
             className={cn("flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-medium transition-colors",
               mode === "manual" ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground")}>
-            <PenLine className="h-3.5 w-3.5" /> Write manually
+            <PenLine className="h-3.5 w-3.5" /> Escribir manualmente
           </button>
           <button onClick={() => setMode("ai")}
             className={cn("flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-medium transition-colors",
               mode === "ai" ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground")}>
-            <Sparkles className="h-3.5 w-3.5" /> Generate with AI
+            <Sparkles className="h-3.5 w-3.5" /> Generar con IA
           </button>
         </div>
         {mode === "ai" && (
           <div className="mt-3 flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
-            <p className="text-xs text-foreground">AI will draft a description from this promotion's location, amenities and features.</p>
+            <p className="text-xs text-foreground">La IA redactará una descripción a partir de la ubicación, amenities y características de esta promoción.</p>
             <Button size="sm" className="rounded-full h-8 gap-1.5 text-xs" onClick={handleGenerate} disabled={isGenerating}>
-              <Sparkles className="h-3 w-3" /> {isGenerating ? "Generating…" : "Generate"}
+              <Sparkles className="h-3 w-3" /> {isGenerating ? "Generando…" : "Generar"}
             </Button>
           </div>
         )}
@@ -400,10 +400,10 @@ export function EditDescriptionDialog({ open, onOpenChange, description, descrip
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Languages className="h-4 w-4 text-primary" strokeWidth={1.5} />
-            <SectionTitle>Translations</SectionTitle>
+            <SectionTitle>Traducciones</SectionTitle>
           </div>
           <Button variant="outline" size="sm" className="rounded-full h-8 text-xs gap-1.5" onClick={handleTranslateAll} disabled={isTranslating || !getValue("en")}>
-            <Sparkles className="h-3 w-3" /> {isTranslating ? "Translating…" : "Translate all with AI"}
+            <Sparkles className="h-3 w-3" /> {isTranslating ? "Traduciendo…" : "Traducir todo con IA"}
           </Button>
         </div>
 
@@ -425,7 +425,7 @@ export function EditDescriptionDialog({ open, onOpenChange, description, descrip
         <Textarea
           value={getValue(activeLang)}
           onChange={e => setValue(activeLang, e.target.value)}
-          placeholder={`Description in ${LANGUAGES.find(l => l.code === activeLang)?.label}...`}
+          placeholder={`Descripción en ${LANGUAGES.find(l => l.code === activeLang)?.label}...`}
           className="min-h-[200px] rounded-2xl text-sm resize-none"
         />
         <p className="text-[10px] text-muted-foreground text-right tabular-nums">{getValue(activeLang).length} / 2000</p>
@@ -443,21 +443,21 @@ export function EditLocationDialog({ open, onOpenChange, location, onSave }: {
     <EditDialogShell
       open={open}
       onOpenChange={onOpenChange}
-      title="Edit location"
-      description="Set the address. The map and the location shown across the promotion will update."
+      title="Editar ubicación"
+      description="Define la dirección. El mapa y la ubicación mostrada en la promoción se actualizarán."
       onCancel={() => onOpenChange(false)}
       onSave={() => { onSave(loc); onOpenChange(false); }}
     >
       <div className="rounded-2xl bg-card border border-border/20 p-5">
-        <SectionTitle>Address</SectionTitle>
+        <SectionTitle>Dirección</SectionTitle>
         <div className="relative mt-2">
           <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input value={loc} onChange={e => setLoc(e.target.value)} placeholder="Street, city, province" className="h-9 rounded-full pl-9 text-sm" />
+          <Input value={loc} onChange={e => setLoc(e.target.value)} placeholder="Calle, ciudad, provincia" className="h-9 rounded-full pl-9 text-sm" />
         </div>
         <div className="mt-4 h-[200px] rounded-xl bg-muted/40 border border-border/40 flex items-center justify-center text-xs text-muted-foreground">
           <div className="text-center">
             <MapPin className="h-6 w-6 text-muted-foreground/30 mx-auto mb-2" />
-            Map preview · {loc || "no address"}
+            Vista previa del mapa · {loc || "sin dirección"}
           </div>
         </div>
       </div>
@@ -472,38 +472,38 @@ export function EditPaymentPlanDialog({ open, onOpenChange, onSave }: {
   const [reservation, setReservation] = useState("15000");
   const [downpayment, setDownpayment] = useState("20");
   const [stages, setStages] = useState([
-    { label: "Reservation", percent: 5, when: "On signing" },
-    { label: "Down payment", percent: 20, when: "Within 30 days" },
-    { label: "Construction milestones", percent: 30, when: "Per milestone" },
-    { label: "Delivery", percent: 45, when: "Key handover" },
+    { label: "Reserva", percent: 5, when: "A la firma" },
+    { label: "Entrada", percent: 20, when: "En 30 días" },
+    { label: "Hitos de construcción", percent: 30, when: "Por hito" },
+    { label: "Entrega", percent: 45, when: "Entrega de llaves" },
   ]);
 
   return (
     <EditDialogShell
       open={open}
       onOpenChange={onOpenChange}
-      title="Edit payment plan"
-      description="Define the buyer payment structure stage by stage."
+      title="Editar plan de pagos"
+      description="Define la estructura de pagos del comprador etapa por etapa."
       onCancel={() => onOpenChange(false)}
       onSave={() => { onSave(); onOpenChange(false); }}
     >
       <div className="rounded-2xl bg-card border border-border/20 p-5 grid grid-cols-2 gap-4">
         <div>
-          <SectionTitle>Reservation amount (€)</SectionTitle>
+          <SectionTitle>Importe de reserva (€)</SectionTitle>
           <Input value={reservation} onChange={e => setReservation(e.target.value)} className="h-9 rounded-full mt-2 text-sm" />
         </div>
         <div>
-          <SectionTitle>Down payment (%)</SectionTitle>
+          <SectionTitle>Entrada (%)</SectionTitle>
           <Input value={downpayment} onChange={e => setDownpayment(e.target.value)} className="h-9 rounded-full mt-2 text-sm" />
         </div>
       </div>
 
       <div className="rounded-2xl bg-card border border-border/20 p-5">
         <div className="flex items-center justify-between mb-3">
-          <SectionTitle>Payment stages</SectionTitle>
+          <SectionTitle>Etapas de pago</SectionTitle>
           <Button size="sm" variant="outline" className="rounded-full h-9 gap-1.5 text-sm"
-            onClick={() => setStages([...stages, { label: "New stage", percent: 0, when: "" }])}>
-            <Plus className="h-3.5 w-3.5" /> Add stage
+            onClick={() => setStages([...stages, { label: "Nueva etapa", percent: 0, when: "" }])}>
+            <Plus className="h-3.5 w-3.5" /> Añadir etapa
           </Button>
         </div>
         <div className="space-y-2">
@@ -532,33 +532,33 @@ export function EditShowHouseDialog({ open, onOpenChange, onSave }: {
 }) {
   const [available, setAvailable] = useState(true);
   const [address, setAddress] = useState("");
-  const [hours, setHours] = useState("Mon–Fri 10:00–18:00");
+  const [hours, setHours] = useState("Lun–Vie 10:00–18:00");
 
   return (
     <EditDialogShell
       open={open}
       onOpenChange={onOpenChange}
-      title="Edit show house"
-      description="Configure show house location and visiting hours."
+      title="Editar piso piloto"
+      description="Configura la ubicación y el horario de visitas del piso piloto."
       onCancel={() => onOpenChange(false)}
       onSave={() => { onSave(); onOpenChange(false); }}
     >
       <div className="rounded-2xl bg-card border border-border/20 p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <SectionTitle>Show house available</SectionTitle>
-            <p className="text-xs text-muted-foreground mt-1">Buyers can visit a furnished model unit.</p>
+            <SectionTitle>Piso piloto disponible</SectionTitle>
+            <p className="text-xs text-muted-foreground mt-1">Los compradores pueden visitar una unidad modelo amueblada.</p>
           </div>
           <Switch checked={available} onCheckedChange={setAvailable} />
         </div>
         {available && (
           <>
             <div>
-              <SectionTitle>Address</SectionTitle>
-              <Input value={address} onChange={e => setAddress(e.target.value)} placeholder="Show house address" className="h-9 rounded-full mt-2 text-sm" />
+              <SectionTitle>Dirección</SectionTitle>
+              <Input value={address} onChange={e => setAddress(e.target.value)} placeholder="Dirección del piso piloto" className="h-9 rounded-full mt-2 text-sm" />
             </div>
             <div>
-              <SectionTitle>Visiting hours</SectionTitle>
+              <SectionTitle>Horario de visitas</SectionTitle>
               <Input value={hours} onChange={e => setHours(e.target.value)} className="h-9 rounded-full mt-2 text-sm" />
             </div>
           </>
@@ -606,18 +606,18 @@ export function EditDocumentDialog({ open, onOpenChange, title, description, acc
       <div className="rounded-2xl bg-card border border-border/20 p-5">
         <div className="border-2 border-dashed border-border/60 rounded-2xl p-8 text-center">
           <Icon className="h-8 w-8 mx-auto text-muted-foreground/40 mb-3" />
-          <p className="text-sm text-foreground font-medium">Drop files here</p>
-          <p className="text-xs text-muted-foreground mt-1">or</p>
+          <p className="text-sm text-foreground font-medium">Arrastra los archivos aquí</p>
+          <p className="text-xs text-muted-foreground mt-1">o</p>
           <Button size="sm" variant="outline" className="rounded-full h-9 mt-3 text-sm" onClick={() => fileRef.current?.click()}>
-            <Upload className="h-3.5 w-3.5 mr-1.5" /> Choose {multiple ? "files" : "file"}
+            <Upload className="h-3.5 w-3.5 mr-1.5" /> Elegir {multiple ? "archivos" : "archivo"}
           </Button>
           <input ref={fileRef} type="file" accept={accept} multiple={multiple} className="hidden" onChange={handleUpload} />
-          <p className="text-[10px] text-muted-foreground mt-3">{accept.toUpperCase().replace(/\./g, "")} · Max 20MB</p>
+          <p className="text-[10px] text-muted-foreground mt-3">{accept.toUpperCase().replace(/\./g, "")} · Máx. 20MB</p>
         </div>
 
         {files.length > 0 && (
           <div className="mt-4 space-y-2">
-            <SectionTitle>Files ({files.length})</SectionTitle>
+            <SectionTitle>Archivos ({files.length})</SectionTitle>
             {files.map(f => (
               <div key={f.id} className="flex items-center gap-3 p-2.5 rounded-xl border border-border/30 bg-muted/30">
                 <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
@@ -652,21 +652,21 @@ export function EditContactsDialog({ open, onOpenChange, website, phone, email, 
     <EditDialogShell
       open={open}
       onOpenChange={onOpenChange}
-      title="Edit contacts"
-      description="Public contact information shown to buyers and collaborating agencies."
+      title="Editar contactos"
+      description="Información de contacto pública mostrada a compradores y agencias colaboradoras."
       onCancel={() => onOpenChange(false)}
       onSave={() => { onSave({ website: w, phone: p, email: e }); onOpenChange(false); }}
     >
       <div className="rounded-2xl bg-card border border-border/20 p-5 space-y-4">
         <div>
-          <SectionTitle>Website</SectionTitle>
+          <SectionTitle>Web</SectionTitle>
           <div className="relative mt-2">
             <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input value={w} onChange={ev => setW(ev.target.value)} placeholder="https://..." className="h-9 rounded-full pl-9 text-sm" />
           </div>
         </div>
         <div>
-          <SectionTitle>Phone</SectionTitle>
+          <SectionTitle>Teléfono</SectionTitle>
           <div className="relative mt-2">
             <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input value={p} onChange={ev => setP(ev.target.value)} placeholder="+34 ..." className="h-9 rounded-full pl-9 text-sm" />
@@ -710,18 +710,18 @@ export function EditSalesOfficesDialog({ open, onOpenChange, offices: initial, o
     <EditDialogShell
       open={open}
       onOpenChange={onOpenChange}
-      title="Edit sales offices"
-      description="Physical points of sale where buyers can visit. These were initially set up when creating the promotion."
+      title="Editar puntos de venta"
+      description="Oficinas físicas donde los compradores pueden acudir. Se configuraron inicialmente al crear la promoción."
       onCancel={() => onOpenChange(false)}
       onSave={() => { onSave(offices); onOpenChange(false); }}
       maxWidth="max-w-2xl"
     >
       <div className="rounded-2xl bg-card border border-border/20 p-5">
         <div className="flex items-center justify-between mb-3">
-          <SectionTitle>Sales offices · {offices.length}</SectionTitle>
+          <SectionTitle>Puntos de venta · {offices.length}</SectionTitle>
           {!editing && (
             <Button size="sm" variant="outline" className="rounded-full h-8 gap-1.5 text-xs" onClick={startNew}>
-              <Plus className="h-3 w-3" /> Add office
+              <Plus className="h-3 w-3" /> Añadir punto de venta
             </Button>
           )}
         </div>
@@ -729,7 +729,7 @@ export function EditSalesOfficesDialog({ open, onOpenChange, offices: initial, o
         {offices.length === 0 && !editing && (
           <div className="text-xs text-muted-foreground py-8 text-center border border-dashed border-border/40 rounded-xl">
             <Store className="h-6 w-6 mx-auto mb-2 text-muted-foreground/40" />
-            No sales offices yet
+            Aún no hay puntos de venta
           </div>
         )}
 
@@ -763,16 +763,16 @@ export function EditSalesOfficesDialog({ open, onOpenChange, offices: initial, o
 
         {editing && (
           <div className="space-y-3 p-4 rounded-xl border border-primary/30 bg-primary/5">
-            <p className="text-xs font-semibold text-foreground">{offices.find(o => o.id === editing.id) ? "Edit office" : "New office"}</p>
-            <Input value={editing.nombre} onChange={e => setEditing({ ...editing, nombre: e.target.value })} placeholder="Office name" className="h-9 rounded-full text-sm" />
-            <Input value={editing.direccion} onChange={e => setEditing({ ...editing, direccion: e.target.value })} placeholder="Address" className="h-9 rounded-full text-sm" />
+            <p className="text-xs font-semibold text-foreground">{offices.find(o => o.id === editing.id) ? "Editar punto de venta" : "Nuevo punto de venta"}</p>
+            <Input value={editing.nombre} onChange={e => setEditing({ ...editing, nombre: e.target.value })} placeholder="Nombre del punto de venta" className="h-9 rounded-full text-sm" />
+            <Input value={editing.direccion} onChange={e => setEditing({ ...editing, direccion: e.target.value })} placeholder="Dirección" className="h-9 rounded-full text-sm" />
             <div className="grid grid-cols-2 gap-2">
-              <Input value={editing.telefono} onChange={e => setEditing({ ...editing, telefono: e.target.value })} placeholder="Phone" className="h-9 rounded-full text-sm" />
+              <Input value={editing.telefono} onChange={e => setEditing({ ...editing, telefono: e.target.value })} placeholder="Teléfono" className="h-9 rounded-full text-sm" />
               <Input value={editing.email} onChange={e => setEditing({ ...editing, email: e.target.value })} placeholder="Email" className="h-9 rounded-full text-sm" />
             </div>
             <div className="flex items-center gap-2 pt-1">
-              <Button size="sm" variant="ghost" className="rounded-full h-8 text-xs" onClick={() => setEditing(null)}>Cancel</Button>
-              <Button size="sm" className="rounded-full h-8 text-xs" onClick={saveOffice} disabled={!editing.nombre}>Save office</Button>
+              <Button size="sm" variant="ghost" className="rounded-full h-8 text-xs" onClick={() => setEditing(null)}>Cancelar</Button>
+              <Button size="sm" className="rounded-full h-8 text-xs" onClick={saveOffice} disabled={!editing.nombre}>Guardar punto de venta</Button>
             </div>
           </div>
         )}
@@ -789,17 +789,17 @@ export function EditInventoryDialog({ open, onOpenChange, onGoAvailability }: {
     <EditDialogShell
       open={open}
       onOpenChange={onOpenChange}
-      title="Edit inventory"
-      description="Inventory is managed unit by unit in the Availability tab."
+      title="Editar inventario"
+      description="El inventario se gestiona unidad por unidad en la pestaña Disponibilidad."
       onCancel={() => onOpenChange(false)}
       onSave={() => { onGoAvailability(); onOpenChange(false); }}
-      saveLabel="Go to Availability"
+      saveLabel="Ir a Disponibilidad"
     >
       <div className="rounded-2xl bg-card border border-border/20 p-6 text-center">
         <Layers className="h-8 w-8 mx-auto text-muted-foreground/40 mb-3" />
-        <p className="text-sm font-semibold text-foreground">Manage units in Availability</p>
+        <p className="text-sm font-semibold text-foreground">Gestiona las unidades en Disponibilidad</p>
         <p className="text-xs text-muted-foreground mt-1.5 max-w-sm mx-auto">
-          Add, edit prices, statuses and details unit by unit.
+          Añade, edita precios, estados y detalles unidad por unidad.
         </p>
       </div>
     </EditDialogShell>
@@ -812,8 +812,8 @@ export function EditBrochureDialog(props: { open: boolean; onOpenChange: (v: boo
     <EditDocumentDialog
       open={props.open}
       onOpenChange={props.onOpenChange}
-      title="Upload brochure"
-      description="Upload the official PDF brochure for buyers and agents."
+      title="Subir brochure"
+      description="Sube el brochure oficial en PDF para compradores y agentes."
       icon={BookOpen}
       onSave={() => props.onSave()}
     />
@@ -892,11 +892,11 @@ export function PickTeamMembersDialog({
     <EditDialogShell
       open={open}
       onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}
-      title="Add team members"
-      description="Pick members and configure permissions for each one before adding."
+      title="Añadir miembros del equipo"
+      description="Elige miembros y configura los permisos de cada uno antes de añadirlos."
       onCancel={() => onOpenChange(false)}
       onSave={handleConfirm}
-      saveLabel={selectedCount > 0 ? `Add ${selectedCount} member${selectedCount > 1 ? "s" : ""}` : "Add"}
+      saveLabel={selectedCount > 0 ? `Añadir ${selectedCount} miembro${selectedCount > 1 ? "s" : ""}` : "Añadir"}
       maxWidth="max-w-3xl"
     >
       {/* Search */}
@@ -905,20 +905,20 @@ export function PickTeamMembersDialog({
         <Input
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Search by name, email or role…"
+          placeholder="Buscar por nombre, email o rol…"
           className="h-9 rounded-full text-sm pl-9 bg-card border-border/40"
         />
       </div>
 
       {/* Pool grid */}
       <div className="rounded-2xl bg-card border border-border/20 p-4">
-        <SectionTitle>Available members · {filtered.length}</SectionTitle>
+        <SectionTitle>Miembros disponibles · {filtered.length}</SectionTitle>
         {filtered.length === 0 ? (
           <div className="text-center py-8">
             <UserPlus className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
-            <p className="text-sm font-medium text-foreground">No members found</p>
+            <p className="text-sm font-medium text-foreground">No se encontraron miembros</p>
             <p className="text-xs text-muted-foreground mt-1">
-              {available.length === 0 ? "All your team members are already added." : "Try a different search."}
+              {available.length === 0 ? "Todos los miembros de tu equipo ya están añadidos." : "Prueba con otra búsqueda."}
             </p>
           </div>
         ) : (
@@ -964,7 +964,7 @@ export function PickTeamMembersDialog({
       {selectedCount > 0 && (
         <div className="rounded-2xl bg-card border border-border/20 p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <SectionTitle>Permissions per member · {selectedCount}</SectionTitle>
+            <SectionTitle>Permisos por miembro · {selectedCount}</SectionTitle>
             <button
               type="button"
               onClick={() => {
@@ -974,7 +974,7 @@ export function PickTeamMembersDialog({
               }}
               className="text-[10px] uppercase tracking-wide text-primary hover:text-primary/80 font-medium"
             >
-              Grant all to everyone
+              Conceder todo a todos
             </button>
           </div>
           <div className="space-y-2">
@@ -999,16 +999,16 @@ export function PickTeamMembersDialog({
                       type="button"
                       onClick={() => toggle(id)}
                       className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      aria-label="Remove"
+                      aria-label="Quitar"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {([
-                      { key: "canRegister" as const, label: "Register clients", desc: "Can register new leads" },
-                      { key: "canShareWithAgencies" as const, label: "Share with agencies", desc: "Can invite collaborators" },
-                      { key: "canEdit" as const, label: "Edit promotion", desc: "Can modify details & pricing" },
+                      { key: "canRegister" as const, label: "Registrar clientes", desc: "Puede registrar nuevos contactos" },
+                      { key: "canShareWithAgencies" as const, label: "Compartir con agencias", desc: "Puede invitar colaboradores" },
+                      { key: "canEdit" as const, label: "Editar promoción", desc: "Puede modificar detalles y precios" },
                     ]).map(({ key, label, desc }) => {
                       const active = perms[key];
                       return (
@@ -1096,11 +1096,11 @@ export function PickSalesOfficesDialog({
     <EditDialogShell
       open={open}
       onOpenChange={(v) => { if (!v) { setSelected(new Set()); setQuery(""); } onOpenChange(v); }}
-      title="Add sales offices"
-      description="Choose physical offices from your company. Click a card to select; you can pick multiple."
+      title="Añadir puntos de venta"
+      description="Elige oficinas físicas de tu empresa. Haz clic en una tarjeta para seleccionarla; puedes elegir varias."
       onCancel={() => onOpenChange(false)}
       onSave={handleConfirm}
-      saveLabel={selected.size > 0 ? `Add ${selected.size} office${selected.size > 1 ? "s" : ""}` : "Add"}
+      saveLabel={selected.size > 0 ? `Añadir ${selected.size} punto${selected.size > 1 ? "s" : ""} de venta` : "Añadir"}
       maxWidth="max-w-3xl"
     >
       {/* Search */}
@@ -1109,7 +1109,7 @@ export function PickSalesOfficesDialog({
         <Input
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Search by name, city or address…"
+          placeholder="Buscar por nombre, ciudad o dirección…"
           className="h-9 rounded-full text-sm pl-9 bg-card border-border/40"
         />
       </div>
@@ -1119,9 +1119,9 @@ export function PickSalesOfficesDialog({
         {filtered.length === 0 ? (
           <div className="text-center py-10">
             <Store className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
-            <p className="text-sm font-medium text-foreground">No offices found</p>
+            <p className="text-sm font-medium text-foreground">No se encontraron puntos de venta</p>
             <p className="text-xs text-muted-foreground mt-1">
-              {available.length === 0 ? "All your offices are already added to this promotion." : "Try a different search."}
+              {available.length === 0 ? "Todos tus puntos de venta ya están añadidos a esta promoción." : "Prueba con otra búsqueda."}
             </p>
           </div>
         ) : (

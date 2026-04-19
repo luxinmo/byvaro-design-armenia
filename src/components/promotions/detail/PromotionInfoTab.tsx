@@ -10,7 +10,7 @@ interface Props {
 
 const subTabs = [
   { id: "delivery", label: "Fecha de entrega", icon: CheckCircle2 },
-  { id: "commissions", label: "Commissions", icon: BadgePercent },
+  { id: "commissions", label: "Comisiones", icon: BadgePercent },
   { id: "payment", label: "Forma de Pago", icon: Euro },
   { id: "registro", label: "Registro", icon: Users },
 ] as const;
@@ -61,18 +61,18 @@ function DeliveryContent({ delivery }: { delivery: string }) {
   return (
     <>
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">Status of the work and delivery date</p>
+        <p className="text-sm text-muted-foreground">Estado de la obra y fecha de entrega</p>
       </div>
       <div className="rounded-xl bg-card border border-border/50 p-5 space-y-1">
-        <p className="text-sm font-semibold text-foreground">Status of the work</p>
+        <p className="text-sm font-semibold text-foreground">Estado de la obra</p>
         <p className="text-sm text-muted-foreground">
-          The project is in various stages of completion, with some units already delivered. Check the status in the development's availability section.
+          El proyecto se encuentra en diferentes fases de ejecución, con algunas unidades ya entregadas. Consulta el estado en la sección de disponibilidad de la promoción.
         </p>
       </div>
       <div className="rounded-xl bg-card border border-border/50 p-5 space-y-1">
-        <p className="text-sm font-semibold text-foreground">Delivery time</p>
+        <p className="text-sm font-semibold text-foreground">Plazo de entrega</p>
         <p className="text-lg font-bold text-foreground">{delivery || "Por confirmar"}</p>
-        <p className="text-sm text-muted-foreground">Estimated delivery date for this promotion.</p>
+        <p className="text-sm text-muted-foreground">Fecha estimada de entrega para esta promoción.</p>
       </div>
     </>
   );
@@ -83,23 +83,23 @@ function CommissionsContent({ commission }: { commission: number }) {
   return (
     <>
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">Commissions</p>
+        <p className="text-sm text-muted-foreground">Comisiones</p>
       </div>
       <div className="rounded-xl bg-card border border-border/50 p-5 flex items-center justify-between">
-        <p className="text-sm font-semibold text-foreground">Collaboration commission for sales</p>
+        <p className="text-sm font-semibold text-foreground">Comisión de colaboración por venta</p>
         <div className="text-right">
           <p className="text-xl font-bold text-foreground">{commission}%</p>
-          <p className="text-xs text-muted-foreground">VAT included</p>
+          <p className="text-xs text-muted-foreground">IVA incluido</p>
         </div>
       </div>
       <div className="rounded-xl bg-card border border-border/50 p-5 space-y-4">
-        <p className="text-sm font-semibold text-foreground">Method of payment of commissions</p>
+        <p className="text-sm font-semibold text-foreground">Forma de pago de comisiones</p>
         <table className="w-full text-sm">
           <thead>
             <tr className="text-muted-foreground">
-              <th className="text-left font-medium pb-3">Payments</th>
-              <th className="text-left font-medium pb-3">Client completed payment</th>
-              <th className="text-left font-medium pb-3">Collaborator payment</th>
+              <th className="text-left font-medium pb-3">Pagos</th>
+              <th className="text-left font-medium pb-3">Pago completado por el cliente</th>
+              <th className="text-left font-medium pb-3">Pago al colaborador</th>
             </tr>
           </thead>
           <tbody className="text-foreground">
@@ -118,9 +118,9 @@ function CommissionsContent({ commission }: { commission: number }) {
       </div>
       <div className="flex items-center gap-3">
         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-600 bg-green-50 rounded-full px-3 py-1">
-          <Check className="h-3.5 w-3.5" /> Collaborating
+          <Check className="h-3.5 w-3.5" /> Colaborando
         </span>
-        <span className="text-xs text-orange-500 font-medium">No contract</span>
+        <span className="text-xs text-orange-500 font-medium">Sin contrato</span>
       </div>
     </>
   );
@@ -134,24 +134,24 @@ function PaymentContent({ reservationCost }: { reservationCost: number }) {
   return (
     <>
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">Method of payment</p>
+        <p className="text-sm text-muted-foreground">Forma de pago</p>
       </div>
       <div className="rounded-xl bg-card border border-border/50 p-5 space-y-4">
         <div className="flex items-center justify-between pb-4 border-b border-border/30">
           <div>
             <p className="text-lg font-bold text-foreground">{formatPrice(reservationCost)}</p>
-            <p className="text-xs text-muted-foreground">Reservation payment</p>
+            <p className="text-xs text-muted-foreground">Pago de reserva</p>
           </div>
           <div className="text-right">
-            <p className="text-lg font-bold text-foreground">60 days</p>
-            <p className="text-xs text-muted-foreground">Validity</p>
+            <p className="text-lg font-bold text-foreground">60 días</p>
+            <p className="text-xs text-muted-foreground">Validez</p>
           </div>
         </div>
         <div className="space-y-0">
           {[
-            { n: 1, label: "Earthworks / Excavation", pct: "15%" },
-            { n: 2, label: "Interior Painting", pct: "20%" },
-            { n: 3, label: "First Occupancy License / Certificate of Habitability", pct: "65%" },
+            { n: 1, label: "Movimiento de tierras / Excavación", pct: "15%" },
+            { n: 2, label: "Pintura interior", pct: "20%" },
+            { n: 3, label: "Licencia de primera ocupación / Cédula de habitabilidad", pct: "65%" },
           ].map((m) => (
             <div key={m.n} className="flex items-center justify-between py-3 border-b border-border/20 last:border-0">
               <div className="flex items-center gap-3">
@@ -170,25 +170,25 @@ function PaymentContent({ reservationCost }: { reservationCost: number }) {
 /* ─── Registro ─── */
 function RegistroContent() {
   const conditions = [
-    "Name and surname",
-    "Nationality",
-    "Last 4 digits of the phone number",
+    "Nombre y apellidos",
+    "Nacionalidad",
+    "Últimas 4 cifras del teléfono",
   ];
 
   return (
     <>
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">Register</p>
+        <p className="text-sm text-muted-foreground">Registro</p>
       </div>
       <div className="rounded-xl bg-card border border-border/50 p-5 flex items-center justify-between">
-        <p className="text-sm font-semibold text-foreground">Choose the payment method for commissions to collaborators</p>
+        <p className="text-sm font-semibold text-foreground">Elige la forma de pago de comisiones a colaboradores</p>
         <div className="text-right">
-          <p className="text-sm font-bold text-foreground">no_expira days</p>
-          <p className="text-xs text-muted-foreground">Validity of registration</p>
+          <p className="text-sm font-bold text-foreground">No expira</p>
+          <p className="text-xs text-muted-foreground">Validez del registro</p>
         </div>
       </div>
       <div className="space-y-2">
-        <p className="text-sm text-muted-foreground">Customer registration conditions</p>
+        <p className="text-sm text-muted-foreground">Condiciones de registro de cliente</p>
         <div className="space-y-3">
           {conditions.map((c) => (
             <div key={c} className="flex items-center gap-3">

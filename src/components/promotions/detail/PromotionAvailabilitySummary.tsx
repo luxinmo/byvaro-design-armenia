@@ -16,10 +16,10 @@ export function PromotionAvailabilitySummary({ promotionId, onViewAll }: { promo
   const withdrawn = units.filter(u => u.status === "withdrawn");
 
   const stats = [
-    { label: "Available", count: available.length, dot: "bg-emerald-500" },
-    { label: "Reserved", count: reserved.length, dot: "bg-amber-500" },
-    { label: "Sold", count: sold.length, dot: "bg-blue-500" },
-    { label: "Withdrawn", count: withdrawn.length, dot: "bg-rose-500" },
+    { label: "Disponibles", count: available.length, dot: "bg-emerald-500" },
+    { label: "Reservadas", count: reserved.length, dot: "bg-amber-500" },
+    { label: "Vendidas", count: sold.length, dot: "bg-blue-500" },
+    { label: "Retiradas", count: withdrawn.length, dot: "bg-rose-500" },
   ];
 
   const avgPrice = available.length > 0
@@ -32,13 +32,13 @@ export function PromotionAvailabilitySummary({ promotionId, onViewAll }: { promo
       {/* Header */}
       <div className="flex items-baseline justify-between mb-5">
         <h2 className="text-base font-semibold text-foreground">
-          Inventory <span className="text-muted-foreground font-normal">· {units.length} units</span>
+          Inventario <span className="text-muted-foreground font-normal">· {units.length} unidades</span>
         </h2>
         <button
           onClick={onViewAll}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
         >
-          View all <ArrowRight className="h-3 w-3" />
+          Ver todo <ArrowRight className="h-3 w-3" />
         </button>
       </div>
 
@@ -57,11 +57,11 @@ export function PromotionAvailabilitySummary({ promotionId, onViewAll }: { promo
 
       {/* Meta */}
       <div className="flex items-center justify-between pt-4 border-t border-border/40 text-xs">
-        <span className="text-muted-foreground">Avg. price</span>
+        <span className="text-muted-foreground">Precio medio</span>
         <span className="text-foreground font-medium tabular-nums">{formatPrice(avgPrice)}</span>
       </div>
       <div className="flex items-center justify-between mt-2 text-xs">
-        <span className="text-muted-foreground">Occupancy</span>
+        <span className="text-muted-foreground">Ocupación</span>
         <span className="text-foreground font-medium tabular-nums">{occupancy}%</span>
       </div>
     </div>

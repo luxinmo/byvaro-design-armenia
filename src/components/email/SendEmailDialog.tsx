@@ -669,7 +669,7 @@ export function SendEmailDialog({
                   <button
                     onClick={() => setStep("template")}
                     className="text-muted-foreground hover:text-foreground p-1.5 -ml-1.5"
-                    aria-label="Back"
+                    aria-label="Volver"
                   >
                     <ArrowLeft className="h-4 w-4" strokeWidth={1.5} />
                   </button>

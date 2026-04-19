@@ -21,11 +21,11 @@ const registrationConditions = [
 
 /* Mock clients for search */
 const mockClients = [
-  { id: "1", name: "Carlos García López", phone: "+34 612 345 678", nationality: "Spanish", email: "carlos@email.com" },
-  { id: "2", name: "Sarah Johnson", phone: "+34 698 112 233", nationality: "British", email: "sarah.j@email.com" },
-  { id: "3", name: "Hans Müller", phone: "+49 170 555 1234", nationality: "German", email: "hans.m@email.com" },
-  { id: "4", name: "Marie Dupont", phone: "+33 6 12 34 56 78", nationality: "French", email: "marie.d@email.com" },
-  { id: "5", name: "Ahmed Al-Farsi", phone: "+971 50 123 4567", nationality: "Emirati", email: "ahmed@email.com" },
+  { id: "1", name: "Carlos García López", phone: "+34 612 345 678", nationality: "Española", email: "carlos@email.com" },
+  { id: "2", name: "Sarah Johnson", phone: "+34 698 112 233", nationality: "Británica", email: "sarah.j@email.com" },
+  { id: "3", name: "Hans Müller", phone: "+49 170 555 1234", nationality: "Alemana", email: "hans.m@email.com" },
+  { id: "4", name: "Marie Dupont", phone: "+33 6 12 34 56 78", nationality: "Francesa", email: "marie.d@email.com" },
+  { id: "5", name: "Ahmed Al-Farsi", phone: "+971 50 123 4567", nationality: "Emiratí", email: "ahmed@email.com" },
 ];
 
 type View = "search" | "create" | "confirm";
@@ -224,7 +224,7 @@ export function ClientRegistrationDialog({ open, onOpenChange, promotionName, va
               <div className="relative">
                 <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Ej: Spanish, British..."
+                  placeholder="Ej: Española, Británica..."
                   value={newClient.nationality}
                   onChange={(e) => setNewClient({ ...newClient, nationality: e.target.value })}
                   className="pl-9"

@@ -20,7 +20,7 @@ const contacts = [
   },
   {
     name: "Thomas Müller",
-    role: "International Sales",
+    role: "Ventas Internacionales",
     avatar: "https://i.pravatar.cc/80?img=23",
     phone: "+49 170 123 456",
     email: "thomas@byvaro.com",
