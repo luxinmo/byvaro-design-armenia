@@ -35,6 +35,7 @@ export interface Empresa {
   razonSocial: string;
   cif: string;
   logoUrl: string;              // data: URL o URL externa
+  logoShape: "circle" | "square"; // forma del logo en el hero
   coverUrl: string;             // portada grande del perfil público
   colorCorporativo: string;     // hex "#AA2417"
   fundadaEn: string;            // "2012"
@@ -51,6 +52,10 @@ export interface Empresa {
   horario: string;              // "L-V 9:30-14:00 / 16:30-19:00"
   sitioWeb: string;             // www.luxinmo.com
   linkedin: string;
+  instagram: string;
+  facebook: string;
+  youtube: string;
+  tiktok: string;
   // KPIs editables en Home
   aniosOperando: string;        // "13"
   oficinasCount: string;        // "01"
@@ -113,6 +118,7 @@ export const defaultEmpresa: Empresa = {
   cif: "",
   logoUrl: "",
   coverUrl: "",
+  logoShape: "circle",
   colorCorporativo: "#AA2417",       // brand Byvaro por defecto
   fundadaEn: "",
   subtitle: "",
@@ -126,6 +132,10 @@ export const defaultEmpresa: Empresa = {
   horario: "",
   sitioWeb: "",
   linkedin: "",
+  instagram: "",
+  facebook: "",
+  youtube: "",
+  tiktok: "",
   aniosOperando: "0",
   oficinasCount: "0",
   agentesCount: "0",

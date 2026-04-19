@@ -23,38 +23,33 @@ for (const vp of VIEWPORTS) {
   const page = await ctx.newPage();
 
   await page.goto(`${URL_BASE}/empresa`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(500);
-  await shot(page, `${vp.name}-1-empresa-home`);
+  await page.waitForTimeout(600);
+  await shot(page, `${vp.name}-1-home`);
 
-  // Click Invitar agencia (botón primario hero)
-  await page.getByRole("button", { name: /Invitar agencia/i }).first().click().catch(() => {});
-  await page.waitForTimeout(500);
-  await shot(page, `${vp.name}-2-modal-datos`);
+  // Hover cover para ver el botón editar portada
+  if (vp.name === "desktop") {
+    await page.locator(".relative.h-48").first().hover().catch(() => {});
+    await page.waitForTimeout(200);
+    await shot(page, `${vp.name}-2-cover-hover`);
 
-  // Rellenar datos
-  await page.locator('input[placeholder*="tuagencia"]').fill("test@agencia.com");
-  await page.locator('input[placeholder*="Costa Invest"]').fill("Costa Invest Homes");
-  await page.waitForTimeout(200);
-  await shot(page, `${vp.name}-3-modal-datos-filled`);
+    // Click editar portada → abre modal
+    await page.getByRole("button", { name: /portada/i }).first().click().catch(() => {});
+    await page.waitForTimeout(400);
+    await shot(page, `${vp.name}-3-modal-cover`);
 
-  // Avanzar
-  await page.getByRole("button", { name: /Siguiente/i }).click().catch(() => {});
-  await page.waitForTimeout(400);
-  await shot(page, `${vp.name}-4-modal-condiciones`);
+    // Cerrar modal
+    await page.getByRole("button", { name: /Cerrar/i }).click().catch(() => {});
+    await page.waitForTimeout(300);
 
-  // Crear
-  await page.getByRole("button", { name: /Crear invitación/i }).click().catch(() => {});
-  await page.waitForTimeout(400);
-  await shot(page, `${vp.name}-5-modal-preview`);
+    // Hover logo
+    await page.locator(".h-\\[100px\\], .sm\\:h-\\[120px\\]").first().hover().catch(() => {});
+    await page.waitForTimeout(200);
 
-  // Cerrar modal
-  await page.getByRole("button", { name: /Cerrar/i }).click().catch(() => {});
-  await page.waitForTimeout(400);
-
-  // Scroll al final para ver sidebar con invitación pendiente
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  await page.waitForTimeout(400);
-  await shot(page, `${vp.name}-6-bottom-with-invitation`);
+    // Click logo → abre modal
+    await page.locator("button", { hasText: /Editar/i }).filter({ has: page.locator(".lucide-camera") }).first().click().catch(() => {});
+    await page.waitForTimeout(400);
+    await shot(page, `${vp.name}-4-modal-logo`);
+  }
 
   await ctx.close();
 }

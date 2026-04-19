@@ -5,13 +5,13 @@
  */
 
 import {
-  Building2, Users, TrendingUp, FolderOpen, ChevronRight, Plus,
+  Building2, Users, ChevronRight, Plus,
 } from "lucide-react";
 import type { Empresa } from "@/lib/empresa";
 import { EditableSection, InfoItem } from "./EditableSection";
 import { OfficesSection } from "./OfficesSection";
 import { HeroStatsStrip } from "./HeroStatsStrip";
-import { QuickActionsBar } from "./QuickActionsBar";
+import { PresenciaOnlineCard } from "./PresenciaOnlineCard";
 import { ZonasEspecialidadesCard } from "./ZonasEspecialidadesCard";
 import { TerminosColaboracionCard } from "./TerminosColaboracionCard";
 import { TestimoniosCard } from "./TestimoniosCard";
@@ -72,8 +72,8 @@ export function EmpresaHomeTab({
       {/* ═════ Stats de credibilidad ═════ */}
       <HeroStatsStrip empresa={empresa} />
 
-      {/* ═════ Quick actions (solo en modo edit / promotor dueño) ═════ */}
-      {viewMode === "edit" && <QuickActionsBar empresa={empresa} />}
+      {/* ═════ Presencia online (web + redes) ═════ */}
+      <PresenciaOnlineCard viewMode={viewMode} empresa={empresa} update={update} />
 
       {/* ═════ Overview ═════ */}
       <EditableSection
@@ -93,18 +93,15 @@ export function EmpresaHomeTab({
         </p>
       </EditableSection>
 
-      {/* ═════ Company data ═════ */}
+      {/* ═════ Datos de la empresa (solo info, sin rendimiento) ═════ */}
       <EditableSection
         title="Datos de la empresa"
         viewMode={viewMode}
         editContent={
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             {[
               { key: "oficinasCount" as const, label: "Oficinas" },
               { key: "agentesCount" as const, label: "Agentes" },
-              { key: "ventasAnuales" as const, label: "Ventas anuales" },
-              { key: "ingresosAnuales" as const, label: "Ingresos anuales" },
-              { key: "portfolio" as const, label: "Cartera" },
             ].map((f) => (
               <div key={f.key}>
                 <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1 block">{f.label}</label>
@@ -118,25 +115,12 @@ export function EmpresaHomeTab({
           </div>
         }
       >
-        <div className="flex flex-col gap-5">
-          <div className="flex flex-col gap-3">
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Información proporcionada por la empresa</span>
-            <div className="grid grid-cols-3 gap-4">
-              <InfoItem icon={Building2} label="Oficinas" value={empresa.oficinasCount || "0"} />
-              <InfoItem icon={Users} label="Agentes" value={empresa.agentesCount || "0"} />
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Idiomas</p>
-                <div className="flex gap-1 text-[14px]">🇪🇸 🇬🇧 🇫🇷</div>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-col gap-3">
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Rendimiento</span>
-            <div className="grid grid-cols-3 gap-4">
-              <InfoItem icon={TrendingUp} label="Ventas" value={empresa.ventasAnuales || "0"} />
-              <InfoItem icon={TrendingUp} label="Ingresos" value={empresa.ingresosAnuales || "0"} />
-              <InfoItem icon={FolderOpen} label="Cartera" value={empresa.portfolio || "0"} />
-            </div>
+        <div className="grid grid-cols-3 gap-4">
+          <InfoItem icon={Building2} label="Oficinas" value={empresa.oficinasCount || "0"} />
+          <InfoItem icon={Users} label="Agentes" value={empresa.agentesCount || "0"} />
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Idiomas</p>
+            <div className="flex gap-1 text-[14px]">🇪🇸 🇬🇧 🇫🇷</div>
           </div>
         </div>
       </EditableSection>

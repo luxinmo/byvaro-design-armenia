@@ -12,15 +12,11 @@
  * oculto (el contenido principal ya tiene los datos más críticos).
  */
 
-import { useState } from "react";
 import {
-  CheckCircle2, Circle, Send, Eye, TrendingUp, MousePointer2,
-  Users, Mail, Clock, Copy, Check, RefreshCw, Trash2, Sparkles,
+  CheckCircle2, Circle, Sparkles, ArrowRight,
 } from "lucide-react";
-import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import type { Empresa } from "@/lib/empresa";
-import { useInvitaciones, buildInvitacionUrl } from "@/lib/invitaciones";
-import { InvitarAgenciaModal } from "./InvitarAgenciaModal";
 import { cn } from "@/lib/utils";
 
 interface ChecklistItem {
@@ -92,29 +88,14 @@ export function EmpresaSidebar({
   empresa: Empresa;
   oficinasCount: number;
 }) {
-  const { pendientes, revocar, reenviar, eliminar } = useInvitaciones();
-  const [showInvitarModal, setShowInvitarModal] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-
+  const navigate = useNavigate();
   const checklist = getChecklist(empresa, oficinasCount);
   const done = checklist.filter(c => c.done).length;
   const total = checklist.length;
   const percent = Math.round((done / total) * 100);
 
-  const handleCopyLink = async (token: string, id: string) => {
-    try {
-      await navigator.clipboard.writeText(buildInvitacionUrl(token));
-      setCopiedId(id);
-      toast.success("Enlace copiado");
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch {
-      toast.error("No se pudo copiar");
-    }
-  };
-
   return (
-    <>
-      <aside className="hidden xl:flex w-[280px] shrink-0 flex-col gap-4">
+    <aside className="hidden xl:flex w-[280px] shrink-0 flex-col gap-4">
         {/* ═════ Fuerza del perfil ═════ */}
         <SidebarCard title="Fuerza del perfil">
           <div className="flex items-center gap-3">
@@ -163,129 +144,33 @@ export function EmpresaSidebar({
           </ul>
         </SidebarCard>
 
-        {/* ═════ Invitar agencia (CTA principal) ═════ */}
-        <SidebarCard
-          title="Red de agencias"
-          accent
-          action="Invitar agencia"
-          actionIcon={Send}
-          onAction={() => setShowInvitarModal(true)}
-        >
-          <p className="text-[11.5px] text-muted-foreground leading-relaxed">
-            Invita agencias colaboradoras para ampliar tu red comercial. Cuantas más agencias, más visibilidad para tus promociones.
-          </p>
-          {pendientes.length > 0 && (
-            <div className="flex items-center gap-2 text-[11.5px]">
-              <Clock className="h-3 w-3 text-amber-500" />
-              <span className="text-foreground">
-                <strong>{pendientes.length}</strong> invitaci{pendientes.length === 1 ? "ón" : "ones"} pendiente{pendientes.length !== 1 ? "s" : ""}
-              </span>
-            </div>
-          )}
-        </SidebarCard>
-
-        {/* ═════ Invitaciones pendientes ═════ */}
-        {pendientes.length > 0 && (
-          <SidebarCard title={`Invitaciones pendientes (${pendientes.length})`}>
-            <ul className="flex flex-col gap-2.5 max-h-[300px] overflow-y-auto">
-              {pendientes.map((inv) => {
-                const diasRestantes = Math.max(0, Math.ceil((inv.expiraEn - Date.now()) / (1000 * 60 * 60 * 24)));
-                return (
-                  <li key={inv.id} className="rounded-xl border border-border bg-muted/30 p-3 flex flex-col gap-1.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-[12px] font-semibold text-foreground truncate">
-                          {inv.nombreAgencia || inv.emailAgencia}
-                        </p>
-                        {inv.nombreAgencia && (
-                          <p className="text-[10.5px] text-muted-foreground truncate">{inv.emailAgencia}</p>
-                        )}
-                      </div>
-                      <span className="text-[9.5px] font-bold uppercase tracking-wide rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-500 border border-amber-500/30 px-2 py-0.5 shrink-0">
-                        {inv.comisionOfrecida}%
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
-                      <Clock className="h-2.5 w-2.5" />
-                      <span>Caduca en {diasRestantes} día{diasRestantes !== 1 ? "s" : ""}</span>
-                    </div>
-                    <div className="flex items-center gap-1 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => handleCopyLink(inv.token, inv.id)}
-                        className="inline-flex items-center gap-1 h-6 px-2 rounded-md bg-card border border-border text-[10.5px] text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {copiedId === inv.id ? <Check className="h-2.5 w-2.5 text-primary" /> : <Copy className="h-2.5 w-2.5" />}
-                        {copiedId === inv.id ? "Copiado" : "Copiar"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { reenviar(inv.id); toast.success("Invitación renovada 30 días"); }}
-                        className="inline-flex items-center gap-1 h-6 px-2 rounded-md bg-card border border-border text-[10.5px] text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <RefreshCw className="h-2.5 w-2.5" />
-                        Renovar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { eliminar(inv.id); toast.success("Invitación eliminada"); }}
-                        className="ml-auto inline-flex items-center h-6 px-2 rounded-md text-muted-foreground hover:text-destructive transition-colors"
-                        aria-label="Eliminar"
-                      >
-                        <Trash2 className="h-2.5 w-2.5" />
-                      </button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </SidebarCard>
-        )}
-
-        {/* ═════ Rendimiento (mock hasta que haya backend) ═════ */}
-        <SidebarCard title="Rendimiento últimos 30d">
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <div className="flex items-center gap-1 text-[9.5px] text-muted-foreground uppercase tracking-wider">
-                <Eye className="h-2.5 w-2.5" /> Vistas
-              </div>
-              <p className="text-[18px] font-bold tnum leading-tight mt-0.5">—</p>
-            </div>
-            <div>
-              <div className="flex items-center gap-1 text-[9.5px] text-muted-foreground uppercase tracking-wider">
-                <MousePointer2 className="h-2.5 w-2.5" /> Clics
-              </div>
-              <p className="text-[18px] font-bold tnum leading-tight mt-0.5">—</p>
-            </div>
-            <div>
-              <div className="flex items-center gap-1 text-[9.5px] text-muted-foreground uppercase tracking-wider">
-                <Users className="h-2.5 w-2.5" /> Únicos
-              </div>
-              <p className="text-[18px] font-bold tnum leading-tight mt-0.5">—</p>
-            </div>
-          </div>
-          <p className="text-[10.5px] text-muted-foreground leading-relaxed pt-2 border-t border-border">
-            Empezaremos a medir vistas cuando publiques tu primer microsite público.
-          </p>
-        </SidebarCard>
-
-        {/* ═════ Tip ═════ */}
+        {/* ═════ Consejo del día ═════ */}
         <SidebarCard title="">
           <div className="flex items-start gap-2.5 -mt-2">
             <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
             <div>
               <p className="text-[11.5px] font-semibold text-foreground leading-tight">Consejo del día</p>
               <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
-                Los perfiles con <strong>3+ testimonios y cover personalizada</strong> convierten 2× más invitaciones de agencias.
+                Los perfiles con <strong>3+ testimonios y cover personalizada</strong> reciben 2× más visitas de agencias.
               </p>
             </div>
           </div>
         </SidebarCard>
-      </aside>
 
-      {showInvitarModal && (
-        <InvitarAgenciaModal onClose={() => setShowInvitarModal(false)} />
-      )}
-    </>
+        {/* ═════ Gestiona tu red en Colaboradores ═════ */}
+        <SidebarCard title="Red de agencias">
+          <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+            Invita y gestiona tus agencias colaboradoras desde el módulo de Red.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate("/colaboradores")}
+            className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-primary hover:underline self-start"
+          >
+            Ir a Colaboradores
+            <ArrowRight className="h-3 w-3" />
+          </button>
+        </SidebarCard>
+      </aside>
   );
 }

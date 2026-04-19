@@ -15,9 +15,9 @@
  * agents, locations, about). Cada uno ≈17%.
  */
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
-  Eye, AlertTriangle, Globe, Edit, CheckCircle2, Upload, Trash2, Send,
+  Eye, AlertTriangle, Globe, CheckCircle2, Camera, Image as ImageIcon,
 } from "lucide-react";
 import { useEmpresa, useOficinas } from "@/lib/empresa";
 import { cn } from "@/lib/utils";
@@ -25,7 +25,7 @@ import { EmpresaHomeTab } from "@/components/empresa/EmpresaHomeTab";
 import { EmpresaAboutTab } from "@/components/empresa/EmpresaAboutTab";
 import { EmpresaAgentsTab } from "@/components/empresa/EmpresaAgentsTab";
 import { EmpresaSidebar } from "@/components/empresa/EmpresaSidebar";
-import { InvitarAgenciaModal } from "@/components/empresa/InvitarAgenciaModal";
+import { ImageCropModal } from "@/components/empresa/ImageCropModal";
 import { Toaster } from "sonner";
 
 type Tab = "home" | "about" | "agents" | "statistics";
@@ -35,9 +35,7 @@ export default function Empresa() {
   const { oficinas } = useOficinas();
   const [tab, setTab] = useState<Tab>("home");
   const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
-  const coverInputRef = useRef<HTMLInputElement>(null);
-  const logoInputRef = useRef<HTMLInputElement>(null);
-  const [showInvitarModal, setShowInvitarModal] = useState(false);
+  const [editingImage, setEditingImage] = useState<"logo" | "cover" | null>(null);
 
   /* ─── % de completitud ─── */
   const completion = useMemo(() => ({
@@ -54,12 +52,16 @@ export default function Empresa() {
   );
   const isIncomplete = completionPercent < 100;
 
-  /* ─── Upload helpers ─── */
-  const handleImageUpload = (file: File, field: "logoUrl" | "coverUrl") => {
-    if (file.size > 3 * 1024 * 1024) return;
-    const reader = new FileReader();
-    reader.onload = () => update(field, reader.result as string);
-    reader.readAsDataURL(file);
+  /* ─── ImageCropModal: Aplicar una imagen recortada ─── */
+  const handleApplyImage = (dataUrl: string) => {
+    if (editingImage === "logo") update("logoUrl", dataUrl);
+    else if (editingImage === "cover") update("coverUrl", dataUrl);
+    setEditingImage(null);
+  };
+  const handleRemoveImage = () => {
+    if (editingImage === "logo") update("logoUrl", "");
+    else if (editingImage === "cover") update("coverUrl", "");
+    setEditingImage(null);
   };
 
   /* ─── Subtitle display ─── */
@@ -101,44 +103,32 @@ export default function Empresa() {
       )}
 
       <div className="px-4 sm:px-6 lg:px-10 pt-4 pb-10 max-w-[1250px] mx-auto w-full">
-        {/* ═════ Cabecera Mi empresa + acciones ═════ */}
+        {/* ═════ Cabecera Mi empresa ═════ */}
         <div className="flex items-end justify-between gap-3 flex-wrap mb-4">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Administración
             </p>
             <h1 className="text-[22px] sm:text-[24px] font-bold tracking-tight leading-tight mt-1">
-              {empresa.nombreComercial ? "Mi empresa" : "Mi empresa"}
-              <span className="text-muted-foreground font-normal ml-2">
-                {empresa.nombreComercial ? `· ${empresa.nombreComercial}` : ""}
-              </span>
+              Mi empresa
+              {empresa.nombreComercial && (
+                <span className="text-muted-foreground font-normal ml-2">· {empresa.nombreComercial}</span>
+              )}
             </h1>
           </div>
-          <div className="flex items-center gap-2">
-            {viewMode === "edit" && (
-              <button
-                type="button"
-                onClick={() => setShowInvitarModal(true)}
-                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-primary text-primary-foreground text-[12.5px] font-semibold hover:bg-primary/90 transition-colors shadow-soft"
-              >
-                <Send className="h-3.5 w-3.5" />
-                Invitar agencia
-              </button>
+          <button
+            type="button"
+            onClick={() => setViewMode(viewMode === "edit" ? "preview" : "edit")}
+            className={cn(
+              "inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-[12.5px] font-semibold transition-colors",
+              viewMode === "preview"
+                ? "bg-foreground text-background hover:bg-foreground/90"
+                : "border border-border text-foreground hover:bg-muted",
             )}
-            <button
-              type="button"
-              onClick={() => setViewMode(viewMode === "edit" ? "preview" : "edit")}
-              className={cn(
-                "inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-[12.5px] font-semibold transition-colors",
-                viewMode === "preview"
-                  ? "bg-foreground text-background hover:bg-foreground/90"
-                  : "border border-border text-foreground hover:bg-muted",
-              )}
-            >
-              <Eye className="h-3.5 w-3.5" />
-              {viewMode === "preview" ? "Volver a editar" : "Previsualizar como agencia"}
-            </button>
-          </div>
+          >
+            <Eye className="h-3.5 w-3.5" />
+            {viewMode === "preview" ? "Volver a editar" : "Previsualizar como agencia"}
+          </button>
         </div>
 
         {/* ═════ Profile hero ═════ */}
@@ -151,44 +141,23 @@ export default function Empresa() {
               <div className="w-full h-full bg-gradient-to-br from-muted via-muted/60 to-primary/10" />
             )}
             {viewMode === "edit" && (
-              <>
-                <div className="absolute top-3 right-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    type="button"
-                    onClick={() => coverInputRef.current?.click()}
-                    className="bg-card/90 backdrop-blur rounded-full px-3 py-1.5 text-[10.5px] font-medium text-foreground flex items-center gap-1.5 shadow-soft hover:bg-card transition-colors"
-                  >
-                    <Edit className="h-3 w-3" /> {empresa.coverUrl ? "Cambiar portada" : "Añadir portada"}
-                  </button>
-                  {empresa.coverUrl && (
-                    <button
-                      type="button"
-                      onClick={() => update("coverUrl", "")}
-                      className="bg-card/90 backdrop-blur rounded-full px-3 py-1.5 text-[10.5px] font-medium text-foreground flex items-center gap-1.5 shadow-soft hover:bg-card transition-colors"
-                    >
-                      <Trash2 className="h-3 w-3" /> Quitar
-                    </button>
-                  )}
-                </div>
-                <input
-                  ref={coverInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) handleImageUpload(f, "coverUrl");
-                    e.target.value = "";
-                  }}
-                />
-              </>
+              <button
+                type="button"
+                onClick={() => setEditingImage("cover")}
+                className="absolute top-3 right-3 bg-card/90 backdrop-blur rounded-full px-3 py-1.5 text-[10.5px] font-medium text-foreground flex items-center gap-1.5 shadow-soft hover:bg-card transition-colors opacity-0 group-hover:opacity-100"
+              >
+                <ImageIcon className="h-3 w-3" /> {empresa.coverUrl ? "Editar portada" : "Añadir portada"}
+              </button>
             )}
           </div>
 
           <div className="relative px-5 sm:px-7 pb-0">
             {/* Logo */}
             <div className="absolute -top-14 sm:-top-16 left-5 sm:left-7 group">
-              <div className="h-[100px] w-[100px] sm:h-[120px] sm:w-[120px] rounded-full border-[5px] border-card shadow-soft-lg bg-muted overflow-hidden">
+              <div className={cn(
+                "h-[100px] w-[100px] sm:h-[120px] sm:w-[120px] border-[5px] border-card shadow-soft-lg bg-muted overflow-hidden",
+                empresa.logoShape === "square" ? "rounded-2xl" : "rounded-full",
+              )}>
                 {empresa.logoUrl ? (
                   <img src={empresa.logoUrl} alt={empresa.nombreComercial} className="w-full h-full object-cover" />
                 ) : (
@@ -198,26 +167,17 @@ export default function Empresa() {
                 )}
               </div>
               {viewMode === "edit" && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => logoInputRef.current?.click()}
-                    className="absolute inset-0 rounded-full bg-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                  >
-                    <Upload className="h-5 w-5 text-card" />
-                  </button>
-                  <input
-                    ref={logoInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) handleImageUpload(f, "logoUrl");
-                      e.target.value = "";
-                    }}
-                  />
-                </>
+                <button
+                  type="button"
+                  onClick={() => setEditingImage("logo")}
+                  className={cn(
+                    "absolute inset-0 bg-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 text-card text-[10px] font-semibold",
+                    empresa.logoShape === "square" ? "rounded-2xl" : "rounded-full",
+                  )}
+                >
+                  <Camera className="h-4 w-4" />
+                  Editar
+                </button>
               )}
             </div>
 
@@ -305,9 +265,30 @@ export default function Empresa() {
         </div>
       </div>
 
-      {showInvitarModal && (
-        <InvitarAgenciaModal onClose={() => setShowInvitarModal(false)} />
-      )}
+      {/* ═════ Modal de edición de imagen ═════ */}
+      <ImageCropModal
+        open={editingImage === "logo"}
+        onClose={() => setEditingImage(null)}
+        onApply={handleApplyImage}
+        onRemove={handleRemoveImage}
+        initialImage={empresa.logoUrl || undefined}
+        shape={empresa.logoShape === "square" ? "square" : "circle"}
+        allowShapeSwitch
+        onShapeChange={(s) => update("logoShape", s)}
+        title="Editar logo"
+        outputSize={{ width: 512, height: 512 }}
+      />
+      <ImageCropModal
+        open={editingImage === "cover"}
+        onClose={() => setEditingImage(null)}
+        onApply={handleApplyImage}
+        onRemove={handleRemoveImage}
+        initialImage={empresa.coverUrl || undefined}
+        shape="rectangle"
+        aspectRatio={24 / 10}
+        title="Editar portada"
+        outputSize={{ width: 1200, height: 500 }}
+      />
     </div>
   );
 }
