@@ -17,7 +17,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import {
-  Eye, AlertTriangle, Globe, Edit, CheckCircle2, Upload, Trash2,
+  Eye, AlertTriangle, Globe, Edit, CheckCircle2, Upload, Trash2, Send,
 } from "lucide-react";
 import { useEmpresa, useOficinas } from "@/lib/empresa";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,8 @@ import { EmpresaHomeTab } from "@/components/empresa/EmpresaHomeTab";
 import { EmpresaAboutTab } from "@/components/empresa/EmpresaAboutTab";
 import { EmpresaAgentsTab } from "@/components/empresa/EmpresaAgentsTab";
 import { EmpresaSidebar } from "@/components/empresa/EmpresaSidebar";
+import { InvitarAgenciaModal } from "@/components/empresa/InvitarAgenciaModal";
+import { Toaster } from "sonner";
 
 type Tab = "home" | "about" | "agents" | "statistics";
 
@@ -35,6 +37,7 @@ export default function Empresa() {
   const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
   const coverInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const [showInvitarModal, setShowInvitarModal] = useState(false);
 
   /* ─── % de completitud ─── */
   const completion = useMemo(() => ({
@@ -78,6 +81,8 @@ export default function Empresa() {
 
   return (
     <div className="flex flex-col min-h-full bg-background">
+      <Toaster position="top-center" richColors />
+
       {/* ═════ Banner onboarding ═════ */}
       {isIncomplete && viewMode === "edit" && (
         <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 sm:px-6 lg:px-10 py-3 flex items-center gap-3 flex-wrap">
@@ -96,21 +101,44 @@ export default function Empresa() {
       )}
 
       <div className="px-4 sm:px-6 lg:px-10 pt-4 pb-10 max-w-[1250px] mx-auto w-full">
-        {/* ═════ Toggle modo (el breadcrumb ya lo pone AppHeader) ═════ */}
-        <div className="flex items-center justify-end mb-4">
-          <button
-            type="button"
-            onClick={() => setViewMode(viewMode === "edit" ? "preview" : "edit")}
-            className={cn(
-              "inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[11.5px] font-semibold transition-colors",
-              viewMode === "preview"
-                ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                : "border border-border text-foreground hover:bg-muted",
+        {/* ═════ Cabecera Mi empresa + acciones ═════ */}
+        <div className="flex items-end justify-between gap-3 flex-wrap mb-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Administración
+            </p>
+            <h1 className="text-[22px] sm:text-[24px] font-bold tracking-tight leading-tight mt-1">
+              {empresa.nombreComercial ? "Mi empresa" : "Mi empresa"}
+              <span className="text-muted-foreground font-normal ml-2">
+                {empresa.nombreComercial ? `· ${empresa.nombreComercial}` : ""}
+              </span>
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            {viewMode === "edit" && (
+              <button
+                type="button"
+                onClick={() => setShowInvitarModal(true)}
+                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-primary text-primary-foreground text-[12.5px] font-semibold hover:bg-primary/90 transition-colors shadow-soft"
+              >
+                <Send className="h-3.5 w-3.5" />
+                Invitar agencia
+              </button>
             )}
-          >
-            <Eye className="h-3.5 w-3.5" />
-            {viewMode === "preview" ? "Volver a editar" : "Ver como usuario"}
-          </button>
+            <button
+              type="button"
+              onClick={() => setViewMode(viewMode === "edit" ? "preview" : "edit")}
+              className={cn(
+                "inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-[12.5px] font-semibold transition-colors",
+                viewMode === "preview"
+                  ? "bg-foreground text-background hover:bg-foreground/90"
+                  : "border border-border text-foreground hover:bg-muted",
+              )}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              {viewMode === "preview" ? "Volver a editar" : "Previsualizar como agencia"}
+            </button>
+          </div>
         </div>
 
         {/* ═════ Profile hero ═════ */}
@@ -272,10 +300,14 @@ export default function Empresa() {
           </div>
 
           {viewMode === "edit" && tab === "home" && (
-            <EmpresaSidebar />
+            <EmpresaSidebar empresa={empresa} oficinasCount={oficinas.length} />
           )}
         </div>
       </div>
+
+      {showInvitarModal && (
+        <InvitarAgenciaModal onClose={() => setShowInvitarModal(false)} />
+      )}
     </div>
   );
 }

@@ -8,11 +8,12 @@
 
 import { useState } from "react";
 import {
-  Share2, Globe, Download, Mail, QrCode, Check, Copy,
+  Share2, Globe, Download, Send, QrCode, Check, Copy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Empresa } from "@/lib/empresa";
 import { toast } from "sonner";
+import { InvitarAgenciaModal } from "./InvitarAgenciaModal";
 
 function buildProfileUrl(empresa: Empresa): string {
   const slug = empresa.nombreComercial
@@ -23,6 +24,7 @@ function buildProfileUrl(empresa: Empresa): string {
 
 export function QuickActionsBar({ empresa }: { empresa: Empresa }) {
   const [copied, setCopied] = useState(false);
+  const [showInvitar, setShowInvitar] = useState(false);
   const url = buildProfileUrl(empresa);
 
   const handleCopy = async () => {
@@ -37,11 +39,11 @@ export function QuickActionsBar({ empresa }: { empresa: Empresa }) {
   };
 
   const actions = [
-    { icon: Share2, label: "Compartir perfil", onClick: handleCopy, primary: true },
-    { icon: Globe, label: "Ver microsite", onClick: () => window.open(url, "_blank") },
-    { icon: Download, label: "Media kit", onClick: () => toast.info("Próximamente", { description: "Exportación PDF en v2" }) },
-    { icon: Mail, label: "Invitar agencia", onClick: () => toast.info("Próximamente", { description: "Flujo de invitación en construcción" }) },
-    { icon: QrCode, label: "Código QR", onClick: () => toast.info("Próximamente", { description: "Generación de QR en v2" }) },
+    { icon: Send,    label: "Invitar agencia", onClick: () => setShowInvitar(true), primary: true },
+    { icon: Share2,  label: "Compartir perfil", onClick: handleCopy },
+    { icon: Globe,   label: "Ver microsite",    onClick: () => window.open(url, "_blank") },
+    { icon: Download,label: "Media kit",        onClick: () => toast.info("Próximamente", { description: "Exportación PDF en v2" }) },
+    { icon: QrCode,  label: "Código QR",        onClick: () => toast.info("Próximamente", { description: "Generación de QR en v2" }) },
   ];
 
   return (
@@ -80,6 +82,8 @@ export function QuickActionsBar({ empresa }: { empresa: Empresa }) {
           );
         })}
       </div>
+
+      {showInvitar && <InvitarAgenciaModal onClose={() => setShowInvitar(false)} />}
     </div>
   );
 }
