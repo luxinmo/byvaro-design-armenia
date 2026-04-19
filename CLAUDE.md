@@ -8,18 +8,27 @@
 
 ## 🎯 Qué es Byvaro
 
-SaaS para **promotores inmobiliarios** que gestionan obra nueva y colaboran
-con **agencias** externas para vender unidades. El promotor carga su cartera
-de promociones, comparte unidades con agencias seleccionadas, controla los
-registros de clientes que vienen de esas agencias, la agenda de visitas, las
-ventas y las comisiones.
+SaaS para promotores inmobiliarios de obra nueva. Dos problemas clave que
+resuelve:
 
-Existen **dos personas** que comparten muchas pantallas en modo "dual":
+1. **Web de la promoción incluida** → microsite auto-generado por promoción
+2. **IA de duplicados** → analiza si un registro entrante ya existe en
+   contactos del promotor o en registros previos al mismo promotor
 
-| Persona | Ve | Puede |
-|---|---|---|
-| **Promotor** (dueño del proyecto) | Todo | Editar todo, aprobar registros, compartir con agencias |
-| **Agencia** (colaborador externo) | Solo unidades Disponibles | Registrar clientes, programar visitas, enviar fichas a cliente |
+**Modelo**: promotor paga 249€/mes · agencia invitada 0€ · agencia que
+accede al marketplace 99€/mes. Sin fees por venta.
+
+**Tres personas**:
+
+| Persona | Paga | Ve | Puede |
+|---|---|---|---|
+| **Promotor** | 249€/mes | Todo lo suyo | Crear promociones, invitar agencias, aprobar/rechazar registros, microsite, analítica |
+| **Agencia invitada** | 0€ | Promociones donde colabora | Registrar clientes, visitas, fichas. NO datos sensibles de otras agencias |
+| **Agencia marketplace** | 99€/mes | Catálogo completo + las promociones donde colabora | Solicitar colaboración a promotores nuevos |
+| **Agencia sin plan** | 0€ | Marketplace con todo difuminado | Solo contadores agregados, filtros funcionales, nada más |
+
+Lectura obligatoria: **`docs/product.md`** (modelo de negocio, diferencial,
+flujos críticos).
 
 ---
 

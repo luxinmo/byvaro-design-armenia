@@ -86,47 +86,73 @@ Por diseñar después de clavar la vista Promotor completa.
 
 ---
 
-## Fases del diseño (orden planeado)
+## Fases del diseño (orden replanteado por valor de negocio)
+
+> **Criterio de priorización:** primero lo que diferencia Byvaro de
+> competidores (microsites + IA duplicados + marketplace). Después la
+> operativa. Analítica al final.
 
 ### ✅ Fase 0 — Base
-- Proyecto limpio + tokens + AppShell + IA + deploy + docs
+Proyecto limpio + tokens + AppShell + IA del menú + deploy + docs completa.
 
 ### ✅ Fase 1 — Pantalla Inicio + Promociones listado + Crear promoción (shell + 2 pasos)
 
-### 🟡 Fase 2 — Wizard Crear promoción (pasos 3-8)
-- sub_uni, sub_varias, config_edificio, extras, estado, detalles
+### 🟡 Fase 2 — Wizard Crear promoción completo
+Todos los pasos restantes del wizard:
+  - sub_uni, sub_varias, config_edificio, extras
+  - estado, detalles
+  - info_basica (con dirección + MapBox), multimedia (drag&drop), descripcion
+  - crear_unidades, colaboradores, plan_pagos
 
-### ⬜ Fase 3 — Promoción · detalle completo
-- Tabs Overview / Availability / Comisiones / Documents / Agencies
-- Heredar el patrón horizontal de la card del listado
+Sin completar este wizard no se puede ni probar el flujo principal.
 
-### ⬜ Fase 4 — Colaboradores + Analítica
-- Red (listado)
-- Sub-tab Analítica con heatmap Agencia × Nacionalidad
+### ⬜ Fase 3 — Registros (con IA de duplicados · núcleo del valor)
+Master-detail. Listado a la izquierda, timeline a la derecha. Modal de
+decisión con recomendación IA pre-cargada. **40% del valor del producto.**
 
-### ⬜ Fase 5 — Registros
-- Master-detail con timeline, aprobación/rechazo, detector duplicados
+### ⬜ Fase 4 — Microsites públicos (núcleo del valor)
+- Microsite auto-generado al activarse una promoción
+- Plantilla con branding del promotor
+- Formulario de captación → crea registro automático
+- Configuración de dominio custom
 
-### ⬜ Fase 6 — Contactos
-- Lista + tarjetas + ficha de cliente
+**30% del valor del producto.** No puede faltar.
 
-### ⬜ Fase 7 — Calendario
-- Vista mes/semana/día/lista
+### ⬜ Fase 5 — Onboarding de agencia con magic link
+- Template de email de invitación
+- Pantalla de crear contraseña post-link
+- Vista agencia-invitada con la promoción
 
-### ⬜ Fase 8 — Wizard Crear promoción (pasos 9-14)
-- info_basica, multimedia, descripcion, crear_unidades, colaboradores, plan_pagos
+### ⬜ Fase 6 — Marketplace con paywall
+- Listado de promociones para agencia con plan (catálogo completo)
+- Misma listado **difuminado** para agencia sin plan
+- Modal de upgrade (Stripe Checkout)
+- Banner sticky "modo gratuito"
 
-### ⬜ Fase 9 — Ventas (pipeline)
+### ⬜ Fase 7 — Promoción · detalle completo (Promotor + Agencia)
+Tabs Overview / Availability / Comisiones / Documents / Agencies.
 
-### ⬜ Fase 10 — Microsites + Emails
+### ⬜ Fase 8 — Vista Agencia completa (adaptación de pantallas)
+- Inicio agencia · Promociones colaborables · Mis registros · Agenda · Mis contactos
 
-### ⬜ Fase 11 — Ajustes + Integraciones
+### ⬜ Fase 9 — Contactos (CRM)
 
-### ⬜ Fase 12 — Auth + Onboarding
+### ⬜ Fase 10 — Calendario
 
-### ⬜ Fase 13 — Vista Agencia completa (adaptación)
+### ⬜ Fase 11 — Ventas (pipeline)
 
-### ⬜ Fase 14 — Modo oscuro
+### ⬜ Fase 12 — Colaboradores + Analítica Agencia × Nacionalidad
+
+### ⬜ Fase 13 — Emails · plantillas + campañas
+
+### ⬜ Fase 14 — Ajustes · Empresa, Equipo, Facturación
+
+### ⬜ Fase 15 — Auth completo (Login, Register, Forgot, Verify, Reset, Onboarding promotor)
+
+### ⬜ Fase 16 — Integraciones (WhatsApp, n8n, S3, portales)
+Definidas con el promotor en una fase posterior.
+
+### ⬜ Fase 17 — Modo oscuro
 
 ---
 

@@ -1,45 +1,70 @@
 # Arquitectura · Byvaro v2
 
+> **Lectura obligada antes: `docs/product.md`** — explica qué es Byvaro,
+> modelo de negocio, precios y diferencial. Este documento es técnico.
+
 ## ¿Qué es Byvaro?
 
-Plataforma SaaS para **promotores inmobiliarios** (developers) que gestionan
-la venta de obra nueva apoyándose en una **red de agencias colaboradoras**.
+SaaS para **promotores inmobiliarios** de obra nueva. Resuelve dos dolores
+concretos:
 
-El promotor es el dueño del producto inmobiliario (el edificio, la villa) y
-quien invierte en marketing. Las agencias aportan **clientes** a cambio de
-una comisión por venta cerrada. Byvaro es el sistema operativo que orquesta
-esa relación: quién tiene acceso a qué unidad, quién registra a qué cliente,
-qué visitas se programan, qué ventas se cierran y cuánta comisión se paga.
+1. **Les da la web de la promoción** — cada promoción activa genera
+   automáticamente un microsite (`byvaro.com/<slug>` o dominio custom) con
+   formulario de captación conectado al flujo de registros.
+2. **Elimina el caos de los registros entre agencias** — IA automática que
+   compara cada registro entrante con contactos propios + registros previos
+   de otras agencias a ese mismo promotor, y recomienda aprobar o rechazar.
 
-## Las dos personas
+El promotor paga **249€/mes**. Las agencias que invita el promotor son
+**gratis**. Una agencia que quiere descubrir promotores desde el
+**marketplace** paga **99€/mes** (si no paga, ve el marketplace pero todo
+el contenido está difuminado — ver `docs/paywall.md`).
 
-### Promotor (persona principal)
+## Las tres personas
 
-Quien paga Byvaro. Tiene una o varias **promociones** (proyectos
-inmobiliarios) con **unidades** (pisos, villas, locales). Su trabajo:
+### 1. Promotor — el cliente de pago (249€/mes)
 
-- Configurar promociones (multimedia, precios, comisiones, colaboradores)
-- Aprobar o rechazar registros de clientes que envían las agencias
+Quien paga Byvaro. Tiene una o varias **promociones** con **unidades**. Su
+trabajo:
+
+- Configurar promociones (multimedia, precios, comisiones)
+- Invitar agencias de confianza (email → magic link)
+- Aprobar o rechazar registros de clientes con IA de duplicados
 - Validar visitas programadas
-- Gestionar ventas y cobrar/pagar comisiones
-- Analizar qué agencias venden más, en qué mercados (nacionalidades)
+- Gestionar ventas y analítica Agencia × Nacionalidad
 
-### Agencia (colaborador)
+### 2. Agencia invitada — gratis (0€)
 
-Empresas externas que traen compradores al promotor. Tienen acceso *read-only*
-a las unidades **Disponibles** de las promociones con las que colaboran, y
-pueden:
+Agencias que el promotor invita por email. Acceso **completo y gratuito**
+solo a las promociones donde colabora. Pueden:
 
-- Registrar clientes interesados
+- Ver unidades disponibles (solo `status === "available"`)
+- Registrar clientes al promotor
 - Programar visitas
-- Enviar fichas de unidades a sus clientes
-- Ver comisiones propias, pero no datos sensibles (cliente de otra agencia,
-  fecha de venta, agencia ganadora, etc.)
+- Enviar fichas a sus clientes
+- Ver sus comisiones propias
+
+NO ven datos sensibles: cliente de otra agencia, fecha de venta, agencia
+ganadora, datos del resto de promotores.
+
+### 3. Agencia marketplace — plan opcional (99€/mes)
+
+Cualquier agencia que quiera **descubrir promotores** desde el marketplace
+público de Byvaro. Pago 99€/mes le desbloquea:
+
+- Catálogo completo de promociones de todos los promotores
+- Datos reales (precios, fotos, ubicación, unidades)
+- Poder solicitar colaboración a cualquier promotor
+
+Sin pagar, puede visitar `/marketplace` pero todo el contenido está
+difuminado (ver `docs/paywall.md`). Solo ve contadores agregados y filtros
+funcionales, nunca identidades ni datos sensibles.
 
 ### Admin (roles de empresa)
 
-Dentro de la misma empresa del Promotor hay usuarios con distintos permisos:
-owner, comercial, asistente, etc. Configuración en `/ajustes`.
+Dentro de la misma empresa del promotor hay usuarios con distintos permisos.
+Los roles específicos (owner, comercial, asistente) se definirán en una
+fase posterior — por ahora asumimos un único rol owner con permisos totales.
 
 ## Flujos principales
 
@@ -54,24 +79,46 @@ fiscales, equipo) → llegan a `/inicio`.
 (`/crear-promocion`) con 14 etapas (ver `screens/crear-promocion.md`) →
 guarda borrador automáticamente → al publicar aparece en el listado.
 
-### 3. Invitar agencias a colaborar
+### 3. Invitar agencias a colaborar (flujo real)
 
-Dentro de una promoción → tab "Agencias" → selecciona agencias → envía
-invitación → la agencia acepta desde su panel y aparece el inventario en su
-lista de promociones colaborables.
+1. Promotor abre una promoción → sección "Agencias" → botón "Invitar agencia"
+2. Escribe el **email** de la agencia (manual, 1 por 1)
+3. Byvaro envía un email con un **magic link** único
+4. La agencia hace click en el link → aterriza en `/onboarding-agencia`
+5. **Crea su contraseña** en una sola pantalla (el email ya viene
+   pre-rellenado)
+6. Ya está dentro con una cuenta free — ve la promoción del promotor que
+   le invitó
+7. Puede invitar a más compañeros de su equipo a usar la misma cuenta
 
-### 4. Flujo de registro de cliente
+Desde ese momento, la agencia puede registrar clientes a esa promoción. Sin
+pagar. Sin fricción. La agencia solo paga si quiere descubrir promotores
+nuevos en el marketplace.
+
+### 4. Flujo de registro de cliente con IA de duplicados
 
 1. Agencia identifica un cliente interesado
-2. Agencia lo registra en una promoción concreta (nombre, teléfono,
-   nacionalidad, email)
-3. Byvaro detecta posibles duplicados (`matchPercentage` vs clientes previos)
-4. Solicitud llega al Promotor (`/registros`)
-5. Promotor aprueba / rechaza / pide más información
-6. Si se aprueba, queda bloqueada una "preferencia" de X días para esa
-   agencia sobre ese cliente
-7. Agencia puede programar visita con el cliente
-8. Si cliera, se registra como venta y se calcula comisión
+2. Lo registra en una promoción con: nombre, teléfono, email, nacionalidad
+3. Byvaro lanza el análisis de IA que compara contra:
+   - **Contactos propios del promotor** (CRM)
+   - **Registros previos de otras agencias** a esa misma promoción
+   (NO compara entre promotores distintos — es scoping por tenant)
+4. La IA devuelve:
+   ```
+   {
+     matchPercentage: 0-100,
+     matchDetails: [...campos coincidentes...],
+     existingClient: { agencyName, agentName, registeredDate, hasVisited },
+     recommendation: "Recomiendo rechazar porque..." | "Aprobar, sin duplicados"
+   }
+   ```
+5. Promotor recibe notificación en `/registros` con la IA ya ejecutada
+6. Modal con "Aprobar / Rechazar" pre-sugerido según recomendación
+7. Si aprueba → email automático a agencia + cliente; registro bloqueado
+   por `validezRegistroDias` (default 30)
+8. Si rechaza → email de rechazo con motivo
+
+Este es el **40% del valor** del producto — ver `docs/product.md`.
 
 ### 5. Ciclo de venta
 

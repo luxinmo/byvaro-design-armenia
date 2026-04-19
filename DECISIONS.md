@@ -259,3 +259,167 @@ en Promociones debe sentirse del mismo sistema.
 **Razón:** El usuario quiere poder retomar el proyecto con Claude Code o
 con un dev externo. La docs ahora evita re-descubrir contexto, y cada
 pantalla nueva se documenta en el mismo commit para que la sync se mantenga.
+
+---
+
+## 2026-04-19 · ADR-020 · Nombre canónico "Byvaro"
+
+**Decisión:** El producto se escribe **Byvaro** (con Y), como en el repo.
+Aunque se pronuncia "bívaro" / "bívalo", el nombre canónico en UI, dominio
+y documentación es **Byvaro**.
+
+---
+
+## 2026-04-19 · ADR-021 · Byvaro resuelve 2 dolores concretos
+
+**Decisión:** La propuesta de valor se articula sobre **dos problemas**
+específicos del promotor inmobiliario:
+
+1. **Web de la promoción** — se entrega lista (`byvaro.com/<slug>` o
+   dominio custom), evitando que el promotor contrate freelance externo
+2. **Caos de registros entre agencias** — IA recomienda aprobar/rechazar
+   analizando duplicados
+
+Todo lo demás (CRM, calendario, analítica) es soporte a estos dos núcleos.
+El roadmap se prioriza en función del **valor diferencial**, no del orden
+cronológico de las pantallas.
+
+---
+
+## 2026-04-19 · ADR-022 · Pricing definido
+
+**Decisión:**
+
+| Tier | Precio | Quién |
+|---|---|---|
+| Promotor | 249€/mes | Dueño de proyecto inmobiliario |
+| Agencia invitada | 0€ | Agencia que el promotor invita |
+| Agencia marketplace | 99€/mes | Agencia que quiere acceder al catálogo completo |
+
+Sin fees por venta. Sin splits. Solo SaaS suscripción.
+
+---
+
+## 2026-04-19 · ADR-023 · IA de duplicados scope restringido
+
+**Decisión:** La IA que detecta duplicados **solo compara dentro del mismo
+promotor** (tenant). Es decir:
+
+- Contactos propios del promotor (su CRM)
+- Registros previos de otras agencias a ese mismo promotor
+
+NO cruza entre promotores distintos por privacidad y porque no tendría
+sentido de negocio.
+
+**Modelo a elegir**: Claude Haiku (por latencia < 500ms) o GPT-4o-mini (por
+coste). Se decidirá al implementar backend.
+
+**Formato de respuesta**:
+```ts
+{
+  matchPercentage: number,            // 0-100
+  matchDetails: MatchDetail[],        // campos concretos que coinciden
+  existingClient?: ExistingClient,    // si se encontró un duplicado
+  recommendation: string,             // texto libre dirigido al promotor
+}
+```
+
+---
+
+## 2026-04-19 · ADR-024 · Magic link para onboarding de agencia
+
+**Decisión:** Cuando el promotor invita a una agencia:
+
+1. Promotor escribe email de la agencia
+2. Byvaro envía email con **magic link único** (token con expiración 7 días)
+3. Agencia hace click → aterriza en `/onboarding-agencia?token=xxx`
+4. Pantalla única: email (pre-rellenado) + **crear contraseña**
+5. Submit → cuenta creada + sesión activa → ya ve la promoción
+
+NO pedimos: nombre, apellido, teléfono, etc. en el onboarding. Se completan
+después en ajustes si hace falta. Fricción **cero**.
+
+Alternativas consideradas: SSO obligatorio con Google (descartada, muchas
+agencias sin Google Workspace), email + password + verificación (demasiados
+pasos).
+
+---
+
+## 2026-04-19 · ADR-025 · Paywall total para agencia sin plan en marketplace
+
+**Decisión:** Una agencia sin plan que visita el marketplace **no ve NADA**
+de contenido sensible. No se difumina parcialmente, no hay preview. Se
+oculta:
+
+- Fotos, nombre de promotor, nombre de promoción, precios, ubicación exacta,
+  unidades, comisión, datos de contacto
+
+Se muestra solo:
+- Contador total ("247 promociones")
+- Contadores por zona general
+- Filtros funcionales
+- CTAs de upgrade
+
+**Razón:** el modelo freemium funciona solo si el valor está realmente
+detrás del muro. Medio-preview = agencia recolecta data sin pagar.
+
+Detalle: `docs/paywall.md`.
+
+---
+
+## 2026-04-19 · ADR-026 · Microsite auto-generado por promoción
+
+**Decisión:** Cada promoción activa genera automáticamente un microsite
+público accesible en:
+
+- **Default**: `byvaro.com/<slug>` (ej. `byvaro.com/villa-serena`)
+- **Custom (opcional)**: dominio propio del promotor (`villaserena.com`)
+
+El microsite reutiliza fotos, descripción, unidades y formulario de
+captación. El formulario escribe directo en el flujo de registros del
+promotor como `source: "microsite"`.
+
+**Razón:** diferencial clave del producto (30% del valor). No entregar esto
+es no entregar Byvaro.
+
+**Scope:** plantilla fija pero con tokens (colores del promotor, logo,
+nombre). Editor visual viene en Fase posterior.
+
+---
+
+## 2026-04-19 · ADR-027 · Activación de una promoción
+
+**Decisión:** Una promoción pasa de `borrador` a `activa` cuando:
+
+1. Todos los 14 pasos del wizard completados (`missingSteps.length === 0`)
+2. **Comisión definida** (campo obligatorio para compartir)
+3. Ningún warning rojo en la ficha
+
+No requiere datos fiscales del promotor (esos van en `/ajustes/empresa`,
+a nivel cuenta, no por promoción).
+
+Una vez activa:
+- Se puede invitar agencias
+- Se genera el microsite automático
+- Aparece en el marketplace
+
+---
+
+## 2026-04-19 · ADR-028 · Integraciones fuera de scope inicial
+
+**Decisión:** Las integraciones (WhatsApp, n8n, S3, portales inmobiliarios)
+están en el roadmap pero **no se diseñan en las primeras fases**. Se
+priorizarán más adelante según demanda de promotores reales.
+
+`docs/services.md` queda como referencia de qué se instalará cuando toque,
+pero el flujo de pantallas se diseña sin depender de ninguna de estas
+integraciones — asumiendo implementación mock hasta fase de integraciones.
+
+---
+
+## 2026-04-19 · ADR-029 · Roles de usuarios diferidos
+
+**Decisión:** Los roles internos dentro del promotor (owner, comercial,
+asistente) se definirán más adelante. Por ahora, asumimos un único rol con
+permisos totales en la cuenta. Cuando se añada granularidad de roles, se
+documentará aquí y en `docs/data-model.md`.
