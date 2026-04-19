@@ -5,17 +5,65 @@
  * Estado activo: bg primary/10 + text primary (no negro plano).
  * Usable en Promociones, Contactos, Registros, Ventas (mismo look).
  *
- * Piezas:
- *   <FilterPill icon={Building2} label="Tipo" values={[]} options={...} onChange={...} />
- *   <SortPill value={sort} options={...} onChange={...} />
- *   <FilterChipsActive filters={...} onClear={...} />
- *
- * Todos comparten altura h-8, radio rounded-full, tipografía text-[12.5px].
+ * Los popovers se renderizan via React Portal al document.body para
+ * evitar problemas de clipping por contenedores con overflow-x-auto
+ * (como la toolbar horizontal scrollable en móvil).
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, Check, X, ArrowUpDown, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+/* ─── Hook: posicionar popover debajo del botón ─── */
+function usePopoverPosition(
+  buttonRef: React.RefObject<HTMLButtonElement>,
+  open: boolean,
+  align: "start" | "end" = "start",
+) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open || !buttonRef.current) return;
+    const update = () => {
+      const rect = buttonRef.current!.getBoundingClientRect();
+      const top = rect.bottom + 6;
+      const left = align === "end"
+        ? rect.right
+        : rect.left;
+      setPos({ top, left });
+    };
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [open, align, buttonRef]);
+
+  return pos;
+}
+
+/* ─── Hook: cerrar al click fuera (button + portal) ─── */
+function useClickOutside(
+  buttonRef: React.RefObject<HTMLElement>,
+  open: boolean,
+  onClose: () => void,
+  portalDataAttr: string,
+) {
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (buttonRef.current?.contains(target)) return;
+      if (target.closest(`[${portalDataAttr}]`)) return;
+      onClose();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open, onClose, buttonRef, portalDataAttr]);
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    FilterPill · multi-select con icono
@@ -35,15 +83,10 @@ export function FilterPill({
   icon: Icon, label, values, options, onChange, multi = true,
 }: FilterPillProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const pos = usePopoverPosition(buttonRef, open, "start");
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  useClickOutside(buttonRef, open, () => setOpen(false), "data-filter-pill-portal");
 
   const toggle = (opt: FilterOption) => {
     if (multi) {
@@ -57,23 +100,20 @@ export function FilterPill({
   };
 
   const isActive = values.length > 0;
-  const selectedLabels = values
-    .map(v => options.find(o => o.value === v)?.label || v);
+  const selectedLabels = values.map(v => options.find(o => o.value === v)?.label || v);
 
-  // Display inline: si 1 seleccionado → muestra label; si >1 → muestra contador
   const displayValue = isActive
-    ? (selectedLabels.length === 1
-        ? selectedLabels[0]
-        : `${selectedLabels.length} sel.`)
+    ? (selectedLabels.length === 1 ? selectedLabels[0] : `${selectedLabels.length} sel.`)
     : null;
 
   return (
-    <div className="relative shrink-0" ref={ref}>
+    <>
       <button
+        ref={buttonRef}
         type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        onClick={() => setOpen(o => !o)}
         className={cn(
-          "inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12.5px] font-medium border transition-all whitespace-nowrap",
+          "inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12.5px] font-medium border transition-all whitespace-nowrap shrink-0",
           isActive
             ? "bg-primary/10 border-primary/30 text-primary hover:bg-primary/15"
             : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
@@ -87,13 +127,14 @@ export function FilterPill({
             <span className="font-semibold">{displayValue}</span>
           </>
         )}
-        <ChevronDown className={cn("h-3 w-3 opacity-70", open && "rotate-180")} />
+        <ChevronDown className={cn("h-3 w-3 opacity-70 transition-transform", open && "rotate-180")} />
       </button>
 
-      {open && (
+      {open && pos && createPortal(
         <div
-          className="absolute top-full left-0 mt-1.5 bg-popover border border-border rounded-xl shadow-soft-lg z-50 min-w-[200px] py-1.5 animate-in"
-          onMouseDown={(e) => e.stopPropagation()}
+          data-filter-pill-portal
+          style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 9999 }}
+          className="bg-popover border border-border rounded-xl shadow-soft-lg min-w-[220px] py-1.5 max-h-[60vh] overflow-y-auto"
         >
           {options.map((opt) => {
             const selected = values.includes(opt.value);
@@ -127,9 +168,10 @@ export function FilterPill({
               </button>
             </>
           )}
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 
@@ -146,24 +188,20 @@ interface SortPillProps {
 
 export function SortPill({ value, options, onChange }: SortPillProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const pos = usePopoverPosition(buttonRef, open, "end");
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  useClickOutside(buttonRef, open, () => setOpen(false), "data-sort-pill-portal");
 
   const current = options.find(o => o.value === value);
 
   return (
-    <div className="relative shrink-0" ref={ref}>
+    <>
       <button
+        ref={buttonRef}
         type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
-        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12.5px] font-medium border border-border bg-card text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-all whitespace-nowrap"
+        onClick={() => setOpen(o => !o)}
+        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12.5px] font-medium border border-border bg-card text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-all whitespace-nowrap shrink-0"
       >
         <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/70" />
         <span>Ordenar</span>
@@ -173,11 +211,21 @@ export function SortPill({ value, options, onChange }: SortPillProps) {
             <span className="font-semibold text-foreground">{current.label}</span>
           </>
         )}
-        <ChevronDown className={cn("h-3 w-3 opacity-70", open && "rotate-180")} />
+        <ChevronDown className={cn("h-3 w-3 opacity-70 transition-transform", open && "rotate-180")} />
       </button>
 
-      {open && (
-        <div className="absolute top-full right-0 mt-1.5 bg-popover border border-border rounded-xl shadow-soft-lg z-50 min-w-[220px] py-1.5 animate-in">
+      {open && pos && createPortal(
+        <div
+          data-sort-pill-portal
+          style={{
+            position: "fixed",
+            top: pos.top,
+            left: pos.left,
+            transform: "translateX(-100%)",
+            zIndex: 9999,
+          }}
+          className="bg-popover border border-border rounded-xl shadow-soft-lg min-w-[240px] py-1.5 max-h-[60vh] overflow-y-auto"
+        >
           {options.map((opt) => (
             <button
               key={opt.value}
@@ -190,9 +238,10 @@ export function SortPill({ value, options, onChange }: SortPillProps) {
               {value === opt.value && <Check className="h-3.5 w-3.5 text-primary" strokeWidth={2.5} />}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 
