@@ -25,7 +25,7 @@ export function AppHeader() {
   const title = titles[location.pathname] || "Inicio";
 
   return (
-    <header className="hidden lg:flex h-12 sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border px-6 items-center justify-between gap-4">
+    <header className="hidden lg:flex h-14 sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border px-6 items-center justify-between gap-4">
       {/* Breadcrumb · solo contexto, no título */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Home className="h-3.5 w-3.5" />

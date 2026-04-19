@@ -9,27 +9,56 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Search, Building2, Plus, MapPin, Users, Flame, ChevronDown, SlidersHorizontal,
+  Search, Building2, Plus, MapPin, Users, Flame, SlidersHorizontal,
   X, AlertTriangle, Ban, Share2, TrendingUp,
+  Home, Layers, CircleDollarSign, Palette, CalendarDays,
 } from "lucide-react";
 import { promotions, getBuildingTypeLabel, type Promotion } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion } from "@/data/developerPromotions";
 import { unitsByPromotion } from "@/data/units";
 import { Tag } from "@/components/ui/Tag";
+import { FilterPill, SortPill } from "@/components/ui/FilterBar";
 import { cn } from "@/lib/utils";
 
 /* ═══════════════════════════════════════════════════════════════════
-   Opciones de filtros (idénticas al original)
+   Opciones de filtros (en formato { value, label } para FilterPill)
    ═══════════════════════════════════════════════════════════════════ */
-const propertyTypeOptions = ["Apartments", "Villas", "Townhouses", "Penthouses"];
-const priceOptions = [
-  { label: "200k+", value: 200000 },
-  { label: "500k+", value: 500000 },
-  { label: "1M+", value: 1000000 },
-  { label: "2M+", value: 2000000 },
+const propertyTypeOptions = [
+  { value: "Apartments", label: "Apartamentos" },
+  { value: "Villas", label: "Villas" },
+  { value: "Townhouses", label: "Adosados" },
+  { value: "Penthouses", label: "Áticos" },
 ];
-const styleOptions = ["Contemporary", "Mediterranean", "Minimalist", "Classic"];
-const deliveryOptions = ["Ready now", "2025", "2026", "2027+"];
+const buildingTypeOptions = [
+  { value: "Unifamiliar", label: "Unifamiliar" },
+  { value: "Plurifamiliar", label: "Plurifamiliar" },
+];
+const priceFilterOptions = [
+  { value: "200k+", label: "Desde 200K€" },
+  { value: "500k+", label: "Desde 500K€" },
+  { value: "1M+", label: "Desde 1M€" },
+  { value: "2M+", label: "Desde 2M€" },
+];
+const styleOptions = [
+  { value: "Contemporary", label: "Contemporáneo" },
+  { value: "Mediterranean", label: "Mediterráneo" },
+  { value: "Minimalist", label: "Minimalista" },
+  { value: "Classic", label: "Clásico" },
+];
+const deliveryOptions = [
+  { value: "Ready now", label: "Entrega inmediata" },
+  { value: "2025", label: "2025" },
+  { value: "2026", label: "2026" },
+  { value: "2027+", label: "2027 o posterior" },
+];
+const sortOptions = [
+  { value: "recent", label: "Recientes" },
+  { value: "trending", label: "Más activas" },
+  { value: "priceAsc", label: "Precio ↑" },
+  { value: "priceDesc", label: "Precio ↓" },
+  { value: "deliveryAsc", label: "Entrega más cercana" },
+  { value: "availability", label: "Más disponibilidad" },
+];
 const commissionOptions = [
   { label: "3%+", value: 3 },
   { label: "4%+", value: 4 },
@@ -37,74 +66,10 @@ const commissionOptions = [
 ];
 const bedroomOptions = ["1", "2", "3", "4+"];
 
-/* ═══════════════════════════════════════════════════════════════════
-   MultiSelect Dropdown (pill negro cuando tiene selección)
-   ═══════════════════════════════════════════════════════════════════ */
-function MultiSelectDropdown({ label, values, options, onChange }: {
-  label: string; values: string[]; options: string[]; onChange: (v: string[]) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const toggle = (opt: string) => {
-    onChange(values.includes(opt) ? values.filter(v => v !== opt) : [...values, opt]);
-  };
-
-  return (
-    <div className="relative shrink-0" ref={ref}>
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
-        className={cn(
-          "inline-flex items-center gap-1 h-8 px-3.5 rounded-full text-[12.5px] font-medium border transition-colors whitespace-nowrap",
-          values.length > 0
-            ? "bg-foreground text-background border-foreground"
-            : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-foreground/40"
-        )}
-      >
-        {label}
-        {values.length > 0 && (
-          <span className="ml-0.5 bg-background/20 text-background rounded-full px-1.5 text-[10px]">
-            {values.length}
-          </span>
-        )}
-        <ChevronDown className="h-3 w-3" />
-      </button>
-      {open && (
-        <div
-          className="absolute top-full left-0 mt-1 bg-popover border border-border rounded-xl shadow-soft-lg z-50 min-w-[180px] py-1.5"
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          {options.map((opt) => (
-            <div
-              key={opt}
-              className="flex items-center gap-2.5 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/30 transition-colors"
-              onClick={(e) => { e.stopPropagation(); toggle(opt); }}
-            >
-              <div className={cn(
-                "w-3.5 h-3.5 rounded border flex items-center justify-center",
-                values.includes(opt) ? "bg-foreground border-foreground" : "border-muted-foreground/40"
-              )}>
-                {values.includes(opt) && <span className="text-background text-[9px] leading-none">✓</span>}
-              </div>
-              <span className={values.includes(opt) ? "text-foreground font-medium" : "text-muted-foreground"}>
-                {opt}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+// Map de traducción value → label (para chips activas y mapping precio → number)
+const priceLabelFromValue: Record<string, number> = {
+  "200k+": 200000, "500k+": 500000, "1M+": 1000000, "2M+": 2000000,
+};
 
 /* ═══════════════════════════════════════════════════════════════════
    Filtros avanzados (panel: comisión + dormitorios)
@@ -303,6 +268,7 @@ export default function Promociones() {
   const [bedrooms, setBedrooms] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [buildingTypeFilter, setBuildingTypeFilter] = useState<string>("All");
+  const [sort, setSort] = useState<string>("recent");
 
   const allFilters: { key: string; label: string; remove: () => void }[] = [];
   selectedTypes.forEach(v => allFilters.push({ key: "type", label: v, remove: () => setSelectedTypes(selectedTypes.filter(x => x !== v)) }));
@@ -352,7 +318,7 @@ export default function Promociones() {
       result = result.filter(p => selectedTypes.some(t => p.propertyTypes.some(pt => pt.toLowerCase().includes(t.toLowerCase()))));
     }
     if (selectedPrices.length > 0) {
-      const minVal = Math.min(...selectedPrices.map(l => priceOptions.find(o => o.label === l)?.value || 0));
+      const minVal = Math.min(...selectedPrices.map(l => priceLabelFromValue[l] || 0));
       result = result.filter(p => p.priceMax >= minVal);
     }
     if (selectedDelivery.length > 0) {
@@ -439,17 +405,47 @@ export default function Promociones() {
 
           <div className="h-5 w-px bg-border shrink-0 mx-1" />
 
-          {/* Filter pills */}
-          <MultiSelectDropdown label="Tipo" values={selectedTypes} options={propertyTypeOptions} onChange={setSelectedTypes} />
-          <MultiSelectDropdown
-            label={buildingTypeFilter === "All" ? "Edificio" : buildingTypeFilter}
-            values={buildingTypeFilter === "All" ? [] : [buildingTypeFilter]}
-            options={buildingTypeFilterOptions}
-            onChange={(v) => setBuildingTypeFilter(v.length === 0 ? "All" : v[v.length - 1])}
+          {/* Filter pills con iconos */}
+          <FilterPill
+            icon={Home}
+            label="Tipo"
+            values={selectedTypes}
+            options={propertyTypeOptions}
+            onChange={setSelectedTypes}
           />
-          <MultiSelectDropdown label="Precio" values={selectedPrices} options={priceOptions.map(o => o.label)} onChange={setSelectedPrices} />
-          <MultiSelectDropdown label="Estilo" values={selectedStyles} options={styleOptions} onChange={setSelectedStyles} />
-          <MultiSelectDropdown label="Entrega" values={selectedDelivery} options={deliveryOptions} onChange={setSelectedDelivery} />
+          <FilterPill
+            icon={Layers}
+            label="Edificio"
+            values={buildingTypeFilter === "All" ? [] : [buildingTypeFilter]}
+            options={buildingTypeOptions}
+            onChange={(v) => setBuildingTypeFilter(v.length === 0 ? "All" : v[v.length - 1])}
+            multi={false}
+          />
+          <FilterPill
+            icon={CircleDollarSign}
+            label="Precio"
+            values={selectedPrices}
+            options={priceFilterOptions}
+            onChange={setSelectedPrices}
+          />
+          <FilterPill
+            icon={Palette}
+            label="Estilo"
+            values={selectedStyles}
+            options={styleOptions}
+            onChange={setSelectedStyles}
+          />
+          <FilterPill
+            icon={CalendarDays}
+            label="Entrega"
+            values={selectedDelivery}
+            options={deliveryOptions}
+            onChange={setSelectedDelivery}
+          />
+
+          {/* Sort */}
+          <div className="h-5 w-px bg-border shrink-0 mx-1 hidden sm:block" />
+          <SortPill value={sort} options={sortOptions} onChange={setSort} />
 
           {/* Active filter chips */}
           {allFilters.map((f, i) => (
