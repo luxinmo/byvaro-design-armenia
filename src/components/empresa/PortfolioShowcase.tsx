@@ -55,11 +55,9 @@ function StatusBadge({ status, badge }: { status?: string; badge?: string }) {
 
 function PortfolioCard({
   promotion,
-  size = "small",
   onClick,
 }: {
   promotion: typeof promotions[number];
-  size?: "hero" | "small";
   onClick: () => void;
 }) {
   const sold = promotion.totalUnits - promotion.availableUnits;
@@ -69,65 +67,56 @@ function PortfolioCard({
     <button
       type="button"
       onClick={onClick}
-      className={cn(
-        "group relative overflow-hidden rounded-2xl border border-border bg-card shadow-soft text-left",
-        "hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-300",
-        size === "hero" ? "row-span-2" : "",
-      )}
+      className="group relative overflow-hidden rounded-xl border border-border bg-card text-left hover:border-border/70 hover:-translate-y-0.5 hover:shadow-soft transition-all duration-200"
     >
       {/* Cover */}
-      <div className={cn(
-        "relative w-full overflow-hidden bg-muted",
-        size === "hero" ? "h-full min-h-[260px]" : "aspect-[16/10]",
-      )}>
+      <div className="relative w-full aspect-[4/3] overflow-hidden bg-muted">
         {promotion.image ? (
           <img
             src={promotion.image}
             alt={promotion.name}
-            className="absolute inset-0 h-full w-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
+            className="absolute inset-0 h-full w-full object-cover group-hover:scale-[1.03] transition-transform duration-400"
           />
         ) : (
           <div className="absolute inset-0 grid place-items-center">
-            <Building2 className="h-10 w-10 text-muted-foreground/20" />
+            <Building2 className="h-8 w-8 text-muted-foreground/20" />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
 
         {/* Status badge */}
-        <div className="absolute top-3 left-3">
+        <div className="absolute top-2 left-2">
           <StatusBadge status={promotion.status} badge={promotion.badge} />
         </div>
 
         {/* Precio */}
-        <div className="absolute top-3 right-3 rounded-full bg-white/90 backdrop-blur px-3 py-1 shadow-soft">
-          <span className="text-[10.5px] font-bold text-foreground tnum">
+        <div className="absolute top-2 right-2 rounded-full bg-white/90 backdrop-blur px-2 py-0.5 shadow-soft">
+          <span className="text-[10px] font-semibold text-foreground tnum">
             {formatMoney(promotion.priceMin)}
             {promotion.priceMin !== promotion.priceMax && ` – ${formatMoney(promotion.priceMax)}`}
           </span>
         </div>
 
         {/* Info bottom */}
-        <div className="absolute left-0 right-0 bottom-0 p-4">
-          <h3 className={cn("text-white font-bold leading-tight drop-shadow-sm", size === "hero" ? "text-[18px]" : "text-[14px]")}>
+        <div className="absolute left-0 right-0 bottom-0 p-3">
+          <h3 className="text-white font-semibold text-[13px] leading-tight drop-shadow-sm truncate">
             {promotion.name}
           </h3>
-          <p className="text-white/85 text-[11px] flex items-center gap-1 mt-1">
-            <MapPin className="h-2.5 w-2.5" />
+          <p className="text-white/85 text-[11px] flex items-center gap-1 mt-0.5 truncate">
+            <MapPin className="h-2.5 w-2.5 shrink-0" />
             <span className="truncate">{promotion.location}</span>
           </p>
         </div>
       </div>
 
-      {/* Footer info */}
-      <div className="px-4 py-3 flex items-center justify-between gap-3 border-t border-border">
+      {/* Footer compacto */}
+      <div className="px-3 py-2.5 flex items-center justify-between gap-2 border-t border-border">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Unidades</p>
-          <p className="text-[13px] font-semibold text-foreground tnum">
-            {promotion.availableUnits} / {promotion.totalUnits}
-            <span className="text-muted-foreground font-normal"> disponibles</span>
+          <p className="text-[11px] font-semibold text-foreground tnum">
+            {promotion.availableUnits}/{promotion.totalUnits}
+            <span className="text-muted-foreground font-normal ml-1">uds</span>
           </p>
-          {/* Progress bar */}
-          <div className="mt-1 h-1 rounded-full bg-muted overflow-hidden">
+          <div className="mt-1 h-0.5 rounded-full bg-muted overflow-hidden">
             <div
               className="h-full bg-primary/70 rounded-full"
               style={{ width: `${pct}%` }}
@@ -135,10 +124,7 @@ function PortfolioCard({
           </div>
         </div>
         {promotion.delivery && (
-          <div className="text-right shrink-0">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Entrega</p>
-            <p className="text-[12px] font-semibold text-foreground tnum">{promotion.delivery}</p>
-          </div>
+          <span className="text-[10px] text-muted-foreground tnum shrink-0">{promotion.delivery}</span>
         )}
       </div>
     </button>
@@ -178,12 +164,11 @@ export function PortfolioShowcase({ viewMode }: { viewMode: "edit" | "preview" }
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {destacadas.map((p, idx) => (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {destacadas.map((p) => (
             <PortfolioCard
               key={p.id}
               promotion={p}
-              size={idx === 0 && destacadas.length >= 3 ? "hero" : "small"}
               onClick={() => navigate(`/promociones?id=${p.id}`)}
             />
           ))}

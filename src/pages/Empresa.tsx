@@ -17,7 +17,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  Eye, AlertTriangle, Globe, CheckCircle2, Camera, Image as ImageIcon,
+  Eye, AlertTriangle, CheckCircle2, Camera, Image as ImageIcon,
 } from "lucide-react";
 import { useEmpresa, useOficinas } from "@/lib/empresa";
 import { cn } from "@/lib/utils";
@@ -26,6 +26,7 @@ import { EmpresaAboutTab } from "@/components/empresa/EmpresaAboutTab";
 import { EmpresaAgentsTab } from "@/components/empresa/EmpresaAgentsTab";
 import { EmpresaSidebar } from "@/components/empresa/EmpresaSidebar";
 import { ImageCropModal } from "@/components/empresa/ImageCropModal";
+import { HeroSocialIcons } from "@/components/empresa/HeroSocialIcons";
 import { Toaster } from "sonner";
 
 type Tab = "home" | "about" | "agents" | "statistics";
@@ -210,17 +211,10 @@ export default function Empresa() {
                   {subtitleDisplay || "Completa la ubicación y año de fundación para personalizar tu perfil"}
                 </p>
               </div>
-              {empresa.sitioWeb && (
-                <a
-                  href={empresa.sitioWeb.startsWith("http") ? empresa.sitioWeb : `https://${empresa.sitioWeb}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 text-[13px] text-primary font-medium border border-primary/30 rounded-full px-4 h-9 hover:bg-primary/5 transition-colors shrink-0"
-                >
-                  <Globe className="h-3.5 w-3.5" />
-                  {empresa.sitioWeb}
-                </a>
-              )}
+              {/* Iconos sociales · discretos, alineados a la derecha */}
+              <div className="shrink-0">
+                <HeroSocialIcons empresa={empresa} update={update} viewMode={viewMode} />
+              </div>
             </div>
 
             {/* Tabs */}

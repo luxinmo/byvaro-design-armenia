@@ -11,7 +11,6 @@ import type { Empresa } from "@/lib/empresa";
 import { EditableSection, InfoItem } from "./EditableSection";
 import { OfficesSection } from "./OfficesSection";
 import { HeroStatsStrip } from "./HeroStatsStrip";
-import { PresenciaOnlineCard } from "./PresenciaOnlineCard";
 import { ZonasEspecialidadesCard } from "./ZonasEspecialidadesCard";
 import { TerminosColaboracionCard } from "./TerminosColaboracionCard";
 import { TestimoniosCard } from "./TestimoniosCard";
@@ -71,9 +70,6 @@ export function EmpresaHomeTab({
     <div className="flex flex-col gap-5">
       {/* ═════ Stats de credibilidad ═════ */}
       <HeroStatsStrip empresa={empresa} />
-
-      {/* ═════ Presencia online (web + redes) ═════ */}
-      <PresenciaOnlineCard viewMode={viewMode} empresa={empresa} update={update} />
 
       {/* ═════ Overview ═════ */}
       <EditableSection
