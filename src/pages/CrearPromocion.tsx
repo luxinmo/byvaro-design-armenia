@@ -35,6 +35,7 @@ import { getAllSteps } from "@/components/crear-promocion/StepTimeline";
 import { PhaseTimeline } from "@/components/crear-promocion/PhaseTimeline";
 import { AutoSaveIndicator } from "@/components/crear-promocion/AutoSaveIndicator";
 import { WizardPreviewPanel } from "@/components/crear-promocion/WizardPreviewPanel";
+import { InfoBasicaStep } from "@/components/crear-promocion/InfoBasicaStep";
 import { Switch } from "@/components/ui/Switch";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { cn } from "@/lib/utils";
@@ -252,6 +253,12 @@ export default function CrearPromocion() {
     if (step === "extras") return true;
     if (step === "estado") return !!state.estado;
     if (step === "detalles") return true;
+    if (step === "info_basica") {
+      // Mínimos: nombre + país + ciudad
+      return !!state.nombrePromocion.trim()
+        && !!state.direccionPromocion.pais.trim()
+        && !!state.direccionPromocion.ciudad.trim();
+    }
     // Pasos aún no portados: siempre permitimos pasar
     return true;
   };
@@ -821,8 +828,13 @@ export default function CrearPromocion() {
                   </div>
                 )}
 
+                {/* ─── Step: info_basica ─── */}
+                {step === "info_basica" && (
+                  <InfoBasicaStep state={state} update={update} />
+                )}
+
                 {/* ─── Placeholder para pasos aún no portados ─── */}
-                {!["role", "tipo", "sub_uni", "sub_varias", "config_edificio", "extras", "estado", "detalles"].includes(step) && (
+                {!["role", "tipo", "sub_uni", "sub_varias", "config_edificio", "extras", "estado", "detalles", "info_basica"].includes(step) && (
                   <UpcomingStep step={step} />
                 )}
               </motion.div>
