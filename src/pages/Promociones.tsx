@@ -11,7 +11,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Search, Building2, Plus, MapPin, Users, Flame, SlidersHorizontal,
   X, AlertTriangle, Ban, Share2, TrendingUp,
-  Home, Layers, CircleDollarSign, Palette, CalendarDays,
+  Activity, ShieldCheck, Handshake,
 } from "lucide-react";
 import { promotions, getBuildingTypeLabel, type Promotion } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion } from "@/data/developerPromotions";
@@ -282,14 +282,10 @@ const TRENDING_THRESHOLD = 50;
 export default function Promociones() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
-  const [selectedPrices, setSelectedPrices] = useState<string[]>([]);
-  const [selectedDelivery, setSelectedDelivery] = useState<string[]>([]);
-  const [minCommission, setMinCommission] = useState<number | null>(null);
-  const [bedrooms, setBedrooms] = useState<string | null>(null);
+  const [healthFilter, setHealthFilter] = useState<string[]>([]);        // warnings · trending · no-agencies
+  const [activityFilter, setActivityFilter] = useState<string[]>([]);    // new · active-week · inactive
+  const [collabFilter, setCollabFilter] = useState<string[]>([]);        // with-agencies · without · many-requests
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [buildingTypeFilter, setBuildingTypeFilter] = useState<string>("All");
   const [sort, setSort] = useState<string>("recent");
 
   /* ─── Dataset combinado (developer-only + legacy) ─── */
@@ -297,53 +293,41 @@ export default function Promociones() {
     return [...developerOnlyPromotions, ...promotions.map(p => ({ ...p } as DevPromotion))];
   }, []);
 
-  /* ─── Opciones de filtros derivadas dinámicamente de los datos ─── */
-  const locationOptions = useMemo(() => {
-    const zones = new Set<string>();
-    allPromotions.forEach(p => {
-      const z = getZone(p.location);
-      if (z) zones.add(z);
-    });
-    return Array.from(zones).sort().map(z => ({ value: z, label: z }));
-  }, [allPromotions]);
-
-  const propertyTypeOptions = useMemo(() => {
-    const types = new Set<string>();
-    allPromotions.forEach(p => p.propertyTypes.forEach(t => types.add(t)));
-    return Array.from(types).sort().map(t => ({ value: t, label: getPropertyTypeLabel(t) }));
-  }, [allPromotions]);
-
-  const deliveryOptions = useMemo(() => {
-    const years = new Set<string>();
-    allPromotions.forEach(p => {
-      const y = getDeliveryYear(p.delivery);
-      if (y !== 9999) years.add(String(y));
-    });
-    const sorted = Array.from(years).sort();
-    return [
-      { value: "ready", label: "Entrega inmediata" },
-      ...sorted.map(y => ({ value: y, label: y })),
-    ];
-  }, [allPromotions]);
+  /* ─── Opciones de filtros (fijas para gestión del promotor) ─── */
+  const healthOptions = [
+    { value: "warnings", label: "Con warnings" },
+    { value: "trending", label: "Trending (+50% actividad)" },
+    { value: "sold-out", label: "Sin unidades disponibles" },
+    { value: "healthy", label: "Sin incidencias" },
+  ];
+  const activityOptions = [
+    { value: "new", label: "Nueva (badge 'Nueva')" },
+    { value: "last-units", label: "Últimas unidades" },
+    { value: "high-demand", label: "Demanda alta (20+ consultas)" },
+    { value: "inactive", label: "Sin actividad reciente" },
+  ];
+  const collabOptions = [
+    { value: "with-agencies", label: "Con agencias colaborando" },
+    { value: "without", label: "Sin agencias (no compartida)" },
+    { value: "many", label: "Muchas agencias (5+)" },
+  ];
 
   /* ─── Chips activos + clear all ─── */
+  const chipLabel = (opts: {value:string; label:string}[], v: string) =>
+    opts.find(o => o.value === v)?.label ?? v;
+
   const allFilters: { key: string; label: string; remove: () => void }[] = [];
-  selectedLocations.forEach(v =>
-    allFilters.push({ key: "location", label: v, remove: () => setSelectedLocations(selectedLocations.filter(x => x !== v)) }));
-  selectedTypes.forEach(v =>
-    allFilters.push({ key: "type", label: getPropertyTypeLabel(v), remove: () => setSelectedTypes(selectedTypes.filter(x => x !== v)) }));
-  selectedPrices.forEach(v =>
-    allFilters.push({ key: "price", label: priceFilterOptions.find(o => o.value === v)?.label ?? v, remove: () => setSelectedPrices(selectedPrices.filter(x => x !== v)) }));
-  selectedDelivery.forEach(v =>
-    allFilters.push({ key: "delivery", label: deliveryOptions.find(o => o.value === v)?.label ?? v, remove: () => setSelectedDelivery(selectedDelivery.filter(x => x !== v)) }));
-  if (minCommission) allFilters.push({ key: "commission", label: `Comisión ${minCommission}%+`, remove: () => setMinCommission(null) });
-  if (bedrooms) allFilters.push({ key: "bedrooms", label: `${bedrooms} hab`, remove: () => setBedrooms(null) });
+  healthFilter.forEach(v =>
+    allFilters.push({ key: "health", label: chipLabel(healthOptions, v), remove: () => setHealthFilter(healthFilter.filter(x => x !== v)) }));
+  activityFilter.forEach(v =>
+    allFilters.push({ key: "activity", label: chipLabel(activityOptions, v), remove: () => setActivityFilter(activityFilter.filter(x => x !== v)) }));
+  collabFilter.forEach(v =>
+    allFilters.push({ key: "collab", label: chipLabel(collabOptions, v), remove: () => setCollabFilter(collabFilter.filter(x => x !== v)) }));
 
   const hasFilters = allFilters.length > 0;
   const clearAllFilters = () => {
-    setSearch(""); setSelectedLocations([]); setSelectedTypes([]); setSelectedPrices([]);
-    setSelectedDelivery([]); setMinCommission(null); setBedrooms(null);
-    setStatusFilter("all"); setBuildingTypeFilter("All");
+    setSearch(""); setHealthFilter([]); setActivityFilter([]); setCollabFilter([]);
+    setStatusFilter("all");
   };
 
   const statusFilterOptions = [
@@ -353,15 +337,12 @@ export default function Promociones() {
     { key: "sold-out", label: "Vendidas" },
   ] as const;
 
-  /* ─── Filtrado ─── */
+  /* ─── Filtrado (orientado a GESTIÓN del promotor, no catálogo de comprador) ─── */
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return allPromotions.filter(p => {
-      // Estado
+      // Estado (tabs: Todas / Activas / Incompletas / Vendidas)
       if (statusFilter !== "all" && p.status !== statusFilter) return false;
-
-      // Tipo de edificio
-      if (buildingTypeFilter !== "All" && !matchesBuildingType(p.buildingType, buildingTypeFilter)) return false;
 
       // Búsqueda textual
       if (q) {
@@ -372,54 +353,50 @@ export default function Promociones() {
         if (!hay) return false;
       }
 
-      // Ubicación / zona
-      if (selectedLocations.length > 0) {
-        if (!selectedLocations.includes(getZone(p.location))) return false;
-      }
+      // Salud de la promoción
+      if (healthFilter.length > 0) {
+        const hasMissing = (p.missingSteps?.length ?? 0) > 0;
+        const isTrendingNow = (p.activity?.trend ?? 0) >= TRENDING_THRESHOLD;
+        const isSoldOut = p.availableUnits === 0;
+        const isHealthy = !hasMissing && p.canShareWithAgencies !== false;
 
-      // Tipologías (propertyTypes)
-      if (selectedTypes.length > 0) {
-        const ok = selectedTypes.some(t => p.propertyTypes.includes(t));
-        if (!ok) return false;
-      }
-
-      // Precio mín: la promo tiene al menos 1 unidad ≥ el umbral (usamos priceMax)
-      if (selectedPrices.length > 0) {
-        const minVal = Math.min(...selectedPrices.map(v => parseInt(v, 10)));
-        if (p.priceMax < minVal) return false;
-      }
-
-      // Entrega
-      if (selectedDelivery.length > 0) {
-        const promoYear = getDeliveryYear(p.delivery);
-        const ok = selectedDelivery.some(d => {
-          if (d === "ready") return promoYear <= new Date().getFullYear();
-          return String(promoYear) === d;
+        const passes = healthFilter.some(f => {
+          if (f === "warnings") return hasMissing || p.canShareWithAgencies === false;
+          if (f === "trending") return isTrendingNow;
+          if (f === "sold-out") return isSoldOut;
+          if (f === "healthy") return isHealthy;
+          return false;
         });
-        if (!ok) return false;
+        if (!passes) return false;
       }
 
-      // Comisión mín
-      if (minCommission !== null && p.commission < minCommission) return false;
-
-      // Dormitorios: al menos una unidad disponible con esa cantidad de habs
-      if (bedrooms !== null) {
-        const units = unitsByPromotion[p.id] ?? [];
-        const targetMin = bedrooms === "4+" ? 4 : parseInt(bedrooms, 10);
-        const ok = units.some(u => {
-          if (bedrooms === "4+") return u.bedrooms >= 4;
-          return u.bedrooms === targetMin;
+      // Actividad
+      if (activityFilter.length > 0) {
+        const passes = activityFilter.some(f => {
+          if (f === "new") return p.badge === "new";
+          if (f === "last-units") return p.badge === "last-units";
+          if (f === "high-demand") return (p.activity?.inquiries ?? 0) >= 20;
+          if (f === "inactive") return (p.activity?.inquiries ?? 0) === 0 && (p.activity?.visits ?? 0) === 0;
+          return false;
         });
-        if (!ok) return false;
+        if (!passes) return false;
+      }
+
+      // Colaboración
+      if (collabFilter.length > 0) {
+        const nAgencies = p.agencies ?? 0;
+        const passes = collabFilter.some(f => {
+          if (f === "with-agencies") return nAgencies >= 1;
+          if (f === "without") return nAgencies === 0;
+          if (f === "many") return nAgencies >= 5;
+          return false;
+        });
+        if (!passes) return false;
       }
 
       return true;
     });
-  }, [
-    allPromotions, search, statusFilter, buildingTypeFilter,
-    selectedLocations, selectedTypes, selectedPrices, selectedDelivery,
-    minCommission, bedrooms,
-  ]);
+  }, [allPromotions, search, statusFilter, healthFilter, activityFilter, collabFilter]);
 
   /* ─── Ordenación ─── */
   const sortedAndFiltered = useMemo(() => {
@@ -479,11 +456,6 @@ export default function Promociones() {
             )}
           </div>
 
-          <FiltersPanel
-            minCommission={minCommission} setMinCommission={setMinCommission}
-            bedrooms={bedrooms} setBedrooms={setBedrooms}
-          />
-
           <button
             onClick={() => navigate("/crear-promocion")}
             className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft shrink-0"
@@ -521,42 +493,27 @@ export default function Promociones() {
 
           <div className="h-5 w-px bg-border shrink-0 mx-1" />
 
-          {/* Filter pills (deriva opciones de los datos reales) */}
+          {/* Filter pills orientados a GESTIÓN del promotor */}
           <FilterPill
-            icon={MapPin}
-            label="Zona"
-            values={selectedLocations}
-            options={locationOptions}
-            onChange={setSelectedLocations}
+            icon={ShieldCheck}
+            label="Salud"
+            values={healthFilter}
+            options={healthOptions}
+            onChange={setHealthFilter}
           />
           <FilterPill
-            icon={Home}
-            label="Tipología"
-            values={selectedTypes}
-            options={propertyTypeOptions}
-            onChange={setSelectedTypes}
+            icon={Activity}
+            label="Actividad"
+            values={activityFilter}
+            options={activityOptions}
+            onChange={setActivityFilter}
           />
           <FilterPill
-            icon={Layers}
-            label="Edificio"
-            values={buildingTypeFilter === "All" ? [] : [buildingTypeFilter]}
-            options={buildingTypeOptions}
-            onChange={(v) => setBuildingTypeFilter(v.length === 0 ? "All" : v[v.length - 1])}
-            multi={false}
-          />
-          <FilterPill
-            icon={CircleDollarSign}
-            label="Precio"
-            values={selectedPrices}
-            options={priceFilterOptions}
-            onChange={setSelectedPrices}
-          />
-          <FilterPill
-            icon={CalendarDays}
-            label="Entrega"
-            values={selectedDelivery}
-            options={deliveryOptions}
-            onChange={setSelectedDelivery}
+            icon={Handshake}
+            label="Colaboración"
+            values={collabFilter}
+            options={collabOptions}
+            onChange={setCollabFilter}
           />
 
           {/* Sort */}
