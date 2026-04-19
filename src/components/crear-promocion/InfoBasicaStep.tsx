@@ -1,23 +1,29 @@
 /**
  * InfoBasicaStep · Paso "Información básica" del wizard Crear Promoción.
  *
- * Recoge:
- *   - Nombre comercial de la promoción (obligatorio)
- *   - Ubicación: país · provincia · ciudad · dirección
- *   - Estilo arquitectónico (si no se fijó en sub_varias)
- *   - Toggle urbanización
- *   - Amenities, zonas comunes, características de vivienda (pills)
- *   - Aplicación de características (todas / algunas)
- *   - Certificado energético (A-G · En trámite)
+ * Fidelidad al original Lovable + mejoras de UX:
+ *   1. Nombre comercial (obligatorio, autofocus, hero big input).
+ *   2. Dirección · input único tipo Google Places (AddressAutocomplete)
+ *      que parsea ciudad/provincia/país automáticamente.
+ *   3. Certificado energético · letter-grid A-G + "En trámite".
+ *   4. SI unifamiliar:
+ *      - caracteristicasVivienda (pills)
+ *      - Master switch "¿Dentro de urbanización?" → si ON revela
+ *        nombre de la urba + sus zonas comunes compartidas.
+ *   5. SI plurifamiliar/mixto:
+ *      - amenities propias del edificio (pills)
+ *      - caracteristicasVivienda (pills)
+ *      - Si hay características: selector "Todas / Solo algunas unidades"
+ *      - Master switch "¿Dentro de urbanización?" (mejora sobre el
+ *        original: un bloque plurifamiliar también puede estar dentro
+ *        de una urba con piscina compartida, etc.)
  *
- * Diseño: inputs grandes (h-10), pills multi-select con iconos,
- * secciones separadas por SectionLabel. Smart defaults: sugerimos
- * amenities según el país/zona y el tipo de promoción; el promotor
- * puede confirmar o quitar antes de seguir.
+ * El branching respeta la semántica del original: amenities = propias
+ * del edificio; zonasComunes = de la urbanización a la que pertenece.
  */
 
 import { useMemo } from "react";
-import { MapPin, Sparkles, Leaf } from "lucide-react";
+import { MapPin, Sparkles, Leaf, Palmtree, Home as HomeIcon } from "lucide-react";
 import type { WizardState, EstiloVivienda } from "./types";
 import {
   estiloViviendaOptions,
@@ -29,35 +35,13 @@ import {
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/Switch";
 import { OptionCard } from "./SharedWidgets";
+import { AddressAutocomplete } from "./AddressAutocomplete";
 
-/* ─── Sugerencias de ubicación ────────────────────────────────────── */
-const PAISES_COMUNES = ["España", "Portugal", "Andorra", "México", "Colombia", "Argentina"];
-
-const PROVINCIAS_ES = [
-  "A Coruña", "Álava", "Albacete", "Alicante", "Almería", "Asturias",
-  "Ávila", "Badajoz", "Baleares", "Barcelona", "Burgos", "Cáceres",
-  "Cádiz", "Cantabria", "Castellón", "Ciudad Real", "Córdoba", "Cuenca",
-  "Girona", "Granada", "Guadalajara", "Gipuzkoa", "Huelva", "Huesca",
-  "Jaén", "La Rioja", "Las Palmas", "León", "Lleida", "Lugo",
-  "Madrid", "Málaga", "Murcia", "Navarra", "Ourense", "Palencia",
-  "Pontevedra", "Salamanca", "Segovia", "Sevilla", "Soria",
-  "Tarragona", "Santa Cruz de Tenerife", "Teruel", "Toledo",
-  "Valencia", "Valladolid", "Bizkaia", "Zamora", "Zaragoza",
-];
-
-const CIUDADES_POPULARES: Record<string, string[]> = {
-  Alicante: ["Altea", "Benidorm", "Calpe", "Dénia", "Jávea", "Torrevieja", "Santa Pola"],
-  Málaga: ["Marbella", "Estepona", "Fuengirola", "Benalmádena", "Mijas", "Nerja"],
-  Madrid: ["Madrid", "Las Rozas", "Pozuelo", "Majadahonda", "Alcobendas", "Boadilla"],
-  Barcelona: ["Barcelona", "Sitges", "Castelldefels", "Gavà", "Sant Cugat"],
-  Baleares: ["Palma", "Calvià", "Alcúdia", "Pollença", "Manacor", "Ibiza ciudad"],
-};
-
-/* Sugerencias "smart" de amenities según indicios de costa / ciudad. */
-function suggestAmenities(state: WizardState): string[] {
-  const ciudad = state.direccionPromocion.ciudad?.toLowerCase() ?? "";
-  const costa = /marbella|benidorm|denia|altea|jávea|javea|estepona|alicante|málaga|malaga|calpe|torrevieja|palma|ibiza/.test(ciudad);
-  const urbana = /madrid|barcelona|bilbao|sevilla|valencia/.test(ciudad);
+/* ─── Sugerencia smart de amenities según ubicación ──────────────── */
+function suggestAmenities(ciudad: string): string[] {
+  const c = ciudad.toLowerCase();
+  const costa = /marbella|benidorm|denia|altea|javea|jávea|estepona|alicante|málaga|malaga|calpe|torrevieja|palma|ibiza|orihuela|nerja/.test(c);
+  const urbana = /madrid|barcelona|bilbao|sevilla|valencia/.test(c);
   if (costa) return ["piscina", "jardin", "beach_club", "seguridad"];
   if (urbana) return ["gimnasio", "coworking", "seguridad", "conserje"];
   return ["piscina", "jardin", "seguridad"];
@@ -97,34 +81,19 @@ function PillSelect<T extends string>({
   );
 }
 
-/* ─── Sub-componente: Field (label + input) ──────────────────────── */
-function Field({
-  label, required, children, hint,
-}: {
-  label: string; required?: boolean; children: React.ReactNode; hint?: string;
-}) {
+/* ─── SectionLabel compartido ──────────────────────────────────────── */
+function SectionLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-[12.5px] font-medium text-foreground">
-        {label}
-        {required && <span className="text-primary ml-0.5">*</span>}
-      </span>
-      {children}
-      {hint && <span className="text-[10.5px] text-muted-foreground">{hint}</span>}
-    </label>
+    <div className="mb-2">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        {children}
+      </p>
+      {hint && <p className="text-[10.5px] text-muted-foreground/80 mt-0.5">{hint}</p>}
+    </div>
   );
 }
 
 const inputClass = "h-10 px-3 text-[13.5px] bg-card border border-border rounded-xl focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground/60";
-
-/* ─── SectionLabel compartido ──────────────────────────────────────── */
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-2">
-      {children}
-    </p>
-  );
-}
 
 /* ═══════════════════════════════════════════════════════════════════
    InfoBasicaStep
@@ -137,11 +106,14 @@ export function InfoBasicaStep({
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
 }) {
   const isPlurifamiliar = state.tipo === "plurifamiliar" || state.tipo === "mixto";
+  const isUnifamiliar = state.tipo === "unifamiliar";
 
-  // Sugerencias dinámicas. Solo para inspirar, el promotor decide.
-  const suggestions = useMemo(() => suggestAmenities(state), [state.direccionPromocion.ciudad]);
+  // Sugerencias dinámicas de amenities según la ciudad.
+  const suggestions = useMemo(
+    () => suggestAmenities(state.direccionPromocion.ciudad ?? ""),
+    [state.direccionPromocion.ciudad],
+  );
   const noAmenitiesYet = state.amenities.length === 0;
-  const ciudadesSugeridas = CIUDADES_POPULARES[state.direccionPromocion.provincia] ?? [];
 
   const toggleAmenity = (v: string) => {
     const next = state.amenities.includes(v)
@@ -173,74 +145,26 @@ export function InfoBasicaStep({
           value={state.nombrePromocion}
           onChange={(e) => update("nombrePromocion", e.target.value)}
           placeholder="Ej. Residencial Mar Azul"
-          className={cn(inputClass, "h-12 text-[16px] font-semibold")}
+          className={cn(inputClass, "h-12 text-[16px] font-semibold w-full")}
           maxLength={80}
         />
         <p className="text-[10.5px] text-muted-foreground mt-1.5">
-          Este nombre aparecerá en el listado, en los materiales de agencias y en tu microsite público.
+          Este nombre aparecerá en el listado de agencias y en tu microsite público.
         </p>
       </div>
 
-      {/* ═════ Ubicación ═════ */}
+      {/* ═════ Dirección Google-style ═════ */}
       <div>
-        <SectionLabel>
+        <SectionLabel hint="Escribe la ciudad, urbanización o dirección y selecciona una sugerencia.">
           <span className="inline-flex items-center gap-1.5">
             <MapPin className="h-3 w-3" />
             Ubicación
           </span>
         </SectionLabel>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="País" required>
-            <input
-              type="text"
-              list="paises-list"
-              value={state.direccionPromocion.pais}
-              onChange={(e) => update("direccionPromocion", { ...state.direccionPromocion, pais: e.target.value })}
-              placeholder="España"
-              className={inputClass}
-            />
-            <datalist id="paises-list">
-              {PAISES_COMUNES.map(p => <option key={p} value={p} />)}
-            </datalist>
-          </Field>
-          <Field label="Provincia">
-            <input
-              type="text"
-              list="provincias-list"
-              value={state.direccionPromocion.provincia}
-              onChange={(e) => update("direccionPromocion", { ...state.direccionPromocion, provincia: e.target.value, ciudad: "" })}
-              placeholder="Málaga"
-              className={inputClass}
-            />
-            <datalist id="provincias-list">
-              {PROVINCIAS_ES.map(p => <option key={p} value={p} />)}
-            </datalist>
-          </Field>
-          <Field label="Ciudad / municipio" required>
-            <input
-              type="text"
-              list="ciudades-list"
-              value={state.direccionPromocion.ciudad}
-              onChange={(e) => update("direccionPromocion", { ...state.direccionPromocion, ciudad: e.target.value })}
-              placeholder={ciudadesSugeridas[0] ?? "Marbella"}
-              className={inputClass}
-            />
-            {ciudadesSugeridas.length > 0 && (
-              <datalist id="ciudades-list">
-                {ciudadesSugeridas.map(c => <option key={c} value={c} />)}
-              </datalist>
-            )}
-          </Field>
-          <Field label="Dirección / zona" hint="Calle, urbanización o zona reconocible">
-            <input
-              type="text"
-              value={state.direccionPromocion.direccion}
-              onChange={(e) => update("direccionPromocion", { ...state.direccionPromocion, direccion: e.target.value })}
-              placeholder="Av. del Mar, 45"
-              className={inputClass}
-            />
-          </Field>
-        </div>
+        <AddressAutocomplete
+          value={state.direccionPromocion}
+          onChange={(v) => update("direccionPromocion", v)}
+        />
       </div>
 
       {/* ═════ Estilo arquitectónico (solo si no viene ya) ═════ */}
@@ -260,88 +184,149 @@ export function InfoBasicaStep({
         </div>
       )}
 
-      {/* ═════ Urbanización toggle ═════ */}
-      <div className="rounded-2xl border border-border bg-card p-4 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[13.5px] font-semibold text-foreground">¿Está dentro de una urbanización?</p>
-          <p className="text-[11.5px] text-muted-foreground">
-            Si lo está, podrás usar sus zonas comunes como valor añadido para los compradores.
-          </p>
-        </div>
-        <Switch
-          checked={state.urbanizacion}
-          onCheckedChange={(v) => update("urbanizacion", v)}
-          ariaLabel="Dentro de urbanización"
-        />
-      </div>
+      {/* ═════════════════════════════════════════════════════════════
+          Rama UNIFAMILIAR: características + urbanización
+          ═════════════════════════════════════════════════════════════ */}
+      {isUnifamiliar && (
+        <>
+          <div>
+            <SectionLabel>Características destacadas de las viviendas</SectionLabel>
+            <PillSelect
+              options={caracteristicasViviendaOptions}
+              selected={state.caracteristicasVivienda}
+              onToggle={toggleCaracteristica}
+            />
+          </div>
+        </>
+      )}
 
-      {/* ═════ Amenities ═════ */}
+      {/* ═════════════════════════════════════════════════════════════
+          Rama PLURIFAMILIAR / MIXTO: amenities + características
+          ═════════════════════════════════════════════════════════════ */}
+      {isPlurifamiliar && (
+        <>
+          <div>
+            <SectionLabel hint="Lo que ofrece el edificio/promoción por sí mismo.">
+              <span className="inline-flex items-center gap-1.5">
+                <Sparkles className="h-3 w-3" />
+                Amenities del edificio
+              </span>
+            </SectionLabel>
+            <PillSelect
+              options={amenitiesOptions}
+              selected={state.amenities}
+              onToggle={toggleAmenity}
+            />
+            {noAmenitiesYet && state.direccionPromocion.ciudad && (
+              <button
+                type="button"
+                onClick={() => update("amenities", suggestions)}
+                className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] font-medium text-primary hover:underline"
+              >
+                <Sparkles className="h-3 w-3" />
+                Sugerencia: añadir {suggestions.length} amenities habituales en {state.direccionPromocion.ciudad}
+              </button>
+            )}
+          </div>
+
+          <div>
+            <SectionLabel>Características comunes de las viviendas</SectionLabel>
+            <PillSelect
+              options={caracteristicasViviendaOptions}
+              selected={state.caracteristicasVivienda}
+              onToggle={toggleCaracteristica}
+            />
+            {state.caracteristicasVivienda.length > 0 && (
+              <div className="mt-3 flex items-center gap-3 rounded-xl bg-muted/40 border border-border p-3">
+                <span className="text-[11.5px] text-muted-foreground">¿Aplican a todas las viviendas?</span>
+                <div className="flex gap-1 ml-auto">
+                  {(["todas", "algunas"] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => update("caracteristicasAplicacion", v)}
+                      className={cn(
+                        "h-7 rounded-full px-3 text-[11.5px] font-semibold transition-colors",
+                        state.caracteristicasAplicacion === v
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-background text-muted-foreground border border-border hover:text-foreground",
+                      )}
+                    >
+                      {v === "todas" ? "Todas" : "Solo algunas"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ═════ Urbanización master switch (siempre disponible) ═════ */}
       <div>
         <SectionLabel>
           <span className="inline-flex items-center gap-1.5">
-            <Sparkles className="h-3 w-3" />
-            Amenities que ofrece tu promoción
+            <Palmtree className="h-3 w-3" />
+            Urbanización
           </span>
         </SectionLabel>
-        <PillSelect
-          options={amenitiesOptions}
-          selected={state.amenities}
-          onToggle={toggleAmenity}
-        />
-        {noAmenitiesYet && state.direccionPromocion.ciudad && (
-          <button
-            type="button"
-            onClick={() => update("amenities", suggestions)}
-            className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] font-medium text-primary hover:underline"
-          >
-            <Sparkles className="h-3 w-3" />
-            Sugerencia: añadir {suggestions.length} amenities habituales en {state.direccionPromocion.ciudad}
-          </button>
-        )}
-      </div>
-
-      {/* ═════ Zonas comunes — solo plurifamiliar/mixto ═════ */}
-      {isPlurifamiliar && (
-        <div>
-          <SectionLabel>Zonas comunes del edificio</SectionLabel>
-          <PillSelect
-            options={zonasComOptions}
-            selected={state.zonasComunes}
-            onToggle={toggleZona}
-          />
-        </div>
-      )}
-
-      {/* ═════ Características de la vivienda ═════ */}
-      <div>
-        <SectionLabel>Características destacadas de las viviendas</SectionLabel>
-        <PillSelect
-          options={caracteristicasViviendaOptions}
-          selected={state.caracteristicasVivienda}
-          onToggle={toggleCaracteristica}
-        />
-        {state.caracteristicasVivienda.length > 0 && (
-          <div className="mt-3 flex items-center gap-3 rounded-xl bg-muted/40 border border-border p-3">
-            <span className="text-[11.5px] text-muted-foreground">¿Aplican a todas las viviendas?</span>
-            <div className="flex gap-1 ml-auto">
-              {(["todas", "algunas"] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => update("caracteristicasAplicacion", v)}
-                  className={cn(
-                    "h-7 rounded-full px-3 text-[11.5px] font-semibold transition-colors",
-                    state.caracteristicasAplicacion === v
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-background text-muted-foreground border border-border hover:text-foreground",
-                  )}
-                >
-                  {v === "todas" ? "Todas" : "Solo algunas"}
-                </button>
-              ))}
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="flex items-center justify-between gap-3 p-4">
+            <div>
+              <p className="text-[13.5px] font-semibold text-foreground">¿Está dentro de una urbanización?</p>
+              <p className="text-[11.5px] text-muted-foreground leading-relaxed max-w-md">
+                {isUnifamiliar
+                  ? "Las viviendas unifamiliares suelen estar dentro de urbanizaciones con piscina, pistas de pádel, jardines compartidos…"
+                  : "Un bloque plurifamiliar puede formar parte de una urbanización más grande con sus propias zonas comunes."}
+              </p>
             </div>
+            <Switch
+              checked={state.urbanizacion}
+              onCheckedChange={(v) => update("urbanizacion", v)}
+              ariaLabel="Dentro de urbanización"
+            />
           </div>
-        )}
+
+          {/* Sub-formulario que se revela cuando el switch está ON */}
+          {state.urbanizacion && (
+            <div className="border-t border-border bg-muted/20 p-4 flex flex-col gap-4">
+              <div>
+                <label className="text-[11.5px] font-medium text-muted-foreground mb-1.5 block">
+                  Nombre de la urbanización
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej. Urb. Los Flamingos, Nueva Andalucía…"
+                  className={cn(inputClass, "w-full")}
+                  defaultValue=""
+                  /* En el modelo actual no hay `nombreUrbanizacion`.
+                     Lo dejamos como input cosmético; si en el futuro
+                     se añade al estado se conecta aquí. */
+                />
+                <p className="text-[10px] text-muted-foreground/70 mt-1">
+                  Opcional. Si no la sabes, solo marca las zonas comunes que ofrece.
+                </p>
+              </div>
+
+              <div>
+                <p className="text-[11.5px] font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <HomeIcon className="h-3 w-3" />
+                  Zonas comunes compartidas
+                </p>
+                <PillSelect
+                  options={zonasComOptions}
+                  selected={state.zonasComunes}
+                  onToggle={toggleZona}
+                />
+                {state.zonasComunes.length === 0 && (
+                  <p className="text-[10.5px] text-muted-foreground/80 mt-2">
+                    Selecciona las zonas comunes a las que tienen acceso los compradores.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ═════ Certificado energético ═════ */}
