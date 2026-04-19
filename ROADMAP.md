@@ -32,7 +32,7 @@ Leyenda: ✅ hecho · 🟡 en curso · 🎨 placeholder · ⬜ pendiente
 | 🎨 | Microsites | `/microsites` | Placeholder |
 | 🎨 | Emails | `/emails` | Placeholder |
 | 🎨 | Ajustes | `/ajustes` | Placeholder |
-| ⬜ | Promoción · detalle | `/promociones/:id` | Pantalla compleja con tabs |
+| ✅ | Promoción · detalle | `/promociones/:id` | Ficha con 6 tabs (Información · Disponibilidad · Multimedia · Docs · Colaboradores · Registros) |
 
 ---
 
@@ -78,11 +78,12 @@ Por diseñar después de clavar la vista Promotor completa.
 | 🎨 | Estado | Proyecto / construcción / terminado |
 | 🎨 | Detalles finales | Piso piloto, oficinas, entrega |
 | 🎨 | Info básica | Nombre, dirección, precios |
-| 🎨 | Multimedia | Fotos + videos |
-| 🎨 | Descripción | IA o manual |
-| 🎨 | Crear unidades | Tabla editable |
-| 🎨 | Colaboradores | Comisiones, condiciones |
-| 🎨 | Plan de pagos | Hitos del comprador |
+| ✅ | Multimedia | Fotos drag&drop + videos (YouTube / upload / 360°) |
+| ✅ | Descripción | IA o manual · traducciones en 8 idiomas |
+| ✅ | Crear unidades | Lista editable con multimedia por unidad |
+| ✅ | Colaboradores | Comisiones nac/intl · condiciones · forma de pago |
+| ✅ | Plan de pagos | Contrato · manual con % · certificaciones por fase · reserva |
+| ✅ | Revisión | Resumen por fase + publicación |
 
 ---
 

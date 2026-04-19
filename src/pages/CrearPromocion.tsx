@@ -37,6 +37,12 @@ import { AutoSaveIndicator } from "@/components/crear-promocion/AutoSaveIndicato
 import { WizardPreviewPanel } from "@/components/crear-promocion/WizardPreviewPanel";
 import { InfoBasicaStep } from "@/components/crear-promocion/InfoBasicaStep";
 import { DetallesStep } from "@/components/crear-promocion/DetallesStep";
+import { DescripcionStep } from "@/components/crear-promocion/DescripcionStep";
+import { PlanPagosStep } from "@/components/crear-promocion/PlanPagosStep";
+import { MultimediaStep } from "@/components/crear-promocion/MultimediaStep";
+import { ColaboradoresStep } from "@/components/crear-promocion/ColaboradoresStep";
+import { CrearUnidadesStep } from "@/components/crear-promocion/CrearUnidadesStep";
+import { RevisionStep } from "@/components/crear-promocion/RevisionStep";
 import { Switch } from "@/components/ui/Switch";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { cn } from "@/lib/utils";
@@ -817,9 +823,34 @@ export default function CrearPromocion() {
                   <InfoBasicaStep state={state} update={update} />
                 )}
 
-                {/* ─── Placeholder para pasos aún no portados ─── */}
-                {!["role", "tipo", "sub_uni", "sub_varias", "config_edificio", "extras", "estado", "detalles", "info_basica"].includes(step) && (
-                  <UpcomingStep step={step} />
+                {/* ─── Step: descripcion ─── */}
+                {step === "descripcion" && (
+                  <DescripcionStep state={state} update={update} />
+                )}
+
+                {/* ─── Step: plan_pagos ─── */}
+                {step === "plan_pagos" && (
+                  <PlanPagosStep state={state} update={update} />
+                )}
+
+                {/* ─── Step: multimedia ─── */}
+                {step === "multimedia" && (
+                  <MultimediaStep state={state} update={update} />
+                )}
+
+                {/* ─── Step: colaboradores ─── */}
+                {step === "colaboradores" && (
+                  <ColaboradoresStep state={state} update={update} />
+                )}
+
+                {/* ─── Step: crear_unidades ─── */}
+                {step === "crear_unidades" && (
+                  <CrearUnidadesStep state={state} update={update} />
+                )}
+
+                {/* ─── Step: revision (paso final) ─── */}
+                {step === "revision" && (
+                  <RevisionStep state={state} onEditStep={setStep} />
                 )}
               </motion.div>
             </AnimatePresence>

@@ -160,6 +160,12 @@ function getAllSteps(state: WizardState): TimelineStep[] {
     },
   });
 
+  steps.push({
+    id: "revision",
+    label: "Revisión",
+    getSummary: () => null,
+  });
+
   return steps;
 }
 

@@ -12,6 +12,7 @@ import Emails from "@/pages/Emails";
 import Ajustes from "@/pages/Ajustes";
 import CrearPromocion from "@/pages/CrearPromocion";
 import Empresa from "@/pages/Empresa";
+import PromocionDetalle from "@/pages/PromocionDetalle";
 import PromocionesCardsV1 from "@/pages/design-previews/PromocionesCardsV1";
 
 export default function App() {
@@ -30,6 +31,7 @@ export default function App() {
                 <Route path="/" element={<Navigate to="/inicio" replace />} />
                 <Route path="/inicio" element={<Inicio />} />
                 <Route path="/promociones" element={<Promociones />} />
+                <Route path="/promociones/:id" element={<PromocionDetalle />} />
                 <Route path="/registros" element={<Registros />} />
                 <Route path="/ventas" element={<Ventas />} />
                 <Route path="/calendario" element={<Calendario />} />

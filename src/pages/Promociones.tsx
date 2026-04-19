@@ -702,7 +702,7 @@ export default function Promociones() {
               return (
                 <article
                   key={p.id}
-                  onClick={() => alert(`Navegar a /promociones/${p.id}`)}
+                  onClick={() => navigate(`/promociones/${p.id}`)}
                   className={cn(
                     "group flex flex-col lg:flex-row bg-card border rounded-2xl overflow-hidden shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer",
                     hasMissing

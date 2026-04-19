@@ -1,0 +1,2349 @@
+import { useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { promotions, getBuildingTypeLabel } from "@/data/promotions";
+import { developerOnlyPromotions, type DevPromotion, type Comercial, type ComercialPermissions } from "@/data/developerPromotions";
+import { agencies, type Agency } from "@/data/agencies";
+import {
+  ArrowLeft, Pencil, Share2, Users, AlertTriangle, CheckCircle2,
+  MapPin, Calendar, Euro, Home, Banknote, TrendingUp, Camera,
+  FileText, Layers, Handshake, CreditCard, ChevronRight,
+  Settings, Eye, Building2, HardHat, Car, Archive,
+  Globe, Shield, ClipboardList, Image, Video, Play,
+  Plus, Phone, Mail, MessageCircle, Store, UserPlus,
+  Check, X, ExternalLink, Zap, Star, Search, ChevronDown, Info,
+  Lock, Unlock, FolderOpen, Folder, Download, BookOpen, Upload, MoreHorizontal, FilePlus, ArrowRight,
+  Trophy, Sparkles, ArrowUpRight, FileCheck2,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { Separator } from "@/components/ui/separator";
+import { Tag } from "@/components/ui/tag";
+import { Progress } from "@/components/ui/progress";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { PromotionAvailabilitySummary } from "@/components/promotions/detail/PromotionAvailabilitySummary";
+import { PromotionAvailabilityFull } from "@/components/promotions/detail/PromotionAvailabilityFull";
+import { unitsByPromotion } from "@/data/units";
+import { ClientRegistrationDialog } from "@/components/promotions/detail/ClientRegistrationDialog";
+import { PromotionRecords } from "@/components/promotions/detail/PromotionRecords";
+import {
+  EditMultimediaDialog, EditBasicInfoDialog, EditStructureDialog,
+  EditDescriptionDialog, EditLocationDialog, EditPaymentPlanDialog,
+  EditShowHouseDialog, EditDocumentDialog, EditContactsDialog, EditInventoryDialog,
+  EditSalesOfficesDialog, type SalesOffice,
+  PickTeamMembersDialog, PickSalesOfficesDialog,
+} from "@/components/promotions/detail/EditSectionDialogs";
+import { activeTeamMembers } from "@/data/teamMembers";
+import { companyOffices } from "@/data/companyOffices";
+import { SendEmailDialog } from "@/components/email/SendEmailDialog";
+
+function formatPrice(n: number) {
+  return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+}
+
+const stepConfig: Record<string, { icon: typeof Camera; label: string; description: string; wizardStep: string }> = {
+  "Basic info": { icon: Settings, label: "Basic info", description: "Name, address and amenities", wizardStep: "info_basica" },
+  "Multimedia": { icon: Camera, label: "Multimedia", description: "Photos and videos", wizardStep: "multimedia" },
+  "Description": { icon: FileText, label: "Description", description: "Project description", wizardStep: "descripcion" },
+  "Units": { icon: Layers, label: "Units", description: "Configure available units", wizardStep: "crear_unidades" },
+  "Collaborators": { icon: Handshake, label: "Collaborators", description: "Commissions and agencies", wizardStep: "colaboradores" },
+  "Payment plan": { icon: CreditCard, label: "Payment plan", description: "Buyer payment structure", wizardStep: "plan_pagos" },
+};
+
+function getWizardUrl(step?: string, returnTo?: string) {
+  const ws = step ? stepConfig[step]?.wizardStep : undefined;
+  const base = ws ? `/create-promotion?step=${ws}` : "/create-promotion";
+  return returnTo ? `${base}&returnTo=${encodeURIComponent(returnTo)}` : base;
+}
+
+function statusConfig(status: string) {
+  const map: Record<string, { label: string; variant: "success" | "warning" | "muted" | "danger" }> = {
+    active: { label: "Active", variant: "success" },
+    incomplete: { label: "Incomplete", variant: "warning" },
+    inactive: { label: "Inactive", variant: "muted" },
+    "sold-out": { label: "Sold out", variant: "danger" },
+  };
+  return map[status] || map.inactive;
+}
+
+const tabKeys = ["Overview", "Availability", "Agencies", "Comisiones", "Records", "Documents"];
+const collabTabKeys = ["Overview", "Availability", "Comisiones", "Documents"];
+const allSteps = ["Basic info", "Multimedia", "Description", "Units", "Collaborators", "Payment plan"];
+
+const conditionLabels: Record<string, string> = {
+  nombre_completo: "Full name",
+  ultimas_4_cifras: "Last 4 digits phone",
+  nacionalidad: "Nationality",
+  email_completo: "Full email",
+};
+
+// Mock contacts for the footer
+const contacts = [
+  { name: "Arman Yeghiazaryan", role: "Founder & Director Comercial", avatar: "https://i.pravatar.cc/80?img=33", phone: "+34 612 345 678", email: "arman@byvaro.com", languages: ["🇪🇸", "🇫🇷", "🇬🇧"] },
+  { name: "María López", role: "Responsable de Ventas", avatar: "https://i.pravatar.cc/80?img=12", phone: "+34 678 901 234", email: "maria@byvaro.com", languages: ["🇪🇸", "🇬🇧"] },
+  { name: "Thomas Müller", role: "International Sales", avatar: "https://i.pravatar.cc/80?img=23", phone: "+49 170 123 456", email: "thomas@byvaro.com", languages: ["🇩🇪", "🇬🇧", "🇪🇸"] },
+];
+
+export default function DeveloperPromotionDetail({ agentMode = false }: { agentMode?: boolean } = {}) {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState(0);
+  const [_availabilityVersion, _setAvailabilityVersion] = useState<"v1" | "v2">("v2");
+  const [viewAsCollaborator, setViewAsCollaborator] = useState(agentMode);
+  const [addComercialOpen, setAddComercialOpen] = useState(false);
+  const [pickOfficesOpen, setPickOfficesOpen] = useState(false);
+  
+  const [comercialesList, setComercialesList] = useState<Comercial[]>([]);
+  const [initialized, setInitialized] = useState(false);
+  const [showFlatUnitId, setShowFlatUnitId] = useState<string | null>(null);
+  const [showFlatPickerOpen, setShowFlatPickerOpen] = useState(false);
+  const [openDocFolder, setOpenDocFolder] = useState<string | null>(null);
+  const [blockedAgencies, setBlockedAgencies] = useState<Record<string, Set<string>>>({ planos: new Set(), brochure: new Set() });
+  const [folderLocked, setFolderLocked] = useState<Record<string, boolean>>({ planos: false, brochure: false });
+  const [registerClientOpen, setRegisterClientOpen] = useState(false);
+  const [sendEmailOpen, setSendEmailOpen] = useState(false);
+  // Edit dialogs
+  const [editOpen, setEditOpen] = useState<null | "multimedia" | "basicInfo" | "structure" | "description" | "location" | "paymentPlan" | "showHouse" | "memoria" | "planos" | "brochure" | "contacts" | "inventory" | "salesOffices">(null);
+  const [salesOffices, setSalesOffices] = useState<SalesOffice[]>([]);
+
+  const allPromotions: DevPromotion[] = [
+    ...developerOnlyPromotions,
+    ...promotions.map(p => ({ ...p } as DevPromotion)),
+  ];
+  const p = allPromotions.find((promo) => promo.id === id);
+
+  if (p && !initialized) {
+    setComercialesList(p.comerciales || []);
+    setSalesOffices((p.puntosDeVenta || []) as SalesOffice[]);
+    setInitialized(true);
+  }
+
+  if (!p) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center space-y-3">
+          <p className="text-lg font-semibold text-foreground">Promotion not found</p>
+          <Button variant="outline" onClick={() => navigate("/developer-promotions")}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to promotions
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const status = statusConfig(p.status);
+  const hasMissing = p.missingSteps && p.missingSteps.length > 0;
+  const missingSet = new Set(p.missingSteps || []);
+  const completedSteps = allSteps.filter(s => !missingSet.has(s));
+  const completionPct = Math.round((completedSteps.length / allSteps.length) * 100);
+  const occupancy = p.totalUnits > 0 ? Math.round(((p.totalUnits - p.availableUnits) / p.totalUnits) * 100) : 0;
+  const typeLabel = getBuildingTypeLabel(p.buildingType);
+  const returnPath = `/developer-promotions/${p.id}`;
+  const website = `${p.name.toLowerCase().replace(/\s+/g, "-")}.byvaro.com`;
+
+  const constructionPhaseLabel = p.constructionProgress !== undefined
+    ? p.constructionProgress >= 100 ? "Completed" : p.constructionProgress >= 80 ? "Finishing" : p.constructionProgress >= 50 ? "Installations" : p.constructionProgress >= 20 ? "Structure" : "Starting"
+    : "Project phase";
+
+  const galleryImages = [
+    p.image || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&h=500&fit=crop",
+    "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=300&fit=crop",
+    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400&h=300&fit=crop",
+    "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400&h=300&fit=crop",
+  ];
+
+
+  // KPI data with optional click handler to switch tabs
+  const allKpis = [
+    { icon: Euro, label: "Price range", value: `${formatPrice(p.priceMin)}${p.priceMax > p.priceMin ? ` – ${formatPrice(p.priceMax)}` : ""}`, detail: `${formatPrice(p.reservationCost)} reservation`, color: "text-blue-600 bg-blue-50", empty: false },
+    { icon: Home, label: "Availability", value: `${p.availableUnits} / ${p.totalUnits}`, detail: `${occupancy}% sold`, color: "text-emerald-600 bg-emerald-50", progress: occupancy, empty: false },
+    { icon: TrendingUp, label: "Commission", value: p.commission > 0 ? `${p.commission}%` : "—", detail: p.commission > 0 ? `~${formatPrice(p.priceMin * p.commission / 100)}` : "Not configured", color: "text-amber-600 bg-amber-50", onClick: () => setActiveTab(visibleTabs.indexOf("Comisiones")), empty: p.commission === 0 },
+    { icon: Calendar, label: "Delivery", value: p.delivery || "TBD", detail: "Estimated", color: "text-violet-600 bg-violet-50", empty: !p.delivery },
+    { icon: HardHat, label: "Construction", value: p.constructionProgress !== undefined ? `${p.constructionProgress}%` : "—", detail: constructionPhaseLabel, color: "text-orange-600 bg-orange-50", empty: p.constructionProgress === undefined },
+    ...(!viewAsCollaborator ? [{ icon: Users, label: "Agencies", value: `${p.agencies}`, detail: p.agencies > 0 ? "Collaborating" : "None yet", color: "text-indigo-600 bg-indigo-50", onClick: () => setActiveTab(2), empty: false }] : []),
+  ];
+  const kpis = viewAsCollaborator ? allKpis.filter(k => !k.empty) : allKpis;
+
+  const visibleTabs = viewAsCollaborator ? collabTabKeys : tabKeys;
+
+  // Map activeTab to the correct tab key
+  const activeTabKey = visibleTabs[activeTab] || visibleTabs[0];
+
+  const handleToggleCollabView = () => {
+    setViewAsCollaborator(v => !v);
+    setActiveTab(0);
+  };
+
+  return (
+    <div className="h-full overflow-auto bg-background">
+      {/* ── Collaborator preview banner (only in developer preview mode, not agent mode) ── */}
+      {viewAsCollaborator && !agentMode && (
+        <div className="sticky top-0 z-50 bg-foreground text-background px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Eye className="h-4 w-4 opacity-70" />
+            <span className="text-sm font-medium">Estás viendo esta promoción como un <strong>colaborador</strong></span>
+          </div>
+          <button
+            onClick={handleToggleCollabView}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-background/15 hover:bg-background/25 text-xs font-medium transition-colors"
+          >
+            <X className="h-3 w-3" /> Salir de la vista previa
+          </button>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="px-5 sm:px-8 lg:px-10 pt-6 pb-0">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
+          <button onClick={() => navigate(agentMode ? "/promotions-agent" : "/developer-promotions")} className="hover:text-foreground transition-colors">Promotions</button>
+          <span>/</span>
+          <span className="text-foreground font-medium">{p.name}</span>
+        </div>
+
+        <div className="flex items-start justify-between gap-6 mb-4">
+          <div>
+            <div className="flex items-center gap-2.5 mb-1">
+              <h1 className="text-lg font-semibold text-foreground tracking-tight">{p.name}</h1>
+              <span className="text-[10px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">{p.code}</span>
+              <Tag variant={status.variant} size="sm">{status.label}</Tag>
+              {typeLabel && <Tag variant="default" size="sm">{typeLabel}</Tag>}
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <MapPin className="h-3 w-3" />
+              <span>{p.location || "No location set"}</span>
+            </div>
+          </div>
+          {!agentMode && !viewAsCollaborator && activeTabKey !== "Agencies" && (
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={handleToggleCollabView} className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted-foreground/70 hover:text-foreground transition-colors">
+                <Eye className="h-3.5 w-3.5" strokeWidth={1.5} /> Vista colaborador
+              </button>
+              <button onClick={() => setSendEmailOpen(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium text-foreground hover:bg-muted transition-colors">
+                <Mail className="h-3.5 w-3.5" strokeWidth={1.5} /> Send
+              </button>
+              <button onClick={() => setRegisterClientOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+                <Users className="h-4 w-4" strokeWidth={1.5} /> Register client
+              </button>
+            </div>
+          )}
+          {viewAsCollaborator && (
+            <div className="flex items-center gap-2 shrink-0">
+              <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8 rounded-full" onClick={() => setSendEmailOpen(true)}><Mail className="h-3 w-3" /> Send</Button>
+              <Button size="sm" className="gap-1.5 text-xs h-8 rounded-full" onClick={() => setRegisterClientOpen(true)}><Users className="h-3 w-3" /> Registrar cliente</Button>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          {visibleTabs.map((tab, i) => {
+            const requestCount = !viewAsCollaborator && tab === "Agencies" ? agencies.filter(a => a.isNewRequest).length : 0;
+            return (
+              <button key={tab} onClick={() => setActiveTab(i)}
+                className={`px-3.5 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${activeTab === i ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/40"}`}>
+                {tab}
+                {requestCount > 0 && (
+                  <span className="h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">{requestCount}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <Separator className="mt-3" />
+
+      <div className="p-[25px] w-full min-w-0" style={{ maxWidth: (activeTabKey === "Availability" || activeTabKey === "Agencies" || activeTabKey === "Overview") ? undefined : "1250px" }}>
+
+        {activeTabKey === "Overview" && (
+          <>
+            {/* Mobile: collaboration + completion (shown above content on small screens) */}
+            {!viewAsCollaborator && (
+              <div className="lg:hidden space-y-4">
+                <CollaborationStatusBanner
+                  isIncomplete={!!hasMissing}
+                  isShared={p.agencies > 0}
+                  agencyCount={p.agencies}
+                  activity={p.activity}
+                  onShare={() => setActiveTab(visibleTabs.indexOf("Agencies"))}
+                />
+              </div>
+            )}
+
+            {/* Two-column layout: main content left, narrow icon rail right */}
+            <div className={`flex gap-4 ${!viewAsCollaborator ? "lg:flex-row" : ""} flex-col w-full min-w-0`} style={{ maxWidth: !viewAsCollaborator ? "1570px" : "1250px" }}>
+              {/* ── LEFT: Main content ── */}
+              <div className="flex-1 min-w-0 space-y-5 order-2 lg:order-1">
+
+            {/* ── 1. GALLERY ── */}
+            <SectionCard title="Multimedia" stepName="Multimedia" missing={missingSet.has("Multimedia")} onEdit={() => setEditOpen("multimedia")} hideEdit={viewAsCollaborator} flush>
+              <div className="grid grid-cols-4 grid-rows-2 gap-1.5 h-[320px]">
+                <div className="col-span-2 row-span-2 relative group cursor-pointer">
+                  <img src={galleryImages[0]} alt={p.name} className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                  <Tag variant="overlay" size="sm" className="absolute bottom-3 left-3"><Image className="h-3 w-3" /> 12 photos</Tag>
+                </div>
+                {galleryImages.slice(1, 4).map((src, i) => (
+                  <div key={i} className="overflow-hidden cursor-pointer group">
+                    <img src={src} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  </div>
+                ))}
+                <div className="relative overflow-hidden cursor-pointer group bg-muted/30 flex items-center justify-center">
+                  <div className="text-center">
+                    <Video className="h-5 w-5 text-muted-foreground/40 mx-auto mb-1" />
+                    <span className="text-xs text-muted-foreground">2 videos</span>
+                  </div>
+                </div>
+              </div>
+            </SectionCard>
+
+            {/* ── 2. KEY DATA ── */}
+            <div className={`grid gap-3 2xl:gap-4 grid-cols-2 ${kpis.length <= 3 ? "md:grid-cols-3" : kpis.length <= 4 ? "md:grid-cols-4" : kpis.length <= 5 ? "md:grid-cols-3 lg:grid-cols-5" : "md:grid-cols-3 lg:grid-cols-6"}`}>
+              {kpis.map((kpi) => {
+                const isAgencies = kpi.label === "Agencies";
+                return (
+                  <div key={kpi.label}
+                    onClick={kpi.onClick}
+                    className={`group relative rounded-2xl border bg-card p-3.5 2xl:p-5 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_24px_-8px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 transition-all duration-200 overflow-hidden ${kpi.onClick ? "cursor-pointer" : ""} ${kpi.empty ? "border-rose-200/70" : "border-border/40"}`}>
+                    <div className={`h-7 w-7 2xl:h-9 2xl:w-9 rounded-lg flex items-center justify-center ${kpi.color} mb-2`}>
+                      <kpi.icon className="h-3.5 w-3.5 2xl:h-4 2xl:w-4" />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">{kpi.label}</p>
+                    <p className={`text-sm 2xl:text-base font-semibold leading-tight tabular-nums ${kpi.empty ? "text-rose-600" : "text-foreground"}`}>{kpi.value}</p>
+                    {kpi.progress !== undefined && <Progress value={kpi.progress} className="h-1 mt-1.5" />}
+                    {kpi.empty ? (
+                      <p className="text-[10px] mt-1 flex items-center gap-1 text-rose-600 font-medium">
+                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                        Missing
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground mt-1">{kpi.detail}</p>
+                    )}
+                    {isAgencies && (
+                      <div className="absolute inset-0 bg-card/95 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                          <Plus className="h-3.5 w-3.5" strokeWidth={2} /> Add agencies
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── 3. STRUCTURE & CONSTRUCTION ── */}
+            <SectionCard title="Structure & Construction" stepName="Basic info" missing={false} onEdit={() => setEditOpen("structure")} hideEdit={viewAsCollaborator}>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <InfoItem icon={Building2} label="Type" value={typeLabel || "Not set"} />
+                <InfoItem icon={Layers} label="Structure" value={p.totalUnits > 10 ? "Multi-block" : "Single block"} />
+                <InfoItem icon={HardHat} label="Construction" value={constructionPhaseLabel} sub={p.constructionProgress !== undefined ? `${p.constructionProgress}% complete` : undefined} />
+                <InfoItem icon={Calendar} label="Delivery" value={p.delivery || "TBD"} />
+              </div>
+              <div className="h-px bg-border/40 my-4" />
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <InfoItem icon={Home} label="Total units" value={`${p.totalUnits}`} />
+                <InfoItem icon={Car} label="Parking" value={p.totalUnits > 0 ? `${p.totalUnits} spaces` : "—"} sub="Included in price" />
+                <InfoItem icon={Archive} label="Storage" value={p.totalUnits > 0 ? `${Math.floor(p.totalUnits * 0.8)} units` : "—"} sub="Included in price" />
+                <InfoItem icon={Shield} label="License" value="Granted" />
+              </div>
+              {p.constructionProgress !== undefined && (
+                <>
+                  <div className="h-px bg-border/40 my-4" />
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs text-muted-foreground">Construction progress</span>
+                      <span className="text-xs font-semibold text-foreground">{p.constructionProgress}%</span>
+                    </div>
+                    <Progress value={p.constructionProgress} className="h-2" />
+                  </div>
+                </>
+              )}
+            </SectionCard>
+
+            {/* ── 4. BASIC INFORMATION (no Location — has its own section) ── */}
+            <SectionCard title="Basic information" stepName="Basic info" missing={missingSet.has("Basic info")} onEdit={() => setEditOpen("basicInfo")} hideEdit={viewAsCollaborator}>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Property types</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(p.propertyTypes.length > 0 ? p.propertyTypes : ["Not set"]).map(t => (
+                      <Tag key={t} variant="default" size="sm">{t}</Tag>
+                    ))}
+                  </div>
+                </div>
+                <div className="h-px bg-border/40" />
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Amenities</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {["Pool", "Gym", "Garden", "Security", "Parking"].map(a => (
+                      <Tag key={a} variant="default" size="sm">{a}</Tag>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Home features</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {["Equipped kitchen", "Air conditioning", "Terrace", "Smart home"].map(f => (
+                      <Tag key={f} variant="default" size="sm">{f}</Tag>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </SectionCard>
+
+            {/* ── PISO PILOTO (Show House) ── */}
+            {(() => {
+              const promoUnits = unitsByPromotion[p.id] || [];
+              const showFlatUnit = showFlatUnitId ? promoUnits.find(u => u.id === showFlatUnitId) : null;
+
+              // Collaborator only sees this section if a show flat is actually set
+              if (viewAsCollaborator && !showFlatUnit) return null;
+
+              return (
+                <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+                  <div className="px-5 pt-4 pb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="h-7 w-7 rounded-lg bg-emerald-50 flex items-center justify-center">
+                        <Eye className="h-3.5 w-3.5 text-emerald-600" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-semibold text-foreground">Show House</h2>
+                        <p className="text-[10px] text-muted-foreground">Model unit available for visits</p>
+                      </div>
+                    </div>
+                    {!viewAsCollaborator && showFlatUnit && (
+                      <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 rounded-full" onClick={() => setShowFlatPickerOpen(true)}>
+                        <Pencil className="h-3 w-3" /> Change unit
+                      </Button>
+                    )}
+                  </div>
+                  <div className="px-5 pb-5">
+                    {showFlatUnit ? (
+                      <div className="flex gap-4 p-4 rounded-xl border border-emerald-200/60 bg-emerald-50/30">
+                        <div className="w-[180px] h-[130px] rounded-xl overflow-hidden shrink-0 relative group cursor-pointer">
+                          <img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=400&h=300&fit=crop" alt="Show House" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                          <div className="absolute top-2 left-2">
+                            <Tag variant="overlay" size="sm"><Star className="h-2.5 w-2.5" /> Show House</Tag>
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="text-sm font-bold text-foreground">{showFlatUnit.block} - P{showFlatUnit.floor} {showFlatUnit.door}</h3>
+                            <Tag variant="success" size="sm">Show House</Tag>
+                          </div>
+                          <p className="text-lg font-bold text-foreground mb-3">{formatPrice(showFlatUnit.price)}</p>
+                          <div className="grid grid-cols-3 gap-3">
+                            <div>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Dormitorios</p>
+                              <p className="text-sm font-semibold text-foreground">{showFlatUnit.bedrooms}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Superficie</p>
+                              <p className="text-sm font-semibold text-foreground">{showFlatUnit.builtArea} m²</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Planta</p>
+                              <p className="text-sm font-semibold text-foreground">{showFlatUnit.floor}ª</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 mt-3 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Mon–Fri, 10:00 - 18:00</span>
+                            <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> By appointment</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : !viewAsCollaborator ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-center rounded-xl border border-dashed border-border/40 bg-muted/10">
+                        <Eye className="h-8 w-8 text-muted-foreground/20 mb-2" />
+                        <p className="text-sm font-medium text-muted-foreground">No show house selected</p>
+                        <p className="text-xs text-muted-foreground/60 mt-0.5 mb-3">Pick a unit from the availability list</p>
+                        <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8 rounded-full" onClick={() => setShowFlatPickerOpen(true)}>
+                          <Plus className="h-3 w-3" /> Select unit
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── DOCUMENTACIÓN: Planos generales + Brochure ── */}
+            <div className={`grid grid-cols-1 ${p.totalUnits > 1 ? "lg:grid-cols-3" : "lg:grid-cols-2"} gap-4`}>
+              {/* Memoria de calidades */}
+              <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden group/section relative">
+                <div className="px-5 pt-4 pb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                    <h2 className="text-base font-semibold text-foreground">Memoria de calidades</h2>
+                  </div>
+                  {!viewAsCollaborator && (
+                    <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 opacity-0 group-hover/section:opacity-100 transition-opacity rounded-full" onClick={() => setEditOpen("memoria")}>
+                      <Upload className="h-3 w-3" /> Upload
+                    </Button>
+                  )}
+                </div>
+                <div className="px-5 pb-5">
+                  <div className="flex items-center gap-4 p-4 rounded-xl border border-border/30 bg-background/50 hover:border-border/50 hover:shadow-sm transition-all cursor-pointer" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("calidades"); }}>
+                    <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                      <FileText className="h-6 w-6 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">Memoria_Calidades.pdf</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">PDF · 4.2 MB</p>
+                    </div>
+                    <Download className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Planos generales — only multi-unit */}
+              {p.totalUnits > 1 && (
+                <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden group/section relative">
+                  <div className="px-5 pt-4 pb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+                      <h2 className="text-base font-semibold text-foreground">Planos generales</h2>
+                      {!viewAsCollaborator && <Share2 className="h-3 w-3 text-primary/60" />}
+                    </div>
+                    {!viewAsCollaborator && (
+                      <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 opacity-0 group-hover/section:opacity-100 transition-opacity rounded-full" onClick={() => setEditOpen("planos")}>
+                        <Upload className="h-3 w-3" /> Upload
+                      </Button>
+                    )}
+                  </div>
+                  <div className="px-5 pb-5">
+                    <div className="rounded-xl overflow-hidden border border-border/30 bg-background/50 cursor-pointer group hover:shadow-sm transition-all" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("planos"); }}>
+                      <img src="https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=600&h=200&fit=crop" alt="Planos" className="w-full h-[120px] object-cover group-hover:scale-[1.02] transition-transform duration-300" />
+                      <div className="p-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-medium text-foreground">3 archivos</p>
+                          <p className="text-[10px] text-muted-foreground">Planos de planta y distribución</p>
+                        </div>
+                        <FolderOpen className="h-3.5 w-3.5 text-muted-foreground/40" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Brochure */}
+              <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden group/section relative">
+                <div className="px-5 pt-4 pb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                      <h2 className="text-base font-semibold text-foreground">Brochure</h2>
+                      {!viewAsCollaborator && <Share2 className="h-3 w-3 text-primary/60" />}
+                    </div>
+                  {!viewAsCollaborator && (
+                    <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 opacity-0 group-hover/section:opacity-100 transition-opacity rounded-full" onClick={() => setEditOpen("brochure")}>
+                      <Upload className="h-3 w-3" /> Upload
+                    </Button>
+                  )}
+                </div>
+                <div className="px-5 pb-5">
+                  <div className="rounded-xl overflow-hidden border border-border/30 bg-background/50 cursor-pointer group hover:shadow-sm transition-all" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("brochure"); }}>
+                    <img src="https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=600&h=200&fit=crop" alt="Brochure" className="w-full h-[120px] object-cover group-hover:scale-[1.02] transition-transform duration-300" />
+                    <div className="p-3 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-foreground">Brochure comercial</p>
+                        <p className="text-[10px] text-muted-foreground">PDF · 8.5 MB</p>
+                      </div>
+                      <Download className="h-3.5 w-3.5 text-muted-foreground/40" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ── 5. UNITS / PAYMENT PLAN / COMMISSIONS ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <SectionCard title="Units & Availability" stepName="Units" missing={missingSet.has("Units")} onEdit={() => setEditOpen("inventory")} hideEdit={viewAsCollaborator}>
+                <PromotionAvailabilitySummary promotionId={p.id} onViewAll={() => setActiveTab(1)} />
+              </SectionCard>
+
+              <SectionCard title="Payment plan" stepName="Payment plan" missing={missingSet.has("Payment plan")} onEdit={() => setEditOpen("paymentPlan")} hideEdit={viewAsCollaborator}>
+                {p.reservationCost > 0 ? (
+                  <div className="space-y-4">
+                    {/* Summary row */}
+                    <div className="grid grid-cols-3 gap-3 pb-3 border-b border-border/40">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Reservation</p>
+                        <p className="text-sm font-semibold text-foreground tabular-nums">{formatPrice(p.reservationCost)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Validity</p>
+                        <p className="text-sm font-semibold text-foreground">60 days</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Method</p>
+                        <p className="text-sm font-semibold text-foreground">Milestones</p>
+                      </div>
+                    </div>
+
+                    {/* Milestones — minimal list */}
+                    <div className="space-y-2">
+                      {[
+                        { pct: "10%", label: "Reservation signing" },
+                        { pct: "20%", label: "Structure completion" },
+                        { pct: "30%", label: "Installations" },
+                        { pct: "40%", label: "Notary (keys)" },
+                      ].map((m, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2.5">
+                            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+                            <span className="text-foreground">{m.label}</span>
+                          </div>
+                          <span className="font-medium text-foreground tabular-nums">{m.pct}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Commissions inline summary */}
+                    {(() => {
+                      const commissionMissing = !p.commission || p.commission === 0;
+                      return (
+                        <button
+                          onClick={() => setActiveTab(visibleTabs.indexOf("Comisiones"))}
+                          className="w-full flex items-center justify-between pt-3 border-t border-border/40 text-left hover:opacity-80 transition-opacity"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className={`h-1.5 w-1.5 rounded-full ${commissionMissing ? "bg-rose-500" : "bg-emerald-500"}`} />
+                            <span className="text-xs text-muted-foreground">Commissions</span>
+                            {commissionMissing && (
+                              <span className="text-[10px] font-medium text-rose-600">Missing</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-medium text-foreground tabular-nums">
+                              {commissionMissing ? "Not set" : `${p.commission}%`}
+                            </span>
+                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                          </div>
+                        </button>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <EmptyState icon={CreditCard} message="No payment plan defined" sub="Define how buyers will pay" />
+                )}
+              </SectionCard>
+            </div>
+
+
+
+
+
+            {/* ── 8. DESCRIPTION ── */}
+            <SectionCard title="Description" stepName="Description" missing={missingSet.has("Description")} onEdit={() => setEditOpen("description")} hideEdit={viewAsCollaborator}>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Tag variant="default" size="sm"><Globe className="h-3 w-3" /> ES</Tag>
+                  <Tag variant="default" size="sm"><Globe className="h-3 w-3" /> EN</Tag>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {p.name} is a {typeLabel?.toLowerCase() || "residential"} development located in {p.location || "Spain"}.
+                  {p.developer && ` Developed by ${p.developer}.`}
+                  {p.totalUnits > 0 && ` The project comprises ${p.totalUnits} units with delivery estimated for ${p.delivery || "TBD"}.`}
+                  {p.propertyTypes.length > 0 && ` Property types include ${p.propertyTypes.join(", ").toLowerCase()}.`}
+                </p>
+              </div>
+            </SectionCard>
+
+            {/* ── 9. LOCATION ── */}
+            <SectionCard title="Location" stepName="Basic info" missing={false} onEdit={() => setEditOpen("location")} hideEdit={viewAsCollaborator}>
+              <div className="rounded-xl overflow-hidden h-[200px] bg-muted/30 flex items-center justify-center">
+                <div className="text-center">
+                  <MapPin className="h-6 w-6 text-muted-foreground/30 mx-auto mb-2" />
+                  <p className="text-xs text-muted-foreground">{p.location || "No location set"}, Spain</p>
+                </div>
+              </div>
+            </SectionCard>
+
+            {/* ── 10. CONTACTS ── */}
+            <ContactFooter
+              contacts={contacts}
+              website={website}
+              puntosDeVenta={salesOffices}
+              comerciales={viewAsCollaborator ? [] : comercialesList}
+              onAddMember={viewAsCollaborator ? undefined : () => setAddComercialOpen(true)}
+              onAddOffice={viewAsCollaborator ? undefined : () => setPickOfficesOpen(true)}
+              onEditOffices={viewAsCollaborator ? undefined : () => setEditOpen("salesOffices")}
+              hideManagement={viewAsCollaborator}
+            />
+              </div>
+              {/* ── END LEFT COLUMN ── */}
+
+              {/* ── RIGHT RAIL: icon dock (md/lg) → labeled card (2xl) ── */}
+              {!viewAsCollaborator && (() => {
+                const items: { icon: typeof Users; label: string; hint?: string; onClick?: () => void; danger?: boolean; info?: boolean }[] = [
+                  { icon: Users, label: "Add agencies", hint: "Invite collaborators", onClick: () => setActiveTab(visibleTabs.indexOf("Agencies")) },
+                  { icon: Share2, label: "Share", hint: "Share with collaborators", onClick: () => setActiveTab(visibleTabs.indexOf("Agencies")) },
+                  { icon: FileText, label: "Brochure", hint: "Download brochure", onClick: () => {} },
+                  { icon: Download, label: "Price list", hint: "Download as PDF", onClick: () => {} },
+                  { icon: MessageCircle, label: "Contact sales", hint: "Talk to sales team", onClick: () => {} },
+                  ...(hasMissing ? [{ icon: AlertTriangle, label: "Incomplete", hint: `${completedSteps.length}/${allSteps.length} steps · Click to complete`, onClick: () => navigate(getWizardUrl(p.missingSteps?.[0], returnPath)), danger: true }] : []),
+                  { icon: Info, label: "Live data", hint: "Prices and availability update in real time. Confirm before closing.", info: true },
+                ];
+                return (
+                  <TooltipProvider delayDuration={150}>
+                    <aside className="w-full lg:w-12 2xl:w-[260px] lg:shrink-0 order-1 lg:order-2">
+                      <div className="lg:sticky lg:top-6">
+                        {/* Compact dock — visible md/lg, hidden on 2xl */}
+                        <div className="2xl:hidden flex lg:flex-col gap-1.5 rounded-2xl bg-card border border-border/40 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] p-1.5">
+                          {items.map((item, i) => (
+                            <Tooltip key={i}>
+                              <TooltipTrigger asChild>
+                                <button
+                                  onClick={item.onClick}
+                                  className={`h-9 w-9 rounded-xl flex items-center justify-center transition-colors ${item.danger ? "text-destructive hover:bg-destructive/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/60"}`}
+                                >
+                                  <item.icon className="h-4 w-4" strokeWidth={1.5} />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left" className="max-w-[260px] text-xs">
+                                {item.hint || item.label}
+                              </TooltipContent>
+                            </Tooltip>
+                          ))}
+                        </div>
+
+                        {/* Labeled side card — visible only on 2xl (≥1536px, MacBook 16") */}
+                        <div className="hidden 2xl:flex flex-col rounded-2xl bg-card border border-border/40 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+                          <div className="px-4 pt-4 pb-2">
+                            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Quick actions</p>
+                          </div>
+                          <div className="px-2 pb-2 flex flex-col gap-0.5">
+                            {items.filter(i => !i.info && !i.danger).map((item, i) => (
+                              <button
+                                key={i}
+                                onClick={item.onClick}
+                                className="group flex items-center gap-3 px-2.5 py-2 rounded-xl text-left transition-colors hover:bg-muted/50"
+                              >
+                                <span className="h-8 w-8 rounded-lg bg-muted/40 group-hover:bg-muted/70 flex items-center justify-center shrink-0 transition-colors">
+                                  <item.icon className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground" strokeWidth={1.75} />
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                  <span className="block text-xs font-medium text-foreground truncate">{item.label}</span>
+                                  {item.hint && <span className="block text-[10px] text-muted-foreground truncate">{item.hint}</span>}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+
+                          {items.some(i => i.danger) && (
+                            <>
+                              <div className="h-px bg-border/40 mx-4" />
+                              <div className="px-2 py-2">
+                                {items.filter(i => i.danger).map((item, i) => (
+                                  <button
+                                    key={i}
+                                    onClick={item.onClick}
+                                    className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-left transition-colors hover:bg-destructive/5"
+                                  >
+                                    <span className="h-8 w-8 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
+                                      <item.icon className="h-3.5 w-3.5 text-destructive" strokeWidth={1.75} />
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block text-xs font-medium text-destructive truncate">{item.label}</span>
+                                      {item.hint && <span className="block text-[10px] text-destructive/70 truncate">{item.hint}</span>}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          )}
+
+                          {items.some(i => i.info) && (
+                            <>
+                              <div className="h-px bg-border/40 mx-4" />
+                              <div className="px-4 py-3 flex items-start gap-2">
+                                <Info className="h-3 w-3 text-muted-foreground/60 mt-0.5 shrink-0" strokeWidth={1.75} />
+                                <p className="text-[10px] leading-relaxed text-muted-foreground">
+                                  {items.find(i => i.info)?.hint}
+                                </p>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </aside>
+                  </TooltipProvider>
+                );
+              })()}
+            </div>
+
+          </>
+        )}
+
+        {/* ═══ TAB: AVAILABILITY ═══ */}
+        {activeTabKey === "Availability" && (
+          <div className="flex gap-4 lg:flex-row flex-col w-full max-w-[1570px] min-w-0">
+            {/* Main content */}
+            <div className="flex-1 min-w-0 order-2 lg:order-1">
+              <PromotionAvailabilityFull promotionId={p.id} isCollaboratorView={viewAsCollaborator} />
+            </div>
+
+            {/* Right rail — minimalist icon dock */}
+            <TooltipProvider delayDuration={150}>
+              <aside className="w-full lg:w-12 lg:shrink-0 order-1 lg:order-2">
+                <div className="lg:sticky lg:top-6 flex lg:flex-col gap-1.5 rounded-2xl bg-card border border-border/40 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] p-1.5">
+                  {[
+                    { icon: FileText, label: "Descargar brochure" },
+                    { icon: Download, label: "Descargar listado de precios" },
+                    { icon: Share2, label: "Avisar a colaboradores" },
+                    { icon: MessageCircle, label: "Contactar equipo comercial" },
+                    { icon: Info, label: "Los precios y disponibilidad se actualizan en tiempo real. Consulta con el equipo comercial antes de confirmar." },
+                  ].map((item, i) => (
+                    <Tooltip key={i}>
+                      <TooltipTrigger asChild>
+                        <button className="h-9 w-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
+                          <item.icon className="h-4 w-4" strokeWidth={1.5} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-[220px] text-xs">
+                        {item.label}
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                </div>
+              </aside>
+            </TooltipProvider>
+          </div>
+        )}
+
+        {activeTabKey === "Agencies" && !viewAsCollaborator && <AgenciesTab promotionId={p.id} navigate={navigate} />}
+
+        {/* ═══ TAB: COMISIONES ═══ */}
+        {activeTabKey === "Comisiones" && (
+          <div className="space-y-5">
+            {/* Commission structure card */}
+            <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+              <div className="px-5 pt-4 pb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-foreground">Commission structure</h2>
+                {!viewAsCollaborator && (
+                  <button onClick={() => navigate(getWizardUrl("Collaborators", returnPath))}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm transition-colors">
+                    <Pencil className="h-3 w-3" /> Edit
+                  </button>
+                )}
+              </div>
+              <div className="px-5 pb-5">
+                {p.collaboration ? (
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      {p.collaboration.diferenciarNacionalInternacional && p.collaboration.diferenciarComisiones ? (
+                        <>
+                          <div className="flex items-center justify-between p-2.5 rounded-lg border border-primary/30 bg-primary/5">
+                            <div className="flex items-center gap-2.5">
+                              <Globe className="h-3.5 w-3.5 text-primary" />
+                              <span className="text-xs text-foreground">International clients</span>
+                            </div>
+                            <span className="text-sm font-bold text-foreground">{p.collaboration.comisionInternacional}%</span>
+                          </div>
+                          <div className="flex items-center justify-between p-2.5 rounded-lg border border-border/40">
+                            <div className="flex items-center gap-2.5">
+                              <Home className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="text-xs text-foreground">National clients</span>
+                            </div>
+                            <span className="text-sm font-bold text-foreground">{p.collaboration.comisionNacional}%</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex items-center justify-between p-3 rounded-lg border border-primary/30 bg-primary/5">
+                          <div className="flex items-center gap-2.5">
+                            <Handshake className="h-3.5 w-3.5 text-primary" />
+                            <span className="text-xs text-foreground">Commission rate</span>
+                          </div>
+                          <span className="text-sm font-bold text-foreground">{p.collaboration.comisionInternacional}%</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="h-px bg-border/40" />
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <InfoItem icon={Banknote} label="Payment method"
+                        value={p.collaboration.formaPagoComision === "escritura" ? "At notary signing"
+                          : p.collaboration.formaPagoComision === "proporcional" ? "Proportional"
+                          : p.collaboration.formaPagoComision === "personalizado" ? "Custom milestones" : "Not set"} />
+                      <InfoItem icon={Globe} label="Client classification"
+                        value={p.collaboration.diferenciarNacionalInternacional ? "National & International" : "Unified"}
+                        sub={p.collaboration.agenciasRefusarNacional ? "Agencies can reject national" : undefined} />
+                      <InfoItem icon={Shield} label="VAT" value={p.collaboration.ivaIncluido ? "Included in commission" : "Not included"} />
+                    </div>
+
+                    {p.collaboration.formaPagoComision === "personalizado" && p.collaboration.hitosComision.length > 0 && (
+                      <>
+                        <div className="h-px bg-border/40" />
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Commission milestones</p>
+                          <div className="space-y-1.5">
+                            {p.collaboration.hitosComision.map((h, i) => (
+                              <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-border/40">
+                                <span className="text-xs text-foreground">Client pays {h.pagoCliente}%</span>
+                                <span className="text-xs font-bold text-foreground">{h.pagoColaborador}% commission</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="p-2.5 rounded-lg bg-muted/50">
+                      <p className="text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground">Estimated per sale:</span>{" "}
+                        {formatPrice(p.priceMin * p.collaboration.comisionInternacional / 100)} – {formatPrice(p.priceMax * p.collaboration.comisionInternacional / 100)}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <EmptyState icon={Handshake} message="No commission structure defined" sub="Configure commissions to start collaborating" />
+                )}
+              </div>
+            </div>
+
+            {/* Registration conditions card */}
+            <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+              <div className="px-5 pt-4 pb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-foreground">Client registration conditions</h2>
+                {!viewAsCollaborator && (
+                  <button onClick={() => navigate(getWizardUrl("Collaborators", returnPath))}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm transition-colors">
+                    <Pencil className="h-3 w-3" /> Edit
+                  </button>
+                )}
+              </div>
+              <div className="px-5 pb-5">
+                {p.collaboration && p.collaboration.condicionesRegistro.length > 0 ? (
+                  <div className="space-y-4">
+                    <p className="text-xs text-muted-foreground">Agencies must provide the following data when registering a client for this promotion:</p>
+                    <div className="space-y-1.5">
+                      {p.collaboration.condicionesRegistro.map(c => (
+                        <div key={c} className="flex items-center gap-2.5 p-2.5 rounded-lg border border-border/40">
+                          <div className="h-6 w-6 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                            <ClipboardList className="h-3.5 w-3.5 text-primary" />
+                          </div>
+                          <span className="text-xs font-medium text-foreground">{conditionLabels[c] || c}</span>
+                          {["nombre_completo", "ultimas_4_cifras", "nacionalidad"].includes(c) && (
+                            <Tag variant="warning" size="sm" className="ml-auto">Required</Tag>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2.5 p-2.5 rounded-lg bg-muted/50">
+                      <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-xs text-foreground">
+                        <span className="font-medium">Validez del registro:</span>{" "}
+                        {p.collaboration.validezRegistroDias === 0 || !p.collaboration.validezRegistroDias
+                          ? "No expira"
+                          : `${p.collaboration.validezRegistroDias} días`}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <EmptyState icon={ClipboardList} message="No registration conditions set" sub="Define what data agencies need to provide" />
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ TAB: RECORDS ═══ */}
+        {activeTabKey === "Records" && !viewAsCollaborator && (
+          <PromotionRecords embedded />
+        )}
+
+        {/* ═══ TAB: DOCUMENTS ═══ */}
+        {activeTabKey === "Documents" && (
+          <DocumentsTab
+            openFolder={openDocFolder}
+            onOpenFolder={setOpenDocFolder}
+            blockedAgencies={blockedAgencies}
+            onToggleBlockAgency={(folder, agencyId) => {
+              setBlockedAgencies(prev => {
+                const s = new Set(prev[folder] || []);
+                if (s.has(agencyId)) s.delete(agencyId); else s.add(agencyId);
+                return { ...prev, [folder]: s };
+              });
+            }}
+            folderLocked={folderLocked}
+            onToggleFolderLock={(folder) => {
+              setFolderLocked(prev => ({ ...prev, [folder]: !prev[folder] }));
+            }}
+            promotionName={p.name}
+            totalUnits={p.totalUnits}
+            readOnly={viewAsCollaborator}
+          />
+        )}
+      </div>
+
+      {/* Client Registration dialog */}
+      <ClientRegistrationDialog open={registerClientOpen} onOpenChange={setRegisterClientOpen} promotionName={p.name} validezDias={p.collaboration?.validezRegistroDias} />
+
+      {/* Send email dialog (template picker + WYSIWYG) */}
+      <SendEmailDialog open={sendEmailOpen} onOpenChange={setSendEmailOpen} mode="promotion" promotionId={id} />
+
+      {/* ═══ EDIT SECTION DIALOGS ═══ */}
+      <EditMultimediaDialog open={editOpen === "multimedia"} onOpenChange={(v) => setEditOpen(v ? "multimedia" : null)} images={galleryImages} onSave={() => {}} />
+      <EditBasicInfoDialog open={editOpen === "basicInfo"} onOpenChange={(v) => setEditOpen(v ? "basicInfo" : null)} propertyTypes={p.propertyTypes || []} onSave={() => {}} />
+      <EditStructureDialog open={editOpen === "structure"} onOpenChange={(v) => setEditOpen(v ? "structure" : null)} type={typeLabel || ""} structure={p.totalUnits > 10 ? "Multi-block" : "Single block"} phase={constructionPhaseLabel} progress={p.constructionProgress || 0} onSave={() => {}} onOpenWizard={() => navigate(getWizardUrl("Basic info", returnPath))} />
+      <EditDescriptionDialog open={editOpen === "description"} onOpenChange={(v) => setEditOpen(v ? "description" : null)} description={(p as any).description || ""} onSave={() => {}} />
+      <EditLocationDialog open={editOpen === "location"} onOpenChange={(v) => setEditOpen(v ? "location" : null)} location={p.location || ""} onSave={() => {}} />
+      <EditPaymentPlanDialog open={editOpen === "paymentPlan"} onOpenChange={(v) => setEditOpen(v ? "paymentPlan" : null)} onSave={() => {}} />
+      <EditShowHouseDialog open={editOpen === "showHouse"} onOpenChange={(v) => setEditOpen(v ? "showHouse" : null)} onSave={() => {}} />
+      <EditDocumentDialog open={editOpen === "memoria"} onOpenChange={(v) => setEditOpen(v ? "memoria" : null)} title="Upload quality specs" description="Upload the quality specifications PDF for this promotion." icon={FileText} onSave={() => {}} />
+      <EditDocumentDialog open={editOpen === "planos"} onOpenChange={(v) => setEditOpen(v ? "planos" : null)} title="Upload general floorplans" description="Upload general floorplans (PDF or images)." icon={Layers} accept=".pdf,.jpg,.png" multiple onSave={() => {}} />
+      <EditDocumentDialog open={editOpen === "brochure"} onOpenChange={(v) => setEditOpen(v ? "brochure" : null)} title="Upload brochure" description="Upload the official PDF brochure for buyers and agents." icon={BookOpen} onSave={() => {}} />
+      <EditContactsDialog open={editOpen === "contacts"} onOpenChange={(v) => setEditOpen(v ? "contacts" : null)} website={website} onSave={() => {}} />
+      <EditInventoryDialog open={editOpen === "inventory"} onOpenChange={(v) => setEditOpen(v ? "inventory" : null)} onGoAvailability={() => setActiveTab(visibleTabs.indexOf("Availability"))} />
+      <EditSalesOfficesDialog open={editOpen === "salesOffices"} onOpenChange={(v) => setEditOpen(v ? "salesOffices" : null)} offices={salesOffices} onSave={setSalesOffices} />
+
+      {/* Pick team members (visual multi-select) */}
+      <PickTeamMembersDialog
+        open={addComercialOpen}
+        onOpenChange={setAddComercialOpen}
+        pool={activeTeamMembers.map(m => ({ id: m.id, name: m.name, role: m.role, email: m.email, avatar: m.avatar }))}
+        alreadyAddedIds={comercialesList.map(c => c.id)}
+        onConfirm={(members) => {
+          const newOnes: Comercial[] = members.map(m => ({
+            id: m.id,
+            nombre: m.name,
+            email: m.email,
+            avatar: m.avatar,
+            permissions: m.permissions,
+          }));
+          setComercialesList(prev => [...prev, ...newOnes]);
+        }}
+      />
+
+      {/* Pick sales offices (visual multi-select) */}
+      <PickSalesOfficesDialog
+        open={pickOfficesOpen}
+        onOpenChange={setPickOfficesOpen}
+        pool={companyOffices.map(o => ({
+          id: o.id, name: o.name, address: o.address, city: o.city,
+          phone: o.phone, email: o.email, coverUrl: o.coverUrl,
+        }))}
+        alreadyAddedIds={salesOffices.map(o => o.id)}
+        onConfirm={(picked) => {
+          const additions: SalesOffice[] = picked.map(o => ({
+            id: o.id,
+            nombre: o.name,
+            direccion: [o.address, o.city].filter(Boolean).join(", "),
+            telefono: o.phone || "",
+            email: o.email || "",
+            coverUrl: o.coverUrl,
+          }));
+          setSalesOffices(prev => [...prev, ...additions]);
+        }}
+      />
+
+
+      {/* Show Flat Picker Dialog */}
+      <Dialog open={showFlatPickerOpen} onOpenChange={setShowFlatPickerOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[70vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Seleccionar piso piloto</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-2">Elige una unidad del listado de disponibilidad</p>
+          <div className="flex-1 overflow-auto space-y-1.5 py-2">
+            {(unitsByPromotion[p.id] || []).map(unit => (
+              <button
+                key={unit.id}
+                onClick={() => { setShowFlatUnitId(unit.id); setShowFlatPickerOpen(false); }}
+                className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${
+                  showFlatUnitId === unit.id ? "border-primary bg-primary/5" : "border-border/40 hover:border-border/60 hover:bg-muted/20"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-lg bg-muted/40 flex items-center justify-center shrink-0">
+                    <Home className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{unit.block} - P{unit.floor} {unit.door}</p>
+                    <p className="text-xs text-muted-foreground">{unit.bedrooms} hab · {unit.builtArea} m² · {unit.type}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-foreground">{formatPrice(unit.price)}</p>
+                  <Tag variant={unit.status === "available" ? "success" : unit.status === "reserved" ? "warning" : "muted"} size="sm">
+                    {unit.status === "available" ? "Disponible" : unit.status === "reserved" ? "Reservado" : "Vendido"}
+                  </Tag>
+                </div>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ═══ AGENCIES TAB ═══
+
+function formatCompact(n: number) {
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(0)}k`;
+  return `${n}`;
+}
+
+const agencyStatusOptions = ["Active", "Pending", "Expired"];
+const agencyTypeOptions = ["Agency", "Broker", "Network"];
+
+/* ─────────── Sparkline ─────────── */
+function Sparkline({ data, color = "currentColor" }: { data: number[]; color?: string }) {
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  const w = 64, h = 22;
+  const step = w / (data.length - 1);
+  const points = data.map((v, i) => `${i * step},${h - ((v - min) / range) * h}`).join(" ");
+  const areaPoints = `0,${h} ${points} ${w},${h}`;
+  return (
+    <svg width={w} height={h} className="overflow-visible" style={{ color }}>
+      <polygon points={areaPoints} fill="currentColor" opacity="0.12" />
+      <polyline points={points} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={w} cy={h - ((data[data.length - 1] - min) / range) * h} r="2" fill="currentColor" />
+    </svg>
+  );
+}
+
+/* ─────────── KPI Card ─────────── */
+function AgencyKPI({ icon: Icon, label, value, delta, accent, trend, trendColor }: { icon: any; label: string; value: string; delta?: string; accent?: string; trend?: number[]; trendColor?: string }) {
+  const positive = delta?.startsWith("+");
+  return (
+    <div className="group relative flex-1 min-w-0 rounded-2xl bg-card border border-border/40 p-4 sm:p-5 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_24px_-8px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 transition-all duration-200">
+      <div className="flex items-start justify-between gap-2 mb-4">
+        <div className={cn("h-9 w-9 rounded-xl flex items-center justify-center shrink-0", accent || "bg-muted/60")}>
+          <Icon className="h-4 w-4 text-foreground/80" strokeWidth={1.75} />
+        </div>
+        {trend && (
+          <div className={cn("opacity-70 group-hover:opacity-100 transition-opacity", trendColor || "text-emerald-500")}>
+            <Sparkline data={trend} />
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">{label}</p>
+      <div className="flex items-baseline gap-2 mt-1.5">
+        <p className="text-2xl sm:text-[26px] font-bold text-foreground tabular-nums leading-none tracking-tight">{value}</p>
+        {delta && (
+          <span className={cn("text-[11px] font-semibold tabular-nums inline-flex items-center gap-0.5", positive ? "text-emerald-600" : "text-destructive")}>
+            <TrendingUp className={cn("h-3 w-3", !positive && "rotate-180")} strokeWidth={2.25} /> {delta}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────── Requests banner ─────────── */
+function RequestsBanner({ requests }: { requests: Agency[] }) {
+  if (requests.length === 0) return null;
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.06] via-primary/[0.02] to-transparent p-4 sm:p-5">
+      <div className="absolute -top-12 -right-12 h-40 w-40 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+      <div className="relative flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-3.5 flex-1 min-w-[240px]">
+          <div className="relative h-11 w-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+            <Sparkles className="h-5 w-5 text-primary" strokeWidth={1.75} />
+            <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shadow-sm">{requests.length}</span>
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-foreground">{requests.length} nueva{requests.length > 1 ? "s" : ""} solicitud{requests.length > 1 ? "es" : ""} de colaboración</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Aprueba para reforzar la red comercial de esta promoción</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex -space-x-2">
+            {requests.slice(0, 4).map((r) => (
+              <div key={r.id} className="h-8 w-8 rounded-full border-2 border-background overflow-hidden bg-white shadow-sm" title={r.name}>
+                <img src={r.logo || ""} alt={r.name} className="w-full h-full object-contain p-0.5" />
+              </div>
+            ))}
+            {requests.length > 4 && (
+              <div className="h-8 w-8 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-semibold text-muted-foreground">+{requests.length - 4}</div>
+            )}
+          </div>
+          <Button size="sm" className="rounded-full text-xs h-9 gap-1.5 px-4 shadow-sm">Revisar solicitudes <ArrowUpRight className="h-3.5 w-3.5" /></Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────── Top performers ─────────── */
+function TopPerformers({ list }: { list: Agency[] }) {
+  if (list.length === 0) return null;
+  const top = list.slice(0, 3);
+  const maxSales = Math.max(...top.map((a) => a.salesVolume), 1);
+  const medals = [
+    { ring: "ring-amber-400/40", bg: "bg-gradient-to-br from-amber-400 to-amber-500", text: "text-white" },
+    { ring: "ring-zinc-300/60", bg: "bg-gradient-to-br from-zinc-300 to-zinc-400", text: "text-white" },
+    { ring: "ring-orange-400/40", bg: "bg-gradient-to-br from-orange-400 to-orange-600", text: "text-white" },
+  ];
+  return (
+    <div className="rounded-2xl bg-card border border-border/40 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2.5">
+          <div className="h-7 w-7 rounded-lg bg-amber-500/10 flex items-center justify-center">
+            <Trophy className="h-3.5 w-3.5 text-amber-500" strokeWidth={2} />
+          </div>
+          <h3 className="text-sm font-semibold text-foreground">Top performers</h3>
+          <span className="text-[10px] text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full font-medium">En esta promoción</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+        {top.map((ag, idx) => {
+          const m = medals[idx];
+          const pct = (ag.salesVolume / maxSales) * 100;
+          return (
+            <div key={ag.id} className="group relative flex items-center gap-3 p-3 rounded-xl border border-border/30 bg-muted/10 hover:bg-muted/30 hover:border-border/60 transition-all cursor-pointer overflow-hidden">
+              <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary/[0.04] to-transparent transition-all duration-500" style={{ width: `${pct}%` }} />
+              <div className={cn("relative h-8 w-8 rounded-full ring-2 flex items-center justify-center text-xs font-bold shrink-0 shadow-sm", m.bg, m.ring, m.text)}>{idx + 1}</div>
+              <div className="relative h-10 w-10 rounded-full overflow-hidden bg-white border border-border/30 shrink-0 shadow-sm">
+                <img src={ag.logo || ""} alt={ag.name} className="w-full h-full object-contain p-0.5" />
+              </div>
+              <div className="relative min-w-0 flex-1">
+                <p className="text-xs font-semibold text-foreground truncate">{ag.name}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-sm font-bold text-foreground tabular-nums">{formatCompact(ag.salesVolume)}€</span>
+                  <span className="text-[10px] text-muted-foreground">· {ag.registrations} regs</span>
+                </div>
+              </div>
+              <ArrowUpRight className="relative h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-foreground transition-colors shrink-0" />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────── ActionRail (vertical floating icon bar on hover) ─────────── */
+function AgencyActionRail() {
+  const items = [
+    { icon: FileText, label: "Ver ficha" },
+    { icon: Download, label: "Descargar informe" },
+    { icon: Share2, label: "Compartir" },
+    { icon: MessageCircle, label: "Comentar" },
+    { icon: Info, label: "Más info" },
+  ];
+  return (
+    <div className="absolute top-1/2 -translate-y-1/2 left-full ml-2 opacity-0 group-hover:opacity-100 group-hover:ml-3 transition-all duration-200 z-30 hidden xl:block pointer-events-none group-hover:pointer-events-auto">
+      <div className="flex flex-col items-center gap-1 bg-card border border-border/40 rounded-full py-2 px-1 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.12)]">
+        {items.map(({ icon: Icon, label }, i) => (
+          <button key={i} onClick={(e) => e.stopPropagation()} title={label} aria-label={label}
+            className="h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
+            <Icon className="h-4 w-4" strokeWidth={1.75} />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AgenciesTab({ promotionId, navigate }: { promotionId: string; navigate: (path: string) => void }) {
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [typeFilter, setTypeFilter] = useState<string[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const newRequests = agencies.filter(a => a.isNewRequest);
+  const collaboratingHere = agencies.filter(a => !a.isNewRequest && a.promotionsCollaborating.includes(promotionId));
+  const otherPromoAgencies = agencies.filter(a => !a.isNewRequest && a.promotionsCollaborating.length > 0 && !a.promotionsCollaborating.includes(promotionId));
+
+  const allRelevant = [...newRequests, ...collaboratingHere];
+
+  // KPIs scoped to this promotion (collaborating only — agencies actively working on it)
+  const totals = {
+    active: collaboratingHere.length,
+    visits: collaboratingHere.reduce((s, a) => s + a.visitsCount, 0),
+    registrations: collaboratingHere.reduce((s, a) => s + a.registrations, 0),
+    sales: collaboratingHere.reduce((s, a) => s + a.salesVolume, 0),
+  };
+
+  const topPerformers = [...collaboratingHere].sort((a, b) => b.salesVolume - a.salesVolume);
+
+  const filtered = allRelevant.filter(ag => {
+    if (search) {
+      const q = search.toLowerCase();
+      if (!ag.name.toLowerCase().includes(q) && !ag.location.toLowerCase().includes(q)) return false;
+    }
+    if (statusFilter.length > 0 && !statusFilter.some(s => s.toLowerCase() === ag.status)) return false;
+    if (typeFilter.length > 0 && !typeFilter.includes(ag.type)) return false;
+    return true;
+  });
+
+  const sortedFiltered = [...filtered].sort((a, b) => {
+    if (a.isNewRequest && !b.isNewRequest) return -1;
+    if (!a.isNewRequest && b.isNewRequest) return 1;
+    return b.salesVolume - a.salesVolume;
+  });
+
+  const toggleSelect = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selected.size === sortedFiltered.length) setSelected(new Set());
+    else setSelected(new Set(sortedFiltered.map(a => a.id)));
+  };
+
+  const hasSidebar = otherPromoAgencies.length > 0;
+
+  return (
+    <div className="space-y-5 w-full max-w-[1570px] min-w-0">
+      {/* KPI hero — scoped to this promotion */}
+      {allRelevant.length > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <AgencyKPI icon={Building2} label="Agencias colaborando" value={`${totals.active}`} delta={totals.active > 0 ? "+1" : undefined} accent="bg-blue-500/10" trend={[1, 1, 2, 2, 2, 3, totals.active]} trendColor="text-blue-500" />
+          <AgencyKPI icon={Eye} label="Visitas a esta promoción" value={`${totals.visits}`} delta="+18%" accent="bg-violet-500/10" trend={[20, 28, 35, 42, 50, 58, totals.visits]} trendColor="text-violet-500" />
+          <AgencyKPI icon={FileCheck2} label="Registros" value={`${totals.registrations}`} delta="+9%" accent="bg-emerald-500/10" trend={[5, 8, 10, 12, 15, 18, totals.registrations]} trendColor="text-emerald-500" />
+          <AgencyKPI icon={Euro} label="Volumen ventas" value={`${formatCompact(totals.sales)}€`} delta="+24%" accent="bg-amber-500/10" trend={[1, 2, 3, 4, 5, 6, 7]} trendColor="text-amber-500" />
+        </div>
+      )}
+
+      {/* New requests banner */}
+      <RequestsBanner requests={newRequests} />
+
+      {/* Top performers — only if there are collaborating agencies */}
+      <TopPerformers list={topPerformers} />
+
+      {/* Header with search & filters — only if there are agencies */}
+      {allRelevant.length > 0 && (
+        <div className="flex items-center justify-between flex-wrap gap-3 pt-2">
+          <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
+              <input
+                placeholder="Buscar por nombre o ubicación..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-9 pr-3 h-9 text-sm bg-muted/30 border-transparent focus:bg-background focus:border-border rounded-full border outline-none transition-colors"
+              />
+              {search && (
+                <button className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setSearch("")}>
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <AgencyFilterPill label="Estado" values={statusFilter} options={agencyStatusOptions} onChange={setStatusFilter} />
+            <AgencyFilterPill label="Tipo" values={typeFilter} options={agencyTypeOptions} onChange={setTypeFilter} />
+          </div>
+          <div className="flex items-center gap-3">
+            {selected.size > 0 && <span className="text-xs text-primary font-medium">{selected.size} seleccionadas</span>}
+            <button onClick={selectAll} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              {selected.size === sortedFiltered.length && sortedFiltered.length > 0 ? "Deseleccionar" : "Seleccionar todo"}
+            </button>
+            <div className="hidden sm:block h-4 w-px bg-border/60" />
+            <span className="hidden sm:inline text-xs text-muted-foreground"><span className="font-semibold text-foreground">{filtered.length}</span> agencias</span>
+            <Button size="sm" className="rounded-full text-xs h-8 gap-1.5 px-3.5"><Plus className="h-3 w-3" /> Invitar agencia</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Main layout: cards + sidebar right */}
+      <div className={`flex gap-5 flex-col ${hasSidebar ? "lg:flex-row" : ""} w-full min-w-0`}>
+        {/* Cards grid */}
+        <div className="flex-1 min-w-0 space-y-5 order-2 lg:order-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
+            {sortedFiltered.map((ag) => (
+              <AgencyCard key={ag.id} agency={ag} promotionId={promotionId} selected={selected.has(ag.id)} onToggleSelect={() => toggleSelect(ag.id)} />
+            ))}
+          </div>
+
+          {filtered.length === 0 && allRelevant.length > 0 && (
+            <div className="py-16 text-center">
+              <Building2 className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
+              <p className="text-muted-foreground text-sm">No agencies match your search</p>
+            </div>
+          )}
+
+          {allRelevant.length === 0 && (
+            <div className="py-16 flex flex-col items-center text-center max-w-md mx-auto">
+              <div className="h-16 w-16 rounded-2xl bg-muted/40 flex items-center justify-center mb-4">
+                <Users className="h-8 w-8 text-muted-foreground/30" />
+              </div>
+              <h3 className="text-base font-semibold text-foreground mb-1.5">No tienes agencias colaborando aún</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed mb-5">
+                Invita agencias para que puedan registrar clientes y vender las unidades de esta promoción.
+              </p>
+              <Button size="sm" className="gap-1.5 text-sm h-9 rounded-full"><Plus className="h-3.5 w-3.5" /> Invitar agencia</Button>
+            </div>
+          )}
+        </div>
+
+        {/* Sidebar — only "no colaboran en esta promoción" (the request banner is on top) */}
+        {hasSidebar && (
+          <div className="w-full lg:w-[300px] lg:shrink-0 order-1 lg:order-2">
+            <div className="lg:sticky lg:top-4 space-y-4">
+              <div className="rounded-2xl border border-amber-300/40 bg-amber-50/50 dark:bg-amber-950/20 p-4">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Info className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                  <h3 className="text-xs font-semibold text-foreground leading-snug">No colaboran en esta promoción</h3>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {otherPromoAgencies.length > 1 ? "Estas agencias ya colaboran" : "Esta agencia ya colabora"} contigo en otras promociones pero no en esta.
+                </p>
+                <div className="mt-3 space-y-1.5">
+                  {otherPromoAgencies.map(a => (
+                    <div key={a.id} className="flex items-center justify-between p-2 rounded-lg bg-background/60">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="h-7 w-7 rounded-full overflow-hidden bg-white shrink-0">
+                          <img src={a.logo || ""} alt="" className="w-full h-full object-contain p-0.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-foreground truncate">{a.name}</p>
+                          <p className="text-[10px] text-muted-foreground">{a.promotionsCollaborating.length} de {a.totalPromotionsAvailable} promos</p>
+                        </div>
+                      </div>
+                      <button className="text-[10px] text-primary font-medium hover:underline shrink-0">Invitar</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────── Commercial agency card (V2 style) ─────────── */
+function AgencyCard({ agency: ag, promotionId, selected, onToggleSelect }: { agency: Agency; promotionId: string; selected: boolean; onToggleSelect: () => void }) {
+  const logoUrl = ag.logo || `https://ui-avatars.com/api/?name=${encodeURIComponent(ag.name)}&background=e2e8f0&color=475569&size=120&font-size=0.33&bold=true`;
+  const collabInThis = ag.promotionsCollaborating.includes(promotionId);
+  const collabCount = ag.promotionsCollaborating.length;
+  const totalPromos = ag.totalPromotionsAvailable;
+  const conversionRate = ag.visitsCount > 0 ? Math.round((ag.registrations / ag.visitsCount) * 100) : 0;
+
+  return (
+    <div className={cn(
+      "group relative bg-card border rounded-2xl transition-all duration-300 hover:shadow-[0_8px_28px_-12px_rgba(0,0,0,0.12)] hover:-translate-y-0.5",
+      selected ? "border-primary ring-2 ring-primary/20" : ag.isNewRequest ? "border-primary/40" : "border-border/40"
+    )}>
+      <AgencyActionRail />
+
+      {/* Selection */}
+      <div className={`absolute top-3 left-3 z-20 transition-opacity ${selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+        <button onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
+          className={cn("h-6 w-6 rounded-md border-2 flex items-center justify-center transition-colors shadow-sm",
+            selected ? "bg-primary border-primary text-primary-foreground" : "bg-white/95 border-white/60 backdrop-blur-sm hover:border-primary")}>
+          {selected && <Check className="h-3.5 w-3.5" />}
+        </button>
+      </div>
+
+      {/* Cover compact */}
+      <div className="h-20 w-full relative overflow-hidden rounded-t-2xl">
+        <img src={ag.cover || "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=600&h=200&fit=crop"} alt=""
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+        <div className="absolute inset-0 bg-gradient-to-t from-card via-card/20 to-transparent" />
+        <div className="absolute top-2.5 right-3 flex items-center gap-1.5">
+          {ag.isNewRequest && (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary text-primary-foreground flex items-center gap-1 shadow-sm">
+              <Star className="h-2.5 w-2.5" /> Nueva solicitud
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="px-4 sm:px-5 pb-5 -mt-8 relative">
+        <div className="flex items-end justify-between gap-3 mb-3">
+          <div className="h-14 w-14 rounded-2xl border-4 border-card shadow-md overflow-hidden bg-card shrink-0">
+            <img src={logoUrl} alt={ag.name} className="w-full h-full object-contain bg-white p-1" />
+          </div>
+          <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full",
+            ag.status === "active" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30" :
+              ag.status === "pending" ? "bg-amber-50 text-amber-600 dark:bg-amber-950/30" :
+                ag.status === "expired" ? "bg-red-50 text-destructive dark:bg-red-950/30" :
+                  "bg-muted text-muted-foreground"
+          )}>
+            {ag.status === "active" ? "Activa" : ag.status === "pending" ? "Pendiente" : ag.status === "expired" ? "Expirada" : "Inactiva"}
+          </span>
+        </div>
+
+        <h3 className="text-sm font-bold text-foreground leading-snug truncate">{ag.name}</h3>
+        <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground">
+          <MapPin className="h-3 w-3 shrink-0" />
+          <span className="truncate">{ag.location}</span>
+          <span className="text-muted-foreground/40">·</span>
+          <span>{ag.type}</span>
+        </div>
+
+        {/* Collaboration status */}
+        <div className="mt-3 flex items-center gap-2">
+          {ag.isNewRequest ? (
+            <span className="text-[11px] font-medium text-primary flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" /> Solicita colaborar en esta promoción
+            </span>
+          ) : collabInThis ? (
+            <span className="text-[11px] font-medium text-emerald-600 flex items-center gap-1.5">
+              <Check className="h-3 w-3" /> Colabora en esta promoción
+            </span>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">
+              <span className="font-semibold text-foreground">{collabCount}/{totalPromos}</span> promociones · no en esta
+            </span>
+          )}
+        </div>
+
+        {/* Commercial metrics row */}
+        <div className="grid grid-cols-4 gap-2 mt-4 pt-3.5 border-t border-border/30">
+          <div className="text-center">
+            <p className="text-sm font-bold text-foreground tabular-nums leading-none">{ag.visitsCount}</p>
+            <p className="text-[9px] text-muted-foreground mt-1 uppercase tracking-wider">Visitas</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-bold text-foreground tabular-nums leading-none">{ag.registrations}</p>
+            <p className="text-[9px] text-muted-foreground mt-1 uppercase tracking-wider">Regs</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-bold text-foreground tabular-nums leading-none">{conversionRate}%</p>
+            <p className="text-[9px] text-muted-foreground mt-1 uppercase tracking-wider">Conv.</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-bold text-foreground tabular-nums leading-none">{formatCompact(ag.salesVolume)}€</p>
+            <p className="text-[9px] text-muted-foreground mt-1 uppercase tracking-wider">Ventas</p>
+          </div>
+        </div>
+
+        {/* CTA row */}
+        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border/30">
+          {ag.isNewRequest ? (
+            <>
+              <Button size="sm" className="rounded-full text-xs h-8 flex-1 gap-1.5"><Check className="h-3 w-3" /> Aprobar</Button>
+              <button className="px-3 h-8 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors">Rechazar</button>
+            </>
+          ) : (
+            <>
+              <button className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 rounded-full border border-border/60 text-xs font-medium text-foreground hover:bg-muted/30 transition-colors">
+                <Eye className="h-3 w-3" /> Ver perfil
+              </button>
+              <button className="px-3 h-8 rounded-full bg-foreground text-background text-xs font-medium hover:bg-foreground/90 transition-colors inline-flex items-center gap-1.5">
+                <MessageCircle className="h-3 w-3" /> Contactar
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AgencyFilterPill({ label, values, options, onChange }: { label: string; values: string[]; options: string[]; onChange: (v: string[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const toggle = (opt: string) => {
+    onChange(values.includes(opt) ? values.filter(v => v !== opt) : [...values, opt]);
+  };
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors whitespace-nowrap ${
+          values.length > 0
+            ? "bg-foreground text-background border-foreground"
+            : "border-border/60 text-muted-foreground hover:text-foreground hover:border-foreground/40"
+        }`}
+      >
+        {label}
+        {values.length > 0 && <span className="ml-0.5 bg-background/20 text-background rounded-full px-1.5 text-xs">{values.length}</span>}
+        <ChevronDown className="h-3 w-3" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute top-full left-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 min-w-[150px] py-1">
+            {options.map((opt) => (
+              <div
+                key={opt}
+                className="flex items-center gap-2.5 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/30 transition-colors"
+                onClick={() => toggle(opt)}
+              >
+                <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${values.includes(opt) ? "bg-foreground border-foreground" : "border-muted-foreground/40"}`}>
+                  {values.includes(opt) && <span className="text-background text-[9px] leading-none">✓</span>}
+                </div>
+                <span className={values.includes(opt) ? "text-foreground font-medium" : "text-muted-foreground"}>{opt}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ═══ DOCUMENTS TAB ═══
+
+const mockFolders: Record<string, { name: string; icon: typeof Layers; files: { name: string; size: string; type: string; thumbnail?: string }[] }> = {
+  planos: {
+    name: "Planos generales",
+    icon: Layers,
+    files: [
+      { name: "Planta_Baja.pdf", size: "2.1 MB", type: "PDF", thumbnail: "https://images.unsplash.com/photo-1574359411659-15573a27fd0c?w=200&h=200&fit=crop" },
+      { name: "Planta_1.pdf", size: "1.8 MB", type: "PDF", thumbnail: "https://images.unsplash.com/photo-1574359411659-15573a27fd0c?w=200&h=200&fit=crop" },
+      { name: "Planta_Atica.pdf", size: "1.5 MB", type: "PDF", thumbnail: "https://images.unsplash.com/photo-1574359411659-15573a27fd0c?w=200&h=200&fit=crop" },
+    ],
+  },
+  brochure: {
+    name: "Brochure",
+    icon: BookOpen,
+    files: [
+      { name: "Brochure_Comercial.pdf", size: "8.5 MB", type: "PDF", thumbnail: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=200&h=200&fit=crop" },
+    ],
+  },
+  calidades: {
+    name: "Memoria de calidades",
+    icon: FileText,
+    files: [
+      { name: "Memoria_Calidades.pdf", size: "4.2 MB", type: "PDF", thumbnail: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=200&h=200&fit=crop" },
+    ],
+  },
+};
+
+const mockAgenciesAccess = [
+  { id: "ag1", name: "Costa Realty", logo: "https://ui-avatars.com/api/?name=CR&background=3b82f6&color=fff&size=40" },
+  { id: "ag2", name: "Mediterranean Homes", logo: "https://ui-avatars.com/api/?name=MH&background=10b981&color=fff&size=40" },
+  { id: "ag3", name: "Luxury Estates", logo: "https://ui-avatars.com/api/?name=LE&background=8b5cf6&color=fff&size=40" },
+  { id: "ag4", name: "SunCoast Properties", logo: "https://ui-avatars.com/api/?name=SP&background=f59e0b&color=fff&size=40" },
+  { id: "ag5", name: "Iberian Realty", logo: "https://ui-avatars.com/api/?name=IR&background=ef4444&color=fff&size=40" },
+  { id: "ag6", name: "Golden Coast", logo: "https://ui-avatars.com/api/?name=GC&background=06b6d4&color=fff&size=40" },
+  { id: "ag7", name: "Premier Living", logo: "https://ui-avatars.com/api/?name=PL&background=ec4899&color=fff&size=40" },
+  { id: "ag8", name: "Andalucía Homes", logo: "https://ui-avatars.com/api/?name=AH&background=84cc16&color=fff&size=40" },
+  { id: "ag9", name: "Vista Mar Realty", logo: "https://ui-avatars.com/api/?name=VM&background=f97316&color=fff&size=40" },
+  { id: "ag10", name: "Blue Sky Properties", logo: "https://ui-avatars.com/api/?name=BS&background=6366f1&color=fff&size=40" },
+  { id: "ag11", name: "Sol & Playa", logo: "https://ui-avatars.com/api/?name=S&background=14b8a6&color=fff&size=40" },
+  { id: "ag12", name: "Elite Homes Spain", logo: "https://ui-avatars.com/api/?name=EH&background=a855f7&color=fff&size=40" },
+  { id: "ag13", name: "Marbella Select", logo: "https://ui-avatars.com/api/?name=MS&background=0ea5e9&color=fff&size=40" },
+  { id: "ag14", name: "Costa Living", logo: "https://ui-avatars.com/api/?name=CL&background=d946ef&color=fff&size=40" },
+];
+
+function DocumentsTab({ openFolder, onOpenFolder, blockedAgencies, onToggleBlockAgency, folderLocked, onToggleFolderLock, promotionName, totalUnits, readOnly }: {
+  openFolder: string | null;
+  onOpenFolder: (f: string | null) => void;
+  blockedAgencies: Record<string, Set<string>>;
+  onToggleBlockAgency: (folder: string, agencyId: string) => void;
+  folderLocked: Record<string, boolean>;
+  onToggleFolderLock: (folder: string) => void;
+  promotionName: string;
+  totalUnits: number;
+  readOnly?: boolean;
+}) {
+  const [showAgenciesList, setShowAgenciesList] = useState(false);
+  const [agencySearch, setAgencySearch] = useState("");
+  const [confirmLockFolder, setConfirmLockFolder] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [folderMenuOpen, setFolderMenuOpen] = useState<string | null>(null);
+  const folderKeys = ["calidades", ...(totalUnits > 1 ? ["planos"] : []), "brochure"];
+
+  const totalCollaborators = mockAgenciesAccess.length;
+  const filteredAgencies = mockAgenciesAccess.filter(a => a.name.toLowerCase().includes(agencySearch.toLowerCase()));
+
+  const toggleFileSelect = (fileName: string) => {
+    const next = new Set(selectedFiles);
+    next.has(fileName) ? next.delete(fileName) : next.add(fileName);
+    setSelectedFiles(next);
+  };
+
+  const toggleSelectAllFiles = (files: { name: string }[]) => {
+    const allNames = files.map(f => f.name);
+    const allSelected = allNames.every(n => selectedFiles.has(n));
+    if (allSelected) setSelectedFiles(new Set());
+    else setSelectedFiles(new Set(allNames));
+  };
+
+  if (openFolder && mockFolders[openFolder]) {
+    const folder = mockFolders[openFolder];
+    const isLocked = folderLocked[openFolder] || false;
+    const blocked = blockedAgencies[openFolder] || new Set();
+    const isShareable = openFolder === "planos" || openFolder === "brochure";
+    const activeAgencies = mockAgenciesAccess.filter(a => !blocked.has(a.id)).length;
+    const allFilesSelected = folder.files.length > 0 && folder.files.every(f => selectedFiles.has(f.name));
+
+    return (
+      <div className="space-y-5">
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <button onClick={() => { onOpenFolder(null); setSelectedFiles(new Set()); }} className="hover:text-foreground transition-colors">Documentos</button>
+          <span>/</span>
+          <span className="text-foreground font-medium">{folder.name}</span>
+        </div>
+
+        {/* Sharing banner inside folder — only for developer, not agency */}
+        {!readOnly && isShareable && !isLocked && (
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-primary/5 border border-primary/10">
+            <Share2 className="h-3.5 w-3.5 text-primary shrink-0" strokeWidth={1.5} />
+            <p className="text-xs text-foreground flex-1">
+              Compartido con <span className="font-semibold">{activeAgencies} agencias</span> colaboradoras
+            </p>
+            <button
+              onClick={() => setShowAgenciesList(!showAgenciesList)}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              {showAgenciesList ? "Ocultar" : "Ver listado"}
+            </button>
+          </div>
+        )}
+        {!readOnly && isShareable && isLocked && (
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-destructive/5 border border-destructive/10">
+            <Lock className="h-3.5 w-3.5 text-destructive shrink-0" strokeWidth={1.5} />
+            <p className="text-xs text-muted-foreground flex-1">Esta carpeta está bloqueada y no se comparte con ninguna agencia.</p>
+            <button
+              onClick={() => onToggleFolderLock(openFolder)}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Desbloquear
+            </button>
+          </div>
+        )}
+
+        {/* Agency list popover */}
+        {!readOnly && showAgenciesList && isShareable && !isLocked && (
+          <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+            <div className="px-4 pt-4 pb-3 flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-foreground">Agencias con acceso ({activeAgencies})</h3>
+              <button
+                onClick={() => setConfirmLockFolder(openFolder)}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+              >
+                <Lock className="h-3 w-3" strokeWidth={1.5} /> Bloquear todo
+              </button>
+            </div>
+            <div className="px-4 pb-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" strokeWidth={1.5} />
+                <input
+                  type="text"
+                  value={agencySearch}
+                  onChange={e => setAgencySearch(e.target.value)}
+                  placeholder="Buscar agencia..."
+                  className="w-full pl-7 pr-3 py-1.5 text-xs rounded-lg border border-border/40 bg-background/50 text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/40"
+                />
+              </div>
+            </div>
+            <div className="px-4 pb-4 space-y-1 max-h-[240px] overflow-y-auto">
+              {filteredAgencies.map(ag => {
+                const isBlocked = blocked.has(ag.id);
+                return (
+                  <div key={ag.id} className={`flex items-center justify-between p-2.5 rounded-lg transition-colors ${isBlocked ? "opacity-50" : ""}`}>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <img src={ag.logo} alt="" className="h-6 w-6 rounded-full shrink-0" />
+                      <p className={`text-xs font-medium truncate ${isBlocked ? "text-muted-foreground line-through" : "text-foreground"}`}>{ag.name}</p>
+                    </div>
+                    <button
+                      onClick={() => onToggleBlockAgency(openFolder, ag.id)}
+                      className={`p-1 rounded-md transition-colors ${isBlocked ? "text-destructive hover:bg-destructive/10" : "text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10"}`}
+                      title={isBlocked ? "Desbloquear" : "Bloquear acceso"}
+                    >
+                      {isBlocked ? <Lock className="h-3 w-3" strokeWidth={1.5} /> : <Unlock className="h-3 w-3" strokeWidth={1.5} />}
+                    </button>
+                  </div>
+                );
+              })}
+              {filteredAgencies.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-3">Sin resultados</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Selection bar */}
+        {selectedFiles.size > 0 && (
+          <div className="flex items-center justify-between p-3 rounded-xl bg-primary/5 border border-primary/10">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-semibold text-foreground">{selectedFiles.size} archivo{selectedFiles.size > 1 ? "s" : ""} seleccionado{selectedFiles.size > 1 ? "s" : ""}</span>
+              <button onClick={() => toggleSelectAllFiles(folder.files)} className="text-xs text-primary font-medium hover:underline">
+                {allFilesSelected ? "Deseleccionar todo" : "Seleccionar todo"}
+              </button>
+              <button onClick={() => setSelectedFiles(new Set())} className="text-xs text-muted-foreground hover:text-foreground underline">
+                Limpiar
+              </button>
+            </div>
+            <Button size="sm" className="gap-1.5 text-xs h-8 rounded-full">
+              <Download className="h-3.5 w-3.5" strokeWidth={1.5} /> Descargar ({selectedFiles.size})
+            </Button>
+          </div>
+        )}
+
+        {/* File thumbnails grid */}
+        <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+          <div className="px-5 pt-5 pb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-foreground">{folder.files.length} archivo{folder.files.length !== 1 ? "s" : ""}</h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => toggleSelectAllFiles(folder.files)}
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                {allFilesSelected ? "Deseleccionar todo" : "Seleccionar todo"}
+              </button>
+              {!readOnly && (
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8">
+                  <Upload className="h-3 w-3" strokeWidth={1.5} /> Subir archivo
+                </Button>
+              )}
+            </div>
+          </div>
+          <div className="px-5 pb-5 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {folder.files.map((file, i) => {
+              const isSelected = selectedFiles.has(file.name);
+              return (
+                <div
+                  key={i}
+                  onClick={() => toggleFileSelect(file.name)}
+                  className={cn(
+                    "group rounded-xl border bg-background/50 hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden",
+                    isSelected ? "border-primary ring-2 ring-primary/20" : "border-border/30 hover:border-border/50"
+                  )}
+                >
+                  {/* Thumbnail */}
+                  <div className="aspect-[4/3] bg-muted/30 relative overflow-hidden">
+                    {file.thumbnail ? (
+                      <img src={file.thumbnail} alt={file.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <FileText className="h-8 w-8 text-muted-foreground/30" strokeWidth={1.5} />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                      <Download className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" strokeWidth={1.5} />
+                    </div>
+                    <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-black/50 text-white backdrop-blur-sm">
+                      {file.type}
+                    </span>
+                    {/* Selection checkbox */}
+                    <div className={cn(
+                      "absolute top-2 left-2 h-5 w-5 rounded border-2 flex items-center justify-center transition-all",
+                      isSelected ? "border-primary bg-primary" : "border-white/60 bg-black/20 opacity-0 group-hover:opacity-100"
+                    )}>
+                      {isSelected && <Check className="h-3 w-3 text-primary-foreground" strokeWidth={3} />}
+                    </div>
+                  </div>
+                  {/* Info */}
+                  <div className="p-3">
+                    <p className="text-xs font-medium text-foreground truncate">{file.name}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{file.size}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      {/* Confirm lock dialog */}
+      {confirmLockFolder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="rounded-2xl bg-card border border-border/40 shadow-xl p-6 max-w-sm w-full mx-4 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+                <Lock className="h-5 w-5 text-destructive" strokeWidth={1.5} />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">¿Bloquear carpeta?</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {mockAgenciesAccess.length} agencias perderán acceso a los archivos de esta carpeta de forma inmediata.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => setConfirmLockFolder(null)}>
+                Cancelar
+              </Button>
+              <Button variant="destructive" size="sm" className="text-xs h-8 gap-1.5" onClick={() => { onToggleFolderLock(confirmLockFolder); setConfirmLockFolder(null); setShowAgenciesList(false); }}>
+                <Lock className="h-3 w-3" strokeWidth={1.5} /> Bloquear
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      </div>
+    );
+  }
+
+  // Folder grid view
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-foreground">Documentos</h2>
+        {!readOnly && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs h-9">
+              <Upload className="h-3.5 w-3.5" strokeWidth={1.5} /> Subir documento
+            </Button>
+            <Button size="sm" className="gap-1.5 text-xs h-9">
+              <FilePlus className="h-3.5 w-3.5" strokeWidth={1.5} /> Crear documento
+            </Button>
+          </div>
+        )}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {folderKeys.map(key => {
+          const folder = mockFolders[key];
+          if (!folder) return null;
+          const isShareable = key === "planos" || key === "brochure";
+          const isLocked = folderLocked[key] || false;
+          const isDeletable = key !== "calidades"; // System folders can't be deleted
+          return (
+            <div key={key} className="group relative text-left rounded-2xl border border-border/40 bg-card p-5 hover:-translate-y-0.5 hover:border-border/60 hover:shadow-[0_4px_24px_-8px_rgba(0,0,0,0.08)] transition-all duration-200">
+              <button
+                onClick={() => onOpenFolder(key)}
+                className="w-full text-left"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <Folder className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
+                  {!readOnly && isShareable && !isLocked && <Share2 className="h-3 w-3 text-muted-foreground/50" strokeWidth={1.5} />}
+                  {!readOnly && isLocked && <Lock className="h-3 w-3 text-destructive/50" strokeWidth={1.5} />}
+                </div>
+                <p className="text-sm font-medium text-foreground">{folder.name}</p>
+                <div className="flex items-center justify-between mt-1.5">
+                  <p className="text-xs text-muted-foreground">{folder.files.length} archivo{folder.files.length !== 1 ? "s" : ""}</p>
+                </div>
+                {!readOnly && isShareable && !isLocked && (
+                  <div className="mt-3 pt-3 border-t border-border/20 flex items-center gap-1.5">
+                    <Share2 className="h-2.5 w-2.5 text-amber-500" strokeWidth={1.5} />
+                    <p className="text-[10px] text-amber-600">Compartido con {totalCollaborators} agencias</p>
+                  </div>
+                )}
+                {!readOnly && isLocked && (
+                  <div className="mt-3 pt-3 border-t border-border/20 flex items-center gap-1.5">
+                    <Lock className="h-2.5 w-2.5 text-destructive/50" strokeWidth={1.5} />
+                    <p className="text-[10px] text-muted-foreground">No compartido</p>
+                  </div>
+                )}
+              </button>
+              {/* 3-dot menu */}
+              {!readOnly && (
+                <div className="absolute top-4 right-4">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setFolderMenuOpen(folderMenuOpen === key ? null : key); }}
+                    className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-muted/50 transition-colors"
+                  >
+                    <MoreHorizontal className="h-4 w-4" strokeWidth={1.5} />
+                  </button>
+                  {folderMenuOpen === key && (
+                    <div className="absolute right-0 top-8 z-20 w-48 rounded-xl border border-border/40 bg-card shadow-lg py-1.5 animate-in fade-in-0 zoom-in-95">
+                      {isShareable && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onOpenFolder(key); setFolderMenuOpen(null); }}
+                          className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-foreground hover:bg-muted/40 transition-colors"
+                        >
+                          <Share2 className="h-3.5 w-3.5 text-muted-foreground/60" strokeWidth={1.5} /> Compartir con colaboradores
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onToggleFolderLock(key); setFolderMenuOpen(null); }}
+                        className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-foreground hover:bg-muted/40 transition-colors"
+                      >
+                        {isLocked
+                          ? <><Unlock className="h-3.5 w-3.5 text-muted-foreground/60" strokeWidth={1.5} /> Desbloquear carpeta</>
+                          : <><Lock className="h-3.5 w-3.5 text-muted-foreground/60" strokeWidth={1.5} /> Bloquear carpeta</>
+                        }
+                      </button>
+                      {isDeletable && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setFolderMenuOpen(null); }}
+                          className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-destructive hover:bg-destructive/5 transition-colors"
+                        >
+                          <X className="h-3.5 w-3.5" strokeWidth={1.5} /> Eliminar carpeta
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ═══ SHARED COMPONENTS ═══
+
+// ═══ COLLABORATION STATUS BANNER ═══
+function CollaborationStatusBanner({ isIncomplete, isShared, agencyCount, activity, onShare }: {
+  isIncomplete: boolean;
+  isShared: boolean;
+  agencyCount: number;
+  activity?: { inquiries: number; reservations: number; visits: number; trend: number };
+  onShare: () => void;
+}) {
+  if (isIncomplete) {
+    return (
+      <div className="rounded-2xl border border-amber-200/60 bg-amber-50/50 overflow-hidden">
+        <div className="p-4 2xl:p-5 flex items-start gap-3">
+          <div className="h-7 w-7 2xl:h-9 2xl:w-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+            <Lock className="h-3.5 w-3.5 2xl:h-4 2xl:w-4 text-amber-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground leading-tight">Cannot share yet</p>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Complete all steps to be able to share with agencies.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isShared) {
+    const mockVisits = activity?.visits || 42;
+    const mockSales = activity?.reservations || 3;
+    const mockRegistrations = activity?.inquiries || 18;
+
+    return (
+      <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="px-3.5 2xl:px-5 py-2.5 2xl:py-4 flex items-start gap-2.5 2xl:gap-3">
+          <div className="h-7 w-7 2xl:h-9 2xl:w-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0 mt-0.5">
+            <Users className="h-3.5 w-3.5 2xl:h-4 2xl:w-4 text-emerald-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground leading-tight">Shared with <span className="tabular-nums">{agencyCount}</span> {agencyCount === 1 ? "agency" : "agencies"}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-snug">Your promotion is being marketed by external collaborators.</p>
+          </div>
+        </div>
+        <div className="border-t border-border/30 px-3.5 2xl:px-5 py-2.5 2xl:py-3.5 grid grid-cols-3 gap-2">
+          <div className="text-center">
+            <p className="text-sm 2xl:text-base font-semibold text-foreground tabular-nums leading-none">{mockVisits}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Visits</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm 2xl:text-base font-semibold text-foreground tabular-nums leading-none">{mockSales}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Sales</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm 2xl:text-base font-semibold text-foreground tabular-nums leading-none">{mockRegistrations}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Registrations</p>
+          </div>
+        </div>
+        <div className="border-t border-border/30 px-3.5 2xl:px-5 py-2 2xl:py-2.5">
+          <button
+            onClick={onShare}
+            className="w-full flex items-center justify-center gap-2 text-xs 2xl:text-sm font-medium text-muted-foreground hover:text-foreground transition-colors py-0.5"
+          >
+            <Share2 className="h-3.5 w-3.5" strokeWidth={1.5} /> Share with more
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Complete but not yet shared
+  return (
+    <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/40 overflow-hidden">
+      <div className="p-4 2xl:p-5 flex items-start gap-3">
+        <div className="h-7 w-7 2xl:h-9 2xl:w-9 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0 mt-0.5">
+          <CheckCircle2 className="h-3.5 w-3.5 2xl:h-4 2xl:w-4 text-emerald-600" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground leading-tight">Ready to share!</p>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Share with agencies to start receiving clients.</p>
+        </div>
+      </div>
+      <div className="border-t border-emerald-200/40 px-4 2xl:px-5 py-3">
+        <button
+          onClick={onShare}
+          className="w-full flex items-center justify-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors py-1"
+        >
+          <Share2 className="h-3.5 w-3.5" strokeWidth={1.5} /> Share with collaborators
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SectionCard({ title, stepName, missing, onEdit, children, hideEdit, flush }: {
+  title: string; stepName: string; missing: boolean; onEdit: () => void; children: React.ReactNode; hideEdit?: boolean; flush?: boolean;
+}) {
+  if (missing && hideEdit) return null;
+  if (missing) {
+    return (
+      <div className="rounded-2xl border border-dashed border-destructive/30 bg-destructive/5 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+            <h2 className="text-base font-semibold text-foreground">{title}</h2>
+            <Tag variant="danger" size="sm">Missing</Tag>
+          </div>
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7" onClick={onEdit}>
+            <Pencil className="h-3 w-3" /> Complete
+          </Button>
+        </div>
+        <EmptyState icon={stepConfig[stepName]?.icon || Settings} message={`${title} not configured`} sub={`Click "Complete" to set up ${title.toLowerCase()}`} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden group/section relative">
+      {flush ? (
+        <>
+          {!hideEdit && (
+            <button onClick={onEdit}
+              className="absolute top-3 right-3 z-10 opacity-0 group-hover/section:opacity-100 transition-opacity inline-flex items-center gap-1 px-2 py-1 rounded-md bg-background/90 backdrop-blur-sm border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm">
+              <Pencil className="h-3 w-3" /> Edit
+            </button>
+          )}
+          {children}
+        </>
+      ) : (
+        <>
+          <div className="px-5 pt-4 pb-3 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-foreground">{title}</h2>
+            {!hideEdit && (
+              <button onClick={onEdit}
+                className="opacity-0 group-hover/section:opacity-100 transition-opacity inline-flex items-center gap-1 px-2 py-1 rounded-md bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm">
+                <Pencil className="h-3 w-3" /> Edit
+              </button>
+            )}
+          </div>
+          <div className="px-5 pb-5">{children}</div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function InfoItem({ icon: Icon, label, value, sub }: { icon: typeof Home; label: string; value: string; sub?: string }) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 mb-1">
+        <Icon className="h-3 w-3 text-muted-foreground/60" />
+        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</p>
+      </div>
+      <p className="text-sm font-medium text-foreground">{value}</p>
+      {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+function EmptyState({ icon: Icon, message, sub }: { icon: typeof Home; message: string; sub: string }) {
+  return (
+    <div className="flex items-center justify-center py-6 text-center">
+      <div>
+        <Icon className="h-6 w-6 text-muted-foreground/20 mx-auto mb-2" />
+        <p className="text-xs text-muted-foreground">{message}</p>
+        <p className="text-xs text-muted-foreground/60 mt-0.5">{sub}</p>
+      </div>
+    </div>
+  );
+}
+
+// ═══ CONTACT FOOTER — max 3 visible, rotating, with offices alongside if 1 contact ═══
+type ContactPerson = { name: string; role: string; avatar: string; phone: string; email: string; languages: string[] };
+type PuntoDeVentaType = { id: string; nombre: string; direccion: string; telefono: string; email: string; whatsapp?: string; coverUrl?: string };
+
+function ContactFooter({ contacts, website, puntosDeVenta, comerciales, onAddMember, onAddOffice, onEditOffices, hideManagement }: {
+  contacts: ContactPerson[]; website: string; puntosDeVenta?: PuntoDeVentaType[];
+  comerciales?: Comercial[]; onAddMember?: () => void; onAddOffice?: () => void; onEditOffices?: () => void; hideManagement?: boolean;
+}) {
+  const [page, setPage] = useState(0);
+  const visibleContacts = contacts.length > 3
+    ? Array.from({ length: 3 }, (_, i) => contacts[((page * 3) + i) % contacts.length])
+    : contacts;
+  const totalPages = contacts.length > 3 ? Math.ceil(contacts.length / 3) : 0;
+
+  const isSingle = visibleContacts.length === 1;
+  const offices = puntosDeVenta || [];
+
+  return (
+    <div className="rounded-2xl bg-card border border-border/40 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="px-5 pt-5 pb-3 flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">Equipo de contacto</h2>
+          {!hideManagement && <p className="text-xs text-muted-foreground mt-0.5">Gestiona tu equipo comercial y puntos de venta</p>}
+        </div>
+        <div className="flex items-center gap-2">
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1 mr-2">
+              {Array.from({ length: totalPages }, (_, i) => (
+                <button key={i} onClick={() => setPage(i)} className={`h-1.5 rounded-full transition-all ${i === page ? "w-4 bg-primary" : "w-1.5 bg-muted-foreground/20"}`} />
+              ))}
+            </div>
+          )}
+          {onAddMember && !hideManagement && (
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 rounded-full" onClick={onAddMember}>
+              <UserPlus className="h-3 w-3" /> Add member
+            </Button>
+          )}
+          {onAddOffice && !hideManagement && (
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 rounded-full" onClick={onAddOffice}>
+              <Store className="h-3 w-3" /> Add office
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Contact cards */}
+      <div className="px-5 pb-4">
+        {isSingle ? (
+          <div className="flex flex-col md:flex-row gap-3">
+            <ContactCard contact={visibleContacts[0]} large />
+            {offices.length > 0 && (
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Sales offices · {offices.length}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {offices.map((o) => <OfficeMiniCard key={o.id} office={o} />)}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className={`grid grid-cols-1 ${visibleContacts.length === 2 ? "md:grid-cols-2" : "md:grid-cols-3"} gap-2.5`}>
+            {visibleContacts.map((c) => (
+              <ContactCard key={c.name} contact={c} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Comerciales (internal team with permissions) */}
+      {comerciales && comerciales.length > 0 && (
+        <>
+          <div className="h-px bg-border/40 mx-5" />
+          <div className="px-5 py-4">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-2.5">Miembros del equipo</p>
+            <div className="space-y-1.5">
+              {comerciales.map(c => (
+                <div key={c.id} className="flex items-center gap-3 p-2.5 rounded-lg border border-border/30 bg-background/50">
+                  <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <Users className="h-3 w-3 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-foreground">{c.nombre}</p>
+                    <p className="text-[10px] text-muted-foreground">{c.email}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {c.permissions.canRegister && <Tag variant="default" size="sm">Register</Tag>}
+                    {c.permissions.canShareWithAgencies && <Tag variant="default" size="sm">Share</Tag>}
+                    {c.permissions.canEdit && <Tag variant="default" size="sm">Edit</Tag>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Footer: website + offices grid */}
+      <div className="h-px bg-border/40 mx-5" />
+      <div className="px-5 py-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <a href="#" className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium transition-colors">
+            <Globe className="h-3 w-3" strokeWidth={1.5} />
+            {website}
+            <ExternalLink className="h-2.5 w-2.5 opacity-50" strokeWidth={1.5} />
+          </a>
+          {!isSingle && offices.length > 0 && (
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Sales offices · {offices.length}</p>
+          )}
+        </div>
+        {!isSingle && offices.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {offices.map((o) => <OfficeMiniCard key={o.id} office={o} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ContactCard({ contact: c, large }: { contact: ContactPerson; large?: boolean }) {
+  return (
+    <div className={`rounded-xl border border-border/30 bg-background/50 p-4 hover:border-border/50 hover:shadow-sm transition-all duration-200 ${large ? "flex-1" : ""}`}>
+      <div className="flex items-center gap-3 mb-3">
+        <Avatar className={`${large ? "h-14 w-14" : "h-12 w-12"} ring-2 ring-background shadow-sm`}>
+          <AvatarImage src={c.avatar} alt={c.name} className="object-cover" />
+          <AvatarFallback className="bg-muted text-xs font-medium">{c.name.slice(0, 2)}</AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1">
+          <p className={`${large ? "text-sm" : "text-sm"} font-semibold text-foreground truncate`}>{c.name}</p>
+          <p className={`${large ? "text-xs" : "text-[10px]"} text-muted-foreground`}>{c.role}</p>
+          <div className="flex items-center gap-1 mt-1">
+            {c.languages.map((f, i) => (
+              <span key={i} className="text-xs">{f}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <button className="flex-1 flex items-center justify-center gap-1 h-8 rounded-lg bg-muted/40 text-muted-foreground hover:bg-muted/60 hover:text-foreground text-xs font-medium transition-all duration-200">
+          <Phone className="h-3.5 w-3.5" strokeWidth={1.5} /> Llamar
+        </button>
+        <button className="flex-1 flex items-center justify-center gap-1 h-8 rounded-lg bg-muted/40 text-muted-foreground hover:bg-muted/60 hover:text-foreground text-xs font-medium transition-all duration-200">
+          <Mail className="h-3.5 w-3.5" strokeWidth={1.5} /> Email
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function OfficeMiniCard({ office: o }: { office: PuntoDeVentaType }) {
+  return (
+    <div className="group relative rounded-2xl border border-border/40 bg-card overflow-hidden hover:border-border/70 hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.12)] transition-all duration-300">
+      {/* Cover with title overlay */}
+      <div className="relative h-32 overflow-hidden bg-muted/20">
+        {o.coverUrl ? (
+          <img
+            src={o.coverUrl}
+            alt={o.nombre}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-muted/40 via-muted/25 to-muted/10 flex items-center justify-center">
+            <Store className="h-7 w-7 text-muted-foreground/30" strokeWidth={1.5} />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 p-3.5">
+          <p className="text-sm font-semibold text-white truncate drop-shadow-sm">{o.nombre}</p>
+        </div>
+      </div>
+
+      {/* Body — full contact info, always visible */}
+      <div className="p-3.5 space-y-2">
+        {o.direccion && (
+          <div className="flex items-start gap-2">
+            <MapPin className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0 mt-0.5" strokeWidth={1.75} />
+            <p className="text-xs text-foreground/90 leading-relaxed">{o.direccion}</p>
+          </div>
+        )}
+        {o.telefono && (
+          <a
+            href={`tel:${o.telefono}`}
+            className="flex items-center gap-2 group/item hover:text-foreground transition-colors"
+          >
+            <Phone className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" strokeWidth={1.75} />
+            <p className="text-xs text-muted-foreground group-hover/item:text-foreground truncate">{o.telefono}</p>
+          </a>
+        )}
+        {o.email && (
+          <a
+            href={`mailto:${o.email}`}
+            className="flex items-center gap-2 group/item hover:text-foreground transition-colors"
+          >
+            <Mail className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" strokeWidth={1.75} />
+            <p className="text-xs text-muted-foreground group-hover/item:text-foreground truncate">{o.email}</p>
+          </a>
+        )}
+        {o.whatsapp && (
+          <a
+            href={`https://wa.me/${o.whatsapp.replace(/[^\d]/g, "")}`}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 group/item hover:text-emerald-600 transition-colors"
+          >
+            <MessageCircle className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0 group-hover/item:text-emerald-600" strokeWidth={1.75} />
+            <p className="text-xs text-muted-foreground group-hover/item:text-emerald-600 truncate">WhatsApp · {o.whatsapp}</p>
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
