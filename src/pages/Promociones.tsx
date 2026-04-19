@@ -17,8 +17,8 @@ import { promotions, getBuildingTypeLabel, type Promotion } from "@/data/promoti
 import { developerOnlyPromotions, type DevPromotion } from "@/data/developerPromotions";
 import { unitsByPromotion } from "@/data/units";
 import { Tag } from "@/components/ui/Tag";
-import { SortPill } from "@/components/ui/FilterBar";
 import { cn } from "@/lib/utils";
+import { ChevronDown } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════
    Opciones estáticas (las dinámicas se derivan de los datos en el componente)
@@ -284,7 +284,6 @@ export default function Promociones() {
   const [search, setSearch] = useState("");
 
   // Filtros de gestión (específicos del promotor)
-  const [healthFilter, setHealthFilter] = useState<string[]>([]);
   const [activityFilter, setActivityFilter] = useState<string[]>([]);
   const [collabFilter, setCollabFilter] = useState<string[]>([]);
 
@@ -306,7 +305,7 @@ export default function Promociones() {
 
   // Contador de filtros activos (para badge en el botón)
   const activeFilterCount =
-    healthFilter.length + activityFilter.length + collabFilter.length +
+    activityFilter.length + collabFilter.length +
     selectedLocations.length + selectedTypes.length + selectedPrices.length +
     selectedBedrooms.length + selectedDelivery.length + selectedCommissions.length +
     (buildingTypeFilter !== "All" ? 1 : 0);
@@ -317,12 +316,6 @@ export default function Promociones() {
   }, []);
 
   /* ─── Opciones de filtros de GESTIÓN (fijas) ─── */
-  const healthOptions = [
-    { value: "warnings", label: "Con warnings" },
-    { value: "trending", label: "Trending" },
-    { value: "sold-out", label: "Sin disponibilidad" },
-    { value: "healthy", label: "Sin incidencias" },
-  ];
   const activityOptions = [
     { value: "new", label: "Nueva" },
     { value: "last-units", label: "Últimas unidades" },
@@ -382,14 +375,14 @@ export default function Promociones() {
   }, [allPromotions]);
 
   /* ─── "Limpiar todo" ─── */
-  const hasFilters = healthFilter.length + activityFilter.length + collabFilter.length
+  const hasFilters = activityFilter.length + collabFilter.length
     + selectedLocations.length + selectedTypes.length + selectedPrices.length
     + selectedBedrooms.length + selectedDelivery.length + selectedCommissions.length > 0
     || buildingTypeFilter !== "All";
 
   const clearAllFilters = () => {
     setSearch("");
-    setHealthFilter([]); setActivityFilter([]); setCollabFilter([]);
+    setActivityFilter([]); setCollabFilter([]);
     setSelectedLocations([]); setSelectedTypes([]); setBuildingTypeFilter("All");
     setSelectedPrices([]); setSelectedBedrooms([]); setSelectedDelivery([]);
     setSelectedCommissions([]);
@@ -420,20 +413,6 @@ export default function Promociones() {
       }
 
       // ──────── Gestión ────────
-      if (healthFilter.length > 0) {
-        const hasMissing = (p.missingSteps?.length ?? 0) > 0;
-        const isTrendingNow = (p.activity?.trend ?? 0) >= TRENDING_THRESHOLD;
-        const isSoldOut = p.availableUnits === 0;
-        const isHealthy = !hasMissing && p.canShareWithAgencies !== false;
-        const ok = healthFilter.some(f => {
-          if (f === "warnings") return hasMissing || p.canShareWithAgencies === false;
-          if (f === "trending") return isTrendingNow;
-          if (f === "sold-out") return isSoldOut;
-          if (f === "healthy") return isHealthy;
-          return false;
-        });
-        if (!ok) return false;
-      }
       if (activityFilter.length > 0) {
         const ok = activityFilter.some(f => {
           if (f === "new") return p.badge === "new";
@@ -492,7 +471,7 @@ export default function Promociones() {
     });
   }, [
     allPromotions, search, statusFilter,
-    healthFilter, activityFilter, collabFilter,
+    activityFilter, collabFilter,
     selectedLocations, buildingTypeFilter, selectedTypes,
     selectedPrices, selectedDelivery, selectedCommissions, selectedBedrooms,
   ]);
@@ -569,10 +548,10 @@ export default function Promociones() {
 
       <div className="h-px bg-border/60" />
 
-      {/* ═══════════ Toolbar · solo status + filtros btn + sort + count ═══════════ */}
+      {/* ═══════════ Toolbar ═══════════ */}
       <div className="px-4 sm:px-6 lg:px-8 py-2.5">
-        <div className="max-w-[1400px] mx-auto flex items-center gap-2 flex-wrap">
-          {/* Status tabs */}
+        <div className="max-w-[1400px] mx-auto flex items-center gap-3 flex-wrap">
+          {/* Izquierda: status tabs */}
           <div className="flex items-center gap-0.5">
             {statusFilterOptions.map((opt) => (
               <button
@@ -590,32 +569,32 @@ export default function Promociones() {
             ))}
           </div>
 
-          {/* Filtros button */}
-          <button
-            onClick={() => setFiltersOpen(true)}
-            className={cn(
-              "inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-[12.5px] font-medium transition-colors",
-              activeFilterCount > 0
-                ? "bg-primary/10 border-primary/30 text-primary hover:bg-primary/15"
-                : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
-            )}
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            Filtros
-            {activeFilterCount > 0 && (
-              <span className="ml-0.5 bg-primary text-primary-foreground rounded-full h-4 min-w-[18px] px-1 text-[10px] font-bold grid place-items-center">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+          {/* Derecha: contador + sort minimalista + filtros */}
+          <div className="ml-auto flex items-center gap-4">
+            <span className="text-xs text-muted-foreground hidden sm:inline">
+              <span className="font-semibold text-foreground tnum">{sortedAndFiltered.length}</span> resultados
+            </span>
 
-          {/* Sort */}
-          <SortPill value={sort} options={sortOptions} onChange={setSort} />
+            <MinimalSort value={sort} options={sortOptions} onChange={setSort} />
 
-          {/* Count */}
-          <span className="text-xs text-muted-foreground ml-auto shrink-0">
-            <span className="font-semibold text-foreground tnum">{sortedAndFiltered.length}</span> promociones
-          </span>
+            <button
+              onClick={() => setFiltersOpen(true)}
+              className={cn(
+                "inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full border text-[12.5px] font-medium transition-colors",
+                activeFilterCount > 0
+                  ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90"
+                  : "bg-card border-border text-foreground hover:border-foreground/30"
+              )}
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              Filtros
+              {activeFilterCount > 0 && (
+                <span className="ml-0.5 bg-primary-foreground/20 rounded-full h-4 min-w-[18px] px-1 text-[10px] font-bold grid place-items-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -887,7 +866,6 @@ export default function Promociones() {
               <div className="flex-1 overflow-y-auto px-5 py-5 space-y-7">
                 <div className="space-y-5">
                   <SectionTitle>Gestión</SectionTitle>
-                  <FilterGroup title="Salud" options={healthOptions} values={healthFilter} onChange={setHealthFilter} />
                   <FilterGroup title="Actividad" options={activityOptions} values={activityFilter} onChange={setActivityFilter} />
                   <FilterGroup title="Colaboración" options={collabOptions} values={collabFilter} onChange={setCollabFilter} />
                 </div>
@@ -932,6 +910,60 @@ export default function Promociones() {
           </>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MinimalSort · dropdown minimalista (solo texto + chevron)
+   ═══════════════════════════════════════════════════════════════════ */
+function MinimalSort({
+  value, options, onChange,
+}: {
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const current = options.find(o => o.value === value);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="inline-flex items-center gap-1 text-[12.5px] text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <span className="hidden sm:inline">Ordenar por</span>
+        <span className="font-semibold text-foreground">{current?.label}</span>
+        <ChevronDown className={cn("h-3 w-3 opacity-60 transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full right-0 mt-2 bg-popover border border-border rounded-xl shadow-soft-lg z-30 min-w-[220px] py-1.5">
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              className="w-full flex items-center justify-between px-3 py-1.5 text-sm transition-colors hover:bg-muted/40 text-left"
+            >
+              <span className={cn(value === opt.value ? "text-foreground font-medium" : "text-muted-foreground")}>
+                {opt.label}
+              </span>
+              {value === opt.value && <Check className="h-3.5 w-3.5 text-primary" strokeWidth={2.5} />}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
