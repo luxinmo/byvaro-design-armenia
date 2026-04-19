@@ -18,11 +18,15 @@ const titles: Record<string, string> = {
   "/microsites": "Microsites",
   "/emails": "Emails",
   "/ajustes": "Ajustes",
+  "/empresa": "Empresa",
 };
 
 export function AppHeader() {
   const location = useLocation();
-  const title = titles[location.pathname] || "Inicio";
+  // Busca entrada exacta o con prefijo (para rutas tipo /empresa/…)
+  const title = titles[location.pathname]
+    || titles[Object.keys(titles).find(p => location.pathname.startsWith(p + "/")) ?? ""]
+    || "Inicio";
 
   return (
     <header className="hidden lg:flex h-14 sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border px-6 items-center justify-between gap-4">

@@ -96,9 +96,8 @@ export default function Empresa() {
       )}
 
       <div className="px-4 sm:px-6 lg:px-10 pt-4 pb-10 max-w-[1250px] mx-auto w-full">
-        {/* ═════ Breadcrumb + toggle ═════ */}
-        <div className="flex items-center justify-between mb-4 gap-2">
-          <span className="text-[11px] text-muted-foreground">‹ Administración</span>
+        {/* ═════ Toggle modo (el breadcrumb ya lo pone AppHeader) ═════ */}
+        <div className="flex items-center justify-end mb-4">
           <button
             type="button"
             onClick={() => setViewMode(viewMode === "edit" ? "preview" : "edit")}
