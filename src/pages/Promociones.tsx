@@ -26,7 +26,20 @@ import { cn } from "@/lib/utils";
    Opciones estáticas (las dinámicas se derivan de los datos en el componente)
    ═══════════════════════════════════════════════════════════════════ */
 
-/** Traducción de propertyType (viene en inglés del dato) → label español */
+/** Aliases: normalizan variantes del dato a un único value canónico.
+ *  Evita duplicados tipo "Villa" vs "Villas" en el filtro. */
+const propertyTypeAliases: Record<string, string> = {
+  "Villa": "Villas",
+  "Villas": "Villas",
+  "Apartment": "Apartments",
+  "Apartments": "Apartments",
+  "Townhouse": "Townhouses",
+  "Townhouses": "Townhouses",
+  "Penthouse": "Penthouses",
+  "Penthouses": "Penthouses",
+};
+
+/** Traducción de propertyType canónico → label español */
 const propertyTypeLabels: Record<string, string> = {
   "Apartments": "Apartamentos",
   "Villas": "Villas",
@@ -35,6 +48,11 @@ const propertyTypeLabels: Record<string, string> = {
   "Duplex": "Dúplex",
   "Commercial": "Locales",
 };
+
+/** Normaliza un propertyType crudo al canónico (Villa → Villas) */
+function normalizePropertyType(v: string): string {
+  return propertyTypeAliases[v] ?? v;
+}
 
 const buildingTypeOptions = [
   { value: "Unifamiliar", label: "Unifamiliar" },
@@ -68,10 +86,35 @@ const bedroomOptions = ["1", "2", "3", "4+"];
 
 /* ─── helpers de filtrado/ordenación ─────────────────────────────── */
 
-/** Extrae la "zona" de la ubicación: "Marbella, Costa del Sol" → "Costa del Sol" */
+/** Normalizador de zonas: mapea variantes a un catálogo oficial español
+ *  para evitar duplicados tipo "Alicante" vs "Costa Blanca" o nombres raros
+ *  como "Playa de San Juan". */
+const zoneNormalizer: Record<string, string> = {
+  "Alicante": "Costa Blanca",
+  "Playa de San Juan": "Costa Blanca",
+  "Málaga": "Costa del Sol",
+  "Costa del Sol": "Costa del Sol",
+  "Las Rozas": "Madrid",
+  "Madrid": "Madrid",
+  "Barcelona Coast": "Costa Catalana",
+  "Barcelona": "Costa Catalana",
+  "Ciudad de las Artes": "Valencia",
+  "Playa Malvarrosa": "Valencia",
+  "Valencia": "Valencia",
+  "Girona": "Costa Brava",
+  "Costa Brava": "Costa Brava",
+  "Baleares": "Baleares",
+  "Mallorca": "Baleares",
+  "Ibiza": "Baleares",
+  "Canarias": "Canarias",
+};
+
+/** Extrae la "zona" de la ubicación: "Marbella, Costa del Sol" → "Costa del Sol".
+ *  Si el resultado está en el normalizador, se mapea a su versión canónica. */
 function getZone(location: string): string {
   const parts = location.split(",").map(p => p.trim()).filter(Boolean);
-  return parts[parts.length - 1] || parts[0] || "";
+  const raw = parts[parts.length - 1] || parts[0] || "";
+  return zoneNormalizer[raw] ?? raw;
 }
 
 /** Extrae el año de la fecha de entrega: "Q3 2026" → 2026 */
@@ -367,7 +410,7 @@ export default function Promociones() {
 
   const propertyTypeOptions = useMemo(() => {
     const types = new Set<string>();
-    allPromotions.forEach(p => p.propertyTypes.forEach(t => types.add(t)));
+    allPromotions.forEach(p => p.propertyTypes.forEach(t => types.add(normalizePropertyType(t))));
     return Array.from(types).sort().map(t => ({ value: t, label: getPropertyTypeLabel(t) }));
   }, [allPromotions]);
 
@@ -448,7 +491,10 @@ export default function Promociones() {
       // ──────── Búsqueda avanzada ────────
       if (selectedLocations.length > 0 && !selectedLocations.includes(getZone(p.location))) return false;
       if (buildingTypeFilter !== "All" && !matchesBuildingType(p.buildingType, buildingTypeFilter)) return false;
-      if (selectedTypes.length > 0 && !selectedTypes.some(t => p.propertyTypes.includes(t))) return false;
+      if (selectedTypes.length > 0) {
+        const normalized = p.propertyTypes.map(normalizePropertyType);
+        if (!selectedTypes.some(t => normalized.includes(t))) return false;
+      }
 
       // Precio min/max (inputs numéricos)
       if (priceMin !== null && p.priceMax < priceMin) return false;

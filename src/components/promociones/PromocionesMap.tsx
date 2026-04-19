@@ -122,36 +122,56 @@ export function PromocionesMap({ promotions: promos }: { promotions: DevPromotio
                 icon={makeBrandedIcon(trending)}
               >
                 <Popup>
-                  <div className="min-w-[240px]">
-                    <div className="flex items-start justify-between gap-2 mb-1.5">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                  <div className="w-[260px] -m-[10px]">
+                    {/* Imagen de portada */}
+                    {promo.image && (
+                      <div className="relative aspect-[16/9] bg-gray-100 overflow-hidden">
+                        <img
+                          src={promo.image}
+                          alt={promo.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                        {trending && (
+                          <span
+                            className="absolute top-2 right-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider text-white"
+                            style={{ background: "linear-gradient(135deg,#f97316,#ef4444)" }}
+                          >
+                            <Flame className="h-2.5 w-2.5" /> Trending
+                          </span>
+                        )}
+                        {promo.badge && (
+                          <span className="absolute top-2 left-2 bg-white/95 backdrop-blur text-[9px] font-bold uppercase tracking-wider text-gray-900 px-2 py-0.5 rounded-full shadow">
+                            {promo.badge === "new" ? "Nueva" : "Últimas"}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {/* Contenido */}
+                    <div className="p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 m-0">
                         {promo.location}
                       </p>
-                      {trending && (
-                        <span className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider text-orange-600">
-                          <Flame className="h-2.5 w-2.5" /> Trending
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="text-sm font-bold text-gray-900 mb-0.5">{promo.name}</h3>
-                    <p className="text-[11px] text-gray-500 mb-2">
-                      {promo.developer} · {promo.delivery}
-                    </p>
-                    <p className="text-sm font-bold text-gray-900">
-                      {formatPrice(promo.priceMin)}
-                      {promo.priceMax > promo.priceMin && (
-                        <span className="text-gray-400 font-normal">
-                          {" — "}
-                          {formatPrice(promo.priceMax)}
-                        </span>
-                      )}
-                    </p>
-                    <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100 text-[11px] text-gray-600">
-                      <span><span className="font-semibold text-gray-900">{promo.availableUnits}/{promo.totalUnits}</span> dispon.</span>
-                      <span><span className="font-semibold text-gray-900">{promo.commission}%</span> com.</span>
-                      {promo.constructionProgress !== undefined && (
-                        <span><span className="font-semibold text-gray-900">{promo.constructionProgress}%</span> obra</span>
-                      )}
+                      <h3 className="text-sm font-bold text-gray-900 mt-0.5 m-0">{promo.name}</h3>
+                      <p className="text-[11px] text-gray-500 mt-0.5 mb-2 m-0">
+                        {promo.developer} · Entrega {promo.delivery}
+                      </p>
+                      <p className="text-sm font-bold text-gray-900 m-0">
+                        {formatPrice(promo.priceMin)}
+                        {promo.priceMax > promo.priceMin && (
+                          <span className="text-gray-400 font-normal">
+                            {" — "}
+                            {formatPrice(promo.priceMax)}
+                          </span>
+                        )}
+                      </p>
+                      <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100 text-[11px] text-gray-600">
+                        <span><span className="font-semibold text-gray-900">{promo.availableUnits}/{promo.totalUnits}</span> dispon.</span>
+                        <span><span className="font-semibold text-gray-900">{promo.commission}%</span> com.</span>
+                        {promo.constructionProgress !== undefined && (
+                          <span><span className="font-semibold text-gray-900">{promo.constructionProgress}%</span> obra</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </Popup>
