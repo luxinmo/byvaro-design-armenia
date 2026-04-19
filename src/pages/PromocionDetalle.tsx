@@ -173,12 +173,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
   // KPI data with optional click handler to switch tabs
   const allKpis = [
-    { icon: Euro, label: "Rango de precios", value: `${formatPrice(p.priceMin)}${p.priceMax > p.priceMin ? ` – ${formatPrice(p.priceMax)}` : ""}`, detail: `${formatPrice(p.reservationCost)} de reserva`, color: "text-blue-600 bg-blue-50", empty: false },
-    { icon: Home, label: "Disponibilidad", value: `${p.availableUnits} / ${p.totalUnits}`, detail: `${occupancy}% vendido`, color: "text-emerald-600 bg-emerald-50", progress: occupancy, empty: false },
-    { icon: TrendingUp, label: "Comisión", value: p.commission > 0 ? `${p.commission}%` : "—", detail: p.commission > 0 ? `~${formatPrice(p.priceMin * p.commission / 100)}` : "Sin configurar", color: "text-amber-600 bg-amber-50", onClick: () => setActiveTab(visibleTabs.indexOf("Comisiones")), empty: p.commission === 0 },
-    { icon: Calendar, label: "Entrega", value: p.delivery || "Por definir", detail: "Estimada", color: "text-violet-600 bg-violet-50", empty: !p.delivery },
-    { icon: HardHat, label: "Construcción", value: p.constructionProgress !== undefined ? `${p.constructionProgress}%` : "—", detail: constructionPhaseLabel, color: "text-orange-600 bg-orange-50", empty: p.constructionProgress === undefined },
-    ...(!viewAsCollaborator ? [{ icon: Users, label: "Agencias", value: `${p.agencies}`, detail: p.agencies > 0 ? "Colaborando" : "Ninguna aún", color: "text-indigo-600 bg-indigo-50", onClick: () => setActiveTab(2), empty: false }] : []),
+    { icon: Euro, label: "Rango de precios", value: `${formatPrice(p.priceMin)}${p.priceMax > p.priceMin ? ` – ${formatPrice(p.priceMax)}` : ""}`, detail: `${formatPrice(p.reservationCost)} de reserva`, color: "text-primary bg-primary/10", empty: false },
+    { icon: Home, label: "Disponibilidad", value: `${p.availableUnits} / ${p.totalUnits}`, detail: `${occupancy}% vendido`, color: "text-primary bg-primary/10", progress: occupancy, empty: false },
+    { icon: TrendingUp, label: "Comisión", value: p.commission > 0 ? `${p.commission}%` : "—", detail: p.commission > 0 ? `~${formatPrice(p.priceMin * p.commission / 100)}` : "Sin configurar", color: "text-amber-600 bg-amber-500/10", onClick: () => setActiveTab(visibleTabs.indexOf("Comisiones")), empty: p.commission === 0 },
+    { icon: Calendar, label: "Entrega", value: p.delivery || "Por definir", detail: "Estimada", color: "text-accent-foreground bg-accent/10", empty: !p.delivery },
+    { icon: HardHat, label: "Construcción", value: p.constructionProgress !== undefined ? `${p.constructionProgress}%` : "—", detail: constructionPhaseLabel, color: "text-destructive bg-destructive/10", empty: p.constructionProgress === undefined },
+    ...(!viewAsCollaborator ? [{ icon: Users, label: "Agencias", value: `${p.agencies}`, detail: p.agencies > 0 ? "Colaborando" : "Ninguna aún", color: "text-primary bg-primary/10", onClick: () => setActiveTab(2), empty: false }] : []),
   ];
   const kpis = viewAsCollaborator ? allKpis.filter(k => !k.empty) : allKpis;
 
@@ -210,65 +210,116 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         </div>
       )}
 
-      {/* Header */}
-      <div className="px-5 sm:px-8 lg:px-10 pt-6 pb-0">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
-          <button onClick={() => navigate(agentMode ? "/promotions-agent" : "/developer-promotions")} className="hover:text-foreground transition-colors">Promociones</button>
-          <span>/</span>
-          <span className="text-foreground font-medium">{p.name}</span>
+      {/* ═════ Header · adaptado a sistema Byvaro ═════
+          - Breadcrumb tipo eyebrow con código de promoción a la derecha.
+          - H1 en escala Byvaro (text-[22px] sm:text-[28px] font-bold).
+          - Línea de metadata bajo el título: ubicación · promotor · entrega.
+          - Barra de acciones usando <Button> (ya pill por defecto, ver
+            src/components/ui/button.tsx).
+          - Tabs con subrayado (mismo patrón que /empresa) en vez de pills
+            con fondo. El <Separator> desaparece porque el borde inferior
+            del <nav> hace de separador visual. */}
+      <header className="px-5 sm:px-8 lg:px-10 pt-6 pb-0">
+        {/* Breadcrumb / eyebrow */}
+        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-3">
+          <button
+            onClick={() => navigate(agentMode ? "/promotions-agent" : "/developer-promotions")}
+            className="hover:text-foreground transition-colors"
+          >
+            Promociones
+          </button>
+          <ChevronRight className="h-3 w-3" />
+          <span className="text-foreground/70 tnum">{p.code}</span>
         </div>
 
-        <div className="flex items-start justify-between gap-6 mb-4">
-          <div>
-            <div className="flex items-center gap-2.5 mb-1">
-              <h1 className="text-lg font-semibold text-foreground tracking-tight">{p.name}</h1>
-              <span className="text-[10px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">{p.code}</span>
+        {/* Título + acciones */}
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-5">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight text-foreground leading-tight">
+                {p.name}
+              </h1>
               <Tag variant={status.variant} size="sm">{status.label}</Tag>
               {typeLabel && <Tag variant="default" size="sm">{typeLabel}</Tag>}
             </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <MapPin className="h-3 w-3" />
-              <span>{p.location || "Sin ubicación"}</span>
+            <div className="flex items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1.5 flex-wrap">
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="h-3.5 w-3.5 shrink-0" />
+                {p.location || "Sin ubicación"}
+              </span>
+              {p.developer && (
+                <>
+                  <span className="text-border">·</span>
+                  <span className="inline-flex items-center gap-1">
+                    <Building2 className="h-3.5 w-3.5 shrink-0" />
+                    {p.developer}
+                  </span>
+                </>
+              )}
+              {p.delivery && (
+                <>
+                  <span className="text-border">·</span>
+                  <span className="inline-flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5 shrink-0" />
+                    Entrega {p.delivery}
+                  </span>
+                </>
+              )}
             </div>
           </div>
+
           {!agentMode && !viewAsCollaborator && activeTabKey !== "Agencies" && (
-            <div className="flex items-center gap-2 shrink-0">
-              <button onClick={handleToggleCollabView} className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted-foreground/70 hover:text-foreground transition-colors">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              <Button size="sm" variant="ghost" onClick={handleToggleCollabView} className="gap-1.5">
                 <Eye className="h-3.5 w-3.5" strokeWidth={1.5} /> Vista colaborador
-              </button>
-              <button onClick={() => setSendEmailOpen(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium text-foreground hover:bg-muted transition-colors">
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setSendEmailOpen(true)} className="gap-1.5">
                 <Mail className="h-3.5 w-3.5" strokeWidth={1.5} /> Enviar
-              </button>
-              <button onClick={() => setRegisterClientOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
-                <Users className="h-4 w-4" strokeWidth={1.5} /> Registrar cliente
-              </button>
+              </Button>
+              <Button size="sm" onClick={() => setRegisterClientOpen(true)} className="gap-1.5">
+                <Users className="h-3.5 w-3.5" strokeWidth={1.5} /> Registrar cliente
+              </Button>
             </div>
           )}
           {viewAsCollaborator && (
             <div className="flex items-center gap-2 shrink-0">
-              <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8 rounded-full" onClick={() => setSendEmailOpen(true)}><Mail className="h-3 w-3" /> Enviar</Button>
-              <Button size="sm" className="gap-1.5 text-xs h-8 rounded-full" onClick={() => setRegisterClientOpen(true)}><Users className="h-3 w-3" /> Registrar cliente</Button>
+              <Button size="sm" variant="outline" onClick={() => setSendEmailOpen(true)} className="gap-1.5">
+                <Mail className="h-3.5 w-3.5" /> Enviar
+              </Button>
+              <Button size="sm" onClick={() => setRegisterClientOpen(true)} className="gap-1.5">
+                <Users className="h-3.5 w-3.5" /> Registrar cliente
+              </Button>
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        {/* Tabs · subrayado Byvaro (patrón de /empresa) */}
+        <nav className="flex items-center gap-1 border-b border-border overflow-x-auto no-scrollbar -mx-5 sm:-mx-8 lg:-mx-10 px-5 sm:px-8 lg:px-10">
           {visibleTabs.map((tab, i) => {
             const requestCount = !viewAsCollaborator && tab === "Agencies" ? agencies.filter(a => a.isNewRequest).length : 0;
+            const active = activeTab === i;
             return (
-              <button key={tab} onClick={() => setActiveTab(i)}
-                className={`px-3.5 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${activeTab === i ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/40"}`}>
+              <button
+                key={tab}
+                onClick={() => setActiveTab(i)}
+                className={cn(
+                  "relative px-4 sm:px-5 py-3 text-[13px] font-medium whitespace-nowrap transition-colors inline-flex items-center gap-1.5",
+                  active
+                    ? "text-primary after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-primary"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
                 {tabLabels[tab] || tab}
                 {requestCount > 0 && (
-                  <span className="h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">{requestCount}</span>
+                  <span className="h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold inline-flex items-center justify-center tnum">
+                    {requestCount}
+                  </span>
                 )}
               </button>
             );
           })}
-        </div>
-      </div>
-
-      <Separator className="mt-3" />
+        </nav>
+      </header>
 
       <div className="p-[25px] w-full min-w-0" style={{ maxWidth: (activeTabKey === "Availability" || activeTabKey === "Agencies" || activeTabKey === "Overview") ? undefined : "1250px" }}>
 
@@ -321,16 +372,16 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 return (
                   <div key={kpi.label}
                     onClick={kpi.onClick}
-                    className={`group relative rounded-2xl border bg-card p-3.5 2xl:p-5 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_24px_-8px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 transition-all duration-200 overflow-hidden ${kpi.onClick ? "cursor-pointer" : ""} ${kpi.empty ? "border-rose-200/70" : "border-border/40"}`}>
+                    className={`group relative rounded-2xl border bg-card p-3.5 2xl:p-5 shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 overflow-hidden ${kpi.onClick ? "cursor-pointer" : ""} ${kpi.empty ? "border-destructive/30" : "border-border"}`}>
                     <div className={`h-7 w-7 2xl:h-9 2xl:w-9 rounded-lg flex items-center justify-center ${kpi.color} mb-2`}>
                       <kpi.icon className="h-3.5 w-3.5 2xl:h-4 2xl:w-4" />
                     </div>
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">{kpi.label}</p>
-                    <p className={`text-sm 2xl:text-base font-semibold leading-tight tabular-nums ${kpi.empty ? "text-rose-600" : "text-foreground"}`}>{kpi.value}</p>
+                    <p className={`text-sm 2xl:text-base font-semibold leading-tight tabular-nums ${kpi.empty ? "text-destructive" : "text-foreground"}`}>{kpi.value}</p>
                     {kpi.progress !== undefined && <Progress value={kpi.progress} className="h-1 mt-1.5" />}
                     {kpi.empty ? (
-                      <p className="text-[10px] mt-1 flex items-center gap-1 text-rose-600 font-medium">
-                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                      <p className="text-[10px] mt-1 flex items-center gap-1 text-destructive font-medium">
+                        <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
                         Falta
                       </p>
                     ) : (
@@ -417,11 +468,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               if (viewAsCollaborator && !showFlatUnit) return null;
 
               return (
-                <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+                <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
                   <div className="px-5 pt-4 pb-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="h-7 w-7 rounded-lg bg-emerald-50 flex items-center justify-center">
-                        <Eye className="h-3.5 w-3.5 text-emerald-600" />
+                      <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Eye className="h-3.5 w-3.5 text-primary" />
                       </div>
                       <div>
                         <h2 className="text-base font-semibold text-foreground">Piso piloto</h2>
@@ -436,7 +487,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   </div>
                   <div className="px-5 pb-5">
                     {showFlatUnit ? (
-                      <div className="flex gap-4 p-4 rounded-xl border border-emerald-200/60 bg-emerald-50/30">
+                      <div className="flex gap-4 p-4 rounded-xl border border-primary/20 bg-primary/5">
                         <div className="w-[180px] h-[130px] rounded-xl overflow-hidden shrink-0 relative group cursor-pointer">
                           <img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=400&h=300&fit=crop" alt="Piso piloto" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                           <div className="absolute top-2 left-2">
@@ -470,7 +521,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                         </div>
                       </div>
                     ) : !viewAsCollaborator ? (
-                      <div className="flex flex-col items-center justify-center py-8 text-center rounded-xl border border-dashed border-border/40 bg-muted/10">
+                      <div className="flex flex-col items-center justify-center py-8 text-center rounded-xl border border-dashed border-border bg-muted/10">
                         <Eye className="h-8 w-8 text-muted-foreground/20 mb-2" />
                         <p className="text-sm font-medium text-muted-foreground">Sin piso piloto seleccionado</p>
                         <p className="text-xs text-muted-foreground/60 mt-0.5 mb-3">Elige una unidad del listado de disponibilidad</p>
@@ -487,7 +538,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             {/* ── DOCUMENTACIÓN: Planos generales + Brochure ── */}
             <div className={`grid grid-cols-1 ${p.totalUnits > 1 ? "lg:grid-cols-3" : "lg:grid-cols-2"} gap-4`}>
               {/* Memoria de calidades */}
-              <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden group/section relative">
+              <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden group/section relative">
                 <div className="px-5 pt-4 pb-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <FileText className="h-3.5 w-3.5 text-muted-foreground" />
@@ -500,7 +551,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   )}
                 </div>
                 <div className="px-5 pb-5">
-                  <div className="flex items-center gap-4 p-4 rounded-xl border border-border/30 bg-background/50 hover:border-border/50 hover:shadow-sm transition-all cursor-pointer" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("calidades"); }}>
+                  <div className="flex items-center gap-4 p-4 rounded-xl border border-border bg-background/50 hover:border-border/50 hover:shadow-sm transition-all cursor-pointer" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("calidades"); }}>
                     <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                       <FileText className="h-6 w-6 text-primary" />
                     </div>
@@ -515,7 +566,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
               {/* Planos generales — only multi-unit */}
               {p.totalUnits > 1 && (
-                <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden group/section relative">
+                <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden group/section relative">
                   <div className="px-5 pt-4 pb-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Layers className="h-3.5 w-3.5 text-muted-foreground" />
@@ -529,7 +580,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     )}
                   </div>
                   <div className="px-5 pb-5">
-                    <div className="rounded-xl overflow-hidden border border-border/30 bg-background/50 cursor-pointer group hover:shadow-sm transition-all" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("planos"); }}>
+                    <div className="rounded-xl overflow-hidden border border-border bg-background/50 cursor-pointer group hover:shadow-sm transition-all" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("planos"); }}>
                       <img src="https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=600&h=200&fit=crop" alt="Planos" className="w-full h-[120px] object-cover group-hover:scale-[1.02] transition-transform duration-300" />
                       <div className="p-3 flex items-center justify-between">
                         <div>
@@ -544,7 +595,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               )}
 
               {/* Brochure */}
-              <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden group/section relative">
+              <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden group/section relative">
                 <div className="px-5 pt-4 pb-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
@@ -558,7 +609,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   )}
                 </div>
                 <div className="px-5 pb-5">
-                  <div className="rounded-xl overflow-hidden border border-border/30 bg-background/50 cursor-pointer group hover:shadow-sm transition-all" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("brochure"); }}>
+                  <div className="rounded-xl overflow-hidden border border-border bg-background/50 cursor-pointer group hover:shadow-sm transition-all" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("brochure"); }}>
                     <img src="https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=600&h=200&fit=crop" alt="Brochure" className="w-full h-[120px] object-cover group-hover:scale-[1.02] transition-transform duration-300" />
                     <div className="p-3 flex items-center justify-between">
                       <div>
@@ -582,7 +633,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 {p.reservationCost > 0 ? (
                   <div className="space-y-4">
                     {/* Summary row */}
-                    <div className="grid grid-cols-3 gap-3 pb-3 border-b border-border/40">
+                    <div className="grid grid-cols-3 gap-3 pb-3 border-b border-border">
                       <div>
                         <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Reserva</p>
                         <p className="text-sm font-semibold text-foreground tabular-nums">{formatPrice(p.reservationCost)}</p>
@@ -621,13 +672,13 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                       return (
                         <button
                           onClick={() => setActiveTab(visibleTabs.indexOf("Comisiones"))}
-                          className="w-full flex items-center justify-between pt-3 border-t border-border/40 text-left hover:opacity-80 transition-opacity"
+                          className="w-full flex items-center justify-between pt-3 border-t border-border text-left hover:opacity-80 transition-opacity"
                         >
                           <div className="flex items-center gap-2">
-                            <span className={`h-1.5 w-1.5 rounded-full ${commissionMissing ? "bg-rose-500" : "bg-emerald-500"}`} />
+                            <span className={`h-1.5 w-1.5 rounded-full ${commissionMissing ? "bg-destructive" : "bg-primary"}`} />
                             <span className="text-xs text-muted-foreground">Comisiones</span>
                             {commissionMissing && (
-                              <span className="text-[10px] font-medium text-rose-600">Falta</span>
+                              <span className="text-[10px] font-medium text-destructive">Falta</span>
                             )}
                           </div>
                           <div className="flex items-center gap-1.5">
@@ -706,7 +757,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     <aside className="w-full lg:w-12 2xl:w-[260px] lg:shrink-0 order-1 lg:order-2">
                       <div className="lg:sticky lg:top-6">
                         {/* Compact dock — visible md/lg, hidden on 2xl */}
-                        <div className="2xl:hidden flex lg:flex-col gap-1.5 rounded-2xl bg-card border border-border/40 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] p-1.5">
+                        <div className="2xl:hidden flex lg:flex-col gap-1.5 rounded-2xl bg-card border border-border shadow-soft p-1.5">
                           {items.map((item, i) => (
                             <Tooltip key={i}>
                               <TooltipTrigger asChild>
@@ -725,7 +776,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                         </div>
 
                         {/* Labeled side card — visible only on 2xl (≥1536px, MacBook 16") */}
-                        <div className="hidden 2xl:flex flex-col rounded-2xl bg-card border border-border/40 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+                        <div className="hidden 2xl:flex flex-col rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
                           <div className="px-4 pt-4 pb-2">
                             <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Acciones rápidas</p>
                           </div>
@@ -803,7 +854,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             {/* Right rail — minimalist icon dock */}
             <TooltipProvider delayDuration={150}>
               <aside className="w-full lg:w-12 lg:shrink-0 order-1 lg:order-2">
-                <div className="lg:sticky lg:top-6 flex lg:flex-col gap-1.5 rounded-2xl bg-card border border-border/40 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] p-1.5">
+                <div className="lg:sticky lg:top-6 flex lg:flex-col gap-1.5 rounded-2xl bg-card border border-border shadow-soft p-1.5">
                   {[
                     { icon: FileText, label: "Descargar brochure" },
                     { icon: Download, label: "Descargar listado de precios" },
@@ -873,12 +924,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         {activeTabKey === "Comisiones" && (
           <div className="space-y-5">
             {/* Commission structure card */}
-            <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+            <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
               <div className="px-5 pt-4 pb-3 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-foreground">Estructura de comisiones</h2>
                 {!viewAsCollaborator && (
                   <button onClick={() => navigate(getWizardUrl("Collaborators", returnPath))}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm transition-colors">
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm transition-colors">
                     <Pencil className="h-3 w-3" /> Editar
                   </button>
                 )}
@@ -896,7 +947,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                             </div>
                             <span className="text-sm font-bold text-foreground">{p.collaboration.comisionInternacional}%</span>
                           </div>
-                          <div className="flex items-center justify-between p-2.5 rounded-lg border border-border/40">
+                          <div className="flex items-center justify-between p-2.5 rounded-lg border border-border">
                             <div className="flex items-center gap-2.5">
                               <Home className="h-3.5 w-3.5 text-muted-foreground" />
                               <span className="text-xs text-foreground">Clientes nacionales</span>
@@ -935,7 +986,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Hitos de comisión</p>
                           <div className="space-y-1.5">
                             {p.collaboration.hitosComision.map((h, i) => (
-                              <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-border/40">
+                              <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-border">
                                 <span className="text-xs text-foreground">El cliente paga {h.pagoCliente}%</span>
                                 <span className="text-xs font-bold text-foreground">{h.pagoColaborador}% de comisión</span>
                               </div>
@@ -959,12 +1010,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             </div>
 
             {/* Registration conditions card */}
-            <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+            <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
               <div className="px-5 pt-4 pb-3 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-foreground">Condiciones de registro de clientes</h2>
                 {!viewAsCollaborator && (
                   <button onClick={() => navigate(getWizardUrl("Collaborators", returnPath))}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm transition-colors">
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm transition-colors">
                     <Pencil className="h-3 w-3" /> Editar
                   </button>
                 )}
@@ -975,8 +1026,8 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     <p className="text-xs text-muted-foreground">Las agencias deben proporcionar los siguientes datos al registrar un cliente para esta promoción:</p>
                     <div className="space-y-1.5">
                       {p.collaboration.condicionesRegistro.map(c => (
-                        <div key={c} className="flex items-center gap-2.5 p-2.5 rounded-lg border border-border/40">
-                          <div className="h-6 w-6 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                        <div key={c} className="flex items-center gap-2.5 p-2.5 rounded-lg border border-border">
+                          <div className="h-6 w-6 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                             <ClipboardList className="h-3.5 w-3.5 text-primary" />
                           </div>
                           <span className="text-xs font-medium text-foreground">{conditionLabels[c] || c}</span>
@@ -1108,7 +1159,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 key={unit.id}
                 onClick={() => { setShowFlatUnitId(unit.id); setShowFlatPickerOpen(false); }}
                 className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${
-                  showFlatUnitId === unit.id ? "border-primary bg-primary/5" : "border-border/40 hover:border-border/60 hover:bg-muted/20"
+                  showFlatUnitId === unit.id ? "border-primary bg-primary/5" : "border-border hover:border-border/60 hover:bg-muted/20"
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -1178,13 +1229,13 @@ function Sparkline({ data, color = "currentColor" }: { data: number[]; color?: s
 function AgencyKPI({ icon: Icon, label, value, delta, accent, trend, trendColor }: { icon: any; label: string; value: string; delta?: string; accent?: string; trend?: number[]; trendColor?: string }) {
   const positive = delta?.startsWith("+");
   return (
-    <div className="group relative flex-1 min-w-0 rounded-2xl bg-card border border-border/40 p-4 sm:p-5 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_24px_-8px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 transition-all duration-200">
+    <div className="group relative flex-1 min-w-0 rounded-2xl bg-card border border-border p-4 sm:p-5 shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200">
       <div className="flex items-start justify-between gap-2 mb-4">
         <div className={cn("h-9 w-9 rounded-xl flex items-center justify-center shrink-0", accent || "bg-muted/60")}>
           <Icon className="h-4 w-4 text-foreground/80" strokeWidth={1.75} />
         </div>
         {trend && (
-          <div className={cn("opacity-70 group-hover:opacity-100 transition-opacity", trendColor || "text-emerald-500")}>
+          <div className={cn("opacity-70 group-hover:opacity-100 transition-opacity", trendColor || "text-primary")}>
             <Sparkline data={trend} />
           </div>
         )}
@@ -1193,7 +1244,7 @@ function AgencyKPI({ icon: Icon, label, value, delta, accent, trend, trendColor 
       <div className="flex items-baseline gap-2 mt-1.5">
         <p className="text-2xl sm:text-[26px] font-bold text-foreground tabular-nums leading-none tracking-tight">{value}</p>
         {delta && (
-          <span className={cn("text-[11px] font-semibold tabular-nums inline-flex items-center gap-0.5", positive ? "text-emerald-600" : "text-destructive")}>
+          <span className={cn("text-[11px] font-semibold tabular-nums inline-flex items-center gap-0.5", positive ? "text-primary" : "text-destructive")}>
             <TrendingUp className={cn("h-3 w-3", !positive && "rotate-180")} strokeWidth={2.25} /> {delta}
           </span>
         )}
@@ -1248,10 +1299,10 @@ function TopPerformers({ list }: { list: Agency[] }) {
     { ring: "ring-orange-400/40", bg: "bg-gradient-to-br from-orange-400 to-orange-600", text: "text-white" },
   ];
   return (
-    <div className="rounded-2xl bg-card border border-border/40 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] p-4 sm:p-5">
+    <div className="rounded-2xl bg-card border border-border shadow-soft p-4 sm:p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
-          <div className="h-7 w-7 rounded-lg bg-amber-500/10 flex items-center justify-center">
+          <div className="h-7 w-7 rounded-lg bg-amber-500/100/10 flex items-center justify-center">
             <Trophy className="h-3.5 w-3.5 text-amber-500" strokeWidth={2} />
           </div>
           <h3 className="text-sm font-semibold text-foreground">Mejores colaboradores</h3>
@@ -1263,10 +1314,10 @@ function TopPerformers({ list }: { list: Agency[] }) {
           const m = medals[idx];
           const pct = (ag.salesVolume / maxSales) * 100;
           return (
-            <div key={ag.id} className="group relative flex items-center gap-3 p-3 rounded-xl border border-border/30 bg-muted/10 hover:bg-muted/30 hover:border-border/60 transition-all cursor-pointer overflow-hidden">
+            <div key={ag.id} className="group relative flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/10 hover:bg-muted/30 hover:border-border/60 transition-all cursor-pointer overflow-hidden">
               <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary/[0.04] to-transparent transition-all duration-500" style={{ width: `${pct}%` }} />
               <div className={cn("relative h-8 w-8 rounded-full ring-2 flex items-center justify-center text-xs font-bold shrink-0 shadow-sm", m.bg, m.ring, m.text)}>{idx + 1}</div>
-              <div className="relative h-10 w-10 rounded-full overflow-hidden bg-white border border-border/30 shrink-0 shadow-sm">
+              <div className="relative h-10 w-10 rounded-full overflow-hidden bg-white border border-border shrink-0 shadow-sm">
                 <img src={ag.logo || ""} alt={ag.name} className="w-full h-full object-contain p-0.5" />
               </div>
               <div className="relative min-w-0 flex-1">
@@ -1296,7 +1347,7 @@ function AgencyActionRail() {
   ];
   return (
     <div className="absolute top-1/2 -translate-y-1/2 left-full ml-2 opacity-0 group-hover:opacity-100 group-hover:ml-3 transition-all duration-200 z-30 hidden xl:block pointer-events-none group-hover:pointer-events-auto">
-      <div className="flex flex-col items-center gap-1 bg-card border border-border/40 rounded-full py-2 px-1 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.12)]">
+      <div className="flex flex-col items-center gap-1 bg-card border border-border rounded-full py-2 px-1 shadow-soft-lg">
         {items.map(({ icon: Icon, label }, i) => (
           <button key={i} onClick={(e) => e.stopPropagation()} title={label} aria-label={label}
             className="h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
@@ -1366,10 +1417,10 @@ function AgenciesTab({ promotionId, navigate }: { promotionId: string; navigate:
       {/* KPI hero — scoped to this promotion */}
       {allRelevant.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <AgencyKPI icon={Building2} label="Agencias colaborando" value={`${totals.active}`} delta={totals.active > 0 ? "+1" : undefined} accent="bg-blue-500/10" trend={[1, 1, 2, 2, 2, 3, totals.active]} trendColor="text-blue-500" />
-          <AgencyKPI icon={Eye} label="Visitas a esta promoción" value={`${totals.visits}`} delta="+18%" accent="bg-violet-500/10" trend={[20, 28, 35, 42, 50, 58, totals.visits]} trendColor="text-violet-500" />
-          <AgencyKPI icon={FileCheck2} label="Registros" value={`${totals.registrations}`} delta="+9%" accent="bg-emerald-500/10" trend={[5, 8, 10, 12, 15, 18, totals.registrations]} trendColor="text-emerald-500" />
-          <AgencyKPI icon={Euro} label="Volumen ventas" value={`${formatCompact(totals.sales)}€`} delta="+24%" accent="bg-amber-500/10" trend={[1, 2, 3, 4, 5, 6, 7]} trendColor="text-amber-500" />
+          <AgencyKPI icon={Building2} label="Agencias colaborando" value={`${totals.active}`} delta={totals.active > 0 ? "+1" : undefined} accent="bg-primary/10" trend={[1, 1, 2, 2, 2, 3, totals.active]} trendColor="text-primary" />
+          <AgencyKPI icon={Eye} label="Visitas a esta promoción" value={`${totals.visits}`} delta="+18%" accent="bg-accent/10" trend={[20, 28, 35, 42, 50, 58, totals.visits]} trendColor="text-accent-foreground" />
+          <AgencyKPI icon={FileCheck2} label="Registros" value={`${totals.registrations}`} delta="+9%" accent="bg-primary/10" trend={[5, 8, 10, 12, 15, 18, totals.registrations]} trendColor="text-primary" />
+          <AgencyKPI icon={Euro} label="Volumen ventas" value={`${formatCompact(totals.sales)}€`} delta="+24%" accent="bg-amber-500/100/10" trend={[1, 2, 3, 4, 5, 6, 7]} trendColor="text-amber-500" />
         </div>
       )}
 
@@ -1447,7 +1498,7 @@ function AgenciesTab({ promotionId, navigate }: { promotionId: string; navigate:
         {hasSidebar && (
           <div className="w-full lg:w-[300px] lg:shrink-0 order-1 lg:order-2">
             <div className="lg:sticky lg:top-4 space-y-4">
-              <div className="rounded-2xl border border-amber-300/40 bg-amber-50/50 dark:bg-amber-950/20 p-4">
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/100/10 dark:bg-amber-500/10 p-4">
                 <div className="flex items-center gap-2 mb-1.5">
                   <Info className="h-3.5 w-3.5 text-amber-600 shrink-0" />
                   <h3 className="text-xs font-semibold text-foreground leading-snug">No colaboran en esta promoción</h3>
@@ -1490,15 +1541,15 @@ function AgencyCard({ agency: ag, promotionId, selected, onToggleSelect }: { age
 
   return (
     <div className={cn(
-      "group relative bg-card border rounded-2xl transition-all duration-300 hover:shadow-[0_8px_28px_-12px_rgba(0,0,0,0.12)] hover:-translate-y-0.5",
-      selected ? "border-primary ring-2 ring-primary/20" : ag.isNewRequest ? "border-primary/40" : "border-border/40"
+      "group relative bg-card border rounded-2xl transition-all duration-300 hover:shadow-soft-lg hover:-translate-y-0.5",
+      selected ? "border-primary ring-2 ring-primary/20" : ag.isNewRequest ? "border-primary/40" : "border-border"
     )}>
       <AgencyActionRail />
 
       {/* Selection */}
       <div className={`absolute top-3 left-3 z-20 transition-opacity ${selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
         <button onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
-          className={cn("h-6 w-6 rounded-md border-2 flex items-center justify-center transition-colors shadow-sm",
+          className={cn("h-6 w-6 rounded-lg border-2 flex items-center justify-center transition-colors shadow-sm",
             selected ? "bg-primary border-primary text-primary-foreground" : "bg-white/95 border-white/60 backdrop-blur-sm hover:border-primary")}>
           {selected && <Check className="h-3.5 w-3.5" />}
         </button>
@@ -1525,9 +1576,9 @@ function AgencyCard({ agency: ag, promotionId, selected, onToggleSelect }: { age
             <img src={logoUrl} alt={ag.name} className="w-full h-full object-contain bg-white p-1" />
           </div>
           <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full",
-            ag.status === "active" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30" :
-              ag.status === "pending" ? "bg-amber-50 text-amber-600 dark:bg-amber-950/30" :
-                ag.status === "expired" ? "bg-red-50 text-destructive dark:bg-red-950/30" :
+            ag.status === "active" ? "bg-primary/10 text-primary dark:bg-primary/10" :
+              ag.status === "pending" ? "bg-amber-500/10 text-amber-600 dark:bg-amber-500/10" :
+                ag.status === "expired" ? "bg-destructive/10 text-destructive dark:bg-destructive/10" :
                   "bg-muted text-muted-foreground"
           )}>
             {ag.status === "active" ? "Activa" : ag.status === "pending" ? "Pendiente" : ag.status === "expired" ? "Expirada" : "Inactiva"}
@@ -1549,7 +1600,7 @@ function AgencyCard({ agency: ag, promotionId, selected, onToggleSelect }: { age
               <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" /> Solicita colaborar en esta promoción
             </span>
           ) : collabInThis ? (
-            <span className="text-[11px] font-medium text-emerald-600 flex items-center gap-1.5">
+            <span className="text-[11px] font-medium text-primary flex items-center gap-1.5">
               <Check className="h-3 w-3" /> Colabora en esta promoción
             </span>
           ) : (
@@ -1560,7 +1611,7 @@ function AgencyCard({ agency: ag, promotionId, selected, onToggleSelect }: { age
         </div>
 
         {/* Commercial metrics row */}
-        <div className="grid grid-cols-4 gap-2 mt-4 pt-3.5 border-t border-border/30">
+        <div className="grid grid-cols-4 gap-2 mt-4 pt-3.5 border-t border-border">
           <div className="text-center">
             <p className="text-sm font-bold text-foreground tabular-nums leading-none">{ag.visitsCount}</p>
             <p className="text-[9px] text-muted-foreground mt-1 uppercase tracking-wider">Visitas</p>
@@ -1580,7 +1631,7 @@ function AgencyCard({ agency: ag, promotionId, selected, onToggleSelect }: { age
         </div>
 
         {/* CTA row */}
-        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border/30">
+        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border">
           {ag.isNewRequest ? (
             <>
               <Button size="sm" className="rounded-full text-xs h-8 flex-1 gap-1.5"><Check className="h-3 w-3" /> Aprobar</Button>
@@ -1770,7 +1821,7 @@ function DocumentsTab({ openFolder, onOpenFolder, blockedAgencies, onToggleBlock
 
         {/* Agency list popover */}
         {!readOnly && showAgenciesList && isShareable && !isLocked && (
-          <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+          <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
             <div className="px-4 pt-4 pb-3 flex items-center justify-between">
               <h3 className="text-xs font-semibold text-foreground">Agencias con acceso ({activeAgencies})</h3>
               <button
@@ -1788,7 +1839,7 @@ function DocumentsTab({ openFolder, onOpenFolder, blockedAgencies, onToggleBlock
                   value={agencySearch}
                   onChange={e => setAgencySearch(e.target.value)}
                   placeholder="Buscar agencia..."
-                  className="w-full pl-7 pr-3 py-1.5 text-xs rounded-lg border border-border/40 bg-background/50 text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/40"
+                  className="w-full pl-7 pr-3 py-1.5 text-xs rounded-lg border border-border bg-background/50 text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/40"
                 />
               </div>
             </div>
@@ -1803,7 +1854,7 @@ function DocumentsTab({ openFolder, onOpenFolder, blockedAgencies, onToggleBlock
                     </div>
                     <button
                       onClick={() => onToggleBlockAgency(openFolder, ag.id)}
-                      className={`p-1 rounded-md transition-colors ${isBlocked ? "text-destructive hover:bg-destructive/10" : "text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10"}`}
+                      className={`p-1 rounded-lg transition-colors ${isBlocked ? "text-destructive hover:bg-destructive/10" : "text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10"}`}
                       title={isBlocked ? "Desbloquear" : "Bloquear acceso"}
                     >
                       {isBlocked ? <Lock className="h-3 w-3" strokeWidth={1.5} /> : <Unlock className="h-3 w-3" strokeWidth={1.5} />}
@@ -1837,7 +1888,7 @@ function DocumentsTab({ openFolder, onOpenFolder, blockedAgencies, onToggleBlock
         )}
 
         {/* File thumbnails grid */}
-        <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
           <div className="px-5 pt-5 pb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-foreground">{folder.files.length} archivo{folder.files.length !== 1 ? "s" : ""}</h2>
             <div className="flex items-center gap-2">
@@ -1863,7 +1914,7 @@ function DocumentsTab({ openFolder, onOpenFolder, blockedAgencies, onToggleBlock
                   onClick={() => toggleFileSelect(file.name)}
                   className={cn(
                     "group rounded-xl border bg-background/50 hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden",
-                    isSelected ? "border-primary ring-2 ring-primary/20" : "border-border/30 hover:border-border/50"
+                    isSelected ? "border-primary ring-2 ring-primary/20" : "border-border hover:border-border/50"
                   )}
                 >
                   {/* Thumbnail */}
@@ -1902,7 +1953,7 @@ function DocumentsTab({ openFolder, onOpenFolder, blockedAgencies, onToggleBlock
       {/* Confirm lock dialog */}
       {confirmLockFolder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="rounded-2xl bg-card border border-border/40 shadow-xl p-6 max-w-sm w-full mx-4 space-y-4">
+          <div className="rounded-2xl bg-card border border-border shadow-xl p-6 max-w-sm w-full mx-4 space-y-4">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
                 <Lock className="h-5 w-5 text-destructive" strokeWidth={1.5} />
@@ -1954,7 +2005,7 @@ function DocumentsTab({ openFolder, onOpenFolder, blockedAgencies, onToggleBlock
           const isLocked = folderLocked[key] || false;
           const isDeletable = key !== "calidades"; // System folders can't be deleted
           return (
-            <div key={key} className="group relative text-left rounded-2xl border border-border/40 bg-card p-5 hover:-translate-y-0.5 hover:border-border/60 hover:shadow-[0_4px_24px_-8px_rgba(0,0,0,0.08)] transition-all duration-200">
+            <div key={key} className="group relative text-left rounded-2xl border border-border bg-card p-5 hover:-translate-y-0.5 hover:border-border/60 hover:shadow-soft-lg transition-all duration-200">
               <button
                 onClick={() => onOpenFolder(key)}
                 className="w-full text-left"
@@ -1991,7 +2042,7 @@ function DocumentsTab({ openFolder, onOpenFolder, blockedAgencies, onToggleBlock
                     <MoreHorizontal className="h-4 w-4" strokeWidth={1.5} />
                   </button>
                   {folderMenuOpen === key && (
-                    <div className="absolute right-0 top-8 z-20 w-48 rounded-xl border border-border/40 bg-card shadow-lg py-1.5 animate-in fade-in-0 zoom-in-95">
+                    <div className="absolute right-0 top-8 z-20 w-48 rounded-xl border border-border bg-card shadow-lg py-1.5 animate-in fade-in-0 zoom-in-95">
                       {isShareable && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onOpenFolder(key); setFolderMenuOpen(null); }}
@@ -2041,9 +2092,9 @@ function CollaborationStatusBanner({ isIncomplete, isShared, agencyCount, activi
 }) {
   if (isIncomplete) {
     return (
-      <div className="rounded-2xl border border-amber-200/60 bg-amber-50/50 overflow-hidden">
+      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/100/10 overflow-hidden">
         <div className="p-4 2xl:p-5 flex items-start gap-3">
-          <div className="h-7 w-7 2xl:h-9 2xl:w-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+          <div className="h-7 w-7 2xl:h-9 2xl:w-9 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0 mt-0.5">
             <Lock className="h-3.5 w-3.5 2xl:h-4 2xl:w-4 text-amber-600" />
           </div>
           <div className="min-w-0">
@@ -2061,17 +2112,17 @@ function CollaborationStatusBanner({ isIncomplete, isShared, agencyCount, activi
     const mockRegistrations = activity?.inquiries || 18;
 
     return (
-      <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
         <div className="px-3.5 2xl:px-5 py-2.5 2xl:py-4 flex items-start gap-2.5 2xl:gap-3">
-          <div className="h-7 w-7 2xl:h-9 2xl:w-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0 mt-0.5">
-            <Users className="h-3.5 w-3.5 2xl:h-4 2xl:w-4 text-emerald-600" />
+          <div className="h-7 w-7 2xl:h-9 2xl:w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+            <Users className="h-3.5 w-3.5 2xl:h-4 2xl:w-4 text-primary" />
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground leading-tight">Compartida con <span className="tabular-nums">{agencyCount}</span> {agencyCount === 1 ? "agencia" : "agencias"}</p>
             <p className="text-xs text-muted-foreground mt-0.5 leading-snug">Tu promoción está siendo comercializada por colaboradores externos.</p>
           </div>
         </div>
-        <div className="border-t border-border/30 px-3.5 2xl:px-5 py-2.5 2xl:py-3.5 grid grid-cols-3 gap-2">
+        <div className="border-t border-border px-3.5 2xl:px-5 py-2.5 2xl:py-3.5 grid grid-cols-3 gap-2">
           <div className="text-center">
             <p className="text-sm 2xl:text-base font-semibold text-foreground tabular-nums leading-none">{mockVisits}</p>
             <p className="text-[10px] text-muted-foreground mt-1">Visitas</p>
@@ -2085,7 +2136,7 @@ function CollaborationStatusBanner({ isIncomplete, isShared, agencyCount, activi
             <p className="text-[10px] text-muted-foreground mt-1">Registros</p>
           </div>
         </div>
-        <div className="border-t border-border/30 px-3.5 2xl:px-5 py-2 2xl:py-2.5">
+        <div className="border-t border-border px-3.5 2xl:px-5 py-2 2xl:py-2.5">
           <button
             onClick={onShare}
             className="w-full flex items-center justify-center gap-2 text-xs 2xl:text-sm font-medium text-muted-foreground hover:text-foreground transition-colors py-0.5"
@@ -2099,17 +2150,17 @@ function CollaborationStatusBanner({ isIncomplete, isShared, agencyCount, activi
 
   // Complete but not yet shared
   return (
-    <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/40 overflow-hidden">
+    <div className="rounded-2xl border border-primary/20 bg-primary/5 overflow-hidden">
       <div className="p-4 2xl:p-5 flex items-start gap-3">
-        <div className="h-7 w-7 2xl:h-9 2xl:w-9 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0 mt-0.5">
-          <CheckCircle2 className="h-3.5 w-3.5 2xl:h-4 2xl:w-4 text-emerald-600" />
+        <div className="h-7 w-7 2xl:h-9 2xl:w-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
+          <CheckCircle2 className="h-3.5 w-3.5 2xl:h-4 2xl:w-4 text-primary" />
         </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-foreground leading-tight">¡Lista para compartir!</p>
           <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Compártela con agencias para empezar a recibir clientes.</p>
         </div>
       </div>
-      <div className="border-t border-emerald-200/40 px-4 2xl:px-5 py-3">
+      <div className="border-t border-primary/20 px-4 2xl:px-5 py-3">
         <button
           onClick={onShare}
           className="w-full flex items-center justify-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors py-1"
@@ -2144,12 +2195,12 @@ function SectionCard({ title, stepName, missing, onEdit, children, hideEdit, flu
   }
 
   return (
-    <div className="rounded-2xl border border-border/40 bg-card shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden group/section relative">
+    <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden group/section relative">
       {flush ? (
         <>
           {!hideEdit && (
             <button onClick={onEdit}
-              className="absolute top-3 right-3 z-10 opacity-0 group-hover/section:opacity-100 transition-opacity inline-flex items-center gap-1 px-2 py-1 rounded-md bg-background/90 backdrop-blur-sm border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm">
+              className="absolute top-3 right-3 z-10 opacity-0 group-hover/section:opacity-100 transition-opacity inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-background/90 backdrop-blur-sm border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm">
               <Pencil className="h-3 w-3" /> Editar
             </button>
           )}
@@ -2161,7 +2212,7 @@ function SectionCard({ title, stepName, missing, onEdit, children, hideEdit, flu
             <h2 className="text-base font-semibold text-foreground">{title}</h2>
             {!hideEdit && (
               <button onClick={onEdit}
-                className="opacity-0 group-hover/section:opacity-100 transition-opacity inline-flex items-center gap-1 px-2 py-1 rounded-md bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm">
+                className="opacity-0 group-hover/section:opacity-100 transition-opacity inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm">
                 <Pencil className="h-3 w-3" /> Edit
               </button>
             )}
@@ -2216,7 +2267,7 @@ function ContactFooter({ contacts, website, puntosDeVenta, comerciales, onAddMem
   const offices = puntosDeVenta || [];
 
   return (
-    <div className="rounded-2xl bg-card border border-border/40 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+    <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
       <div className="px-5 pt-5 pb-3 flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-foreground">Equipo de contacto</h2>
@@ -2274,7 +2325,7 @@ function ContactFooter({ contacts, website, puntosDeVenta, comerciales, onAddMem
             <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-2.5">Miembros del equipo</p>
             <div className="space-y-1.5">
               {comerciales.map(c => (
-                <div key={c.id} className="flex items-center gap-3 p-2.5 rounded-lg border border-border/30 bg-background/50">
+                <div key={c.id} className="flex items-center gap-3 p-2.5 rounded-lg border border-border bg-background/50">
                   <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                     <Users className="h-3 w-3 text-primary" />
                   </div>
@@ -2319,7 +2370,7 @@ function ContactFooter({ contacts, website, puntosDeVenta, comerciales, onAddMem
 
 function ContactCard({ contact: c, large }: { contact: ContactPerson; large?: boolean }) {
   return (
-    <div className={`rounded-xl border border-border/30 bg-background/50 p-4 hover:border-border/50 hover:shadow-sm transition-all duration-200 ${large ? "flex-1" : ""}`}>
+    <div className={`rounded-xl border border-border bg-background/50 p-4 hover:border-border/50 hover:shadow-sm transition-all duration-200 ${large ? "flex-1" : ""}`}>
       <div className="flex items-center gap-3 mb-3">
         <Avatar className={`${large ? "h-14 w-14" : "h-12 w-12"} ring-2 ring-background shadow-sm`}>
           <AvatarImage src={c.avatar} alt={c.name} className="object-cover" />
@@ -2349,7 +2400,7 @@ function ContactCard({ contact: c, large }: { contact: ContactPerson; large?: bo
 
 function OfficeMiniCard({ office: o }: { office: PuntoDeVentaType }) {
   return (
-    <div className="group relative rounded-2xl border border-border/40 bg-card overflow-hidden hover:border-border/70 hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.12)] transition-all duration-300">
+    <div className="group relative rounded-2xl border border-border bg-card overflow-hidden hover:border-border/70 hover:shadow-soft-lg transition-all duration-300">
       {/* Cover with title overlay */}
       <div className="relative h-32 overflow-hidden bg-muted/20">
         {o.coverUrl ? (
@@ -2400,10 +2451,10 @@ function OfficeMiniCard({ office: o }: { office: PuntoDeVentaType }) {
             href={`https://wa.me/${o.whatsapp.replace(/[^\d]/g, "")}`}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-2 group/item hover:text-emerald-600 transition-colors"
+            className="flex items-center gap-2 group/item hover:text-primary transition-colors"
           >
-            <MessageCircle className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0 group-hover/item:text-emerald-600" strokeWidth={1.75} />
-            <p className="text-xs text-muted-foreground group-hover/item:text-emerald-600 truncate">WhatsApp · {o.whatsapp}</p>
+            <MessageCircle className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0 group-hover/item:text-primary" strokeWidth={1.75} />
+            <p className="text-xs text-muted-foreground group-hover/item:text-primary truncate">WhatsApp · {o.whatsapp}</p>
           </a>
         )}
       </div>
