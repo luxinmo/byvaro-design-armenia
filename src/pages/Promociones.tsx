@@ -21,36 +21,33 @@ import { FilterPill, SortPill } from "@/components/ui/FilterBar";
 import { cn } from "@/lib/utils";
 
 /* ═══════════════════════════════════════════════════════════════════
-   Opciones de filtros (en formato { value, label } para FilterPill)
+   Opciones estáticas (las dinámicas se derivan de los datos en el componente)
    ═══════════════════════════════════════════════════════════════════ */
-const propertyTypeOptions = [
-  { value: "Apartments", label: "Apartamentos" },
-  { value: "Villas", label: "Villas" },
-  { value: "Townhouses", label: "Adosados" },
-  { value: "Penthouses", label: "Áticos" },
-];
+
+/** Traducción de propertyType (viene en inglés del dato) → label español */
+const propertyTypeLabels: Record<string, string> = {
+  "Apartments": "Apartamentos",
+  "Villas": "Villas",
+  "Townhouses": "Adosados",
+  "Penthouses": "Áticos",
+  "Duplex": "Dúplex",
+  "Commercial": "Locales",
+};
+
 const buildingTypeOptions = [
   { value: "Unifamiliar", label: "Unifamiliar" },
   { value: "Plurifamiliar", label: "Plurifamiliar" },
+  { value: "Mixto", label: "Mixto" },
 ];
+
+/** Precio: rangos abiertos desde X. Valor es número (umbral min). */
 const priceFilterOptions = [
-  { value: "200k+", label: "Desde 200K€" },
-  { value: "500k+", label: "Desde 500K€" },
-  { value: "1M+", label: "Desde 1M€" },
-  { value: "2M+", label: "Desde 2M€" },
+  { value: "200000", label: "Desde 200K€" },
+  { value: "500000", label: "Desde 500K€" },
+  { value: "1000000", label: "Desde 1M€" },
+  { value: "2000000", label: "Desde 2M€" },
 ];
-const styleOptions = [
-  { value: "Contemporary", label: "Contemporáneo" },
-  { value: "Mediterranean", label: "Mediterráneo" },
-  { value: "Minimalist", label: "Minimalista" },
-  { value: "Classic", label: "Clásico" },
-];
-const deliveryOptions = [
-  { value: "Ready now", label: "Entrega inmediata" },
-  { value: "2025", label: "2025" },
-  { value: "2026", label: "2026" },
-  { value: "2027+", label: "2027 o posterior" },
-];
+
 const sortOptions = [
   { value: "recent", label: "Recientes" },
   { value: "trending", label: "Más activas" },
@@ -59,6 +56,7 @@ const sortOptions = [
   { value: "deliveryAsc", label: "Entrega más cercana" },
   { value: "availability", label: "Más disponibilidad" },
 ];
+
 const commissionOptions = [
   { label: "3%+", value: 3 },
   { label: "4%+", value: 4 },
@@ -66,10 +64,34 @@ const commissionOptions = [
 ];
 const bedroomOptions = ["1", "2", "3", "4+"];
 
-// Map de traducción value → label (para chips activas y mapping precio → number)
-const priceLabelFromValue: Record<string, number> = {
-  "200k+": 200000, "500k+": 500000, "1M+": 1000000, "2M+": 2000000,
-};
+/* ─── helpers de filtrado/ordenación ─────────────────────────────── */
+
+/** Extrae la "zona" de la ubicación: "Marbella, Costa del Sol" → "Costa del Sol" */
+function getZone(location: string): string {
+  const parts = location.split(",").map(p => p.trim()).filter(Boolean);
+  return parts[parts.length - 1] || parts[0] || "";
+}
+
+/** Extrae el año de la fecha de entrega: "Q3 2026" → 2026 */
+function getDeliveryYear(delivery?: string): number {
+  if (!delivery) return 9999;
+  const match = delivery.match(/\d{4}/);
+  return match ? parseInt(match[0], 10) : 9999;
+}
+
+/** Traduce un value de propertyType a su label en español */
+function getPropertyTypeLabel(v: string): string {
+  return propertyTypeLabels[v] || v;
+}
+
+/** Traduce el buildingType interno a su filtro */
+function matchesBuildingType(promoType: string | undefined, filterValue: string): boolean {
+  if (!promoType) return false;
+  if (filterValue === "Unifamiliar") return promoType === "unifamiliar-single" || promoType === "unifamiliar-multiple";
+  if (filterValue === "Plurifamiliar") return promoType === "plurifamiliar";
+  if (filterValue === "Mixto") return promoType === "mixto";
+  return false;
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    Filtros avanzados (panel: comisión + dormitorios)
@@ -260,9 +282,9 @@ const TRENDING_THRESHOLD = 50;
 export default function Promociones() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedPrices, setSelectedPrices] = useState<string[]>([]);
-  const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [selectedDelivery, setSelectedDelivery] = useState<string[]>([]);
   const [minCommission, setMinCommission] = useState<number | null>(null);
   const [bedrooms, setBedrooms] = useState<string | null>(null);
@@ -270,17 +292,56 @@ export default function Promociones() {
   const [buildingTypeFilter, setBuildingTypeFilter] = useState<string>("All");
   const [sort, setSort] = useState<string>("recent");
 
+  /* ─── Dataset combinado (developer-only + legacy) ─── */
+  const allPromotions: DevPromotion[] = useMemo(() => {
+    return [...developerOnlyPromotions, ...promotions.map(p => ({ ...p } as DevPromotion))];
+  }, []);
+
+  /* ─── Opciones de filtros derivadas dinámicamente de los datos ─── */
+  const locationOptions = useMemo(() => {
+    const zones = new Set<string>();
+    allPromotions.forEach(p => {
+      const z = getZone(p.location);
+      if (z) zones.add(z);
+    });
+    return Array.from(zones).sort().map(z => ({ value: z, label: z }));
+  }, [allPromotions]);
+
+  const propertyTypeOptions = useMemo(() => {
+    const types = new Set<string>();
+    allPromotions.forEach(p => p.propertyTypes.forEach(t => types.add(t)));
+    return Array.from(types).sort().map(t => ({ value: t, label: getPropertyTypeLabel(t) }));
+  }, [allPromotions]);
+
+  const deliveryOptions = useMemo(() => {
+    const years = new Set<string>();
+    allPromotions.forEach(p => {
+      const y = getDeliveryYear(p.delivery);
+      if (y !== 9999) years.add(String(y));
+    });
+    const sorted = Array.from(years).sort();
+    return [
+      { value: "ready", label: "Entrega inmediata" },
+      ...sorted.map(y => ({ value: y, label: y })),
+    ];
+  }, [allPromotions]);
+
+  /* ─── Chips activos + clear all ─── */
   const allFilters: { key: string; label: string; remove: () => void }[] = [];
-  selectedTypes.forEach(v => allFilters.push({ key: "type", label: v, remove: () => setSelectedTypes(selectedTypes.filter(x => x !== v)) }));
-  selectedPrices.forEach(v => allFilters.push({ key: "price", label: v, remove: () => setSelectedPrices(selectedPrices.filter(x => x !== v)) }));
-  selectedStyles.forEach(v => allFilters.push({ key: "style", label: v, remove: () => setSelectedStyles(selectedStyles.filter(x => x !== v)) }));
-  selectedDelivery.forEach(v => allFilters.push({ key: "delivery", label: v, remove: () => setSelectedDelivery(selectedDelivery.filter(x => x !== v)) }));
-  if (minCommission) allFilters.push({ key: "commission", label: `${minCommission}%+`, remove: () => setMinCommission(null) });
+  selectedLocations.forEach(v =>
+    allFilters.push({ key: "location", label: v, remove: () => setSelectedLocations(selectedLocations.filter(x => x !== v)) }));
+  selectedTypes.forEach(v =>
+    allFilters.push({ key: "type", label: getPropertyTypeLabel(v), remove: () => setSelectedTypes(selectedTypes.filter(x => x !== v)) }));
+  selectedPrices.forEach(v =>
+    allFilters.push({ key: "price", label: priceFilterOptions.find(o => o.value === v)?.label ?? v, remove: () => setSelectedPrices(selectedPrices.filter(x => x !== v)) }));
+  selectedDelivery.forEach(v =>
+    allFilters.push({ key: "delivery", label: deliveryOptions.find(o => o.value === v)?.label ?? v, remove: () => setSelectedDelivery(selectedDelivery.filter(x => x !== v)) }));
+  if (minCommission) allFilters.push({ key: "commission", label: `Comisión ${minCommission}%+`, remove: () => setMinCommission(null) });
   if (bedrooms) allFilters.push({ key: "bedrooms", label: `${bedrooms} hab`, remove: () => setBedrooms(null) });
 
   const hasFilters = allFilters.length > 0;
   const clearAllFilters = () => {
-    setSearch(""); setSelectedTypes([]); setSelectedPrices([]); setSelectedStyles([]);
+    setSearch(""); setSelectedLocations([]); setSelectedTypes([]); setSelectedPrices([]);
     setSelectedDelivery([]); setMinCommission(null); setBedrooms(null);
     setStatusFilter("all"); setBuildingTypeFilter("All");
   };
@@ -292,44 +353,99 @@ export default function Promociones() {
     { key: "sold-out", label: "Vendidas" },
   ] as const;
 
-  const buildingTypeFilterOptions = ["All", "Unifamiliar", "Plurifamiliar"];
-
-  const allPromotions: DevPromotion[] = useMemo(() => {
-    return [...developerOnlyPromotions, ...promotions.map(p => ({ ...p } as DevPromotion))];
-  }, []);
-
+  /* ─── Filtrado ─── */
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    let result = [...allPromotions];
-    if (statusFilter !== "all") result = result.filter(p => p.status === statusFilter);
-    if (buildingTypeFilter === "Unifamiliar") {
-      result = result.filter(p => p.buildingType === "unifamiliar-single" || p.buildingType === "unifamiliar-multiple");
-    } else if (buildingTypeFilter === "Plurifamiliar") {
-      result = result.filter(p => p.buildingType === "plurifamiliar");
+    return allPromotions.filter(p => {
+      // Estado
+      if (statusFilter !== "all" && p.status !== statusFilter) return false;
+
+      // Tipo de edificio
+      if (buildingTypeFilter !== "All" && !matchesBuildingType(p.buildingType, buildingTypeFilter)) return false;
+
+      // Búsqueda textual
+      if (q) {
+        const hay = p.name.toLowerCase().includes(q)
+          || p.location.toLowerCase().includes(q)
+          || p.code.toLowerCase().includes(q)
+          || (p.developer?.toLowerCase().includes(q) ?? false);
+        if (!hay) return false;
+      }
+
+      // Ubicación / zona
+      if (selectedLocations.length > 0) {
+        if (!selectedLocations.includes(getZone(p.location))) return false;
+      }
+
+      // Tipologías (propertyTypes)
+      if (selectedTypes.length > 0) {
+        const ok = selectedTypes.some(t => p.propertyTypes.includes(t));
+        if (!ok) return false;
+      }
+
+      // Precio mín: la promo tiene al menos 1 unidad ≥ el umbral (usamos priceMax)
+      if (selectedPrices.length > 0) {
+        const minVal = Math.min(...selectedPrices.map(v => parseInt(v, 10)));
+        if (p.priceMax < minVal) return false;
+      }
+
+      // Entrega
+      if (selectedDelivery.length > 0) {
+        const promoYear = getDeliveryYear(p.delivery);
+        const ok = selectedDelivery.some(d => {
+          if (d === "ready") return promoYear <= new Date().getFullYear();
+          return String(promoYear) === d;
+        });
+        if (!ok) return false;
+      }
+
+      // Comisión mín
+      if (minCommission !== null && p.commission < minCommission) return false;
+
+      // Dormitorios: al menos una unidad disponible con esa cantidad de habs
+      if (bedrooms !== null) {
+        const units = unitsByPromotion[p.id] ?? [];
+        const targetMin = bedrooms === "4+" ? 4 : parseInt(bedrooms, 10);
+        const ok = units.some(u => {
+          if (bedrooms === "4+") return u.bedrooms >= 4;
+          return u.bedrooms === targetMin;
+        });
+        if (!ok) return false;
+      }
+
+      return true;
+    });
+  }, [
+    allPromotions, search, statusFilter, buildingTypeFilter,
+    selectedLocations, selectedTypes, selectedPrices, selectedDelivery,
+    minCommission, bedrooms,
+  ]);
+
+  /* ─── Ordenación ─── */
+  const sortedAndFiltered = useMemo(() => {
+    const arr = [...filtered];
+    switch (sort) {
+      case "trending":
+        return arr.sort((a, b) => (b.activity?.trend ?? 0) - (a.activity?.trend ?? 0));
+      case "priceAsc":
+        return arr.sort((a, b) => a.priceMin - b.priceMin);
+      case "priceDesc":
+        return arr.sort((a, b) => b.priceMax - a.priceMax);
+      case "deliveryAsc":
+        return arr.sort((a, b) => getDeliveryYear(a.delivery) - getDeliveryYear(b.delivery));
+      case "availability":
+        return arr.sort((a, b) => b.availableUnits - a.availableUnits);
+      case "recent":
+      default:
+        // 'recent' aproximado: las que tienen badge "new" primero, luego por actividad
+        return arr.sort((a, b) => {
+          const aNew = a.badge === "new" ? 1 : 0;
+          const bNew = b.badge === "new" ? 1 : 0;
+          if (aNew !== bNew) return bNew - aNew;
+          return (b.activity?.inquiries ?? 0) - (a.activity?.inquiries ?? 0);
+        });
     }
-    if (q) {
-      result = result.filter(p =>
-        p.name.toLowerCase().includes(q) ||
-        p.location.toLowerCase().includes(q) ||
-        p.code.toLowerCase().includes(q)
-      );
-    }
-    if (selectedTypes.length > 0) {
-      result = result.filter(p => selectedTypes.some(t => p.propertyTypes.some(pt => pt.toLowerCase().includes(t.toLowerCase()))));
-    }
-    if (selectedPrices.length > 0) {
-      const minVal = Math.min(...selectedPrices.map(l => priceLabelFromValue[l] || 0));
-      result = result.filter(p => p.priceMax >= minVal);
-    }
-    if (selectedDelivery.length > 0) {
-      result = result.filter(p => selectedDelivery.some(d => {
-        if (d === "Ready now") return p.delivery?.includes("2025");
-        return p.delivery?.includes(d.replace("+", ""));
-      }));
-    }
-    if (minCommission) result = result.filter(p => p.commission >= minCommission);
-    return result;
-  }, [search, selectedTypes, selectedPrices, selectedDelivery, minCommission, allPromotions, statusFilter, buildingTypeFilter]);
+  }, [filtered, sort]);
 
   const isTrending = (p: DevPromotion) => (p.activity?.trend ?? 0) >= TRENDING_THRESHOLD;
 
@@ -405,10 +521,17 @@ export default function Promociones() {
 
           <div className="h-5 w-px bg-border shrink-0 mx-1" />
 
-          {/* Filter pills con iconos */}
+          {/* Filter pills (deriva opciones de los datos reales) */}
+          <FilterPill
+            icon={MapPin}
+            label="Zona"
+            values={selectedLocations}
+            options={locationOptions}
+            onChange={setSelectedLocations}
+          />
           <FilterPill
             icon={Home}
-            label="Tipo"
+            label="Tipología"
             values={selectedTypes}
             options={propertyTypeOptions}
             onChange={setSelectedTypes}
@@ -427,13 +550,6 @@ export default function Promociones() {
             values={selectedPrices}
             options={priceFilterOptions}
             onChange={setSelectedPrices}
-          />
-          <FilterPill
-            icon={Palette}
-            label="Estilo"
-            values={selectedStyles}
-            options={styleOptions}
-            onChange={setSelectedStyles}
           />
           <FilterPill
             icon={CalendarDays}
@@ -464,7 +580,7 @@ export default function Promociones() {
 
           {/* Count */}
           <span className="text-xs text-muted-foreground ml-auto pl-3 shrink-0 hidden sm:inline">
-            <span className="font-semibold text-foreground tnum">{filtered.length}</span> promociones
+            <span className="font-semibold text-foreground tnum">{sortedAndFiltered.length}</span> promociones
           </span>
         </div>
       </div>
@@ -472,10 +588,10 @@ export default function Promociones() {
       {/* ═══════════ Cards list (horizontal) ═══════════ */}
       <div className="flex-1 px-4 sm:px-6 lg:px-8 pb-8">
         <div className="max-w-[1400px] mx-auto flex flex-col gap-3 lg:gap-4">
-          {filtered.length === 0 ? (
+          {sortedAndFiltered.length === 0 ? (
             <EmptyState />
           ) : (
-            filtered.map((p) => {
+            sortedAndFiltered.map((p) => {
               const badgeLabel = p.badge === "new" ? "Nueva" : p.badge === "last-units" ? "Últimas unidades" : null;
               const status = statusTag(p.status);
               const { typologies, units: availableUnits, lastUnit } = getAvailableData(p.id);
