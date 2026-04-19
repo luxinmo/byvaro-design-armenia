@@ -27,8 +27,8 @@ contract, permisos, estados, enlaces salientes.
 
 | Pantalla | Ruta | Archivo |
 |---|---|---|
-| Login | `/login` | (pendiente) |
-| Registro | `/register` | (pendiente) |
+| Login | `/login` | [`auth.md`](auth.md) |
+| Registro | `/register` | [`auth.md`](auth.md) |
 | Forgot password | `/forgot-password` | (pendiente) |
 | Reset password | `/reset-password` | (pendiente) |
 | Verify code | `/verify-code` | (pendiente) |

@@ -14,11 +14,17 @@ import CrearPromocion from "@/pages/CrearPromocion";
 import Empresa from "@/pages/Empresa";
 import PromocionDetalle from "@/pages/PromocionDetalle";
 import PromocionesCardsV1 from "@/pages/design-previews/PromocionesCardsV1";
+import Login from "@/pages/Login";
+import Register from "@/pages/Register";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Auth · fullscreen (sin AppLayout) — ver docs/screens/auth.md */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+
         {/* Wizard fullscreen (sin AppLayout) */}
         <Route path="/crear-promocion" element={<CrearPromocion />} />
 

@@ -6,6 +6,7 @@ import {
   Handshake, Contact, Globe, Mail, Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BrandLogo } from "@/components/BrandLogo";
 
 const titles: Record<string, string> = {
   "/inicio": "Inicio",
@@ -68,10 +69,7 @@ export function MobileHeader() {
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
           <aside className="absolute left-0 top-0 bottom-0 w-[280px] bg-sidebar shadow-2xl flex flex-col animate-fade-up">
             <div className="h-14 flex items-center justify-between px-5 border-b border-sidebar-border">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-primary grid place-items-center text-primary-foreground font-bold text-sm">B</div>
-                <div className="font-bold text-[15px] tracking-tight">Byvaro</div>
-              </div>
+              <BrandLogo variant="lockup" iconSize={32} wordmarkHeight={16} />
               <button onClick={() => setOpen(false)} className="p-2 -mr-2 rounded-lg hover:bg-muted">
                 <X className="h-5 w-5" />
               </button>

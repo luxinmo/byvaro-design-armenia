@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEmpresa } from "@/lib/empresa";
+import { BrandLogo } from "@/components/BrandLogo";
 
 type NavItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }>; badge?: string | number; accent?: boolean };
 type NavGroup = { label: string; items: NavItem[] };
@@ -49,10 +50,9 @@ export function AppSidebar() {
 
   return (
     <aside className="hidden lg:flex flex-col w-[236px] shrink-0 border-r border-sidebar-border bg-sidebar sticky top-0 h-screen">
-      {/* Logo */}
-      <div className="h-14 flex items-center gap-2.5 px-5 border-b border-sidebar-border">
-        <div className="w-8 h-8 rounded-xl bg-primary grid place-items-center text-primary-foreground font-bold text-sm">B</div>
-        <div className="font-bold text-[15px] tracking-tight text-foreground">Byvaro</div>
+      {/* Logo — isotipo + wordmark unificados via BrandLogo */}
+      <div className="h-14 flex items-center px-5 border-b border-sidebar-border">
+        <BrandLogo variant="lockup" iconSize={32} wordmarkHeight={16} />
       </div>
 
       {/* Nav */}
