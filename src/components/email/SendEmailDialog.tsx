@@ -63,7 +63,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
   Mail, Users, User, ArrowLeft, Send, Languages, Pencil, Check,
-  ChevronRight, Search, ChevronDown, X, Star, UserPlus, Building2,
+  ChevronRight, Search, ChevronDown, X, Star, UserPlus, Building2, Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 // Catálogo de plantillas + tipado de audiencia/idioma/bloques editables
@@ -185,6 +185,9 @@ export function SendEmailDialog({
   const [includeSignature, setIncludeSignature] = useState(true);
   const [includeAvailability, setIncludeAvailability] = useState(true);
   const [recipientsOpen, setRecipientsOpen] = useState(false);
+  // Panel de opciones del compose (firma + disponibilidad…) colapsable
+  // desde la bottom bar. Sustituye a la "Toggles bar" fija.
+  const [composeOptionsOpen, setComposeOptionsOpen] = useState(false);
 
   // blocks per language so switching language preserves edits
   const [blocksByLang, setBlocksByLang] = useState<Record<Language, TemplateBlocks>>({
@@ -1152,41 +1155,45 @@ export function SendEmailDialog({
               </div>
             </div>
 
-            {/* Toggles bar */}
-            <div className="flex items-center gap-5 px-5 py-2 border-b border-border/30 bg-card">
-              {tpl.supportsSignature !== false && (
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Switch checked={includeSignature} onCheckedChange={setIncludeSignature} />
-                  <span className="text-xs text-foreground">
-                    {language === "es" ? "Incluir firma" : "Include signature"}
-                  </span>
-                </label>
-              )}
-              {tpl.supportsAvailability && (
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Switch
-                    checked={includeAvailability}
-                    onCheckedChange={setIncludeAvailability}
-                    disabled={availabilityUnits.length === 0}
-                  />
-                  <span className={cn(
-                    "text-xs",
-                    availabilityUnits.length === 0 ? "text-muted-foreground" : "text-foreground",
-                  )}>
-                    {language === "es" ? "Incluir disponibilidad" : "Include availability"}
-                    {availabilityUnits.length > 0 && (
-                      <span className="text-muted-foreground"> · {availabilityUnits.length}</span>
-                    )}
-                  </span>
-                </label>
-              )}
-              <span className="ml-auto text-[11px] text-muted-foreground inline-flex items-center gap-1.5">
-                <Pencil className="h-3 w-3" strokeWidth={1.5} />
-                {language === "es"
-                  ? "Click en cualquier texto del email para editarlo"
-                  : "Click any text in the email to edit it"}
-              </span>
-            </div>
+            {/* Toggles bar · colapsable desde la bottom bar "Opciones".
+                Antes ocupaba una fila fija; ahora se despliega sólo
+                cuando el usuario lo pide. */}
+            {composeOptionsOpen && (
+              <div className="flex items-center flex-wrap gap-4 sm:gap-5 px-3 sm:px-5 py-3 border-b border-border/30 bg-muted/30">
+                {tpl.supportsSignature !== false && (
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <Switch checked={includeSignature} onCheckedChange={setIncludeSignature} />
+                    <span className="text-xs text-foreground">
+                      {language === "es" ? "Incluir firma" : "Include signature"}
+                    </span>
+                  </label>
+                )}
+                {tpl.supportsAvailability && (
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <Switch
+                      checked={includeAvailability}
+                      onCheckedChange={setIncludeAvailability}
+                      disabled={availabilityUnits.length === 0}
+                    />
+                    <span className={cn(
+                      "text-xs",
+                      availabilityUnits.length === 0 ? "text-muted-foreground" : "text-foreground",
+                    )}>
+                      {language === "es" ? "Incluir disponibilidad" : "Include availability"}
+                      {availabilityUnits.length > 0 && (
+                        <span className="text-muted-foreground"> · {availabilityUnits.length}</span>
+                      )}
+                    </span>
+                  </label>
+                )}
+                <span className="ml-auto text-[11px] text-muted-foreground inline-flex items-center gap-1.5">
+                  <Pencil className="h-3 w-3" strokeWidth={1.5} />
+                  {language === "es"
+                    ? "Click en cualquier texto del email para editarlo"
+                    : "Click any text in the email to edit it"}
+                </span>
+              </div>
+            )}
 
             {/* Email body — full width inline editor */}
             <main className="flex-1 min-h-0 overflow-y-auto bg-muted">
@@ -1197,19 +1204,21 @@ export function SendEmailDialog({
               />
             </main>
 
-            {/* Bottom bar sticky · Cancelar + Enviar primario. Respeta
-                safe-area en iOS. Mismo patrón que PriceListDialog. */}
+            {/* Bottom bar sticky · Opciones + Enviar primario. La X
+                de arriba ya cierra, así que aquí no hace falta Cancelar.
+                Mismo patrón que PriceListDialog. */}
             <div
               className="shrink-0 border-t border-border bg-card p-3 flex items-center gap-2 print:hidden"
               style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
             >
               <Button
                 size="sm"
-                variant="outline"
-                className="rounded-full h-10 px-4 text-sm"
-                onClick={() => onOpenChange(false)}
+                variant={composeOptionsOpen ? "default" : "outline"}
+                className="rounded-full h-10 gap-1.5 px-4 text-sm"
+                onClick={() => setComposeOptionsOpen(v => !v)}
               >
-                {language === "es" ? "Cancelar" : "Cancel"}
+                <Settings className="h-4 w-4" strokeWidth={1.75} />
+                {language === "es" ? "Opciones" : "Options"}
               </Button>
               <Button
                 size="sm"
