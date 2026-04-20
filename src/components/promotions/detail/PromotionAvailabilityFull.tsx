@@ -1455,14 +1455,13 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
         unitId={emailUnitId ?? undefined}
       />
 
-      {/* Vista de unidad · modal centrado 1000px · fullscreen en móvil. */}
+      {/* Vista de unidad · modal centrado 1200px · galería Airbnb + edición in-situ. */}
       <UnitDetailDialog
         open={!!detailUnitId}
         onOpenChange={(v) => !v && setDetailUnitId(null)}
         unit={detailUnitId ? allUnits.find((u) => u.id === detailUnitId) ?? null : null}
-        siblings={filtered}
-        onChangeUnit={(id) => setDetailUnitId(id)}
         isCollaboratorView={isCollaboratorView}
+        onUpdateUnit={handleUnitUpdate}
       />
     </div>
   );
