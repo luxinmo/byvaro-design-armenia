@@ -69,6 +69,16 @@
   .tnum { font-variant-numeric: tabular-nums; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   .no-scrollbar::-webkit-scrollbar { display: none; }
+}
+
+/* iOS Safari hace auto-zoom cuando el usuario enfoca un input con
+   font-size menor a 16px. Forzamos 16px en todos los inputs a
+   pantallas pequeñas para evitar el zoom. */
+@media (max-width: 1023px) {
+  input, select, textarea { font-size: 16px !important; }
+}
+
+@layer utilities {
 
   /* Active sidebar item · left color bar */
   .nav-item-active::before {

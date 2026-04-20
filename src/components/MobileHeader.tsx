@@ -55,9 +55,9 @@ export function MobileHeader() {
               </button>
             )}
           </div>
-          {/* Centro · logo fijo */}
+          {/* Centro · wordmark fijo (sólo "byvaro" sin icono). */}
           <div className="flex items-center justify-center">
-            <BrandLogo variant="lockup" iconSize={22} wordmarkHeight={12} />
+            <BrandLogo variant="wordmark" wordmarkHeight={18} />
           </div>
           {/* Derecha · menú (las notificaciones viven en la bottom bar). */}
           <div className="flex items-center justify-end">
