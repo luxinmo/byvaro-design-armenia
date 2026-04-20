@@ -88,6 +88,7 @@ import { UnitDetailPanel } from "./UnitDetailPanel";
 import { SendEmailDialog } from "@/components/email/SendEmailDialog";
 import { registerUnsavedGuard } from "@/lib/unsavedGuard";
 import { cn, priceForDisplay } from "@/lib/utils";
+import { MinimalSort } from "@/components/ui/MinimalSort";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -765,38 +766,40 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
         </div>
       </div>
 
-      {/* Mini-toolbar móvil — sólo en <sm. Dos selects discretos:
-          filtro de estado + orden. Sustituye a la toolbar completa
-          que se oculta en móvil. */}
-      <div className="sm:hidden flex items-center justify-between gap-2 px-1 pb-1 text-xs text-muted-foreground">
-        <select
+      {/* Mini-toolbar móvil — mismo patrón MinimalSort que /promociones.
+          Izquierda: filtro de estado (Todas / Disponibles / Vendidas…).
+          Derecha: orden (bloque / planta / precio / superficie…). */}
+      <div className="sm:hidden flex items-center justify-between gap-2 px-1 pb-1">
+        <MinimalSort
           value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value as UnitStatus | "all")}
-          className="appearance-none bg-transparent border-0 pr-4 font-medium text-foreground focus:outline-none"
-        >
-          <option value="all">Todas ({filtered.length})</option>
-          <option value="available">Disponibles</option>
-          <option value="reserved">Reservadas</option>
-          <option value="sold">Vendidas</option>
-          <option value="withdrawn">Retiradas</option>
-        </select>
-        <select
+          onChange={(v) => setFilterStatus(v as UnitStatus | "all")}
+          align="left"
+          options={[
+            { value: "all", label: `Todas (${filtered.length})` },
+            { value: "available", label: "Disponibles" },
+            { value: "reserved", label: "Reservadas" },
+            { value: "sold", label: "Vendidas" },
+            { value: "withdrawn", label: "Retiradas" },
+          ]}
+        />
+        <MinimalSort
           value={`${sortField}-${sortDir}`}
-          onChange={(e) => {
-            const [f, d] = e.target.value.split("-") as [SortField, "asc" | "desc"];
+          onChange={(v) => {
+            const [f, d] = v.split("-") as [SortField, "asc" | "desc"];
             setSortField(f);
             setSortDir(d);
           }}
-          className="appearance-none bg-transparent border-0 pl-4 text-right focus:outline-none"
-        >
-          <option value="block-asc">Ordenar: bloque</option>
-          <option value="floor-asc">Planta ↑</option>
-          <option value="floor-desc">Planta ↓</option>
-          <option value="price-asc">Precio ↑</option>
-          <option value="price-desc">Precio ↓</option>
-          <option value="builtArea-desc">Superficie ↓</option>
-          <option value="bedrooms-desc">Dormitorios ↓</option>
-        </select>
+          label="Ordenar"
+          options={[
+            { value: "block-asc", label: "Bloque" },
+            { value: "floor-asc", label: "Planta ↑" },
+            { value: "floor-desc", label: "Planta ↓" },
+            { value: "price-asc", label: "Precio ↑" },
+            { value: "price-desc", label: "Precio ↓" },
+            { value: "builtArea-desc", label: "Superficie ↓" },
+            { value: "bedrooms-desc", label: "Dormitorios ↓" },
+          ]}
+        />
       </div>
 
       {/* Blocks */}

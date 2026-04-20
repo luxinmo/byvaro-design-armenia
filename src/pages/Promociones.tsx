@@ -21,6 +21,7 @@ import { agencies, type Agency } from "@/data/agencies";
 import { Tag } from "@/components/ui/Tag";
 import { PromocionesMap } from "@/components/promociones/PromocionesMap";
 import { cn } from "@/lib/utils";
+import { MinimalSort } from "@/components/ui/MinimalSort";
 
 /* ═══════════════════════════════════════════════════════════════════
    Opciones estáticas (las dinámicas se derivan de los datos en el componente)
@@ -663,7 +664,7 @@ export default function Promociones() {
               <span className="font-semibold text-foreground tnum">{sortedAndFiltered.length}</span> resultados
             </span>
 
-            <MinimalSort value={sort} options={sortOptions} onChange={setSort} />
+            <MinimalSort value={sort} options={sortOptions} onChange={setSort} label="Ordenar por" />
 
             {/* Toggle Lista / Cuadrícula / Mapa — sólo desde sm+. En
                 móvil mostramos una sola vista (lista) para simplificar. */}
@@ -1042,60 +1043,6 @@ export default function Promociones() {
           </>
         )}
       </AnimatePresence>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   MinimalSort · dropdown minimalista (solo texto + chevron)
-   ═══════════════════════════════════════════════════════════════════ */
-function MinimalSort({
-  value, options, onChange,
-}: {
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (v: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const current = options.find(o => o.value === value);
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="inline-flex items-center gap-1 text-[12.5px] text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <span className="hidden sm:inline">Ordenar por</span>
-        <span className="font-semibold text-foreground">{current?.label}</span>
-        <ChevronDown className={cn("h-3 w-3 opacity-60 transition-transform", open && "rotate-180")} />
-      </button>
-
-      {open && (
-        <div className="absolute top-full right-0 mt-2 bg-popover border border-border rounded-xl shadow-soft-lg z-30 min-w-[220px] py-1.5">
-          {options.map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => { onChange(opt.value); setOpen(false); }}
-              className="w-full flex items-center justify-between px-3 py-1.5 text-sm transition-colors hover:bg-muted/40 text-left"
-            >
-              <span className={cn(value === opt.value ? "text-foreground font-medium" : "text-muted-foreground")}>
-                {opt.label}
-              </span>
-              {value === opt.value && <Check className="h-3.5 w-3.5 text-primary" strokeWidth={2.5} />}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
