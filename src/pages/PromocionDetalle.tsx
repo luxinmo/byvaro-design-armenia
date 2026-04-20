@@ -895,36 +895,37 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   </div>
                   <div className="px-5 pb-5">
                     {showFlatUnit ? (
-                      <div className="flex gap-4 p-4 rounded-xl border border-primary/20 bg-primary/5">
-                        <div className="w-[180px] h-[130px] rounded-xl overflow-hidden shrink-0 relative group cursor-pointer">
+                      <div className="flex flex-col sm:flex-row gap-4 p-4 rounded-xl border border-primary/20 bg-primary/5">
+                        {/* Imagen: full-width en móvil; 180px fijo en sm+. */}
+                        <div className="w-full sm:w-[180px] h-[160px] sm:h-[130px] rounded-xl overflow-hidden shrink-0 relative group cursor-pointer">
                           <img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=400&h=300&fit=crop" alt="Piso piloto" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                           <div className="absolute top-2 left-2">
                             <Tag variant="overlay" size="sm"><Star className="h-2.5 w-2.5" /> Piso piloto</Tag>
                           </div>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-sm font-bold text-foreground">{showFlatUnit.block} - P{showFlatUnit.floor} {showFlatUnit.door}</h3>
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            <h3 className="text-sm font-bold text-foreground whitespace-nowrap">{showFlatUnit.block} - P{showFlatUnit.floor} {showFlatUnit.door}</h3>
                             <Tag variant="success" size="sm">Piso piloto</Tag>
                           </div>
                           <p className="text-lg font-bold text-foreground mb-3">{formatPrice(showFlatUnit.price)}</p>
-                          <div className="grid grid-cols-3 gap-3">
-                            <div>
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Dormitorios</p>
+                          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                            <div className="min-w-0">
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide truncate">Dorm.</p>
                               <p className="text-sm font-semibold text-foreground">{showFlatUnit.bedrooms}</p>
                             </div>
-                            <div>
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Superficie</p>
-                              <p className="text-sm font-semibold text-foreground">{showFlatUnit.builtArea} m²</p>
+                            <div className="min-w-0">
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide truncate">Superficie</p>
+                              <p className="text-sm font-semibold text-foreground whitespace-nowrap">{showFlatUnit.builtArea} m²</p>
                             </div>
-                            <div>
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Planta</p>
+                            <div className="min-w-0">
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide truncate">Planta</p>
                               <p className="text-sm font-semibold text-foreground">{showFlatUnit.floor}ª</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3 mt-3 text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Lun–Vie, 10:00 - 18:00</span>
-                            <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> Con cita previa</span>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1 whitespace-nowrap"><Calendar className="h-3 w-3 shrink-0" /> L–V, 10:00–18:00</span>
+                            <span className="flex items-center gap-1 whitespace-nowrap"><Phone className="h-3 w-3 shrink-0" /> Con cita previa</span>
                           </div>
                         </div>
                       </div>
