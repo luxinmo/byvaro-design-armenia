@@ -1305,7 +1305,14 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                       const isSelected = selectedUnits.has(u.id);
                       const isUni = ["Villa", "Chalet", "Unifamiliar", "Pareado", "Adosado"].includes(u.type);
                       return (
-                        <tr key={u.id} className={cn("border-b border-border/20 hover:bg-muted/20 transition-colors", isSelected && "bg-primary/5")}>
+                        <tr
+                          key={u.id}
+                          onClick={() => toggleExpandUnit(u.id)}
+                          className={cn(
+                            "border-b border-border/20 hover:bg-muted/40 transition-colors cursor-pointer",
+                            isSelected && "bg-primary/5"
+                          )}
+                        >
                           <td className="pl-3 pr-1 py-1.5" onClick={e => e.stopPropagation()}>
                             <Checkbox checked={isSelected} onCheckedChange={() => toggleSelect(u.id)} className="h-3.5 w-3.5" />
                           </td>
