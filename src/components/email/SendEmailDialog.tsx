@@ -407,10 +407,14 @@ export function SendEmailDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "p-0 overflow-hidden bg-muted border-0",
+          "p-0 overflow-hidden bg-muted border-0 gap-0",
+          // Móvil/tablet (<lg): fullscreen, sin bordes redondeados.
+          "inset-0 w-full h-full max-w-full translate-x-0 translate-y-0 rounded-none sm:rounded-none",
+          // Desktop (lg+): modal centrado con tamaño según step.
+          "lg:inset-auto lg:left-[50%] lg:top-[50%] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:h-auto lg:rounded-3xl",
           step === "compose"
-            ? "max-w-[1000px] w-[95vw] h-[90vh] flex flex-col"
-            : "max-w-[560px]",
+            ? "lg:max-w-[1000px] lg:w-[95vw] lg:h-[90vh] flex flex-col"
+            : "lg:max-w-[560px] flex flex-col",
         )}
       >
         <DialogHeader className="sr-only">
@@ -422,7 +426,7 @@ export function SendEmailDialog({
 
         {/* ─────── STEP 1 · AUDIENCE ─────── */}
         {step === "audience" && (
-          <div className="p-7">
+          <div className="flex-1 overflow-y-auto p-5 sm:p-7">
             <div className="flex items-center gap-2 mb-1">
               <Mail className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
               <h2 className="text-base font-semibold">¿A quién quieres enviar?</h2>
@@ -452,7 +456,7 @@ export function SendEmailDialog({
 
         {/* ─────── STEP 1b · COLLAB MODE (4 opciones) ─────── */}
         {step === "collab-mode" && (
-          <div className="p-7">
+          <div className="flex-1 overflow-y-auto p-5 sm:p-7">
             <button
               onClick={() => setStep("audience")}
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-4 transition-colors"
@@ -553,7 +557,7 @@ export function SendEmailDialog({
 
         {/* ─────── STEP 1c · COLLAB PICK (multi-select) ─────── */}
         {step === "collab-pick" && (
-          <div className="p-7">
+          <div className="flex-1 overflow-y-auto p-5 sm:p-7">
             <button
               onClick={() => setStep("collab-mode")}
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-4 transition-colors"
@@ -641,7 +645,7 @@ export function SendEmailDialog({
 
         {/* ─────── STEP 1d · COLLAB INVITE (email externo) ─────── */}
         {step === "collab-invite" && (
-          <div className="p-7">
+          <div className="flex-1 overflow-y-auto p-5 sm:p-7">
             <button
               onClick={() => setStep("collab-mode")}
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-4 transition-colors"
@@ -702,7 +706,7 @@ export function SendEmailDialog({
 
         {/* ─────── STEP 2 · TEMPLATE ─────── */}
         {step === "template" && (
-          <div className="p-7">
+          <div className="flex-1 overflow-y-auto p-5 sm:p-7">
             <button
               onClick={() => setStep("audience")}
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-4 transition-colors"
