@@ -2562,12 +2562,15 @@ function ContactFooter({ contacts, website, puntosDeVenta, comerciales, onAddMem
 
   return (
     <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
-      <div className="px-5 pt-5 pb-3 flex items-center justify-between">
-        <div>
+      {/* Header · en móvil stacked (título + subtítulo arriba, botones
+          abajo como chips pill). En sm+ mismo row con los botones a la
+          derecha. */}
+      <div className="px-5 pt-5 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0">
           <h2 className="text-sm font-semibold text-foreground">Equipo de contacto</h2>
           {!hideManagement && <p className="text-xs text-muted-foreground mt-0.5">Gestiona tu equipo comercial y puntos de venta</p>}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {totalPages > 1 && (
             <div className="flex items-center gap-1 mr-2">
               {Array.from({ length: totalPages }, (_, i) => (
@@ -2577,12 +2580,16 @@ function ContactFooter({ contacts, website, puntosDeVenta, comerciales, onAddMem
           )}
           {onAddMember && !hideManagement && (
             <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 rounded-full" onClick={onAddMember}>
-              <UserPlus className="h-3 w-3" /> Añadir miembro
+              <UserPlus className="h-3 w-3" />
+              <span className="hidden sm:inline">Añadir miembro</span>
+              <span className="sm:hidden">Miembro</span>
             </Button>
           )}
           {onAddOffice && !hideManagement && (
             <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 rounded-full" onClick={onAddOffice}>
-              <Store className="h-3 w-3" /> Añadir oficina
+              <Store className="h-3 w-3" />
+              <span className="hidden sm:inline">Añadir oficina</span>
+              <span className="sm:hidden">Oficina</span>
             </Button>
           )}
         </div>
