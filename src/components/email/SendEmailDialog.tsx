@@ -147,9 +147,16 @@ export function SendEmailDialog({
     return undefined;
   }, [defaultTemplateId, mode]);
 
-  // Always start at audience step so the user can pick recipients
-  // (Clientes vs Colaboradores → sub-modal con 4 opciones).
-  const [step, setStep] = useState<Step>(defaultAudience ? "template" : "audience");
+  // Step inicial:
+  //   · sin defaultAudience  → arranca en "audience" (elige Cliente/Colab).
+  //   · defaultAudience="collaborator" → arranca en "collab-mode" (Todos /
+  //     Favoritos / Elegir / Invitar) — es el flujo que dispara "Avisar
+  //     colaboradores" tras la edición masiva de precios.
+  //   · defaultAudience="client" → salta a "template" (no hay sub-modal
+  //     para clientes).
+  const initialStepFor = (a: Audience | undefined): Step =>
+    !a ? "audience" : a === "collaborator" ? "collab-mode" : "template";
+  const [step, setStep] = useState<Step>(initialStepFor(defaultAudience));
   const [audience, setAudience] = useState<Audience>(defaultAudience ?? "client");
   const [templateId, setTemplateId] = useState<TemplateId>(
     forcedDefaultTemplateId ?? "new-availability",
@@ -196,7 +203,7 @@ export function SendEmailDialog({
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
-      setStep(defaultAudience ? "template" : "audience");
+      setStep(initialStepFor(defaultAudience));
       setAudience(defaultAudience ?? "client");
       const tid: TemplateId = forcedDefaultTemplateId ?? "new-availability";
       setTemplateId(tid);
