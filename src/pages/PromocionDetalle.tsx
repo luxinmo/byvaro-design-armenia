@@ -1307,14 +1307,16 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           estas acciones ya están como botones en la barra superior; en
           móvil las reunimos bajo un + flotante con dropup. */}
       {/* FAB móvil · posicionado con safe-area + 60px (altura del
-          MobileBottomNav) + 16px de gap para no montarse a la barra. */}
+          MobileBottomNav) + 16px de gap para no montarse a la barra.
+          flex items-end fija el botón a la derecha aunque el menú
+          expandido sea más ancho que el botón. */}
       <div
-        className="sm:hidden fixed right-4 z-40"
+        className="sm:hidden fixed right-4 z-40 flex flex-col items-end"
         style={{ bottom: "calc(60px + env(safe-area-inset-bottom) + 16px)" }}
       >
         {mobileFabOpen && (
           <>
-            <div className="fixed inset-0 bg-foreground/20 backdrop-blur-[2px] -z-10" onClick={() => setMobileFabOpen(false)} />
+            <div className="fixed inset-0 bg-foreground/40 backdrop-blur-md -z-10" onClick={() => setMobileFabOpen(false)} />
             <div className="flex flex-col items-end gap-2 mb-3 animate-in fade-in slide-in-from-bottom-2 duration-150">
               {/* Sólo promotor · invitar agencia colaboradora. */}
               {!viewAsCollaborator && !agentMode && (
