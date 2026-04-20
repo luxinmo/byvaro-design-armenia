@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { getMissingForPromotion } from "@/lib/publicationRequirements"; // fuente única de verdad de requisitos para publicar
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, priceForDisplay } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Tag } from "@/components/ui/Tag";
 import { Progress } from "@/components/ui/progress";

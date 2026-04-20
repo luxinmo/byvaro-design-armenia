@@ -37,7 +37,7 @@ import { toast } from "sonner";
 import type { Promotion } from "@/data/promotions";
 import { unitsByPromotion, type Unit } from "@/data/units";
 import { useEmpresa } from "@/lib/empresa";
-import { cn } from "@/lib/utils";
+import { cn, priceForDisplay } from "@/lib/utils";
 
 type Idioma = "es" | "en";
 type UnitFilter = "available" | "available-reserved" | "all";

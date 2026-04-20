@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronUp, ArrowUpDown, List, LayoutGrid,
   Building2, Eye, MapPin, X
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, priceForDisplay } from "@/lib/utils";
 
 function formatPrice(n: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
@@ -60,7 +60,7 @@ function SingleUnitView({ unit }: { unit: Unit }) {
             </div>
 
             <p className="text-xs text-muted-foreground mt-3 uppercase tracking-wider font-medium">{unit.type} · {unit.id}</p>
-            <p className="text-3xl font-bold text-foreground tracking-tight mt-1">{formatPrice(unit.price)}</p>
+            <p className="text-3xl font-bold text-foreground tracking-tight mt-1">{priceForDisplay(unit)}</p>
             <p className="text-xs text-muted-foreground">{formatPrice(pricePerM2)}/m²</p>
 
             <div className="h-px bg-border/40 my-5" />
@@ -292,7 +292,7 @@ function ListView({ units, expandedUnit, onToggle }: { units: Unit[]; expandedUn
               <span className={cn("w-[80px] shrink-0 text-sm text-center", isAvailable ? "font-medium text-foreground" : "text-muted-foreground")}>{u.builtArea}</span>
               <span className={cn("w-[120px] shrink-0 text-sm hidden lg:block", isAvailable ? "text-foreground" : "text-muted-foreground")}>{u.orientation}</span>
               <span className="w-[80px] shrink-0 text-sm text-center text-muted-foreground hidden lg:block">{u.floor}ª</span>
-              <span className={cn("ml-auto text-right min-w-[100px] text-sm", isAvailable ? "font-bold text-foreground" : "font-medium text-muted-foreground")}>{formatPrice(u.price)}</span>
+              <span className={cn("ml-auto text-right min-w-[100px] text-sm", isAvailable ? "font-bold text-foreground" : "font-medium text-muted-foreground")}>{priceForDisplay(u)}</span>
             </button>
 
             {/* Expanded detail */}
@@ -368,7 +368,7 @@ function TableView({ units, sortField, sortDir, onSort }: { units: Unit[]; sortF
                 <td className="px-3 py-2.5 text-right text-foreground">{u.builtArea}</td>
                 <td className="px-3 py-2.5 text-muted-foreground hidden lg:table-cell">{u.orientation}</td>
                 <td className="px-3 py-2.5 text-center text-muted-foreground">{u.floor}ª</td>
-                <td className="px-3 py-2.5 text-right font-semibold text-foreground">{formatPrice(u.price)}</td>
+                <td className="px-3 py-2.5 text-right font-semibold text-foreground">{priceForDisplay(u)}</td>
               </tr>
             ))}
           </tbody>

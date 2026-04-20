@@ -87,7 +87,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { UnitDetailPanel } from "./UnitDetailPanel";
 import { SendEmailDialog } from "@/components/email/SendEmailDialog";
 import { registerUnsavedGuard } from "@/lib/unsavedGuard";
-import { cn } from "@/lib/utils";
+import { cn, priceForDisplay } from "@/lib/utils";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -1032,7 +1032,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                                 confusiones entre 500000 y 500.000. */}
                             <td className="px-3 py-2 text-right" onClick={e => editing && isFieldEditable("price") && e.stopPropagation()}>
                               {renderEditableCell(u, "price",
-                                <span className="text-sm font-semibold text-foreground tabular-nums">{formatPrice(u.price)}</span>,
+                                <span className="text-sm font-semibold text-foreground tabular-nums">{priceForDisplay(u)}</span>,
                                 <input
                                   type="text"
                                   inputMode="numeric"
@@ -1133,7 +1133,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                         <span className={`h-2 w-2 rounded-full ${sc.dotClass}`} title={sc.label} />
                       </div>
                       <p className="text-[10px] text-muted-foreground">{u.type} · {u.bedrooms}/{u.bathrooms} · {u.builtArea}m²</p>
-                      <p className="text-sm font-bold text-foreground mt-1.5 tabular-nums">{formatPrice(u.price)}</p>
+                      <p className="text-sm font-bold text-foreground mt-1.5 tabular-nums">{priceForDisplay(u)}</p>
                     </div>
                   );
                 })}
@@ -1175,7 +1175,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                       </div>
                       <div className="shrink-0 flex flex-col items-end gap-1">
                         <span className="text-sm font-bold text-foreground tabular-nums whitespace-nowrap">
-                          {formatPrice(u.price)}
+                          {priceForDisplay(u)}
                         </span>
                         <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium border ${sc.class}`}>
                           <span className={`h-1 w-1 rounded-full ${sc.dotClass}`} />
@@ -1334,7 +1334,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                                   </span>
                                 </div>
                               ) : (
-                                <span className="text-sm font-bold text-foreground tabular-nums">{formatPrice(u.price)}</span>
+                                <span className="text-sm font-bold text-foreground tabular-nums">{priceForDisplay(u)}</span>
                               )}
                             </td>
                           )}

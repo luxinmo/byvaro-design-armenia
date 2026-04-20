@@ -8,7 +8,7 @@ import {
   ArrowUpDown, Image as ImageIcon, Video, FileText,
   Filter, X
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, priceForDisplay } from "@/lib/utils";
 
 function formatPrice(n: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
@@ -225,7 +225,7 @@ export function PromotionAvailabilityFullV2({ promotionId }: { promotionId: stri
                                   <span>{u.builtArea}m²</span>
                                 </div>
 
-                                <span className="text-sm font-bold text-foreground mt-1.5">{formatPrice(u.price)}</span>
+                                <span className="text-sm font-bold text-foreground mt-1.5">{priceForDisplay(u)}</span>
 
                                 {/* Features mini-icons */}
                                 <div className="flex items-center gap-1 mt-1.5">
@@ -274,7 +274,7 @@ export function PromotionAvailabilityFullV2({ promotionId }: { promotionId: stri
 
             {/* Price hero */}
             <div className="px-5 py-5 border-b border-border">
-              <p className="text-3xl font-bold text-foreground tracking-tight">{formatPrice(selected.price)}</p>
+              <p className="text-3xl font-bold text-foreground tracking-tight">{priceForDisplay(selected)}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {formatPrice(Math.round(selected.price / selected.builtArea))}/m² · {selected.builtArea} m² construidos
               </p>

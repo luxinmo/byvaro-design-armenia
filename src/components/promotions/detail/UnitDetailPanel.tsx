@@ -64,7 +64,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn, priceForDisplay } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Compass, Bed, Building2, Waves, Eye, Image as ImageIcon, Video, FileText,
@@ -172,7 +172,7 @@ export function UnitDetailPanel({ unit, onUpdateUnit, isCollaboratorView = false
                   {sc.label}
                 </span>
               </div>
-              <p className="text-2xl font-bold text-foreground tracking-tight">{formatPrice(unit.price)}</p>
+              <p className="text-2xl font-bold text-foreground tracking-tight">{priceForDisplay(unit)}</p>
               <p className="text-xs text-muted-foreground">{formatPrice(pricePerM2)}/m² · {unit.builtArea} m² construidos</p>
             </div>
 
@@ -453,7 +453,7 @@ function EditUnitForm({ unit, onClose, onSave }: { unit: Unit; onClose: () => vo
     <div className="flex-1 overflow-hidden flex flex-col">
       <div className="px-8 pt-4 pb-2">
         <p className="text-sm font-semibold text-foreground tracking-tight">{customPublicId.trim() || generatedId} · {unit.type}</p>
-        <p className="text-xs text-muted-foreground">Ref: {unit.ref} · {formatPrice(unit.price)} · {unit.builtArea} m²</p>
+        <p className="text-xs text-muted-foreground">Ref: {unit.ref} · {priceForDisplay(unit)} · {unit.builtArea} m²</p>
       </div>
 
       <Tabs defaultValue="datos" className="flex-1 flex flex-col overflow-hidden">
@@ -759,7 +759,7 @@ function ReserveForm({ unit, onClose }: { unit: Unit; onClose: () => void }) {
         </div>
         <div className="flex items-center justify-between mt-1">
           <span className="text-muted-foreground">Precio</span>
-          <span className="font-semibold text-foreground">{formatPrice(unit.price)}</span>
+          <span className="font-semibold text-foreground">{priceForDisplay(unit)}</span>
         </div>
       </div>
 
