@@ -104,5 +104,10 @@
 
   /* Plantilla 2 (editorial multi-página): cada sección es una página A4. */
   .editorial-page-break { break-before: page; page-break-before: always; }
-  .editorial-page { page-break-inside: avoid; }
+  .editorial-page {
+    page-break-inside: avoid;
+    /* Fuerza tamaño A4 completo SOLO al imprimir — en pantalla la sección
+       es tan alta como su contenido, sin huecos vacíos. */
+    min-height: 297mm;
+  }
 }

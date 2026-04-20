@@ -147,7 +147,6 @@ export function PriceListDialog({ open, onOpenChange, promotion }: PriceListDial
   const { empresa } = useEmpresa();
   const [template, setTemplate] = useState<Template>(1);
   const [filter, setFilter] = useState<UnitFilter>("available");
-  const [includeCommission, setIncludeCommission] = useState(false);
   const [includeQR, setIncludeQR] = useState(true);
   const [idioma, setIdioma] = useState<Idioma>("es");
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
@@ -364,14 +363,10 @@ export function PriceListDialog({ open, onOpenChange, promotion }: PriceListDial
                     <th className="text-left py-2 px-2 font-semibold">{t.orientacion}</th>
                     <th className="text-center py-2 px-2 font-semibold">{t.estado}</th>
                     <th className="text-right py-2 px-2 font-semibold">{t.precio}</th>
-                    {includeCommission && (
-                      <th className="text-right py-2 px-2 font-semibold">{t.comision}</th>
-                    )}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredUnits.map((u, i) => {
-                    const com = Math.round(u.price * (promotion.commission / 100));
                     return (
                       <tr
                         key={u.id}
@@ -399,11 +394,6 @@ export function PriceListDialog({ open, onOpenChange, promotion }: PriceListDial
                         <td className="py-2 px-2 text-right font-semibold text-foreground">
                           {formatPrice(u.price)}
                         </td>
-                        {includeCommission && (
-                          <td className="py-2 px-2 text-right text-muted-foreground">
-                            {formatPrice(com)}
-                          </td>
-                        )}
                       </tr>
                     );
                   })}
@@ -552,12 +542,6 @@ export function PriceListDialog({ open, onOpenChange, promotion }: PriceListDial
                   Opciones
                 </p>
                 <div className="space-y-2">
-                  <ToggleRow
-                    label="Incluir comisión"
-                    description="Visible para la versión agencia"
-                    checked={includeCommission}
-                    onChange={setIncludeCommission}
-                  />
                   <ToggleRow
                     label="Incluir QR del microsite"
                     description="Enlace directo a la web pública"
@@ -725,7 +709,6 @@ function TemplateEditorial({
     "editorial-page flex flex-col bg-background text-foreground";
   const pageStyle: React.CSSProperties = {
     width: "210mm",
-    minHeight: "297mm",
     padding: "14mm 16mm",
     boxSizing: "border-box",
   };
@@ -843,22 +826,29 @@ function TemplateEditorial({
           </p>
         </div>
 
-        {/* QR opcional */}
-        {includeQR && qrDataUrl && (
-          <div className="mt-auto pt-4 flex items-center gap-3 text-[10px] text-muted-foreground">
-            <img src={qrDataUrl} alt="QR" className="h-16 w-16 rounded-md border border-border" />
-            <div>
-              <p className="font-semibold text-foreground">
-                {idioma === "es" ? "Microsite público" : "Public microsite"}
+        {/* Footer consolidado: QR + microsite + empresa + page number,
+            todo en la parte baja de la portada. */}
+        <footer className="mt-auto pt-4 border-t border-border flex items-center justify-between gap-4 text-[9.5px] text-muted-foreground">
+          <div className="flex items-center gap-3 min-w-0">
+            {includeQR && qrDataUrl && (
+              <img src={qrDataUrl} alt="QR" className="h-14 w-14 rounded-md border border-border shrink-0" />
+            )}
+            <div className="min-w-0">
+              {includeQR && (
+                <>
+                  <p className="font-semibold text-foreground uppercase tracking-[0.12em] text-[9px]">
+                    {idioma === "es" ? "Microsite público" : "Public microsite"}
+                  </p>
+                  <p className="truncate">byvaro.com/{promotion.name.toLowerCase().replace(/\s+/g, "-")}</p>
+                </>
+              )}
+              <p className={cn("truncate uppercase tracking-wider text-[9px]", includeQR && "mt-1")}>
+                {empresa.nombreComercial || "Tu empresa"}
+                {empresa.email && ` · ${empresa.email}`}
               </p>
-              <p>byvaro.com/{promotion.name.toLowerCase().replace(/\s+/g, "-")}</p>
             </div>
           </div>
-        )}
-
-        <footer className="mt-auto pt-4 border-t border-border flex items-center justify-between text-[9px] text-muted-foreground uppercase tracking-wider">
-          <span>{empresa.nombreComercial || "Tu empresa"}{empresa.email && ` · ${empresa.email}`}</span>
-          <span>{pageLabel()}</span>
+          <span className="uppercase tracking-wider text-[9px] shrink-0">{pageLabel()}</span>
         </footer>
       </section>
 
