@@ -443,61 +443,91 @@ export function SendEmailDialog({
             </button>
             <div className="flex items-center gap-2 mb-1">
               <Users className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-              <h2 className="text-base font-semibold">¿A qué colaboradores?</h2>
+              <h2 className="text-base font-semibold">¿A qué colaboradores quieres enviar?</h2>
             </div>
             <p className="text-xs text-muted-foreground mb-5">
               Elige cómo seleccionar a los colaboradores destinatarios.
             </p>
 
-            <div className="grid grid-cols-2 gap-3">
-              {([
-                {
-                  id: "all",
-                  icon: Users,
-                  title: "Todos los colaboradores",
-                  desc: `Enviar a las ${agencies.length} agencias colaboradoras`,
-                  action: () => {
-                    setSelectedRecipients(agencies.map(a => `contact@${a.name.toLowerCase().replace(/[^a-z0-9]+/g, "")}.com`));
-                    setStep("template");
-                  },
-                },
-                {
-                  id: "favorites",
-                  icon: Star,
-                  title: "Solo favoritos",
-                  desc: `Enviar a tus ${FAVORITE_AGENCY_IDS.size} agencias favoritas`,
-                  action: () => {
-                    const favs = agencies.filter(a => FAVORITE_AGENCY_IDS.has(a.id));
-                    setSelectedRecipients(favs.map(a => `contact@${a.name.toLowerCase().replace(/[^a-z0-9]+/g, "")}.com`));
-                    setStep("template");
-                  },
-                },
-                {
-                  id: "pick",
-                  icon: User,
-                  title: "Elegir colaborador",
-                  desc: "Seleccionar uno o varios manualmente",
-                  action: () => setStep("collab-pick"),
-                },
-                {
-                  id: "invite",
-                  icon: UserPlus,
-                  title: "Invitar nuevo",
-                  desc: "Añadir un email externo con invitación pendiente",
-                  action: () => setStep("collab-invite"),
-                },
-              ] as const).map(opt => (
-                <button
-                  key={opt.id}
-                  onClick={opt.action}
-                  className="bg-card border border-border/30 hover:border-foreground/30 rounded-2xl p-5 text-left transition-all group"
-                >
-                  <opt.icon className="h-5 w-5 text-foreground/70 mb-3" strokeWidth={1.5} />
-                  <p className="text-sm font-semibold mb-1">{opt.title}</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{opt.desc}</p>
-                </button>
-              ))}
+            {/* Filas apiladas · prominentes con counter badge */}
+            <div className="space-y-2.5">
+              {/* Opción 1 · TODOS LOS COLABORADORES */}
+              <button
+                onClick={() => {
+                  setSelectedRecipients(agencies.map(a => `contact@${a.name.toLowerCase().replace(/[^a-z0-9]+/g, "")}.com`));
+                  setStep("template");
+                }}
+                className="w-full bg-card border border-border hover:border-foreground/40 hover:shadow-soft rounded-2xl p-5 text-left transition-all flex items-center gap-4 group"
+              >
+                <div className="h-12 w-12 rounded-2xl bg-foreground/5 group-hover:bg-foreground/10 flex items-center justify-center shrink-0 transition-colors">
+                  <Users className="h-5 w-5 text-foreground" strokeWidth={1.5} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className="text-sm font-semibold text-foreground">Todos los colaboradores</p>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-foreground text-background">
+                      {agencies.length}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Enviar a las {agencies.length} agencias colaboradoras de esta promoción
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" strokeWidth={1.5} />
+              </button>
+
+              {/* Opción 2 · COLABORADORES FAVORITOS */}
+              <button
+                onClick={() => {
+                  const favs = agencies.filter(a => FAVORITE_AGENCY_IDS.has(a.id));
+                  setSelectedRecipients(favs.map(a => `contact@${a.name.toLowerCase().replace(/[^a-z0-9]+/g, "")}.com`));
+                  setStep("template");
+                }}
+                className="w-full bg-card border border-border hover:border-amber-400/60 hover:shadow-soft rounded-2xl p-5 text-left transition-all flex items-center gap-4 group"
+              >
+                <div className="h-12 w-12 rounded-2xl bg-amber-50 group-hover:bg-amber-100 flex items-center justify-center shrink-0 transition-colors">
+                  <Star className="h-5 w-5 text-amber-600 fill-amber-500" strokeWidth={1.5} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className="text-sm font-semibold text-foreground">Colaboradores favoritos</p>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                      {FAVORITE_AGENCY_IDS.size}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Enviar solo a tus {FAVORITE_AGENCY_IDS.size} agencias marcadas como favoritas
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" strokeWidth={1.5} />
+              </button>
+
+              {/* Opción 3 · ELEGIR ENTRE COLABORADORES */}
+              <button
+                onClick={() => setStep("collab-pick")}
+                className="w-full bg-card border border-border hover:border-foreground/40 hover:shadow-soft rounded-2xl p-5 text-left transition-all flex items-center gap-4 group"
+              >
+                <div className="h-12 w-12 rounded-2xl bg-foreground/5 group-hover:bg-foreground/10 flex items-center justify-center shrink-0 transition-colors">
+                  <User className="h-5 w-5 text-foreground" strokeWidth={1.5} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground mb-0.5">Elegir entre colaboradores</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Seleccionar manualmente uno o varios de la lista
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" strokeWidth={1.5} />
+              </button>
             </div>
+
+            {/* Acción secundaria · Invitar nuevo */}
+            <button
+              onClick={() => setStep("collab-invite")}
+              className="mt-5 w-full flex items-center justify-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors py-2"
+            >
+              <UserPlus className="h-3.5 w-3.5" strokeWidth={1.5} />
+              <span>¿Quieres invitar a un nuevo colaborador?</span>
+            </button>
           </div>
         )}
 
