@@ -704,7 +704,7 @@ export default function Promociones() {
                   key={p.id}
                   onClick={() => navigate(`/promociones/${p.id}`)}
                   className={cn(
-                    "group flex flex-col lg:flex-row bg-card border rounded-2xl overflow-hidden shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer",
+                    "group flex flex-col xl:flex-row bg-card border rounded-2xl overflow-hidden shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer",
                     hasMissing
                       ? "border-destructive/30 ring-1 ring-destructive/10"
                       : trending
@@ -713,7 +713,7 @@ export default function Promociones() {
                   )}
                 >
                   {/* Image */}
-                  <div className="relative w-full lg:w-[550px] h-[160px] sm:h-[220px] lg:h-[400px] shrink-0 overflow-hidden bg-muted">
+                  <div className="relative w-full xl:w-[480px] h-[160px] sm:h-[220px] xl:h-[400px] shrink-0 overflow-hidden bg-muted">
                     {p.image ? (
                       <>
                         <img
@@ -763,7 +763,7 @@ export default function Promociones() {
                     <h3 className="text-lg lg:text-base font-bold text-foreground leading-snug mb-1">
                       {p.name}
                     </h3>
-                    <div className="flex flex-wrap items-center gap-x-2 text-sm lg:text-xs text-muted-foreground mb-2 lg:mb-3">
+                    <div className="flex flex-wrap items-center gap-x-2 text-sm xl:text-xs text-muted-foreground mb-2 lg:mb-3">
                       {p.developer && <span>{p.developer}</span>}
                       {p.delivery && (
                         <>
@@ -778,8 +778,8 @@ export default function Promociones() {
                       <div className="flex items-start gap-2.5 mb-3 px-3 py-2.5 rounded-xl bg-destructive/5 border border-destructive/20">
                         <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
                         <div>
-                          <p className="text-sm lg:text-xs font-semibold text-destructive mb-0.5">Pasos pendientes para publicar</p>
-                          <p className="text-sm lg:text-xs text-muted-foreground">{p.missingSteps!.join(" · ")}</p>
+                          <p className="text-sm xl:text-xs font-semibold text-destructive mb-0.5">Pasos pendientes para publicar</p>
+                          <p className="text-sm xl:text-xs text-muted-foreground">{p.missingSteps!.join(" · ")}</p>
                         </div>
                       </div>
                     )}
@@ -789,14 +789,14 @@ export default function Promociones() {
                       <div className="flex items-start gap-2.5 mb-3 px-3 py-2.5 rounded-xl bg-amber-50/60 border border-amber-200/40">
                         <Ban className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                         <div>
-                          <p className="text-sm lg:text-xs font-semibold text-amber-700 mb-0.5">No se puede compartir con agencias</p>
-                          <p className="text-sm lg:text-xs text-muted-foreground">Configura comisiones en Colaboradores para habilitar el share</p>
+                          <p className="text-sm xl:text-xs font-semibold text-amber-700 mb-0.5">No se puede compartir con agencias</p>
+                          <p className="text-sm xl:text-xs text-muted-foreground">Configura comisiones en Colaboradores para habilitar el share</p>
                         </div>
                       </div>
                     )}
 
                     {/* Metrics row */}
-                    <div className="flex items-center gap-5 lg:gap-6 mb-2 lg:mb-3">
+                    <div className="flex items-center gap-5 xl:gap-6 mb-2 xl:mb-3">
                       <Metric label="Disponibles" value={`${p.availableUnits} / ${p.totalUnits}`} />
                       <Metric label="Comisión" value={`${p.commission}%`} />
                       {p.constructionProgress !== undefined && (
@@ -819,7 +819,7 @@ export default function Promociones() {
                     )}
 
                     {/* Price */}
-                    <p className="text-lg font-bold text-foreground tracking-tight mb-1 lg:mb-3">
+                    <p className="text-lg font-bold text-foreground tracking-tight mb-1 xl:mb-3">
                       {lastUnit ? formatPrice(lastUnit.price) : (
                         <>
                           {formatPrice(p.priceMin)}
@@ -880,11 +880,11 @@ export default function Promociones() {
                     )}
 
                     {/* Footer */}
-                    <div className="mt-auto pt-2 lg:pt-3 border-t border-border/30 flex items-center justify-between gap-2">
+                    <div className="mt-auto pt-2 xl:pt-3 border-t border-border/30 flex items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground/60 min-w-0">
                         {p.agencies > 0 && (
                           <span className="text-foreground/70 flex items-center gap-1">
-                            <Users className="h-3.5 w-3.5 lg:h-3 lg:w-3" />
+                            <Users className="h-3.5 w-3.5 xl:h-3 xl:w-3" />
                             {p.agencies} agencias
                           </span>
                         )}
@@ -895,7 +895,7 @@ export default function Promociones() {
                       </div>
                       <button
                         onClick={(e) => e.stopPropagation()}
-                        className="text-sm lg:text-xs font-medium text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-1 shrink-0"
+                        className="text-sm xl:text-xs font-medium text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-1 shrink-0"
                       >
                         <Share2 className="h-3.5 w-3.5" />
                         <span className="hidden sm:inline">Compartir con agencias</span>
