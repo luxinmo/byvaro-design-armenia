@@ -212,24 +212,38 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
   const [editedFieldLabels, setEditedFieldLabels] = useState<string[]>([]);
   // Dialog de confirmación al cancelar / salir con cambios sin guardar.
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
-  // Catalog column visibility — on large screens (≥1536px, e.g. MacBook 16")
-  // we show the full column set; on smaller screens we show a compact set.
+  // Catalog column visibility · reactivo al ancho de ventana.
+  //   · ≥1536px (2xl, MacBook 16") → set completo
+  //   · 768-1535 (md/lg/xl)        → set compacto
+  //   · <768 (móvil)               → set mínimo: ref, tipo, precio, estado
   type CatalogCol = "photo" | "ref" | "type" | "dormBath" | "area" | "floorParcel" | "plans" | "status" | "price" | "orientation" | "client";
-  const [visibleCols, setVisibleCols] = useState<Set<CatalogCol>>(() => {
-    const isLargeScreen = typeof window !== "undefined" && window.innerWidth >= 1536;
-    if (isLargeScreen) {
+  const getDefaultCols = (w: number): Set<CatalogCol> => {
+    if (w >= 1536) {
       return new Set<CatalogCol>(
         isCollaboratorView
           ? ["photo", "ref", "type", "dormBath", "area", "floorParcel", "orientation", "status", "price"]
           : ["photo", "ref", "type", "dormBath", "area", "floorParcel", "orientation", "client", "status", "price"]
       );
     }
-    return new Set<CatalogCol>(
-      isCollaboratorView
-        ? ["photo", "ref", "type", "dormBath", "area", "floorParcel", "status", "price"]
-        : ["photo", "ref", "type", "dormBath", "area", "floorParcel", "price"]
-    );
+    if (w >= 768) {
+      return new Set<CatalogCol>(
+        isCollaboratorView
+          ? ["photo", "ref", "type", "dormBath", "area", "floorParcel", "status", "price"]
+          : ["photo", "ref", "type", "dormBath", "area", "floorParcel", "price"]
+      );
+    }
+    // Móvil
+    return new Set<CatalogCol>(["ref", "type", "status", "price"]);
+  };
+  const [visibleCols, setVisibleCols] = useState<Set<CatalogCol>>(() => {
+    return getDefaultCols(typeof window !== "undefined" ? window.innerWidth : 1024);
   });
+  useEffect(() => {
+    const onResize = () => setVisibleCols(getDefaultCols(window.innerWidth));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCollaboratorView]);
   const [colCustomizerOpen, setColCustomizerOpen] = useState(false);
 
   useEffect(() => {
@@ -693,8 +707,8 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px] max-w-xs">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+          <div className="relative w-full sm:flex-1 sm:min-w-[200px] sm:max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
             <input
               type="text"
@@ -705,25 +719,28 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
             />
           </div>
 
-          <select value={filterBlock} onChange={e => setFilterBlock(e.target.value)}
-            className="h-9 px-2.5 rounded-lg border border-border bg-background text-sm">
-            <option value="all">Todos bloques</option>
-            {blocks.map(b => <option key={b} value={b}>{getBlockName(b)}</option>)}
-          </select>
+          {/* En móvil los 3 selects caben en una fila con grid-cols-3. */}
+          <div className="grid grid-cols-3 sm:flex gap-2">
+            <select value={filterBlock} onChange={e => setFilterBlock(e.target.value)}
+              className="min-w-0 h-9 px-2.5 rounded-lg border border-border bg-background text-sm">
+              <option value="all">Bloques</option>
+              {blocks.map(b => <option key={b} value={b}>{getBlockName(b)}</option>)}
+            </select>
 
-          <select value={filterType} onChange={e => setFilterType(e.target.value)}
-            className="h-9 px-2.5 rounded-lg border border-border bg-background text-sm">
-            <option value="all">Todas tipologías</option>
-            {types.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
+            <select value={filterType} onChange={e => setFilterType(e.target.value)}
+              className="min-w-0 h-9 px-2.5 rounded-lg border border-border bg-background text-sm">
+              <option value="all">Tipologías</option>
+              {types.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
 
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as UnitStatus | "all")}
-            className="h-9 px-2.5 rounded-lg border border-border bg-background text-sm">
-            <option value="all">Todos estados</option>
-            {statusOptions.map(s => <option key={s} value={s}>{statusConfig[s].label}</option>)}
-          </select>
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as UnitStatus | "all")}
+              className="min-w-0 h-9 px-2.5 rounded-lg border border-border bg-background text-sm">
+              <option value="all">Estados</option>
+              {statusOptions.map(s => <option key={s} value={s}>{statusConfig[s].label}</option>)}
+            </select>
+          </div>
 
-          <div className="flex items-center gap-1 ml-auto">
+          <div className="flex items-center gap-1 sm:ml-auto">
             {/* Edición masiva directa — no requiere pre-selección, aplica a
                 todas las unidades disponibles (Excel-like). Oculta en móvil:
                 Excel-like no funciona bien con pantallas estrechas. */}
