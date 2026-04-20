@@ -260,10 +260,25 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           <span className="text-foreground/70 tnum">{p.code}</span>
         </div>
 
-        {/* Título + acciones */}
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-5">
+        {/* Título + acciones · relative para posicionar el ojo en móvil. */}
+        <div className="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-5">
+          {/* Eye móvil: icono flotante en esquina superior derecha
+              junto al título, sólo en móvil. En sm+ vive dentro de la
+              barra de acciones con texto. */}
+          {!agentMode && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleToggleCollabView}
+              className="sm:hidden absolute top-0 right-0 h-9 w-9 px-0"
+              title="Vista colaborador"
+              aria-label="Vista colaborador"
+            >
+              <Eye className="h-4 w-4" strokeWidth={1.5} />
+            </Button>
+          )}
           <div className="min-w-0">
-            <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-2.5 flex-wrap pr-10 sm:pr-0">
               <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight text-foreground leading-tight">
                 {p.name}
               </h1>
@@ -286,8 +301,8 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               )}
               {p.delivery && (
                 <>
-                  <span className="text-border">·</span>
-                  <span className="inline-flex items-center gap-1">
+                  <span className="hidden sm:inline text-border">·</span>
+                  <span className="hidden sm:inline-flex items-center gap-1">
                     <Calendar className="h-3.5 w-3.5 shrink-0" />
                     Entrega {p.delivery}
                   </span>
@@ -298,17 +313,15 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
           {!agentMode && !viewAsCollaborator && activeTabKey !== "Agencies" && (
             <div className="flex items-center gap-2 shrink-0 flex-wrap">
-              {/* Vista colaborador · móvil sólo icono, desktop icono + texto. */}
+              {/* Vista colaborador (desktop) · en móvil va en la esquina
+                  superior derecha del header, no aquí. */}
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={handleToggleCollabView}
-                className="gap-1.5 sm:px-4 px-0 w-9 sm:w-auto"
-                title="Vista colaborador"
-                aria-label="Vista colaborador"
+                className="gap-1.5 hidden sm:inline-flex"
               >
-                <Eye className="h-3.5 w-3.5" strokeWidth={1.5} />
-                <span className="hidden sm:inline">Vista colaborador</span>
+                <Eye className="h-3.5 w-3.5" strokeWidth={1.5} /> Vista colaborador
               </Button>
               {/* Enviar · oculto en móvil, accesible desde el FAB. */}
               <Button size="sm" variant="outline" onClick={() => setSendEmailOpen(true)} className="gap-1.5 hidden sm:inline-flex">
@@ -964,7 +977,9 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 ];
                 return (
                   <TooltipProvider delayDuration={150}>
-                    <aside className="w-full lg:w-12 2xl:w-[260px] lg:shrink-0 order-1 lg:order-2 lg:self-start lg:sticky lg:top-4">
+                    {/* Acciones rápidas · sólo desktop (lg+). En móvil
+                        las mismas acciones viven en el FAB "+". */}
+                    <aside className="hidden lg:block w-full lg:w-12 2xl:w-[260px] lg:shrink-0 order-1 lg:order-2 lg:self-start lg:sticky lg:top-4">
                       <div className="lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto no-scrollbar">
                         {/* Compact dock — visible md/lg, hidden on 2xl */}
                         <div className="2xl:hidden flex lg:flex-col gap-1.5 rounded-2xl bg-card border border-border shadow-soft p-1.5">
@@ -1305,6 +1320,14 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           <>
             <div className="fixed inset-0 bg-foreground/20 backdrop-blur-[2px] -z-10" onClick={() => setMobileFabOpen(false)} />
             <div className="flex flex-col items-end gap-2 mb-3 animate-in fade-in slide-in-from-bottom-2 duration-150">
+              {/* Sólo promotor · invitar agencia colaboradora. */}
+              {!viewAsCollaborator && !agentMode && (
+                <FabAction
+                  icon={UserPlus}
+                  label="Invitar a colaborar"
+                  onClick={() => { setMobileFabOpen(false); setActiveTab(visibleTabs.indexOf("Agencies")); }}
+                />
+              )}
               <FabAction
                 icon={Users}
                 label="Registrar cliente"
