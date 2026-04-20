@@ -689,7 +689,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   )}
                 </div>
                 <div className="px-5 pb-5">
-                  <div className="flex items-center gap-4 p-4 rounded-xl border border-border bg-background/50 hover:border-border/50 hover:shadow-sm transition-all cursor-pointer" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("calidades"); }}>
+                  <div className="flex items-center gap-4 p-4 rounded-xl border border-border bg-background/50 hover:border-border/50 hover:shadow-soft transition-all cursor-pointer" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("calidades"); }}>
                     <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                       <FileText className="h-6 w-6 text-primary" />
                     </div>
@@ -740,7 +740,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     )}
                   </div>
                   <div className="px-5 pb-5">
-                    <div className="rounded-xl overflow-hidden border border-border bg-background/50 cursor-pointer group hover:shadow-sm transition-all" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("planos"); }}>
+                    <div className="rounded-xl overflow-hidden border border-border bg-background/50 cursor-pointer group hover:shadow-soft transition-all" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("planos"); }}>
                       <img src="https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=600&h=200&fit=crop" alt="Planos" className="w-full h-[120px] object-cover group-hover:scale-[1.02] transition-transform duration-300" />
                       <div className="p-3 flex items-center justify-between">
                         <div>
@@ -791,7 +791,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   )}
                 </div>
                 <div className="px-5 pb-5">
-                  <div className="rounded-xl overflow-hidden border border-border bg-background/50 cursor-pointer group hover:shadow-sm transition-all" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("brochure"); }}>
+                  <div className="rounded-xl overflow-hidden border border-border bg-background/50 cursor-pointer group hover:shadow-soft transition-all" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("brochure"); }}>
                     <img src="https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=600&h=200&fit=crop" alt="Brochure" className="w-full h-[120px] object-cover group-hover:scale-[1.02] transition-transform duration-300" />
                     <div className="p-3 flex items-center justify-between">
                       <div>
@@ -1132,7 +1132,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 <h2 className="text-sm font-semibold text-foreground">Estructura de comisiones</h2>
                 {!viewAsCollaborator && (
                   <button onClick={() => navigate(getWizardUrl("Collaborators", returnPath))}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm transition-colors">
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-soft transition-colors">
                     <Pencil className="h-3 w-3" /> Editar
                   </button>
                 )}
@@ -1218,7 +1218,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 <h2 className="text-sm font-semibold text-foreground">Condiciones de registro de clientes</h2>
                 {!viewAsCollaborator && (
                   <button onClick={() => navigate(getWizardUrl("Collaborators", returnPath))}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm transition-colors">
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-soft transition-colors">
                     <Pencil className="h-3 w-3" /> Editar
                   </button>
                 )}
@@ -1469,7 +1469,7 @@ function RequestsBanner({ requests }: { requests: Agency[] }) {
         <div className="flex items-center gap-3.5 flex-1 min-w-[240px]">
           <div className="relative h-11 w-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
             <Sparkles className="h-5 w-5 text-primary" strokeWidth={1.75} />
-            <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shadow-sm">{requests.length}</span>
+            <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shadow-soft">{requests.length}</span>
           </div>
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-foreground">{requests.length} nueva{requests.length > 1 ? "s" : ""} solicitud{requests.length > 1 ? "es" : ""} de colaboración</h3>
@@ -1479,7 +1479,7 @@ function RequestsBanner({ requests }: { requests: Agency[] }) {
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex -space-x-2">
             {requests.slice(0, 4).map((r) => (
-              <div key={r.id} className="h-8 w-8 rounded-full border-2 border-background overflow-hidden bg-white shadow-sm" title={r.name}>
+              <div key={r.id} className="h-8 w-8 rounded-full border-2 border-background overflow-hidden bg-white shadow-soft" title={r.name}>
                 <img src={r.logo || ""} alt={r.name} className="w-full h-full object-contain p-0.5" />
               </div>
             ))}
@@ -1487,7 +1487,7 @@ function RequestsBanner({ requests }: { requests: Agency[] }) {
               <div className="h-8 w-8 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-semibold text-muted-foreground">+{requests.length - 4}</div>
             )}
           </div>
-          <Button size="sm" className="rounded-full text-xs h-9 gap-1.5 px-4 shadow-sm">Revisar solicitudes <ArrowUpRight className="h-3.5 w-3.5" /></Button>
+          <Button size="sm" className="rounded-full text-xs h-9 gap-1.5 px-4 shadow-soft">Revisar solicitudes <ArrowUpRight className="h-3.5 w-3.5" /></Button>
         </div>
       </div>
     </div>
@@ -1508,7 +1508,7 @@ function TopPerformers({ list }: { list: Agency[] }) {
     <div className="rounded-2xl bg-card border border-border shadow-soft p-4 sm:p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
-          <div className="h-7 w-7 rounded-lg bg-amber-500/100/10 flex items-center justify-center">
+          <div className="h-7 w-7 rounded-lg bg-amber-500/10 flex items-center justify-center">
             <Trophy className="h-3.5 w-3.5 text-amber-500" strokeWidth={2} />
           </div>
           <h3 className="text-sm font-semibold text-foreground">Mejores colaboradores</h3>
@@ -1522,8 +1522,8 @@ function TopPerformers({ list }: { list: Agency[] }) {
           return (
             <div key={ag.id} className="group relative flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/10 hover:bg-muted/30 hover:border-border/60 transition-all cursor-pointer overflow-hidden">
               <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary/[0.04] to-transparent transition-all duration-500" style={{ width: `${pct}%` }} />
-              <div className={cn("relative h-8 w-8 rounded-full ring-2 flex items-center justify-center text-xs font-bold shrink-0 shadow-sm", m.bg, m.ring, m.text)}>{idx + 1}</div>
-              <div className="relative h-10 w-10 rounded-full overflow-hidden bg-white border border-border shrink-0 shadow-sm">
+              <div className={cn("relative h-8 w-8 rounded-full ring-2 flex items-center justify-center text-xs font-bold shrink-0 shadow-soft", m.bg, m.ring, m.text)}>{idx + 1}</div>
+              <div className="relative h-10 w-10 rounded-full overflow-hidden bg-white border border-border shrink-0 shadow-soft">
                 <img src={ag.logo || ""} alt={ag.name} className="w-full h-full object-contain p-0.5" />
               </div>
               <div className="relative min-w-0 flex-1">
@@ -1626,7 +1626,7 @@ function AgenciesTab({ promotionId, navigate }: { promotionId: string; navigate:
           <AgencyKPI icon={Building2} label="Agencias colaborando" value={`${totals.active}`} delta={totals.active > 0 ? "+1" : undefined} accent="bg-primary/10" trend={[1, 1, 2, 2, 2, 3, totals.active]} trendColor="text-primary" />
           <AgencyKPI icon={Eye} label="Visitas a esta promoción" value={`${totals.visits}`} delta="+18%" accent="bg-accent/10" trend={[20, 28, 35, 42, 50, 58, totals.visits]} trendColor="text-accent-foreground" />
           <AgencyKPI icon={FileCheck2} label="Registros" value={`${totals.registrations}`} delta="+9%" accent="bg-primary/10" trend={[5, 8, 10, 12, 15, 18, totals.registrations]} trendColor="text-primary" />
-          <AgencyKPI icon={Euro} label="Volumen ventas" value={`${formatCompact(totals.sales)}€`} delta="+24%" accent="bg-amber-500/100/10" trend={[1, 2, 3, 4, 5, 6, 7]} trendColor="text-amber-500" />
+          <AgencyKPI icon={Euro} label="Volumen ventas" value={`${formatCompact(totals.sales)}€`} delta="+24%" accent="bg-amber-500/10" trend={[1, 2, 3, 4, 5, 6, 7]} trendColor="text-amber-500" />
         </div>
       )}
 
@@ -1704,7 +1704,7 @@ function AgenciesTab({ promotionId, navigate }: { promotionId: string; navigate:
         {hasSidebar && (
           <div className="w-full lg:w-[300px] lg:shrink-0 order-1 lg:order-2">
             <div className="lg:sticky lg:top-4 space-y-4">
-              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/100/10 dark:bg-amber-500/10 p-4">
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/10 p-4">
                 <div className="flex items-center gap-2 mb-1.5">
                   <Info className="h-3.5 w-3.5 text-amber-600 shrink-0" />
                   <h3 className="text-xs font-semibold text-foreground leading-snug">No colaboran en esta promoción</h3>
@@ -1755,7 +1755,7 @@ function AgencyCard({ agency: ag, promotionId, selected, onToggleSelect }: { age
       {/* Selection */}
       <div className={`absolute top-3 left-3 z-20 transition-opacity ${selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
         <button onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
-          className={cn("h-6 w-6 rounded-lg border-2 flex items-center justify-center transition-colors shadow-sm",
+          className={cn("h-6 w-6 rounded-lg border-2 flex items-center justify-center transition-colors shadow-soft",
             selected ? "bg-primary border-primary text-primary-foreground" : "bg-white/95 border-white/60 backdrop-blur-sm hover:border-primary")}>
           {selected && <Check className="h-3.5 w-3.5" />}
         </button>
@@ -1768,7 +1768,7 @@ function AgencyCard({ agency: ag, promotionId, selected, onToggleSelect }: { age
         <div className="absolute inset-0 bg-gradient-to-t from-card via-card/20 to-transparent" />
         <div className="absolute top-2.5 right-3 flex items-center gap-1.5">
           {ag.isNewRequest && (
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary text-primary-foreground flex items-center gap-1 shadow-sm">
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary text-primary-foreground flex items-center gap-1 shadow-soft">
               <Star className="h-2.5 w-2.5" /> Nueva solicitud
             </span>
           )}
@@ -1778,7 +1778,7 @@ function AgencyCard({ agency: ag, promotionId, selected, onToggleSelect }: { age
       {/* Body */}
       <div className="px-4 sm:px-5 pb-5 -mt-8 relative">
         <div className="flex items-end justify-between gap-3 mb-3">
-          <div className="h-14 w-14 rounded-2xl border-4 border-card shadow-md overflow-hidden bg-card shrink-0">
+          <div className="h-14 w-14 rounded-2xl border-4 border-card shadow-soft overflow-hidden bg-card shrink-0">
             <img src={logoUrl} alt={ag.name} className="w-full h-full object-contain bg-white p-1" />
           </div>
           <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full",
@@ -1881,7 +1881,7 @@ function AgencyFilterPill({ label, values, options, onChange, labels }: { label:
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute top-full left-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 min-w-[150px] py-1">
+          <div className="absolute top-full left-0 mt-1 bg-popover border border-border rounded-lg shadow-soft-lg z-50 min-w-[150px] py-1">
             {options.map((opt) => (
               <div
                 key={opt}
@@ -2119,7 +2119,7 @@ function DocumentsTab({ openFolder, onOpenFolder, blockedAgencies, onToggleBlock
                   key={i}
                   onClick={() => toggleFileSelect(file.name)}
                   className={cn(
-                    "group rounded-xl border bg-background/50 hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden",
+                    "group rounded-xl border bg-background/50 hover:shadow-soft hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden",
                     isSelected ? "border-primary ring-2 ring-primary/20" : "border-border hover:border-border/50"
                   )}
                 >
@@ -2159,7 +2159,7 @@ function DocumentsTab({ openFolder, onOpenFolder, blockedAgencies, onToggleBlock
       {/* Confirm lock dialog */}
       {confirmLockFolder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="rounded-2xl bg-card border border-border shadow-xl p-6 max-w-sm w-full mx-4 space-y-4">
+          <div className="rounded-2xl bg-card border border-border shadow-soft-lg p-6 max-w-sm w-full mx-4 space-y-4">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
                 <Lock className="h-5 w-5 text-destructive" strokeWidth={1.5} />
@@ -2248,7 +2248,7 @@ function DocumentsTab({ openFolder, onOpenFolder, blockedAgencies, onToggleBlock
                     <MoreHorizontal className="h-4 w-4" strokeWidth={1.5} />
                   </button>
                   {folderMenuOpen === key && (
-                    <div className="absolute right-0 top-8 z-20 w-48 rounded-xl border border-border bg-card shadow-lg py-1.5 animate-in fade-in-0 zoom-in-95">
+                    <div className="absolute right-0 top-8 z-20 w-48 rounded-xl border border-border bg-card shadow-soft-lg py-1.5 animate-in fade-in-0 zoom-in-95">
                       {isShareable && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onOpenFolder(key); setFolderMenuOpen(null); }}
@@ -2298,7 +2298,7 @@ function CollaborationStatusBanner({ isIncomplete, isShared, agencyCount, activi
 }) {
   if (isIncomplete) {
     return (
-      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/100/10 overflow-hidden">
+      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 overflow-hidden">
         <div className="p-4 2xl:p-5 flex items-start gap-3">
           <div className="h-7 w-7 2xl:h-9 2xl:w-9 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0 mt-0.5">
             <Lock className="h-3.5 w-3.5 2xl:h-4 2xl:w-4 text-amber-600" />
@@ -2406,7 +2406,7 @@ function SectionCard({ title, stepName, missing, onEdit, children, hideEdit, flu
         <>
           {!hideEdit && (
             <button onClick={onEdit}
-              className="absolute top-3 right-3 z-10 opacity-0 group-hover/section:opacity-100 transition-opacity inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-background/90 backdrop-blur-sm border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm">
+              className="absolute top-3 right-3 z-10 opacity-0 group-hover/section:opacity-100 transition-opacity inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-background/90 backdrop-blur-sm border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-soft">
               <Pencil className="h-3 w-3" /> Editar
             </button>
           )}
@@ -2418,8 +2418,8 @@ function SectionCard({ title, stepName, missing, onEdit, children, hideEdit, flu
             <h2 className="text-base font-semibold text-foreground">{title}</h2>
             {!hideEdit && (
               <button onClick={onEdit}
-                className="opacity-0 group-hover/section:opacity-100 transition-opacity inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-sm">
-                <Pencil className="h-3 w-3" /> Edit
+                className="opacity-0 group-hover/section:opacity-100 transition-opacity inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-soft">
+                <Pencil className="h-3 w-3" /> Editar
               </button>
             )}
           </div>
@@ -2576,9 +2576,9 @@ function ContactFooter({ contacts, website, puntosDeVenta, comerciales, onAddMem
 
 function ContactCard({ contact: c, large }: { contact: ContactPerson; large?: boolean }) {
   return (
-    <div className={`rounded-xl border border-border bg-background/50 p-4 hover:border-border/50 hover:shadow-sm transition-all duration-200 ${large ? "flex-1" : ""}`}>
+    <div className={`rounded-xl border border-border bg-background/50 p-4 hover:border-border/50 hover:shadow-soft transition-all duration-200 ${large ? "flex-1" : ""}`}>
       <div className="flex items-center gap-3 mb-3">
-        <Avatar className={`${large ? "h-14 w-14" : "h-12 w-12"} ring-2 ring-background shadow-sm`}>
+        <Avatar className={`${large ? "h-14 w-14" : "h-12 w-12"} ring-2 ring-background shadow-soft`}>
           <AvatarImage src={c.avatar} alt={c.name} className="object-cover" />
           <AvatarFallback className="bg-muted text-xs font-medium">{c.name.slice(0, 2)}</AvatarFallback>
         </Avatar>

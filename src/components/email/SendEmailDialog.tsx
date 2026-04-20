@@ -483,15 +483,15 @@ export function SendEmailDialog({
                   setSelectedRecipients(favs.map(a => `contact@${a.name.toLowerCase().replace(/[^a-z0-9]+/g, "")}.com`));
                   setStep("template");
                 }}
-                className="w-full bg-card border border-border hover:border-amber-400/60 hover:shadow-soft rounded-2xl p-5 text-left transition-all flex items-center gap-4 group"
+                className="w-full bg-card border border-border hover:border-amber-500/40 hover:shadow-soft rounded-2xl p-5 text-left transition-all flex items-center gap-4 group"
               >
-                <div className="h-12 w-12 rounded-2xl bg-amber-50 group-hover:bg-amber-100 flex items-center justify-center shrink-0 transition-colors">
+                <div className="h-12 w-12 rounded-2xl bg-amber-500/10 group-hover:bg-amber-500/20 flex items-center justify-center shrink-0 transition-colors">
                   <Star className="h-5 w-5 text-amber-600 fill-amber-500" strokeWidth={1.5} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <p className="text-sm font-semibold text-foreground">Colaboradores favoritos</p>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700">
                       {FAVORITE_AGENCY_IDS.size}
                     </span>
                   </div>
@@ -955,7 +955,7 @@ export function SendEmailDialog({
                         className={cn(
                           "flex-1 inline-flex items-center justify-center gap-1.5 h-7 rounded-full text-[11px] font-medium transition-colors",
                           audience === "client"
-                            ? "bg-background text-foreground shadow-sm"
+                            ? "bg-background text-foreground shadow-soft"
                             : "text-muted-foreground hover:text-foreground",
                         )}
                       >
@@ -967,7 +967,7 @@ export function SendEmailDialog({
                         className={cn(
                           "flex-1 inline-flex items-center justify-center gap-1.5 h-7 rounded-full text-[11px] font-medium transition-colors",
                           audience === "collaborator"
-                            ? "bg-background text-foreground shadow-sm"
+                            ? "bg-background text-foreground shadow-soft"
                             : "text-muted-foreground hover:text-foreground",
                         )}
                       >
