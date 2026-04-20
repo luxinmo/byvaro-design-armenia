@@ -4,6 +4,9 @@ dist-ssr
 *.local
 .DS_Store
 
+# Responsive audit output (regenerable, artefactos pesados)
+screenshots/
+
 # Editor
 .vscode/*
 !.vscode/extensions.json
