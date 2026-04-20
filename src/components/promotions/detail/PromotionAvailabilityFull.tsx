@@ -765,6 +765,40 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
         </div>
       </div>
 
+      {/* Mini-toolbar móvil — sólo en <sm. Dos selects discretos:
+          filtro de estado + orden. Sustituye a la toolbar completa
+          que se oculta en móvil. */}
+      <div className="sm:hidden flex items-center justify-between gap-2 px-1 pb-1 text-xs text-muted-foreground">
+        <select
+          value={filterStatus}
+          onChange={e => setFilterStatus(e.target.value as UnitStatus | "all")}
+          className="appearance-none bg-transparent border-0 pr-4 font-medium text-foreground focus:outline-none"
+        >
+          <option value="all">Todas ({filtered.length})</option>
+          <option value="available">Disponibles</option>
+          <option value="reserved">Reservadas</option>
+          <option value="sold">Vendidas</option>
+          <option value="withdrawn">Retiradas</option>
+        </select>
+        <select
+          value={`${sortField}-${sortDir}`}
+          onChange={(e) => {
+            const [f, d] = e.target.value.split("-") as [SortField, "asc" | "desc"];
+            setSortField(f);
+            setSortDir(d);
+          }}
+          className="appearance-none bg-transparent border-0 pl-4 text-right focus:outline-none"
+        >
+          <option value="block-asc">Ordenar: bloque</option>
+          <option value="floor-asc">Planta ↑</option>
+          <option value="floor-desc">Planta ↓</option>
+          <option value="price-asc">Precio ↑</option>
+          <option value="price-desc">Precio ↓</option>
+          <option value="builtArea-desc">Superficie ↓</option>
+          <option value="bedrooms-desc">Dormitorios ↓</option>
+        </select>
+      </div>
+
       {/* Blocks */}
       {blocks.map(block => {
         const blockUnits = filtered.filter(u => u.block === block);
@@ -1159,7 +1193,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                     >
                       {/* Checkbox individual oculto en cards móvil —
                           no hay edición masiva aquí. */}
-                      <div className="w-[64px] h-[48px] rounded-sm overflow-hidden bg-muted/30 shrink-0">
+                      <div className="w-[64px] h-[48px] rounded-[1px] overflow-hidden bg-muted/30 shrink-0">
                         <img src={`https://picsum.photos/seed/${u.id}/160/108`} alt="" className="w-full h-full object-cover" loading="lazy" />
                       </div>
                       <div className="flex-1 min-w-0">
