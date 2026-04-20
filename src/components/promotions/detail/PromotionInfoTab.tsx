@@ -1,6 +1,38 @@
+/**
+ * PromotionInfoTab
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Pestaña "Información" de la ficha de promoción. Renderiza una barra de 4
+ * sub-pestañas con iconos (entrega, comisiones, forma de pago, registro) y
+ * muestra el contenido asociado a la sub-pestaña activa en un panel inferior.
+ *
+ * Estado local:
+ *   - activeSubTab: SubTabId → controla cuál de los 4 bloques se muestra.
+ *
+ * Props:
+ *   - commission:      number  → porcentaje de comisión colaborador (IVA inc.).
+ *   - delivery:        string  → fecha/plazo estimado de entrega (texto libre).
+ *   - reservationCost: number  → coste de reserva en EUR para la forma de pago.
+ *
+ * Dependencias (imports):
+ *   - react (useState)            → estado local de la sub-pestaña activa.
+ *   - lucide-react (icons)        → iconografía de las sub-pestañas y checks.
+ *   - @/lib/utils (cn)            → merge condicional de clases Tailwind.
+ *
+ * Tokens Byvaro usados:
+ *   - Colores:   border, bg-card, bg-muted/30, text-foreground,
+ *                text-muted-foreground, bg-primary/10, text-primary,
+ *                bg-destructive/10, text-destructive.
+ *   - Radios:    rounded-xl (cards/tarjetas internas), rounded-full (pills).
+ *   - Sombras:   shadow-soft (reposo).
+ *
+ * TODO(backend): cargar tabla de hitos de pago y % dinámicamente desde API.
+ * TODO(backend): conectar estado real de colaboración (activa, contrato, etc.).
+ * TODO(feature): permitir a admin editar condiciones de registro por promoción.
+ * TODO(ui):      animar transición entre sub-pestañas (fade-up ya disponible).
+ */
 import { useState } from "react";
-import { CheckCircle2, BadgePercent, Euro, Users, Check, Clock } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { CheckCircle2, BadgePercent, Euro, Users, Check } from "lucide-react"; // iconos Lucide para sub-tabs y ticks
+import { cn } from "@/lib/utils"; // helper clsx+tailwind-merge para clases condicionales
 
 interface Props {
   commission: number;
@@ -34,7 +66,7 @@ export function PromotionInfoTab({ commission, delivery, reservationCost }: Prop
               className={cn(
                 "flex flex-col items-start gap-3 rounded-xl border p-4 transition-all text-left",
                 isActive
-                  ? "border-border bg-card shadow-sm"
+                  ? "border-border bg-card shadow-soft"
                   : "border-transparent bg-transparent hover:bg-muted/30"
               )}
             >
@@ -117,10 +149,10 @@ function CommissionsContent({ commission }: { commission: number }) {
         </table>
       </div>
       <div className="flex items-center gap-3">
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-600 bg-green-50 rounded-full px-3 py-1">
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary bg-primary/10 rounded-full px-3 py-1">
           <Check className="h-3.5 w-3.5" /> Colaborando
         </span>
-        <span className="text-xs text-orange-500 font-medium">Sin contrato</span>
+        <span className="text-xs text-destructive font-medium">Sin contrato</span>
       </div>
     </>
   );

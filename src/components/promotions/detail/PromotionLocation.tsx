@@ -1,4 +1,31 @@
-import { MapPin, Clock, Car, Train } from "lucide-react";
+/**
+ * PromotionLocation
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Panel de ubicación de la promoción. Muestra el título con la ciudad, un
+ * placeholder del mapa (pendiente de integración con Google Maps) y una grid
+ * de 2 columnas con distancias/tiempos a puntos de interés (aeropuerto, AVE,
+ * centro ciudad, playa).
+ *
+ * Estado local:
+ *   - Ninguno. Componente puramente presentacional.
+ *
+ * Props:
+ *   - location: string → nombre de la localidad que se muestra bajo el título.
+ *
+ * Dependencias (imports):
+ *   - lucide-react (icons) → MapPin, Car, Train para header y tarjetas POI.
+ *
+ * Tokens Byvaro usados:
+ *   - Colores:   border, border-border/40, bg-card, bg-muted/20, bg-secondary,
+ *                text-foreground, text-muted-foreground.
+ *   - Radios:    rounded-2xl (panel grande), rounded-lg (icon box cuadrado).
+ *   - Sombras:   shadow-soft (reposo).
+ *
+ * TODO(backend): recibir lat/lng y lista real de distances[] por props.
+ * TODO(feature): integrar mapa real (Google Maps / Mapbox) en el placeholder.
+ * TODO(ui):      añadir estado hover a las filas de POI para accesibilidad.
+ */
+import { MapPin, Car, Train } from "lucide-react"; // iconos Lucide: pin ubicación + transporte
 
 const distances = [
   { icon: Car, label: "Aeropuerto Alicante", time: "35 min" },
@@ -9,7 +36,7 @@ const distances = [
 
 export function PromotionLocation({ location }: { location: string }) {
   return (
-    <div className="rounded-2xl border border-border/40 bg-card overflow-hidden shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)]">
+    <div className="rounded-2xl border border-border/40 bg-card overflow-hidden shadow-soft">
       <div className="p-5">
         <h2 className="text-base font-semibold text-foreground mb-0.5">Ubicación</h2>
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

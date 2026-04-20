@@ -1,4 +1,42 @@
+/**
+ * ClientRegistrationDialog
+ * ------------------------
+ * Diálogo (3 vistas) para registrar un cliente sobre una promoción:
+ *   - "search"  -> buscar cliente existente por nombre / teléfono / email.
+ *   - "create"  -> formulario para crear un cliente nuevo.
+ *   - "confirm" -> resumen del cliente seleccionado/creado y confirmación.
+ *
+ * Props:
+ *   - open: boolean                           -> controla visibilidad.
+ *   - onOpenChange: (open: boolean) => void   -> callback al cerrar/abrir.
+ *   - promotionName: string                   -> se muestra en el header.
+ *   - validezDias?: number                    -> 0 o undefined => no expira.
+ *
+ * Dependencias:
+ *   - @/components/ui/dialog   -> primitivas del modal (Radix wrapper shadcn).
+ *   - @/components/ui/button   -> acciones.
+ *   - @/components/ui/input    -> buscador y formulario.
+ *   - @/components/ui/label    -> etiquetas de campos.
+ *   - @/lib/utils (cn)         -> composición de classnames.
+ *   - lucide-react             -> iconografía (Search, UserPlus, Check, ...).
+ *
+ * Tokens Byvaro usados:
+ *   - primary / primary/10   -> avatar y chips de confirmación.
+ *   - muted / muted-foreground / border/50 -> fondos suaves y separadores.
+ *   - foreground / background -> textos y superficie base.
+ *   - rounded-xl (card resumen) · rounded-lg (inputs) · rounded-full (pills).
+ *
+ * TODO(backend):
+ *   - GET  /api/clientes?q=...           (búsqueda con debounce).
+ *   - POST /api/clientes                 (crear cliente nuevo).
+ *   - POST /api/promociones/:id/registros  { clienteId }  (confirmar registro).
+ * TODO(ui):
+ *   - Validación real de email y teléfono (libphonenumber / zod).
+ *   - Selector de país/nacionalidad con bandera en lugar de input libre.
+ *   - Mostrar conflicto si el cliente ya tiene un registro activo en esta promoción.
+ */
 import { useState } from "react";
+// Primitivas del dialog (shadcn wrapper de Radix)
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,7 +132,7 @@ export function ClientRegistrationDialog({ open, onOpenChange, promotionName, va
         {view === "search" && (
           <div className="p-6 space-y-4">
             {/* Registration conditions */}
-            <div className="rounded-lg bg-muted/40 border border-border/50 p-4 space-y-3">
+            <div className="rounded-xl bg-muted/40 border border-border/50 p-4 space-y-3">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Condiciones de registro</p>
               <div className="space-y-2">
                 {registrationConditions.map((c) => (
@@ -283,8 +321,8 @@ export function ClientRegistrationDialog({ open, onOpenChange, promotionName, va
               <div className="space-y-2">
                 {["Nombre y apellidos", "Nacionalidad", "Últimos 4 dígitos del teléfono"].map((c) => (
                   <div key={c} className="flex items-center gap-2.5">
-                    <div className="h-5 w-5 rounded-full bg-green-100 flex items-center justify-center">
-                      <Check className="h-3 w-3 text-green-600" />
+                    <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Check className="h-3 w-3 text-primary" />
                     </div>
                     <span className="text-sm text-foreground">{c}</span>
                   </div>

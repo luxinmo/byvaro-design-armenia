@@ -1,5 +1,38 @@
-import { Phone, Mail, Globe, MapPin, ExternalLink } from "lucide-react";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+/**
+ * PromotionContacts
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Panel de contactos comerciales de la promoción. Muestra:
+ *   1) Una grid (1/3 cols responsive) con tarjetas por persona del equipo
+ *      comercial, incluyendo avatar, rol, idiomas y botones "Llamar"/"Email".
+ *   2) Un pie con el enlace a la web del proyecto y la lista de puntos de
+ *      venta físicos (oficinas).
+ *
+ * Estado local:
+ *   - Ninguno. Componente puramente presentacional.
+ *
+ * Props:
+ *   - website: string → dominio/url visible del proyecto (muestra texto,
+ *                       href placeholder hasta conectar backend).
+ *
+ * Dependencias (imports):
+ *   - lucide-react (icons)           → iconografía de contacto y enlaces.
+ *   - @/components/ui/avatar (shadcn) → wrapper Radix Avatar con fallback.
+ *
+ * Tokens Byvaro usados:
+ *   - Colores:   border, border-border/30|40, bg-card, bg-background/50,
+ *                bg-muted/40|60, text-foreground, text-muted-foreground,
+ *                text-primary, ring-background.
+ *   - Radios:    rounded-2xl (panel grande), rounded-xl (card persona),
+ *                rounded-lg (botones llamar/email), rounded-full (avatar).
+ *   - Sombras:   shadow-soft (panel y hover de card).
+ *
+ * TODO(backend): recibir contacts[] y salesOffices[] desde la API de promo.
+ * TODO(backend): cablear href real de "Llamar" (tel:) y "Email" (mailto:).
+ * TODO(feature): soporte WhatsApp/Telegram como canales alternativos.
+ * TODO(ui):      reemplazar emojis de idiomas por iconos SVG accesibles.
+ */
+import { Phone, Mail, Globe, MapPin, ExternalLink } from "lucide-react"; // iconos Lucide para canales y puntos de venta
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"; // wrapper shadcn sobre Radix Avatar (gestiona carga + fallback)
 
 const contacts = [
   {
@@ -35,7 +68,7 @@ const salesOffices = [
 
 export function PromotionContacts({ website }: { website: string }) {
   return (
-    <div className="rounded-2xl bg-card border border-border/40 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+    <div className="rounded-2xl bg-card border border-border/40 shadow-soft overflow-hidden">
       {/* Header */}
       <div className="px-5 pt-5 pb-3">
         <h2 className="text-base font-semibold text-foreground">Equipo de contacto</h2>
@@ -48,10 +81,10 @@ export function PromotionContacts({ website }: { website: string }) {
           {contacts.map((c) => (
             <div
               key={c.name}
-              className="rounded-xl border border-border/30 bg-background/50 p-3.5 hover:border-border/50 hover:shadow-sm transition-all duration-200 group"
+              className="rounded-xl border border-border/30 bg-background/50 p-3.5 hover:border-border/50 hover:shadow-soft-lg transition-all duration-200 group"
             >
               <div className="flex items-center gap-2.5 mb-2.5">
-                <Avatar className="h-9 w-9 ring-2 ring-background shadow-sm">
+                <Avatar className="h-9 w-9 ring-2 ring-background shadow-soft">
                   <AvatarImage src={c.avatar} alt={c.name} />
                   <AvatarFallback className="bg-muted text-[10px] font-medium">{c.name.slice(0, 2)}</AvatarFallback>
                 </Avatar>

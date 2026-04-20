@@ -1,8 +1,46 @@
+/**
+ * PromotionRecords
+ * ----------------
+ * Sección "Registros" de la ficha de promoción.
+ * Muestra dos bloques:
+ *   1) Solicitudes pendientes (expandibles con detalle de comprobación de
+ *      posible duplicado, match %, recomendación y acciones Rechazar/Registrar).
+ *   2) Solicitudes procesadas (historial approved / declined).
+ *
+ * Props:
+ *   - embedded?: boolean  -> true cuando se renderiza dentro de un tab;
+ *                            false para vista standalone con cabecera propia.
+ *
+ * Dependencias:
+ *   - @/components/ui/input      -> buscador
+ *   - @/components/ui/button     -> acciones (Gestionar, Editar, Rechazar, Registrar)
+ *   - @/components/ui/checkbox   -> selección múltiple de pendientes
+ *   - @/lib/utils (cn)           -> composición de classnames
+ *   - lucide-react               -> iconografía
+ *
+ * Tokens Byvaro usados:
+ *   - primary / primary/10 / primary/20   (acciones, badges aprobado, match visita)
+ *   - destructive / destructive/10         (rechazado, matches negativos, % alto)
+ *   - amber-500/10 / amber-700 / amber-500/20 (pendiente — excepción permitida)
+ *   - muted / muted-foreground / border/30|40 / card / foreground
+ *   - shadow-soft (paneles grandes) · rounded-2xl / rounded-xl / rounded-full
+ *
+ * TODO(backend):
+ *   - GET    /api/promociones/:id/registros?status=pending|processed
+ *   - POST   /api/registros/:id/aprobar
+ *   - POST   /api/registros/:id/rechazar
+ *   - GET    /api/registros/:id/match   (comprobación de duplicado)
+ * TODO(ui):
+ *   - Paginación / scroll infinito en "procesadas".
+ *   - Acciones masivas con el Checkbox (aprobar/rechazar en lote).
+ *   - Filtros por tipo (registro / registro+visita) y por empresa.
+ */
 import { useState } from "react";
+// Iconos de acciones, estados y columnas de la tabla
 import { Search, Check, X, AlertTriangle, ChevronDown, ChevronUp, Clock, User, Building2, Home, Calendar, Eye, Ban, Settings } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { cn } from "@/lib/utils";
 
 /* ── Types ── */
@@ -103,7 +141,7 @@ const processedRecords: RegistrationRecord[] = [
 function StatusBadge({ status }: { status: RegistrationRecord["status"] }) {
   if (status === "approved") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
         <Check className="h-3.5 w-3.5" />
       </span>
     );
@@ -117,8 +155,8 @@ function StatusBadge({ status }: { status: RegistrationRecord["status"] }) {
   }
 
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600">
-      <span className="h-1.5 w-1.5 rounded-full animate-pulse bg-amber-400" />
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700">
+      <span className="h-1.5 w-1.5 rounded-full animate-pulse bg-amber-500" />
       Pendiente
     </span>
   );
@@ -146,8 +184,8 @@ function MatchCircle({ percentage }: { percentage: number }) {
   const radius = 24;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (percentage / 100) * circumference;
-  const color = percentage >= 80 ? "text-destructive" : percentage >= 50 ? "text-amber-500" : "text-emerald-500";
-  const bgColor = percentage >= 80 ? "bg-destructive/10" : percentage >= 50 ? "bg-amber-50" : "bg-emerald-50";
+  const color = percentage >= 80 ? "text-destructive" : percentage >= 50 ? "text-amber-700" : "text-primary";
+  const bgColor = percentage >= 80 ? "bg-destructive/10" : percentage >= 50 ? "bg-amber-500/10" : "bg-primary/10";
 
   return (
     <div className={cn("relative h-16 w-16 shrink-0 rounded-full flex items-center justify-center", bgColor)}>
@@ -275,7 +313,7 @@ function RecordRow({ record, isPending }: { record: RegistrationRecord; isPendin
                   <div key={d.label} className="flex items-center gap-4 text-xs">
                     <span className="text-muted-foreground w-[240px] shrink-0">{d.label}:</span>
                     {d.match
-                      ? <Check className="h-4 w-4 text-emerald-500 shrink-0" />
+                      ? <Check className="h-4 w-4 text-primary shrink-0" />
                       : <X className="h-4 w-4 text-destructive shrink-0" />}
                     <span className={cn(
                       "font-medium text-sm",
@@ -288,9 +326,9 @@ function RecordRow({ record, isPending }: { record: RegistrationRecord; isPendin
 
             {record.recommendation && (
               <div className="flex items-start gap-2.5 pt-3 border-t border-border/30">
-                <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                <AlertTriangle className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-xs font-semibold text-amber-600">Recomendación sugerida:</p>
+                  <p className="text-xs font-semibold text-amber-700">Recomendación sugerida:</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{record.recommendation}</p>
                 </div>
               </div>
@@ -335,8 +373,8 @@ function RecordRow({ record, isPending }: { record: RegistrationRecord; isPendin
                 </div>
                 <div className="text-center">
                   <p className="text-xs font-semibold text-foreground">{record.contactName}</p>
-                  <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-amber-600">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-amber-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
                     Registro pendiente
                   </span>
                 </div>
@@ -414,7 +452,7 @@ export function PromotionRecords({ embedded = false }: { embedded?: boolean }) {
               {filteredPending.length} nuevas solicitudes de registro y/o visita
             </h3>
           </div>
-          <div className="rounded-xl border border-border/40 bg-card overflow-hidden shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)]">
+          <div className="rounded-2xl border border-border/40 bg-card overflow-hidden shadow-soft">
             <TableHeader showCheckbox />
             {filteredPending.map((r) => (
               <RecordRow key={r.id} record={r} isPending />
@@ -426,7 +464,7 @@ export function PromotionRecords({ embedded = false }: { embedded?: boolean }) {
       {/* Processed section */}
       <div className="space-y-3">
         <h3 className="text-sm font-bold text-foreground">Solicitudes procesadas</h3>
-        <div className="rounded-xl border border-border/40 bg-card overflow-hidden shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)]">
+        <div className="rounded-2xl border border-border/40 bg-card overflow-hidden shadow-soft">
           <TableHeader showCheckbox={false} />
           {filteredProcessed.map((r) => (
             <RecordRow key={r.id} record={r} isPending={false} />

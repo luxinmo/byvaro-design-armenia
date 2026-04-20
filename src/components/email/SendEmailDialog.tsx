@@ -1,24 +1,85 @@
+/**
+ * SendEmailDialog
+ * ---------------
+ * Diálogo multi-paso (wizard) para enviar emails transaccionales/comerciales
+ * desde la ficha de una promoción. Flujo:
+ *   1) audience        -> "A un cliente" vs "A un colaborador".
+ *   2) collab-mode     -> (solo colaboradores) Todos / Favoritos / Elegir / Invitar.
+ *   3) collab-pick     -> multi-select de agencias con checkboxes.
+ *   4) collab-invite   -> invitar email externo con invitación pendiente.
+ *   5) template        -> elegir plantilla (filtradas por audiencia y por
+ *                         disponibilidad real — ej. "Última unidad" requiere
+ *                         exactamente 1 disponible).
+ *   6) compose         -> editor inline (iframe contenteditable) con asunto,
+ *                         idioma ES/EN, toggles firma/disponibilidad y envío.
+ *
+ * Props:
+ *   - open: boolean
+ *   - onOpenChange: (v: boolean) => void
+ *   - defaultAudience?: Audience                -> salta el paso de audiencia.
+ *   - defaultTemplateId?: TemplateId            -> salta template y abre compose.
+ *   - promotionId?: string                      -> inyecta disponibilidad real.
+ *   - mode?: 'promotion' | 'unit' | 'free'      -> define la plantilla forzada.
+ *   - unitId?: string                           -> unidad concreta en mode='unit'.
+ *
+ * Dependencias:
+ *   - @/components/ui/dialog / popover / switch / button / input  -> UI primitives.
+ *   - @/hooks/use-toast                -> feedback de envío e invitación.
+ *   - ./emailTemplates                 -> catálogo de plantillas + render() a HTML.
+ *   - @/data/units                     -> disponibilidad por promoción.
+ *   - @/data/agencies                  -> pool de colaboradores.
+ *   - lucide-react                     -> iconografía.
+ *
+ * Tokens Byvaro usados:
+ *   - primary / primary-foreground     -> no se usa directamente aquí; el diálogo
+ *                                         se apoya en foreground/background como
+ *                                         acento neutro (look tipo Gmail).
+ *   - foreground / foreground/5        -> estados "seleccionado" sutiles.
+ *   - background / muted / muted-foreground / border/30|40
+ *   - amber-500 / amber-500/10|20|30 / amber-700  -> estrella "favorito" y tarjeta
+ *                                                    de "invitar externo" (warning).
+ *   - rounded-2xl (paneles / opciones de paso) · rounded-xl (listas) ·
+ *     rounded-full (chips, pills, botones, inputs tipo search) · rounded-lg (items).
+ *
+ * TODO(backend):
+ *   - POST /api/emails/send                      { templateId, recipients, blocks, subject, lang }
+ *   - POST /api/invitaciones                     { email, promotionId }  (external recipients)
+ *   - GET  /api/agencias                         (pool colaboradores, reemplaza mock)
+ *   - GET  /api/clientes                         (pool clientes, reemplaza FAKE_CLIENTS)
+ *   - GET  /api/promociones/:id/disponibilidad   (top unidades para inyectar)
+ * TODO(ui):
+ *   - Attachments (brochure, memoria) adjuntos al email.
+ *   - Programación de envío (send later) + zona horaria.
+ *   - Preview en móvil además del iframe desktop actual.
+ *   - Persistir borradores por usuario+promoción.
+ *   - Reemplazar FAKE_CLIENTS y FAVORITE_AGENCY_IDS por datos reales del backend.
+ */
 import { useEffect, useMemo, useRef, useState } from "react";
+// Primitivas del dialog (shadcn wrapper de Radix)
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+// Toast para feedback de envío/invitación
 import { useToast } from "@/hooks/use-toast";
 import {
   Mail, Users, User, ArrowLeft, Send, Languages, Pencil, Check,
   ChevronRight, Search, ChevronDown, X, Star, UserPlus, Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+// Catálogo de plantillas + tipado de audiencia/idioma/bloques editables
 import {
   EMAIL_TEMPLATES, getTemplate, getTemplatesByAudience,
   type Audience, type Language, type TemplateId, type TemplateBlocks,
   type AvailabilityUnit,
 } from "./emailTemplates";
+// Datos mock — reemplazar por llamadas al backend cuando esté disponible
 import { unitsByPromotion } from "@/data/units";
 import { agencies } from "@/data/agencies";
+// Popover para selector de plantilla, idioma y destinatarios
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
-import { Switch } from "@/components/ui/switch";
+import { Switch } from "@/components/ui/Switch";
 
 type Step = "audience" | "collab-mode" | "collab-pick" | "collab-invite" | "template" | "compose";
 type SendMode = "promotion" | "unit" | "free";
@@ -502,7 +563,7 @@ export function SendEmailDialog({
                         <p className="text-xs font-medium truncate flex items-center gap-1.5">
                           {a.name}
                           {FAVORITE_AGENCY_IDS.has(a.id) && (
-                            <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400 shrink-0" strokeWidth={1.5} />
+                            <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500 shrink-0" strokeWidth={1.5} />
                           )}
                         </p>
                         <p className="text-[10px] text-muted-foreground truncate">{email}</p>
@@ -904,7 +965,7 @@ export function SendEmailDialog({
                             pickerTab === "favorites" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                           )}
                         >
-                          <Star className={cn("h-3 w-3", pickerTab === "favorites" && "fill-amber-400 text-amber-400")} strokeWidth={1.5} />
+                          <Star className={cn("h-3 w-3", pickerTab === "favorites" && "fill-amber-500 text-amber-500")} strokeWidth={1.5} />
                           {language === "es" ? "Favoritos" : "Favorites"}
                         </button>
                       </div>
@@ -932,13 +993,13 @@ export function SendEmailDialog({
                     {inviteCandidate && (
                       <button
                         onClick={handleInviteAndAdd}
-                        className="w-full flex items-center gap-2.5 p-2 rounded-lg bg-amber-50 hover:bg-amber-100 transition-colors mb-1 text-left"
+                        className="w-full flex items-center gap-2.5 p-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-colors mb-1 text-left"
                       >
-                        <div className="h-7 w-7 rounded-full bg-amber-200 inline-flex items-center justify-center shrink-0">
+                        <div className="h-7 w-7 rounded-full bg-amber-500/20 inline-flex items-center justify-center shrink-0">
                           <UserPlus className="h-3.5 w-3.5 text-amber-700" strokeWidth={2} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-medium text-amber-900 truncate">
+                          <p className="text-xs font-medium text-amber-700 truncate">
                             {language === "es" ? "Invitar y enviar a" : "Invite & send to"}
                           </p>
                           <p className="text-[10px] text-amber-700 truncate">{inviteCandidate}</p>
@@ -986,7 +1047,7 @@ export function SendEmailDialog({
                             <div className="min-w-0 flex-1">
                               <p className="text-xs font-medium truncate flex items-center gap-1.5">
                                 {r.name}
-                                {r.favorite && <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400 shrink-0" strokeWidth={1.5} />}
+                                {r.favorite && <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500 shrink-0" strokeWidth={1.5} />}
                               </p>
                               <p className="text-[10px] text-muted-foreground truncate">{r.email}</p>
                             </div>

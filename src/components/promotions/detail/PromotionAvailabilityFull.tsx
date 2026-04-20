@@ -1,15 +1,87 @@
+/**
+ * PromotionAvailabilityFull · vista completa de disponibilidad de una promoción.
+ *
+ * Es el componente más pesado de la ficha de promoción: orquesta la visualización
+ * y edición del inventario de unidades, con múltiples modos de vista, filtros,
+ * búsqueda, ordenación, selección masiva, edición masiva y exportación.
+ *
+ * Responsabilidades principales:
+ *   1. Listar todas las unidades de la promoción (o solo disponibles si el viewer
+ *      es un colaborador).
+ *   2. Tres modos de vista: `table` (lista compacta), `catalog` (catálogo con
+ *      foto), `grid` (tarjetas — legado). El modo por defecto es `catalog`.
+ *   3. Filtros por estado, bloque, tipología y búsqueda libre (ID/displayId/puerta).
+ *   4. Ordenación por columna (block/floor/type/bedrooms/builtArea/price/status)
+ *      con dirección ascendente/descendente.
+ *   5. Agrupación por bloque con colapso/expansión individual. Renombrado inline
+ *      del nombre del bloque.
+ *   6. Selección múltiple + edición masiva: diálogo de selección de campos (precio,
+ *      estado, habitaciones, etc.) → edición inline → guardado + diálogo de
+ *      notificación a colaboradores/clientes.
+ *   7. Personalización de columnas en el modo catálogo (vía `ColumnCustomizer`).
+ *   8. Envío de fichas por email (`SendEmailDialog`) desde el menú por fila o en
+ *      masa desde la barra de selección.
+ *   9. Panel de detalle expandido por unidad (`UnitDetailPanel`) dentro de la
+ *      tabla.
+ *
+ * Props:
+ *   - promotionId: string                 → key de `unitsByPromotion`.
+ *   - isCollaboratorView?: boolean        → modo colaborador (oculta edición,
+ *                                           filtra a `available`, quita columna
+ *                                           de cliente, etc.).
+ *
+ * Dependencias:
+ *   - `@/data/units`                      → tipos Unit + UnitStatus + mock data.
+ *   - `@/hooks/use-toast`                 → toasts Byvaro.
+ *   - `@/components/ui/button`            → Button Byvaro (CTAs, toggles de vista).
+ *   - `@/components/ui/badge`             → Badge (reservado para futuras chips).
+ *   - `@/components/ui/checkbox`          → Checkbox (selección masiva).
+ *   - `@/components/ui/column-customizer` → Dialog de configuración de columnas.
+ *   - `@/components/ui/dropdown-menu`     → Menú por fila (Ver/Editar/Enviar/Comprar).
+ *   - `@/components/ui/dialog`            → Dialogs de selección de campos y aviso.
+ *   - `@/lib/utils` (cn)                  → classnames condicionales.
+ *   - `./UnitDetailPanel`                 → panel expandido por unidad.
+ *   - `@/components/email/SendEmailDialog` → envío de ficha por email.
+ *   - `lucide-react`                      → iconografía.
+ *
+ * Tokens Byvaro usados (todos HSL, ver src/index.css):
+ *   - bg-card · border-border · text-foreground · text-muted-foreground · bg-muted
+ *   - bg-primary/5 · bg-primary/10 · text-primary (estado "Disponible", selección)
+ *   - bg-destructive/10 · text-destructive (estado "Vendida", "Retirada")
+ *   - Excepción amber-500: estado "Reservada" + barra de edición masiva
+ *     (warning estándar Byvaro — también usado para celdas editables).
+ *   - Radios: rounded-2xl (dialog principal) · rounded-xl (bloques, cards,
+ *     barra de edición) · rounded-lg (inputs, selects, botones pequeños) ·
+ *     rounded-full (badges de estado, chips, dots).
+ *   - Sombras: shadow-soft · shadow-soft-lg en hover.
+ *
+ * TODOs:
+ *   - TODO(backend): GET /api/promociones/:id/units — listar unidades (paginado).
+ *   - TODO(backend): PATCH /api/units/bulk — edición masiva atómica.
+ *   - TODO(backend): POST /api/promociones/:id/notify-collaborators — aviso con
+ *     el diff de campos actualizados.
+ *   - TODO(backend): POST /api/promociones/:id/share-clients — aviso a clientes
+ *     (para isCollaboratorView=true).
+ *   - TODO(backend): PATCH /api/promociones/:id/blocks/:block — renombrado de bloque.
+ *   - TODO(backend): GET /api/promociones/:id/export — descarga de fichas en PDF.
+ *   - TODO(ui): virtualizar la lista (react-window) si el inventario > 200 unidades.
+ *   - TODO(feature): guardar la configuración de columnas del catálogo por usuario.
+ *   - TODO(feature): mapa interactivo (plano de plantas) como modo de vista extra.
+ */
+
 import React, { useEffect, useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { unitsByPromotion, Unit, UnitStatus } from "@/data/units";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge"; // Reservado para futuras chips custom (no usado directamente ahora).
+import { Checkbox } from "@/components/ui/Checkbox";
 import {
   Download, Search, ChevronDown, ChevronUp, ChevronRight,
   Waves, Building2, LayoutGrid, List, ArrowUpDown,
   Pencil, X, Check, Camera, Bed, Compass, Send, SlidersHorizontal,
   MoreVertical, Eye, ShoppingCart,
 } from "lucide-react";
+// ColumnCustomizer: dialog Byvaro para elegir columnas visibles en el catálogo.
 import { ColumnCustomizer, type ColumnDef } from "@/components/ui/column-customizer";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { UnitDetailPanel } from "./UnitDetailPanel";
@@ -27,11 +99,13 @@ function getUnitDisplayId(unit: Pick<Unit, "publicId" | "floor" | "door">) {
   return unit.publicId?.trim() || `${unit.floor}º${unit.door}`;
 }
 
+// Status de unidades unificado con tokens Byvaro (HSL).
+// Amber conservado únicamente para "reserved" — warning estándar del sistema.
 const statusConfig: Record<UnitStatus, { label: string; class: string; dotClass: string }> = {
-  available: { label: "Disponible", class: "bg-emerald-50 text-emerald-700 border-emerald-200", dotClass: "bg-emerald-500" },
-  reserved: { label: "Reservada", class: "bg-amber-50 text-amber-700 border-amber-200", dotClass: "bg-amber-500" },
-  sold: { label: "Vendida", class: "bg-blue-50 text-blue-700 border-blue-200", dotClass: "bg-blue-500" },
-  withdrawn: { label: "Retirada", class: "bg-rose-50 text-rose-700 border-rose-200", dotClass: "bg-rose-500" },
+  available: { label: "Disponible", class: "bg-primary/10 text-primary border-primary/20", dotClass: "bg-primary" },
+  reserved: { label: "Reservada", class: "bg-amber-500/10 text-amber-700 border-amber-500/20", dotClass: "bg-amber-500" },
+  sold: { label: "Vendida", class: "bg-destructive/10 text-destructive border-destructive/20", dotClass: "bg-destructive" },
+  withdrawn: { label: "Retirada", class: "bg-muted text-muted-foreground border-border", dotClass: "bg-muted-foreground" },
 };
 
 const statusOptions: UnitStatus[] = ["available", "reserved", "sold", "withdrawn"];
@@ -475,10 +549,10 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
         onSave={(v) => setVisibleCols(v as Set<CatalogCol>)}
       />
 
-      <div className="relative border border-border rounded-xl bg-card p-4">
+      <div className="relative border border-border rounded-2xl bg-card p-4 shadow-soft">
         {/* Selection overlay */}
         {hasSelection && !bulkEditing && (
-          <div className="absolute inset-0 z-10 rounded-xl bg-card border border-border flex items-center justify-between px-5">
+          <div className="absolute inset-0 z-10 rounded-2xl bg-card border border-border flex items-center justify-between px-5">
             <div className="flex items-center gap-3">
               <span className="text-xs font-semibold text-foreground">{selectedUnits.size} unidad{selectedUnits.size > 1 ? "es" : ""} seleccionada{selectedUnits.size > 1 ? "s" : ""}</span>
               <button onClick={clearSelection} className="text-xs text-muted-foreground hover:text-foreground transition-colors underline">
@@ -553,7 +627,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
         if (blockUnits.length === 0 && filterBlock !== "all") return null;
 
         return (
-          <div key={block} className="border border-border rounded-xl bg-card overflow-hidden">
+          <div key={block} className="border border-border rounded-xl bg-card overflow-hidden shadow-soft">
             {/* Block header */}
             <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30 border-b border-border transition-colors">
               <div className="flex items-center gap-3">
@@ -586,18 +660,18 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                         if (e.key === "Escape") cancelEditBlock();
                       }}
                       onClick={(e) => e.stopPropagation()}
-                      className="h-7 px-2 text-sm font-semibold rounded-md border border-primary/40 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-[180px]"
+                      className="h-7 px-2 text-sm font-semibold rounded-lg border border-primary/40 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-[180px]"
                     />
                     <button
                       onClick={(e) => { e.stopPropagation(); saveBlockName(); }}
-                      className="h-7 w-7 inline-flex items-center justify-center rounded-md hover:bg-emerald-100 text-emerald-700"
+                      className="h-7 w-7 inline-flex items-center justify-center rounded-lg hover:bg-primary/10 text-primary"
                       title="Guardar"
                     >
                       <Check className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); cancelEditBlock(); }}
-                      className="h-7 w-7 inline-flex items-center justify-center rounded-md hover:bg-muted text-muted-foreground"
+                      className="h-7 w-7 inline-flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground"
                       title="Cancelar"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -609,7 +683,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                     {!isCollaboratorView && (
                       <button
                         onClick={(e) => { e.stopPropagation(); startEditBlock(block); }}
-                        className="h-6 w-6 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover/block:opacity-100 transition-opacity"
+                        className="h-6 w-6 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover/block:opacity-100 transition-opacity"
                         title="Renombrar bloque"
                       >
                         <Pencil className="h-3 w-3" strokeWidth={1.5} />
@@ -662,7 +736,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); setColCustomizerOpen(true); }}
-                          className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                          className="inline-flex items-center justify-center h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                           title="Personalizar columnas"
                         >
                           <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -835,7 +909,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                             <td className="px-2 py-2 text-right" onClick={e => e.stopPropagation()}>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <button className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
+                                  <button className="h-7 w-7 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
                                     <MoreVertical className="h-3.5 w-3.5" />
                                   </button>
                                 </DropdownMenuTrigger>
@@ -886,7 +960,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                   return (
                     <div
                       key={u.id}
-                      className={`border rounded-xl p-3 transition-all hover:shadow-sm cursor-pointer relative ${isSelected ? "border-primary bg-primary/5" : "border-border"}`}
+                      className={`border rounded-xl p-3 transition-all shadow-soft hover:shadow-soft-lg cursor-pointer relative ${isSelected ? "border-primary bg-primary/5" : "border-border"}`}
                       onClick={() => toggleExpandUnit(u.id)}
                     >
                       {!isCollaboratorView && (
@@ -970,7 +1044,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); setColCustomizerOpen(true); }}
-                          className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                          className="inline-flex items-center justify-center h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                           title="Personalizar columnas"
                         >
                           <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -1063,7 +1137,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                           <td className="px-2 py-1.5 text-right" onClick={e => e.stopPropagation()}>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <button className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
+                                <button className="h-7 w-7 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
                                   <MoreVertical className="h-3.5 w-3.5" />
                                 </button>
                               </DropdownMenuTrigger>

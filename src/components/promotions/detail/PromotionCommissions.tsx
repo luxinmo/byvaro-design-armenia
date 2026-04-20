@@ -1,4 +1,57 @@
+/**
+ * PromotionCommissions · tabla de comisiones escalonadas por volumen.
+ *
+ * Qué hace:
+ *   Renderiza la estructura de comisiones de la promoción para el
+ *   colaborador: una tabla compacta con 3 tramos (1–3 ventas, 4–8,
+ *   9+) que muestran el % de comisión y bonus aplicable. El tramo
+ *   actual (primero, "1–3 ventas") se destaca con borde y fondo tinte
+ *   primary. Abajo, un bloque resumen `bg-muted/50` calcula la
+ *   estimación en € por venta (min – max) aplicando `commission` al
+ *   rango de precios de la promoción.
+ *
+ * Props:
+ *   - commission: number       % base de comisión (p.ej. 3 → 3%).
+ *   - priceMin: number         precio mínimo de la promoción (€).
+ *   - priceMax: number         precio máximo de la promoción (€).
+ *
+ * Dependencias:
+ *   - `lucide-react`              → iconos TrendingUp (no usado actualmente
+ *     tras limpieza, se mantiene import por si se reintroduce en header)
+ *     e Info (tooltip aclaratorio en cabecera).
+ *   - `@/components/ui/tooltip`   → Tooltip Radix para el hover "cuándo se
+ *     pagan las comisiones".
+ *
+ * Tokens Byvaro usados:
+ *   - `bg-card` + `border-border/40` → superficie del panel.
+ *   - `border-primary/30 bg-primary/5` → highlight del tramo activo.
+ *   - `bg-primary` → bullet del tramo activo.
+ *   - `bg-muted/50` → bloque resumen de estimación.
+ *   - Radios: panel `rounded-2xl`, filas `rounded-lg`, bullet
+ *     `rounded-full`.
+ *   - Sombras: `shadow-soft` en reposo (panel informativo, sin hover).
+ *
+ * TODO(backend):
+ *   - GET /api/promotions/:id/commission-tiers → recibir los tramos
+ *     configurados por la promotora en lugar del array hardcodeado.
+ *     Shape esperado: { rangeLabel, minDeals, maxDeals?, rate, bonus }.
+ *   - Cruzar con las ventas reales del agente (GET /api/agent/sales?
+ *     promotionId=...) para marcar dinámicamente qué tramo está activo
+ *     en vez de fijar `i === 0`.
+ *
+ * TODO(ui):
+ *   - Mostrar progreso hacia el siguiente tramo (p.ej. "2 de 4 ventas
+ *     para bonus +0,5%").
+ *   - Versión mobile con cards en vez de filas.
+ *   - Animación al promocionar de tramo (micro-celebración).
+ */
+
+// Iconos: Info para el tooltip aclaratorio. TrendingUp se conserva
+// temporalmente en el import porque queda reservado para un futuro
+// header visual (icono a la izquierda del título "Comisiones").
 import { TrendingUp, Info } from "lucide-react";
+// Tooltip Radix del sistema de UI Byvaro — usado para mostrar la
+// aclaración "Comisiones por venta cerrada. Se pagan a la escritura."
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 function formatPrice(n: number) {
@@ -19,7 +72,7 @@ export function PromotionCommissions({ commission, priceMin, priceMax }: Props) 
   ];
 
   return (
-    <div className="rounded-2xl border border-border/40 bg-card p-5 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)]">
+    <div className="rounded-2xl border border-border/40 bg-card p-5 shadow-soft">
       <div className="flex items-center gap-2 mb-1">
         <h2 className="text-base font-semibold text-foreground">Comisiones</h2>
         <Tooltip>

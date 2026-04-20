@@ -1,5 +1,62 @@
+/**
+ * UnitDetailPanel · panel lateral/expandible de detalle de una unidad.
+ *
+ * Se renderiza dentro de la tabla/catálogo de `PromotionAvailabilityFull` como
+ * una fila expandida (`<tr>` con colSpan=20). Muestra toda la información
+ * relevante de una unidad individual: precio, superficies, detalles (orientación,
+ * dormitorios, planta), recursos multimedia (plano, fotos, vídeo, tour 360°) y
+ * CTAs contextuales según el estado (reservar, notificar colaboradores, editar).
+ *
+ * Responsabilidades:
+ *   1. Presentación de highlights visuales (piscina · vistas mar · terraza).
+ *   2. Grid de precio + superficies + detalles + recursos.
+ *   3. CTAs contextuales por estado: `available` (reservar), `reserved` (info +
+ *      avisar colaboradores), `sold` (info), `withdrawn` (sin acción).
+ *   4. Dialog de edición de unidad (datos + multimedia) con tabs.
+ *   5. Dialog de reserva (captura cliente + notas).
+ *   6. Envío por email vía `SendEmailDialog`.
+ *
+ * Props (ver interface `UnitDetailPanelProps`):
+ *   - unit: Unit                                → unidad a mostrar.
+ *   - onUpdateUnit?: (id, updates) => void      → callback para persistir edición.
+ *   - isCollaboratorView?: boolean              → oculta edición / reserva cuando
+ *                                                 el viewer es un colaborador.
+ *
+ * Dependencias:
+ *   - `@/data/units`                 → tipos Unit + UnitStatus.
+ *   - `@/hooks/use-toast`            → notificaciones Byvaro.
+ *   - `@/components/ui/button`       → primitiva Button Byvaro.
+ *   - `@/components/ui/dialog`       → Dialog (edición, reserva).
+ *   - `@/components/ui/input`        → Input Byvaro (tipografía + radio coherentes).
+ *   - `@/components/ui/tabs`         → Tabs para el diálogo de edición.
+ *   - `@/lib/utils` (cn)             → helper de classnames condicionales.
+ *   - `zod`                          → validación del ID de unidad al editar.
+ *   - `@/components/email/SendEmailDialog` → envío de ficha por email.
+ *   - `lucide-react`                 → iconografía.
+ *
+ * Tokens Byvaro usados (todos HSL, ver src/index.css):
+ *   - bg-card · border-border · text-foreground · text-muted-foreground
+ *   - bg-primary/10 text-primary (estado "Disponible", chip "Vistas mar", etc.)
+ *   - bg-destructive/10 text-destructive (estado "Retirada", recurso Vídeo)
+ *   - bg-accent/10 text-accent-foreground (recurso Plano)
+ *   - Excepción amber-500: estado "Reservada" + banner reserva (warning Byvaro).
+ *   - Radios: rounded-2xl (dialog edición) · rounded-xl (cards internas,
+ *     recursos, botones principales) · rounded-full (badges de estado, chips).
+ *   - Sombras: shadow-soft en reposo · shadow-soft-lg en hover (sustituye
+ *     los `shadow-[0_Xpx...]` arbitrarios del original).
+ *
+ * TODOs:
+ *   - TODO(backend): PATCH /api/units/:id — persistir edición de unidad.
+ *   - TODO(backend): POST /api/units/:id/reservations — crear reserva.
+ *   - TODO(backend): POST /api/units/:id/notify-collaborators — aviso masivo.
+ *   - TODO(backend): GET /api/units/:id/media — plano, fotos, vídeo, tour.
+ *   - TODO(ui): reemplazar grid de "Recursos" por un viewer real (lightbox,
+ *     reproductor de vídeo, iframe tour 360°).
+ *   - TODO(feature): histórico de cambios de la unidad (precio, estado).
+ */
+
 import { useState } from "react";
-import { z } from "zod";
+import { z } from "zod"; // Validación del ID (floor/door/customId) al editar
 import { Unit, UnitStatus } from "@/data/units";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -24,11 +81,13 @@ function getUnitDisplayId(unit: Pick<Unit, "publicId" | "floor" | "door">) {
   return unit.publicId?.trim() || `${unit.floor}º${unit.door}`;
 }
 
+// Status de unidades unificado con la paleta de tokens Byvaro (HSL).
+// Excepción amber para "reservada" — warning estándar del sistema.
 const statusConfig: Record<UnitStatus, { label: string; class: string; dotClass: string }> = {
-  available: { label: "Disponible", class: "bg-emerald-50 text-emerald-700 border-emerald-200", dotClass: "bg-emerald-500" },
-  reserved: { label: "Reservada", class: "bg-amber-50 text-amber-700 border-amber-200", dotClass: "bg-amber-500" },
-  sold: { label: "Vendida", class: "bg-blue-50 text-blue-700 border-blue-200", dotClass: "bg-blue-500" },
-  withdrawn: { label: "Retirada", class: "bg-rose-50 text-rose-700 border-rose-200", dotClass: "bg-rose-500" },
+  available: { label: "Disponible", class: "bg-primary/10 text-primary border-primary/20", dotClass: "bg-primary" },
+  reserved: { label: "Reservada", class: "bg-amber-500/10 text-amber-700 border-amber-500/20", dotClass: "bg-amber-500" },
+  sold: { label: "Vendida", class: "bg-destructive/10 text-destructive border-destructive/20", dotClass: "bg-destructive" },
+  withdrawn: { label: "Retirada", class: "bg-muted text-muted-foreground border-border", dotClass: "bg-muted-foreground" },
 };
 
 const orientaciones = ["Norte", "Sur", "Este", "Oeste", "NE", "NO", "SE", "SO"];
@@ -75,10 +134,11 @@ export function UnitDetailPanel({ unit, onUpdateUnit, isCollaboratorView = false
   const pricePerM2 = Math.round(unit.price / unit.builtArea);
   const displayId = getUnitDisplayId(unit);
 
+  // Highlights con tokens Byvaro. El original usaba blue/cyan/emerald hardcoded.
   const highlights = [
-    ...(unit.hasPool ? [{ label: "Piscina", icon: Waves, color: "text-blue-600 bg-blue-50" }] : []),
-    ...(unit.floor >= 3 ? [{ label: "Vistas al mar", icon: Eye, color: "text-cyan-600 bg-cyan-50" }] : []),
-    ...(unit.terrace > 0 ? [{ label: `Terraza ${unit.terrace}m²`, icon: Droplets, color: "text-emerald-600 bg-emerald-50" }] : []),
+    ...(unit.hasPool ? [{ label: "Piscina", icon: Waves, color: "text-primary bg-primary/10" }] : []),
+    ...(unit.floor >= 3 ? [{ label: "Vistas al mar", icon: Eye, color: "text-primary bg-primary/10" }] : []),
+    ...(unit.terrace > 0 ? [{ label: `Terraza ${unit.terrace}m²`, icon: Droplets, color: "text-primary bg-primary/10" }] : []),
   ];
 
   const surfaces = [
@@ -155,12 +215,14 @@ export function UnitDetailPanel({ unit, onUpdateUnit, isCollaboratorView = false
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Recursos</span>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { icon: FileText, label: "Plano", color: "text-violet-600 bg-violet-50 border-violet-200" },
-                  { icon: ImageIcon, label: "Fotos (6)", color: "text-amber-600 bg-amber-50 border-amber-200" },
-                  { icon: Video, label: "Vídeo", color: "text-rose-600 bg-rose-50 border-rose-200" },
-                  { icon: Eye, label: "Tour 360°", color: "text-blue-600 bg-blue-50 border-blue-200" },
+                  // Recursos con tokens Byvaro (violet/amber/rose/blue → primary/accent/destructive).
+                  // Amber se mantiene en "Fotos" como warning estándar Byvaro.
+                  { icon: FileText, label: "Plano", color: "text-accent-foreground bg-accent/10 border-accent/20" },
+                  { icon: ImageIcon, label: "Fotos (6)", color: "text-amber-700 bg-amber-500/10 border-amber-500/20" },
+                  { icon: Video, label: "Vídeo", color: "text-destructive bg-destructive/10 border-destructive/20" },
+                  { icon: Eye, label: "Tour 360°", color: "text-primary bg-primary/10 border-primary/20" },
                 ].map(r => (
-                  <button key={r.label} className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-medium transition-all hover:shadow-sm ${r.color}`}>
+                  <button key={r.label} className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-medium transition-all shadow-soft hover:shadow-soft-lg ${r.color}`}>
                     <r.icon className="h-3.5 w-3.5" strokeWidth={1.5} /> {r.label}
                   </button>
                 ))}
@@ -225,10 +287,10 @@ export function UnitDetailPanel({ unit, onUpdateUnit, isCollaboratorView = false
 
               {!isCollaboratorView && unit.status === "reserved" && (
                 <div className="space-y-1.5">
-                  <div className="rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-2.5 text-xs">
-                    <p className="font-medium text-amber-800">Reservada por {unit.clientName}</p>
-                    {unit.agencyName && <p className="text-amber-600 mt-0.5">vía {unit.agencyName}</p>}
-                    {unit.reservedAt && <p className="text-amber-500 mt-0.5">{unit.reservedAt}</p>}
+                  <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 px-3.5 py-2.5 text-xs">
+                    <p className="font-medium text-amber-700">Reservada por {unit.clientName}</p>
+                    {unit.agencyName && <p className="text-amber-700/80 mt-0.5">vía {unit.agencyName}</p>}
+                    {unit.reservedAt && <p className="text-amber-700/70 mt-0.5">{unit.reservedAt}</p>}
                   </div>
                   <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs w-full rounded-xl">
                     <Send className="h-3 w-3" strokeWidth={1.5} /> Avisar colaboradores
@@ -237,10 +299,10 @@ export function UnitDetailPanel({ unit, onUpdateUnit, isCollaboratorView = false
               )}
 
               {!isCollaboratorView && unit.status === "sold" && (
-                <div className="rounded-xl bg-blue-50 border border-blue-200 px-3.5 py-2.5 text-xs">
-                  <p className="font-medium text-blue-800">Vendida a {unit.clientName}</p>
-                  {unit.agencyName && <p className="text-blue-600 mt-0.5">vía {unit.agencyName}</p>}
-                  {unit.soldAt && <p className="text-blue-500 mt-0.5">{unit.soldAt}</p>}
+                <div className="rounded-xl bg-primary/10 border border-primary/20 px-3.5 py-2.5 text-xs">
+                  <p className="font-medium text-primary">Vendida a {unit.clientName}</p>
+                  {unit.agencyName && <p className="text-primary/80 mt-0.5">vía {unit.agencyName}</p>}
+                  {unit.soldAt && <p className="text-primary/70 mt-0.5">{unit.soldAt}</p>}
                 </div>
               )}
             </div>
@@ -537,7 +599,7 @@ function EditUnitForm({ unit, onClose, onSave }: { unit: Unit; onClose: () => vo
                           key={foto.id}
                           onClick={() => togglePromoFoto(foto.id)}
                           className={cn(
-                            "relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all",
+                            "relative aspect-[4/3] rounded-xl overflow-hidden border-2 transition-all",
                             disabled ? "border-border/40 opacity-40 grayscale" : "border-primary/60"
                           )}
                         >
@@ -558,7 +620,7 @@ function EditUnitForm({ unit, onClose, onSave }: { unit: Unit; onClose: () => vo
                 <p className="text-xs text-muted-foreground mb-2">Propias de la unidad · {unitFotos.length}</p>
                 <div className="grid grid-cols-4 gap-2">
                   {unitFotos.map(foto => (
-                    <div key={foto.id} className="relative aspect-[4/3] rounded-lg overflow-hidden border border-border/60 group">
+                    <div key={foto.id} className="relative aspect-[4/3] rounded-xl overflow-hidden border border-border/60 group">
                       <img src={foto.url} alt={foto.nombre} className="w-full h-full object-cover" />
                       <button
                         onClick={() => setUnitFotos(prev => prev.filter(f => f.id !== foto.id))}
@@ -570,7 +632,7 @@ function EditUnitForm({ unit, onClose, onSave }: { unit: Unit; onClose: () => vo
                   ))}
                   <button
                     onClick={addMockUnitPhoto}
-                    className="aspect-[4/3] rounded-lg border-2 border-dashed border-border/60 flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+                    className="aspect-[4/3] rounded-xl border-2 border-dashed border-border/60 flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
                   >
                     <Upload className="h-4 w-4" strokeWidth={1.5} />
                     <span className="text-[10px] font-medium">Subir</span>

@@ -73,11 +73,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import { Switch } from "@/components/ui/Switch";
 import { cn } from "@/lib/utils";
 // Avatar para tarjetas de miembros del equipo en PickTeamMembersDialog
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@/components/ui/Checkbox";
 // Iconografía: acciones (Upload, Trash2, Plus, X, Pencil, Search, Check, UserPlus),
 // tipos de contenido (FileText, BookOpen, Video, Star, Layers, Store, Building2),
 // ubicación/contacto (MapPin, Phone, Mail, Globe), edición textual (PenLine, Sparkles,

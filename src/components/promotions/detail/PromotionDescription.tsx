@@ -1,5 +1,33 @@
+/**
+ * PromotionDescription
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Panel descriptivo del proyecto de una promoción. Muestra un texto largo con
+ * truncado a 4 líneas (line-clamp) y un toggle "Ver más/Ver menos", más una
+ * grid de chips con las amenities/equipamiento del conjunto.
+ *
+ * Estado local:
+ *   - expanded: boolean → alterna line-clamp-4 y texto completo.
+ *
+ * Props:
+ *   - (ninguna por ahora — ver TODO(backend)).
+ *
+ * Dependencias (imports):
+ *   - react (useState)       → estado del toggle expandir/contraer.
+ *   - lucide-react (icons)   → iconografía de cada amenity (Shield, Sun...).
+ *
+ * Tokens Byvaro usados:
+ *   - Colores:   border, border-border/40, bg-card, text-foreground,
+ *                text-muted-foreground, text-primary, bg-muted/40.
+ *   - Radios:    rounded-2xl (panel grande), rounded-full (pills/chips).
+ *   - Sombras:   shadow-soft (reposo).
+ *
+ * TODO(backend): recibir `description` y `amenities[]` por props desde la API
+ *                en lugar de mock local.
+ * TODO(feature): i18n del texto descriptivo (ES/EN/FR).
+ * TODO(ui):      animar la transición de expand/collapse con max-height.
+ */
 import { useState } from "react";
-import { Shield, Sun, Wifi, Dumbbell, Waves, TreePine, Car, Droplets } from "lucide-react";
+import { Shield, Sun, Wifi, Dumbbell, Waves, TreePine, Car, Droplets } from "lucide-react"; // iconos Lucide para amenities
 
 const amenities = [
   { icon: Shield, label: "Seguridad 24h" },
@@ -16,7 +44,7 @@ export function PromotionDescription() {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="rounded-2xl border border-border/40 bg-card p-5 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] space-y-4">
+    <div className="rounded-2xl border border-border/40 bg-card p-5 shadow-soft space-y-4">
       <div>
         <h2 className="text-base font-semibold text-foreground mb-1.5">Descripción del proyecto</h2>
         <div className={`text-sm text-muted-foreground leading-relaxed ${!expanded ? "line-clamp-4" : ""}`}>
