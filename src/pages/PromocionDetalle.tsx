@@ -115,6 +115,8 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const [agenciesView, setAgenciesView] = useState<"v1-lista" | "v2-red">("v2-red");
   const [_availabilityVersion, _setAvailabilityVersion] = useState<"v1" | "v2">("v2");
   const [viewAsCollaborator, setViewAsCollaborator] = useState(agentMode);
+  // FAB móvil — abre un menú con las acciones principales de la ficha.
+  const [mobileFabOpen, setMobileFabOpen] = useState(false);
   const [addComercialOpen, setAddComercialOpen] = useState(false);
   const [pickOfficesOpen, setPickOfficesOpen] = useState(false);
   
@@ -296,10 +298,20 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
           {!agentMode && !viewAsCollaborator && activeTabKey !== "Agencies" && (
             <div className="flex items-center gap-2 shrink-0 flex-wrap">
-              <Button size="sm" variant="ghost" onClick={handleToggleCollabView} className="gap-1.5">
-                <Eye className="h-3.5 w-3.5" strokeWidth={1.5} /> Vista colaborador
+              {/* Vista colaborador · móvil sólo icono, desktop icono + texto. */}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleToggleCollabView}
+                className="gap-1.5 sm:px-4 px-0 w-9 sm:w-auto"
+                title="Vista colaborador"
+                aria-label="Vista colaborador"
+              >
+                <Eye className="h-3.5 w-3.5" strokeWidth={1.5} />
+                <span className="hidden sm:inline">Vista colaborador</span>
               </Button>
-              <Button size="sm" variant="outline" onClick={() => setSendEmailOpen(true)} className="gap-1.5">
+              {/* Enviar · oculto en móvil, accesible desde el FAB. */}
+              <Button size="sm" variant="outline" onClick={() => setSendEmailOpen(true)} className="gap-1.5 hidden sm:inline-flex">
                 <Mail className="h-3.5 w-3.5" strokeWidth={1.5} /> Enviar
               </Button>
 
@@ -342,17 +354,18 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 </TooltipProvider>
               )}
 
-              <Button size="sm" onClick={() => setRegisterClientOpen(true)} className="gap-1.5">
+              {/* Registrar cliente · oculto en móvil, accesible desde el FAB. */}
+              <Button size="sm" onClick={() => setRegisterClientOpen(true)} className="gap-1.5 hidden sm:inline-flex">
                 <Users className="h-3.5 w-3.5" strokeWidth={1.5} /> Registrar cliente
               </Button>
             </div>
           )}
           {viewAsCollaborator && (
             <div className="flex items-center gap-2 shrink-0">
-              <Button size="sm" variant="outline" onClick={() => setSendEmailOpen(true)} className="gap-1.5">
+              <Button size="sm" variant="outline" onClick={() => setSendEmailOpen(true)} className="gap-1.5 hidden sm:inline-flex">
                 <Mail className="h-3.5 w-3.5" /> Enviar
               </Button>
-              <Button size="sm" onClick={() => setRegisterClientOpen(true)} className="gap-1.5">
+              <Button size="sm" onClick={() => setRegisterClientOpen(true)} className="gap-1.5 hidden sm:inline-flex">
                 <Users className="h-3.5 w-3.5" /> Registrar cliente
               </Button>
             </div>
@@ -449,19 +462,6 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               </div>
             )}
 
-            {/* Mobile: collaboration + completion (shown above content on small screens) */}
-            {!viewAsCollaborator && (
-              <div className="lg:hidden space-y-4">
-                <CollaborationStatusBanner
-                  isIncomplete={!!hasMissing}
-                  isShared={p.agencies > 0}
-                  agencyCount={p.agencies}
-                  activity={p.activity}
-                  onShare={() => setActiveTab(visibleTabs.indexOf("Agencies"))}
-                />
-              </div>
-            )}
-
             {/* Two-column layout: main content left, narrow icon rail right */}
             <div className={`flex gap-4 ${!viewAsCollaborator ? "lg:flex-row" : ""} flex-col w-full min-w-0`} style={{ maxWidth: !viewAsCollaborator ? "1570px" : "1250px" }}>
               {/* ── LEFT: Main content ── */}
@@ -469,7 +469,14 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
             {/* ── 1. GALLERY ── */}
             <SectionCard title="Multimedia" stepName="Multimedia" missing={missingSet.has("Multimedia") || realMissing.has("multimedia")} onEdit={() => setEditOpen("multimedia")} hideEdit={viewAsCollaborator} flush>
-              <div className="grid grid-cols-4 grid-rows-2 gap-1.5 h-[320px]">
+              {/* Móvil: sólo la foto principal. Tablet/desktop: mosaico
+                  4×2 con foto hero + 3 thumbs + celda de vídeos. */}
+              <div className="sm:hidden relative cursor-pointer group h-[220px]">
+                <img src={galleryImages[0]} alt={p.name} className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/0 group-active:bg-black/10 transition-colors" />
+                <Tag variant="overlay" size="sm" className="absolute bottom-3 left-3"><Image className="h-3 w-3" /> 12 fotos</Tag>
+              </div>
+              <div className="hidden sm:grid grid-cols-4 grid-rows-2 gap-1.5 h-[320px]">
                 <div className="col-span-2 row-span-2 relative group cursor-pointer">
                   <img src={galleryImages[0]} alt={p.name} className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
@@ -1289,6 +1296,45 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
       {/* Client Registration dialog */}
       <ClientRegistrationDialog open={registerClientOpen} onOpenChange={setRegisterClientOpen} promotionName={p.name} validezDias={p.collaboration?.validezRegistroDias} />
+
+      {/* FAB móvil — acciones rápidas de la ficha. En desktop (sm+)
+          estas acciones ya están como botones en la barra superior; en
+          móvil las reunimos bajo un + flotante con dropup. */}
+      <div className="sm:hidden fixed bottom-20 right-4 z-40">
+        {mobileFabOpen && (
+          <>
+            <div className="fixed inset-0 bg-foreground/20 backdrop-blur-[2px] -z-10" onClick={() => setMobileFabOpen(false)} />
+            <div className="flex flex-col items-end gap-2 mb-3 animate-in fade-in slide-in-from-bottom-2 duration-150">
+              <FabAction
+                icon={Users}
+                label="Registrar cliente"
+                onClick={() => { setMobileFabOpen(false); setRegisterClientOpen(true); }}
+              />
+              <FabAction
+                icon={Mail}
+                label="Enviar email"
+                onClick={() => { setMobileFabOpen(false); setSendEmailOpen(true); }}
+              />
+              <FabAction
+                icon={Download}
+                label="Listado de precios"
+                onClick={() => { setMobileFabOpen(false); setPriceListOpen(true); }}
+              />
+            </div>
+          </>
+        )}
+        <button
+          type="button"
+          onClick={() => setMobileFabOpen(v => !v)}
+          aria-label={mobileFabOpen ? "Cerrar acciones" : "Abrir acciones"}
+          className={cn(
+            "h-14 w-14 rounded-full bg-foreground text-background shadow-soft-lg flex items-center justify-center transition-transform duration-200",
+            mobileFabOpen && "rotate-45"
+          )}
+        >
+          <Plus className="h-6 w-6" strokeWidth={2} />
+        </button>
+      </div>
 
       {/* Send email dialog (template picker + WYSIWYG) */}
       <SendEmailDialog open={sendEmailOpen} onOpenChange={setSendEmailOpen} mode="promotion" promotionId={id} />
@@ -2427,6 +2473,25 @@ function SectionCard({ title, stepName, missing, onEdit, children, hideEdit, flu
         </>
       )}
     </div>
+  );
+}
+
+/* FabAction · botón flotante secundario del FAB móvil con label
+   pill a la izquierda y icono en círculo foreground. */
+function FabAction({ icon: Icon, label, onClick }: { icon: typeof Home; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-3"
+    >
+      <span className="h-9 px-3 rounded-full bg-foreground text-background text-xs font-medium shadow-soft inline-flex items-center">
+        {label}
+      </span>
+      <span className="h-11 w-11 rounded-full bg-card border border-border shadow-soft inline-flex items-center justify-center">
+        <Icon className="h-4 w-4 text-foreground" strokeWidth={1.5} />
+      </span>
+    </button>
   );
 }
 
