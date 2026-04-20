@@ -367,6 +367,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             return (
               <button
                 key={tab}
+                data-nav-guard
                 onClick={() => setActiveTab(i)}
                 className={cn(
                   "relative px-4 sm:px-5 py-3 text-[13px] font-medium whitespace-nowrap transition-colors inline-flex items-center gap-1.5",

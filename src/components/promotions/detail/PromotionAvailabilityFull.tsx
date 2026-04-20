@@ -86,6 +86,7 @@ import { ColumnCustomizer, type ColumnDef } from "@/components/ui/column-customi
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { UnitDetailPanel } from "./UnitDetailPanel";
 import { SendEmailDialog } from "@/components/email/SendEmailDialog";
+import { registerUnsavedGuard } from "@/lib/unsavedGuard";
 import { cn } from "@/lib/utils";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -456,6 +457,12 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsavedEdits]);
+
+  // Registrar el guard para que las navegaciones internas (sidebar,
+  // tabs de la ficha, cualquier <a href>) muestren la confirmación.
+  useEffect(() => {
+    return registerUnsavedGuard(() => hasUnsavedEdits);
   }, [hasUnsavedEdits]);
 
   // Wrapper de cancelBulkEdit que confirma si hay cambios.
