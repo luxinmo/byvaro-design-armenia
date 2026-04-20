@@ -713,7 +713,7 @@ export default function Promociones() {
                   )}
                 >
                   {/* Image */}
-                  <div className="relative w-full xl:w-[480px] h-[160px] sm:h-[220px] xl:h-[400px] shrink-0 overflow-hidden bg-muted">
+                  <div className="relative w-full xl:w-[580px] aspect-[4/3] xl:aspect-auto xl:h-[384px] shrink-0 overflow-hidden bg-muted">
                     {p.image ? (
                       <>
                         <img

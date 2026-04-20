@@ -101,4 +101,8 @@
   }
   /* Deja márgenes controlados por el propio contenedor (18mm). */
   @page { margin: 0; size: A4; }
+
+  /* Plantilla 2 (editorial multi-página): cada sección es una página A4. */
+  .editorial-page-break { break-before: page; page-break-before: always; }
+  .editorial-page { page-break-inside: avoid; }
 }

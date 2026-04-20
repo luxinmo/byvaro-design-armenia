@@ -12,7 +12,7 @@ import {
   Plus, Phone, Mail, MessageCircle, Store, UserPlus,
   Check, X, ExternalLink, Zap, Star, Search, ChevronDown, Info,
   Lock, Unlock, FolderOpen, Folder, Download, BookOpen, Upload, MoreHorizontal, FilePlus, ArrowRight,
-  Trophy, Sparkles, ArrowUpRight, FileCheck2, Rocket, FileDown,
+  Trophy, Sparkles, ArrowUpRight, FileCheck2, Rocket,
 } from "lucide-react";
 import { getMissingForPromotion } from "@/lib/publicationRequirements"; // fuente única de verdad de requisitos para publicar
 import { Button } from "@/components/ui/button";
@@ -297,9 +297,6 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               <Button size="sm" variant="outline" onClick={() => setSendEmailOpen(true)} className="gap-1.5">
                 <Mail className="h-3.5 w-3.5" strokeWidth={1.5} /> Enviar
               </Button>
-              <Button size="sm" variant="outline" onClick={() => setPriceListOpen(true)} className="gap-1.5">
-                <FileDown className="h-3.5 w-3.5" strokeWidth={1.5} /> Listado de precios
-              </Button>
 
               {/* Botón Publicar · aparece si la promoción aún no está activa
                   O si está activa pero le faltan requisitos (estado real de
@@ -349,9 +346,6 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             <div className="flex items-center gap-2 shrink-0">
               <Button size="sm" variant="outline" onClick={() => setSendEmailOpen(true)} className="gap-1.5">
                 <Mail className="h-3.5 w-3.5" /> Enviar
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setPriceListOpen(true)} className="gap-1.5">
-                <FileDown className="h-3.5 w-3.5" /> Listado
               </Button>
               <Button size="sm" onClick={() => setRegisterClientOpen(true)} className="gap-1.5">
                 <Users className="h-3.5 w-3.5" /> Registrar cliente
@@ -871,8 +865,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   { icon: Users, label: "Invitar agencias", hint: "Invitar colaboradores", onClick: () => setActiveTab(visibleTabs.indexOf("Agencies")) },
                   { icon: Share2, label: "Compartir", hint: "Compartir con colaboradores", onClick: () => setActiveTab(visibleTabs.indexOf("Agencies")) },
                   { icon: FileText, label: "Brochure", hint: "Descargar brochure", onClick: () => {} },
-                  { icon: Download, label: "Listado de precios", hint: "Descargar en PDF", onClick: () => {} },
-                  { icon: MessageCircle, label: "Contactar ventas", hint: "Habla con el equipo comercial", onClick: () => {} },
+                  { icon: Download, label: "Listado de precios", hint: "Descargar en PDF", onClick: () => setPriceListOpen(true) },
                   ...(hasMissing ? [{ icon: AlertTriangle, label: "Incompleta", hint: `${completedSteps.length}/${allSteps.length} pasos · Click para completar`, onClick: () => navigate(getWizardUrl(p.missingSteps?.[0], returnPath)), danger: true }] : []),
                   { icon: Info, label: "Datos en vivo", hint: "Precios y disponibilidad se actualizan en tiempo real. Confirma antes de cerrar.", info: true },
                 ];

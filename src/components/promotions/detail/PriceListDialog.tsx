@@ -31,7 +31,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { Download, Printer, X, Building2, QrCode } from "lucide-react";
+import { Download, Printer, X, Building2, QrCode, MapPin, CreditCard, PenLine, Map as MapIcon, LayoutTemplate } from "lucide-react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
 import type { Promotion } from "@/data/promotions";
@@ -41,6 +41,7 @@ import { cn } from "@/lib/utils";
 
 type Idioma = "es" | "en";
 type UnitFilter = "available" | "available-reserved" | "all";
+type Template = 1 | 2;
 
 interface PriceListDialogProps {
   open: boolean;
@@ -144,11 +145,16 @@ function statusDot(s: Unit["status"]) {
    ═══════════════════════════════════════════════════════════════════ */
 export function PriceListDialog({ open, onOpenChange, promotion }: PriceListDialogProps) {
   const { empresa } = useEmpresa();
+  const [template, setTemplate] = useState<Template>(1);
   const [filter, setFilter] = useState<UnitFilter>("available");
   const [includeCommission, setIncludeCommission] = useState(false);
   const [includeQR, setIncludeQR] = useState(true);
   const [idioma, setIdioma] = useState<Idioma>("es");
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
+  // Secciones opcionales de la Plantilla 2 (editorial multi-página).
+  const [showPayment, setShowPayment] = useState(true);
+  const [showLocation, setShowLocation] = useState(true);
+  const [showSignature, setShowSignature] = useState(false);
 
   const t = T[idioma];
 
@@ -230,6 +236,22 @@ export function PriceListDialog({ open, onOpenChange, promotion }: PriceListDial
         <div className="flex-1 flex overflow-hidden print:overflow-visible">
           {/* Preview scrollable */}
           <div className="flex-1 overflow-auto bg-muted/30 p-6 print:p-0 print:bg-background print:overflow-visible">
+            {template === 2 ? (
+              <TemplateEditorial
+                promotion={promotion}
+                units={filteredUnits}
+                empresa={empresa}
+                idioma={idioma}
+                color={color}
+                showPayment={showPayment}
+                showLocation={showLocation}
+                showSignature={showSignature}
+                today={today}
+                qrDataUrl={qrDataUrl}
+                includeQR={includeQR}
+                t={t}
+              />
+            ) : (
             <div
               id="price-list-printable"
               className="mx-auto bg-background shadow-soft-lg print:shadow-none"
@@ -399,11 +421,74 @@ export function PriceListDialog({ open, onOpenChange, promotion }: PriceListDial
                 </div>
               </div>
             </div>
+            )}
           </div>
 
           {/* Opciones — oculto al imprimir */}
           <aside className="w-[280px] shrink-0 border-l border-border bg-card overflow-y-auto print:hidden">
             <div className="p-5 space-y-5">
+              {/* Selector de plantilla */}
+              <div>
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">
+                  Plantilla
+                </p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {([
+                    { n: 1 as Template, label: "Clásica", desc: "1 página" },
+                    { n: 2 as Template, label: "Editorial", desc: "Multi-página" },
+                  ]).map((opt) => (
+                    <button
+                      key={opt.n}
+                      type="button"
+                      onClick={() => setTemplate(opt.n)}
+                      className={cn(
+                        "flex flex-col items-start gap-0.5 h-auto px-3 py-2 rounded-xl border text-left transition-colors",
+                        template === opt.n
+                          ? "border-primary/40 bg-primary/5 text-foreground"
+                          : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                      )}
+                    >
+                      <span className="flex items-center gap-1.5 text-[12px] font-semibold">
+                        <LayoutTemplate className="h-3 w-3" /> Plantilla {opt.n}
+                      </span>
+                      <span className="text-[10px] leading-tight">{opt.label} · {opt.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Secciones (solo Plantilla 2) */}
+              {template === 2 && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">
+                    Secciones del dossier
+                  </p>
+                  <div className="space-y-2">
+                    <ToggleRow
+                      label="Plan de pagos"
+                      description="Hitos + garantías"
+                      checked={showPayment}
+                      onChange={setShowPayment}
+                      icon={CreditCard}
+                    />
+                    <ToggleRow
+                      label="Ubicación"
+                      description="Mapa + transportes y servicios"
+                      checked={showLocation}
+                      onChange={setShowLocation}
+                      icon={MapIcon}
+                    />
+                    <ToggleRow
+                      label="Firma"
+                      description="Conformidad del cliente"
+                      checked={showSignature}
+                      onChange={setShowSignature}
+                      icon={PenLine}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
                 <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">
                   Idioma
@@ -589,5 +674,458 @@ function ToggleRow({
         />
       </span>
     </button>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Plantilla 2 · Editorial multi-página (portada + disponibilidad +
+   opcionales: plan de pagos / ubicación / firma).
+   Portada inspirada en el dossier de Lovable, adaptada a tokens Byvaro.
+   ═══════════════════════════════════════════════════════════════════ */
+function TemplateEditorial({
+  promotion,
+  units,
+  empresa,
+  idioma,
+  color,
+  showPayment,
+  showLocation,
+  showSignature,
+  today,
+  qrDataUrl,
+  includeQR,
+  t,
+}: {
+  promotion: Promotion;
+  units: Unit[];
+  empresa: ReturnType<typeof useEmpresa>["empresa"];
+  idioma: Idioma;
+  color: string;
+  showPayment: boolean;
+  showLocation: boolean;
+  showSignature: boolean;
+  today: string;
+  qrDataUrl: string;
+  includeQR: boolean;
+  t: typeof T["es"];
+}) {
+  // Plan de pagos demo (en la ficha real vendrá de promotion.paymentPlan).
+  const paymentPlan = [
+    { milestone: idioma === "es" ? "Reserva" : "Booking", value: 6000, isFixed: true, when: idioma === "es" ? "A la firma del contrato de reserva" : "On booking contract signature" },
+    { milestone: idioma === "es" ? "Contrato privado" : "Private contract", value: 20, when: idioma === "es" ? "30 días tras la reserva" : "30 days after booking" },
+    { milestone: idioma === "es" ? "Durante construcción" : "During construction", value: 20, when: idioma === "es" ? "Cuotas mensuales hasta entrega" : "Monthly installments until handover" },
+    { milestone: idioma === "es" ? "Entrega de llaves" : "Handover", value: 60, when: idioma === "es" ? "Escritura pública" : "Public deed" },
+  ];
+
+  // Páginas numeradas dinámicamente según secciones activas.
+  let pageNum = 0;
+  const nextPage = () => String(++pageNum).padStart(2, "0");
+
+  const pageClass =
+    "editorial-page flex flex-col bg-background text-foreground";
+  const pageStyle: React.CSSProperties = {
+    width: "210mm",
+    minHeight: "297mm",
+    padding: "14mm 16mm",
+    boxSizing: "border-box",
+  };
+
+  const available = units.filter((u) => u.status === "available");
+  const pageLabel = nextPage; // alias for readability
+
+  return (
+    <div
+      id="price-list-printable"
+      className="mx-auto bg-background shadow-soft-lg print:shadow-none"
+      style={{ width: "210mm" }}
+    >
+      {/* ============ PORTADA ============ */}
+      <section className={pageClass} style={pageStyle}>
+        <header
+          className="flex items-center justify-between pb-4 border-b-2"
+          style={{ borderColor: color }}
+        >
+          <div className="flex items-center gap-2.5">
+            {empresa.logoUrl ? (
+              <img
+                src={empresa.logoUrl}
+                alt={empresa.nombreComercial}
+                className={cn(
+                  "h-8 w-8 object-cover border border-border",
+                  empresa.logoShape === "square" ? "rounded-lg" : "rounded-full"
+                )}
+              />
+            ) : (
+              <div
+                className="h-8 w-8 rounded-lg grid place-items-center text-white text-[10px] font-bold"
+                style={{ backgroundColor: color }}
+              >
+                {(empresa.nombreComercial || "B").slice(0, 2).toUpperCase()}
+              </div>
+            )}
+            <div className="leading-tight">
+              <p className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
+                {idioma === "es" ? "Preparado por" : "Prepared by"}
+              </p>
+              <p className="text-xs font-semibold text-foreground">{empresa.nombreComercial || "Tu empresa"}</p>
+            </div>
+          </div>
+          <div className="text-right leading-tight">
+            <p className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
+              {idioma === "es" ? "Fecha" : "Date"}
+            </p>
+            <p className="text-xs font-semibold text-foreground">{today}</p>
+          </div>
+        </header>
+
+        {/* Título editorial */}
+        <div className="mt-5">
+          <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground" style={{ color }}>
+            {idioma === "es" ? "Promoción" : "Development"} · {(promotion as unknown as { code?: string }).code || promotion.id}
+          </p>
+          <h1 className="mt-1.5 text-[32px] font-bold leading-[1.05] tracking-tight text-foreground">
+            {promotion.name}
+          </h1>
+          <p className="mt-1.5 text-sm text-muted-foreground inline-flex items-center gap-1.5">
+            <MapPin className="h-3.5 w-3.5" />
+            {promotion.location}
+            {promotion.developer ? ` · ${promotion.developer}` : ""}
+          </p>
+        </div>
+
+        {/* Hero */}
+        <div className="mt-4 overflow-hidden" style={{ height: "260px" }}>
+          {promotion.image ? (
+            <img src={promotion.image} alt={promotion.name} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full grid place-items-center bg-muted">
+              <Building2 className="h-10 w-10 text-muted-foreground/40" />
+            </div>
+          )}
+        </div>
+
+        {/* Cuadrícula de datos clave */}
+        <dl className="mt-4 grid grid-cols-4 border-t border-b border-border divide-x divide-border">
+          {[
+            { label: idioma === "es" ? "Desde" : "From", value: formatPrice(promotion.priceMin, idioma === "es" ? "es-ES" : "en-GB") },
+            { label: idioma === "es" ? "Hasta" : "Up to", value: formatPrice(promotion.priceMax, idioma === "es" ? "es-ES" : "en-GB") },
+            { label: t.disponibles, value: `${promotion.availableUnits} / ${promotion.totalUnits}` },
+            { label: t.entrega, value: promotion.delivery || "—" },
+          ].map((item) => (
+            <div key={item.label} className="px-3 py-3">
+              <dt className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">{item.label}</dt>
+              <dd className="text-sm font-semibold text-foreground mt-0.5">{item.value}</dd>
+            </div>
+          ))}
+        </dl>
+
+        {/* Descripción */}
+        <div className="mt-4">
+          <h2 className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground mb-1.5">
+            {idioma === "es" ? "Sobre la promoción" : "About the development"}
+          </h2>
+          <p className="text-[11px] leading-relaxed text-foreground/90">
+            {idioma === "es" ? (
+              <>
+                {promotion.name} es un desarrollo residencial situado en <strong>{promotion.location}</strong>
+                {promotion.developer && <> promovido por <strong>{promotion.developer}</strong></>}.
+                Cuenta con {promotion.totalUnits} unidades totales, de las cuales {promotion.availableUnits} están disponibles.
+                {promotion.constructionProgress != null && ` Estado de construcción: ${promotion.constructionProgress}%.`}
+              </>
+            ) : (
+              <>
+                {promotion.name} is a residential development located in <strong>{promotion.location}</strong>
+                {promotion.developer && <> by <strong>{promotion.developer}</strong></>}.
+                It features {promotion.totalUnits} units, with {promotion.availableUnits} currently available.
+                {promotion.constructionProgress != null && ` Construction progress: ${promotion.constructionProgress}%.`}
+              </>
+            )}
+          </p>
+        </div>
+
+        {/* QR opcional */}
+        {includeQR && qrDataUrl && (
+          <div className="mt-auto pt-4 flex items-center gap-3 text-[10px] text-muted-foreground">
+            <img src={qrDataUrl} alt="QR" className="h-16 w-16 rounded-md border border-border" />
+            <div>
+              <p className="font-semibold text-foreground">
+                {idioma === "es" ? "Microsite público" : "Public microsite"}
+              </p>
+              <p>byvaro.com/{promotion.name.toLowerCase().replace(/\s+/g, "-")}</p>
+            </div>
+          </div>
+        )}
+
+        <footer className="mt-auto pt-4 border-t border-border flex items-center justify-between text-[9px] text-muted-foreground uppercase tracking-wider">
+          <span>{empresa.nombreComercial || "Tu empresa"}{empresa.email && ` · ${empresa.email}`}</span>
+          <span>{pageLabel()}</span>
+        </footer>
+      </section>
+
+      {/* ============ DISPONIBILIDAD ============ */}
+      <section className={cn(pageClass, "editorial-page-break")} style={pageStyle}>
+        <header className="flex items-center justify-between pb-3 border-b-2" style={{ borderColor: color }}>
+          <div className="flex items-center gap-2">
+            {empresa.logoUrl && <img src={empresa.logoUrl} alt="" className="h-6 w-6 rounded object-cover border border-border" />}
+            <span className="text-[11px] font-semibold text-foreground">{empresa.nombreComercial || "Tu empresa"}</span>
+          </div>
+          <span className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
+            {promotion.name}
+          </span>
+        </header>
+
+        <div className="mt-5">
+          <p className="text-[10px] uppercase tracking-[0.22em]" style={{ color }}>{idioma === "es" ? "Sección 01" : "Section 01"}</p>
+          <h2 className="text-2xl font-bold tracking-tight text-foreground mt-1">
+            {idioma === "es" ? "Disponibilidad" : "Availability"}
+          </h2>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            {idioma === "es"
+              ? `${units.length} unidades · Actualizado el ${today}`
+              : `${units.length} units · Updated on ${today}`}
+          </p>
+        </div>
+
+        <table className="mt-4 w-full text-[10px] border-collapse">
+          <thead>
+            <tr className="border-b-2 text-foreground" style={{ borderColor: color }}>
+              <th className="text-left py-2 px-1.5 font-semibold uppercase tracking-wider text-[9px]">{idioma === "es" ? "Ref." : "Ref."}</th>
+              <th className="text-left py-2 px-1.5 font-semibold uppercase tracking-wider text-[9px]">{t.tipo}</th>
+              <th className="text-center py-2 px-1.5 font-semibold uppercase tracking-wider text-[9px]">{t.dormitorios}</th>
+              <th className="text-center py-2 px-1.5 font-semibold uppercase tracking-wider text-[9px]">{t.banos}</th>
+              <th className="text-right py-2 px-1.5 font-semibold uppercase tracking-wider text-[9px]">{t.utiles}</th>
+              <th className="text-right py-2 px-1.5 font-semibold uppercase tracking-wider text-[9px]">{t.construidos}</th>
+              <th className="text-right py-2 px-1.5 font-semibold uppercase tracking-wider text-[9px]">{t.terraza}</th>
+              <th className="text-left py-2 px-1.5 font-semibold uppercase tracking-wider text-[9px]">{t.orientacion}</th>
+              <th className="text-right py-2 px-1.5 font-semibold uppercase tracking-wider text-[9px]">{t.precio}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {units.map((u) => (
+              <tr key={u.id} className={cn("border-b border-border/60", u.status === "sold" && "text-muted-foreground/60")}>
+                <td className="py-2 px-1.5 font-mono text-foreground/80">{u.publicId || `${u.block}-${u.floor}${u.door}`}</td>
+                <td className="py-2 px-1.5 text-foreground/80">{u.type}</td>
+                <td className="py-2 px-1.5 text-center text-foreground/80">{u.bedrooms}</td>
+                <td className="py-2 px-1.5 text-center text-foreground/80">{u.bathrooms}</td>
+                <td className="py-2 px-1.5 text-right text-foreground/80">{u.usableArea} m²</td>
+                <td className="py-2 px-1.5 text-right text-foreground/80">{u.builtArea} m²</td>
+                <td className="py-2 px-1.5 text-right text-foreground/80">{u.terrace > 0 ? `${u.terrace} m²` : "—"}</td>
+                <td className="py-2 px-1.5 text-foreground/80">{u.orientation}</td>
+                <td className="py-2 px-1.5 text-right font-semibold text-foreground">{formatPrice(u.price, idioma === "es" ? "es-ES" : "en-GB")}</td>
+              </tr>
+            ))}
+            {units.length === 0 && (
+              <tr>
+                <td colSpan={9} className="py-8 text-center text-muted-foreground">
+                  {idioma === "es" ? "No hay unidades para mostrar." : "No units to show."}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        <p className="mt-4 text-[9px] text-muted-foreground leading-relaxed border-t border-border pt-3">
+          <strong className="text-foreground/80">
+            {idioma === "es" ? "Nota legal." : "Legal note."}
+          </strong>{" "}
+          {t.disclaimer}
+        </p>
+
+        <footer className="mt-auto pt-4 border-t border-border flex items-center justify-between text-[9px] text-muted-foreground uppercase tracking-wider">
+          <span>{empresa.nombreComercial || "Tu empresa"}{empresa.telefono && ` · ${empresa.telefono}`}</span>
+          <span>{pageLabel()}</span>
+        </footer>
+      </section>
+
+      {/* ============ PLAN DE PAGOS ============ */}
+      {showPayment && (
+        <section className={cn(pageClass, "editorial-page-break")} style={pageStyle}>
+          <header className="flex items-center justify-between pb-3 border-b-2" style={{ borderColor: color }}>
+            <div className="flex items-center gap-2">
+              {empresa.logoUrl && <img src={empresa.logoUrl} alt="" className="h-6 w-6 rounded object-cover border border-border" />}
+              <span className="text-[11px] font-semibold text-foreground">{empresa.nombreComercial || "Tu empresa"}</span>
+            </div>
+            <span className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">{promotion.name}</span>
+          </header>
+
+          <div className="mt-5">
+            <p className="text-[10px] uppercase tracking-[0.22em]" style={{ color }}>{idioma === "es" ? "Sección 02" : "Section 02"}</p>
+            <h2 className="text-2xl font-bold tracking-tight text-foreground mt-1">
+              {idioma === "es" ? "Plan de pagos" : "Payment plan"}
+            </h2>
+          </div>
+
+          <table className="mt-4 w-full text-[11px] border-collapse">
+            <thead>
+              <tr className="border-b-2 text-foreground" style={{ borderColor: color }}>
+                <th className="text-left py-2 px-2 font-semibold uppercase tracking-wider text-[9px]">{idioma === "es" ? "Hito" : "Milestone"}</th>
+                <th className="text-left py-2 px-2 font-semibold uppercase tracking-wider text-[9px]">{idioma === "es" ? "Cuándo" : "When"}</th>
+                <th className="text-right py-2 px-2 font-semibold uppercase tracking-wider text-[9px]">{idioma === "es" ? "Importe" : "Amount"}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paymentPlan.map((row, i) => (
+                <tr key={i} className="border-b border-border/60">
+                  <td className="py-2.5 px-2 font-semibold text-foreground">{row.milestone}</td>
+                  <td className="py-2.5 px-2 text-muted-foreground">{row.when}</td>
+                  <td className="py-2.5 px-2 text-right font-semibold text-foreground">
+                    {row.isFixed ? formatPrice(row.value, idioma === "es" ? "es-ES" : "en-GB") : `${row.value}%`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="mt-5 grid grid-cols-2 gap-4">
+            <div className="border border-border p-4 rounded-xl">
+              <p className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">{idioma === "es" ? "Forma de pago" : "Payment method"}</p>
+              <p className="mt-1 text-[11px] text-foreground/90 leading-relaxed">
+                {idioma === "es"
+                  ? "Transferencia bancaria a cuenta escrow del promotor. Cada pago genera recibo nominal."
+                  : "Bank transfer to escrow account. Each payment issues a nominal receipt."}
+              </p>
+            </div>
+            <div className="border border-border p-4 rounded-xl">
+              <p className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">{idioma === "es" ? "Garantías" : "Guarantees"}</p>
+              <p className="mt-1 text-[11px] text-foreground/90 leading-relaxed">
+                {idioma === "es"
+                  ? "Cantidades anticipadas avaladas según Ley 38/1999. Aval bancario individual."
+                  : "Advance amounts backed under Spanish Law 38/1999. Individual bank guarantee."}
+              </p>
+            </div>
+          </div>
+
+          <footer className="mt-auto pt-4 border-t border-border flex items-center justify-between text-[9px] text-muted-foreground uppercase tracking-wider">
+            <span>{empresa.nombreComercial || "Tu empresa"}</span>
+            <span>{pageLabel()}</span>
+          </footer>
+        </section>
+      )}
+
+      {/* ============ UBICACIÓN ============ */}
+      {showLocation && (
+        <section className={cn(pageClass, "editorial-page-break")} style={pageStyle}>
+          <header className="flex items-center justify-between pb-3 border-b-2" style={{ borderColor: color }}>
+            <div className="flex items-center gap-2">
+              {empresa.logoUrl && <img src={empresa.logoUrl} alt="" className="h-6 w-6 rounded object-cover border border-border" />}
+              <span className="text-[11px] font-semibold text-foreground">{empresa.nombreComercial || "Tu empresa"}</span>
+            </div>
+            <span className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">{promotion.name}</span>
+          </header>
+
+          <div className="mt-5">
+            <p className="text-[10px] uppercase tracking-[0.22em]" style={{ color }}>{idioma === "es" ? "Sección" : "Section"} {showPayment ? "03" : "02"}</p>
+            <h2 className="text-2xl font-bold tracking-tight text-foreground mt-1">{t.ubicacion}</h2>
+            <p className="text-[11px] text-muted-foreground mt-1 inline-flex items-center gap-1.5">
+              <MapPin className="h-3 w-3" /> {promotion.location}
+            </p>
+          </div>
+
+          {/* Mapa estático (fallback a imagen genérica) */}
+          <div className="mt-4 border border-border overflow-hidden rounded-xl" style={{ height: "280px" }}>
+            <img
+              src={`https://staticmap.openstreetmap.de/staticmap.php?center=40.4168,-3.7038&zoom=13&size=900x320&maptype=mapnik`}
+              alt="Mapa"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src =
+                  "https://images.unsplash.com/photo-1524661135-423995f22d0b?w=1200&h=400&fit=crop";
+              }}
+            />
+          </div>
+
+          <div className="mt-5 grid grid-cols-3 gap-4">
+            <div>
+              <p className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">{idioma === "es" ? "Transporte" : "Transport"}</p>
+              <ul className="mt-1.5 text-[11px] text-foreground/90 space-y-1">
+                <li>· {idioma === "es" ? "Metro — 8 min" : "Subway — 8 min"}</li>
+                <li>· {idioma === "es" ? "Cercanías — 12 min" : "Rail — 12 min"}</li>
+                <li>· {idioma === "es" ? "Aeropuerto — 25 min" : "Airport — 25 min"}</li>
+              </ul>
+            </div>
+            <div>
+              <p className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">{idioma === "es" ? "Servicios" : "Services"}</p>
+              <ul className="mt-1.5 text-[11px] text-foreground/90 space-y-1">
+                <li>· {idioma === "es" ? "Colegios bilingües" : "Bilingual schools"}</li>
+                <li>· {idioma === "es" ? "Centro comercial" : "Shopping mall"}</li>
+                <li>· {idioma === "es" ? "Hospital privado" : "Private hospital"}</li>
+              </ul>
+            </div>
+            <div>
+              <p className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">{idioma === "es" ? "Ocio" : "Leisure"}</p>
+              <ul className="mt-1.5 text-[11px] text-foreground/90 space-y-1">
+                <li>· {idioma === "es" ? "Parque urbano" : "Urban park"}</li>
+                <li>· {idioma === "es" ? "Restaurantes y cafés" : "Restaurants and cafés"}</li>
+                <li>· {idioma === "es" ? "Club deportivo" : "Sports club"}</li>
+              </ul>
+            </div>
+          </div>
+
+          <footer className="mt-auto pt-4 border-t border-border flex items-center justify-between text-[9px] text-muted-foreground uppercase tracking-wider">
+            <span>{empresa.nombreComercial || "Tu empresa"}</span>
+            <span>{pageLabel()}</span>
+          </footer>
+        </section>
+      )}
+
+      {/* ============ FIRMA ============ */}
+      {showSignature && (
+        <section className={cn(pageClass, "editorial-page-break")} style={pageStyle}>
+          <header className="flex items-center justify-between pb-3 border-b-2" style={{ borderColor: color }}>
+            <div className="flex items-center gap-2">
+              {empresa.logoUrl && <img src={empresa.logoUrl} alt="" className="h-6 w-6 rounded object-cover border border-border" />}
+              <span className="text-[11px] font-semibold text-foreground">{empresa.nombreComercial || "Tu empresa"}</span>
+            </div>
+            <span className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">{promotion.name}</span>
+          </header>
+
+          <div className="mt-5">
+            <p className="text-[10px] uppercase tracking-[0.22em]" style={{ color }}>
+              {idioma === "es" ? "Sección final" : "Final section"}
+            </p>
+            <h2 className="text-2xl font-bold tracking-tight text-foreground mt-1">
+              {idioma === "es" ? "Conformidad y firma" : "Acknowledgement and signature"}
+            </h2>
+          </div>
+
+          <div className="mt-6 text-[11px] text-foreground/90 leading-relaxed space-y-3">
+            <p>
+              {idioma === "es"
+                ? <>Este documento tiene carácter <strong>informativo</strong> y no constituye oferta vinculante. Características, precios, superficies y plazos pueden sufrir modificaciones por exigencias técnicas, comerciales o normativas.</>
+                : <>This document is <strong>informational only</strong> and does not constitute a binding offer. Features, prices, areas and timelines may change due to technical, commercial or regulatory requirements.</>}
+            </p>
+            <p>
+              {idioma === "es"
+                ? <>El receptor se compromete a tratar esta información como <strong>confidencial</strong> y a no difundirla a terceros sin autorización expresa.</>
+                : <>The recipient commits to treating this information as <strong>confidential</strong> and not sharing it with third parties without express authorisation.</>}
+            </p>
+          </div>
+
+          <div className="mt-10 grid grid-cols-2 gap-10">
+            <div>
+              <div className="border-b-2 h-20" style={{ borderColor: color }} />
+              <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                {idioma === "es" ? "Cliente" : "Client"}
+              </p>
+              <p className="text-[11px] text-foreground/90 mt-2">
+                {idioma === "es" ? "Nombre · DNI · Fecha" : "Name · ID · Date"}
+              </p>
+            </div>
+            <div>
+              <div className="border-b-2 h-20" style={{ borderColor: color }} />
+              <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                {idioma === "es" ? "Asesor comercial" : "Sales advisor"}
+              </p>
+              <p className="text-[11px] text-foreground/90 mt-2">{empresa.nombreComercial || "Tu empresa"} · {today}</p>
+            </div>
+          </div>
+
+          <footer className="mt-auto pt-4 border-t border-border flex items-center justify-between text-[9px] text-muted-foreground uppercase tracking-wider">
+            <span>{empresa.nombreComercial || "Tu empresa"}{empresa.email && ` · ${empresa.email}`}</span>
+            <span>{pageLabel()}</span>
+          </footer>
+        </section>
+      )}
+    </div>
   );
 }
