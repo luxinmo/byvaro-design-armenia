@@ -232,8 +232,9 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
           : ["photo", "ref", "type", "dormBath", "area", "floorParcel", "price"]
       );
     }
-    // Móvil
-    return new Set<CatalogCol>(["ref", "type", "status", "price"]);
+    // Móvil — incluimos foto para mantener la identidad "catálogo" en
+    // mobile. Resto mínimo: ref, tipo, estado y precio.
+    return new Set<CatalogCol>(["photo", "ref", "type", "status", "price"]);
   };
   const [visibleCols, setVisibleCols] = useState<Set<CatalogCol>>(() => {
     return getDefaultCols(typeof window !== "undefined" ? window.innerWidth : 1024);
@@ -1133,9 +1134,60 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
               </div>
             )}
 
-            {/* Catalog view — compact list with thumbnails */}
+            {/* Catalog view mobile · cards apiladas sin scroll horizontal.
+                Solo se muestra en <sm. Desktop sigue con la tabla abajo. */}
             {!isCollapsed && viewMode === "catalog" && (
-              <div className="overflow-x-auto">
+              <div className="sm:hidden divide-y divide-border/60">
+                {blockUnits.map(u => {
+                  const sc = statusConfig[u.status];
+                  const isSelected = selectedUnits.has(u.id);
+                  const sold = u.status === "reserved" || u.status === "sold";
+                  return (
+                    <div
+                      key={u.id}
+                      onClick={() => toggleExpandUnit(u.id)}
+                      className={cn(
+                        "relative flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors",
+                        isSelected && "bg-primary/5"
+                      )}
+                    >
+                      {!isCollaboratorView && (
+                        <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                          <Checkbox checked={isSelected} onCheckedChange={() => toggleSelect(u.id)} className="h-3.5 w-3.5" />
+                        </div>
+                      )}
+                      <div className="w-[64px] h-[48px] rounded-lg overflow-hidden bg-muted/30 shrink-0">
+                        <img src={`https://picsum.photos/seed/${u.id}/160/108`} alt="" className="w-full h-full object-cover" loading="lazy" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-foreground truncate">{getUnitDisplayId(u)}</span>
+                          <span className="text-[10px] text-muted-foreground truncate">· {u.type}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground tabular-nums">
+                          <span className="whitespace-nowrap">{u.bedrooms}/{u.bathrooms}</span>
+                          <span>·</span>
+                          <span className="whitespace-nowrap">{u.builtArea} m²</span>
+                        </div>
+                      </div>
+                      <div className="shrink-0 flex flex-col items-end gap-1">
+                        <span className="text-sm font-bold text-foreground tabular-nums whitespace-nowrap">
+                          {formatPrice(u.price)}
+                        </span>
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium border ${sc.class}`}>
+                          <span className={`h-1 w-1 rounded-full ${sc.dotClass}`} />
+                          {sc.label}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Catalog view desktop/tablet (sm+) — tabla con thumbnails */}
+            {!isCollapsed && viewMode === "catalog" && (
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="bg-muted/50 border-b border-border">
