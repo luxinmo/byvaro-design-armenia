@@ -1306,7 +1306,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       {/* FAB móvil — acciones rápidas de la ficha. En desktop (sm+)
           estas acciones ya están como botones en la barra superior; en
           móvil las reunimos bajo un + flotante con dropup. */}
-      <div className="sm:hidden fixed bottom-20 right-4 z-40">
+      {/* FAB móvil · posicionado con safe-area + 60px (altura del
+          MobileBottomNav) + 16px de gap para no montarse a la barra. */}
+      <div
+        className="sm:hidden fixed right-4 z-40"
+        style={{ bottom: "calc(60px + env(safe-area-inset-bottom) + 16px)" }}
+      >
         {mobileFabOpen && (
           <>
             <div className="fixed inset-0 bg-foreground/20 backdrop-blur-[2px] -z-10" onClick={() => setMobileFabOpen(false)} />
