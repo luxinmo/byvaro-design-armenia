@@ -855,28 +855,26 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                       ))}
                     </div>
 
-                    {/* Commissions inline summary */}
+                    {/* Aval bancario · estado resumido */}
                     {(() => {
-                      const commissionMissing = !p.commission || p.commission === 0;
+                      // TODO(backend): leer p.avalBancario cuando exista. Por
+                      // ahora mock a true para prototipo de diseño.
+                      const hasAval = true;
+                      const entidad = ""; // p.avalEntidad
                       return (
-                        <button
-                          onClick={() => setActiveTab(visibleTabs.indexOf("Comisiones"))}
-                          className="w-full flex items-center justify-between pt-3 border-t border-border text-left hover:opacity-80 transition-opacity"
-                        >
+                        <div className="w-full flex items-center justify-between pt-3 border-t border-border">
                           <div className="flex items-center gap-2">
-                            <span className={`h-1.5 w-1.5 rounded-full ${commissionMissing ? "bg-destructive" : "bg-primary"}`} />
-                            <span className="text-xs text-muted-foreground">Comisiones</span>
-                            {commissionMissing && (
-                              <span className="text-[10px] font-medium text-destructive">Falta</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-medium text-foreground tabular-nums">
-                              {commissionMissing ? "Sin definir" : `${p.commission}%`}
+                            <span className={`h-1.5 w-1.5 rounded-full ${hasAval ? "bg-primary" : "bg-muted-foreground/40"}`} />
+                            <span className="text-xs text-muted-foreground">
+                              {hasAval ? "Con aval bancario" : "Sin aval bancario"}
                             </span>
-                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
                           </div>
-                        </button>
+                          {hasAval && entidad && (
+                            <span className="text-xs font-medium text-foreground tabular-nums">
+                              {entidad}
+                            </span>
+                          )}
+                        </div>
                       );
                     })()}
                   </div>
