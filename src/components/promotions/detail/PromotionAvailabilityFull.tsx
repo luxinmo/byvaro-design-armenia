@@ -85,6 +85,7 @@ import {
 import { ColumnCustomizer, type ColumnDef } from "@/components/ui/column-customizer";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { UnitDetailPanel } from "./UnitDetailPanel";
+import { UnitDetailDialog } from "./UnitDetailDialog";
 import { SendEmailDialog } from "@/components/email/SendEmailDialog";
 import { registerUnsavedGuard } from "@/lib/unsavedGuard";
 import { cn, priceForDisplay } from "@/lib/utils";
@@ -165,6 +166,8 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
   const [viewMode, setViewMode] = useState<"table" | "grid" | "catalog">("catalog");
   const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(new Set());
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null);
+  // Nueva vista de unidad · modal centrado (opción 2).
+  const [detailUnitId, setDetailUnitId] = useState<string | null>(null);
   const [emailUnitId, setEmailUnitId] = useState<string | null>(null);
   const [blockNames, setBlockNames] = useState<Record<string, string>>({});
   const [editingBlock, setEditingBlock] = useState<string | null>(null);
@@ -322,7 +325,10 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
 
   const toggleExpandUnit = (id: string) => {
     if (bulkEditing) return;
-    setExpandedUnit(prev => prev === id ? null : id);
+    // Nueva UX: click en unidad abre el UnitDetailDialog en vez de la
+    // expansión en fila. Se mantiene expandedUnit state por los sitios
+    // que aún referencian el panel antiguo (edit / reserve dialogs).
+    setDetailUnitId(id);
   };
 
   const toggleSelect = (id: string) => {
@@ -1440,6 +1446,16 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
         mode="unit"
         promotionId={promotionId}
         unitId={emailUnitId ?? undefined}
+      />
+
+      {/* Vista de unidad · modal centrado 1000px · fullscreen en móvil. */}
+      <UnitDetailDialog
+        open={!!detailUnitId}
+        onOpenChange={(v) => !v && setDetailUnitId(null)}
+        unit={detailUnitId ? allUnits.find((u) => u.id === detailUnitId) ?? null : null}
+        siblings={filtered}
+        onChangeUnit={(id) => setDetailUnitId(id)}
+        isCollaboratorView={isCollaboratorView}
       />
     </div>
   );
