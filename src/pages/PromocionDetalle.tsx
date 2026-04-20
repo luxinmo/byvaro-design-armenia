@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { promotions, getBuildingTypeLabel } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion, type Comercial, type ComercialPermissions } from "@/data/developerPromotions";
@@ -117,6 +117,32 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const [viewAsCollaborator, setViewAsCollaborator] = useState(agentMode);
   // FAB móvil — abre un menú con las acciones principales de la ficha.
   const [mobileFabOpen, setMobileFabOpen] = useState(false);
+  // Swipe horizontal entre tabs · sólo activa en móvil (<640px).
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (window.innerWidth >= 640) return;
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    // Umbral 60px, dominancia horizontal, ignora tap y scrolls verticales.
+    if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return;
+    const dir = dx < 0 ? 1 : -1;
+    // Usamos setActiveTab con función para leer el valor más reciente sin
+    // depender del valor capturado en el closure (importante en React 18
+    // con strict mode y actualizaciones asíncronas).
+    setActiveTab((cur) => {
+      const max = visibleTabs.length - 1;
+      const next = Math.max(0, Math.min(max, cur + dir));
+      return next;
+    });
+  };
   const [addComercialOpen, setAddComercialOpen] = useState(false);
   const [pickOfficesOpen, setPickOfficesOpen] = useState(false);
   
@@ -403,7 +429,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         </nav>
       </header>
 
-      <div className="p-3 sm:p-[25px] w-full min-w-0" style={{ maxWidth: (activeTabKey === "Availability" || activeTabKey === "Agencies" || activeTabKey === "Overview") ? undefined : "1250px" }}>
+      <div
+        className="p-3 sm:p-[25px] w-full min-w-0"
+        style={{ maxWidth: (activeTabKey === "Availability" || activeTabKey === "Agencies" || activeTabKey === "Overview") ? undefined : "1250px" }}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
 
         {activeTabKey === "Overview" && (
           <>
