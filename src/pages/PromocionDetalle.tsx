@@ -12,7 +12,7 @@ import {
   Plus, Phone, Mail, MessageCircle, Store, UserPlus,
   Check, X, ExternalLink, Zap, Star, Search, ChevronDown, Info,
   Lock, Unlock, FolderOpen, Folder, Download, BookOpen, Upload, MoreHorizontal, FilePlus, ArrowRight,
-  Trophy, Sparkles, ArrowUpRight, FileCheck2, Rocket,
+  Trophy, Sparkles, ArrowUpRight, FileCheck2, Rocket, FileDown,
 } from "lucide-react";
 import { getMissingForPromotion } from "@/lib/publicationRequirements"; // fuente única de verdad de requisitos para publicar
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,7 @@ import {
 import { activeTeamMembers } from "@/data/teamMembers";
 import { companyOffices } from "@/data/companyOffices";
 import { SendEmailDialog } from "@/components/email/SendEmailDialog";
+import { PriceListDialog } from "@/components/promotions/detail/PriceListDialog";
 import { toast, Toaster } from "sonner"; // feedback tras publicar
 
 function formatPrice(n: number) {
@@ -121,6 +122,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const [folderLocked, setFolderLocked] = useState<Record<string, boolean>>({ planos: false, brochure: false });
   const [registerClientOpen, setRegisterClientOpen] = useState(false);
   const [sendEmailOpen, setSendEmailOpen] = useState(false);
+  const [priceListOpen, setPriceListOpen] = useState(false);
   // Edit dialogs
   const [editOpen, setEditOpen] = useState<null | "multimedia" | "basicInfo" | "structure" | "description" | "location" | "paymentPlan" | "showHouse" | "memoria" | "planos" | "brochure" | "contacts" | "inventory" | "salesOffices">(null);
   const [salesOffices, setSalesOffices] = useState<SalesOffice[]>([]);
@@ -295,6 +297,9 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               <Button size="sm" variant="outline" onClick={() => setSendEmailOpen(true)} className="gap-1.5">
                 <Mail className="h-3.5 w-3.5" strokeWidth={1.5} /> Enviar
               </Button>
+              <Button size="sm" variant="outline" onClick={() => setPriceListOpen(true)} className="gap-1.5">
+                <FileDown className="h-3.5 w-3.5" strokeWidth={1.5} /> Listado de precios
+              </Button>
 
               {/* Botón Publicar · aparece si la promoción aún no está activa
                   O si está activa pero le faltan requisitos (estado real de
@@ -344,6 +349,9 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             <div className="flex items-center gap-2 shrink-0">
               <Button size="sm" variant="outline" onClick={() => setSendEmailOpen(true)} className="gap-1.5">
                 <Mail className="h-3.5 w-3.5" /> Enviar
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setPriceListOpen(true)} className="gap-1.5">
+                <FileDown className="h-3.5 w-3.5" /> Listado
               </Button>
               <Button size="sm" onClick={() => setRegisterClientOpen(true)} className="gap-1.5">
                 <Users className="h-3.5 w-3.5" /> Registrar cliente
@@ -1205,6 +1213,9 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
       {/* Send email dialog (template picker + WYSIWYG) */}
       <SendEmailDialog open={sendEmailOpen} onOpenChange={setSendEmailOpen} mode="promotion" promotionId={id} />
+
+      {/* Listado de precios descargable (PDF vía window.print). */}
+      <PriceListDialog open={priceListOpen} onOpenChange={setPriceListOpen} promotion={p} />
 
       {/* ═══ EDIT SECTION DIALOGS ═══ */}
       <EditMultimediaDialog open={editOpen === "multimedia"} onOpenChange={(v) => setEditOpen(v ? "multimedia" : null)} images={galleryImages} onSave={() => {}} />

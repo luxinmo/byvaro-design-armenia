@@ -80,3 +80,25 @@
     border-radius: 0 3px 3px 0;
   }
 }
+
+/* ===================================================================
+   Print styles · soporte para descarga PDF del listado de precios.
+   Cuando el usuario pulsa "Descargar PDF" en PriceListDialog, se
+   invoca window.print(). Oculta todo excepto el contenedor con
+   id="price-list-printable".
+   =================================================================== */
+@media print {
+  body * { visibility: hidden !important; }
+  #price-list-printable,
+  #price-list-printable * { visibility: visible !important; }
+  #price-list-printable {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 210mm !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+  /* Deja márgenes controlados por el propio contenedor (18mm). */
+  @page { margin: 0; size: A4; }
+}
