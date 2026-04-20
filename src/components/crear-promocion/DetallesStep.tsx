@@ -46,10 +46,18 @@ function ToggleCard({
 }) {
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden">
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
+        aria-pressed={checked}
         onClick={() => onChange(!checked)}
-        className="w-full flex items-center justify-between gap-3 p-4 text-left hover:bg-muted/30 transition-colors"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onChange(!checked);
+          }
+        }}
+        className="w-full flex items-center justify-between gap-3 p-4 text-left cursor-pointer hover:bg-muted/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >
         <div className="flex items-center gap-3">
           <div className={cn(
@@ -64,7 +72,7 @@ function ToggleCard({
           </div>
         </div>
         <Switch checked={checked} onCheckedChange={onChange} ariaLabel={title} />
-      </button>
+      </div>
       {checked && children && (
         <div className="border-t border-border bg-muted/20 p-4">{children}</div>
       )}

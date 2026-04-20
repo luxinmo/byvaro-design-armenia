@@ -71,6 +71,10 @@ async function fillStep(page, heading) {
   const actions = [];
 
   // 1) Text inputs y textareas con defaults sensatos.
+  //    Inputs que son autocomplete de ubicación (placeholder menciona
+  //    ciudad/dirección/ubicación) se detectan y se trata aparte: se
+  //    teclea una ciudad real presente en las sugerencias y se emite
+  //    click sobre la primera opción del dropdown.
   const filled = await page.evaluate(() => {
     let count = 0;
     const set = (el, value) => {
@@ -81,7 +85,14 @@ async function fillStep(page, heading) {
       count++;
     };
     document.querySelectorAll('main input[type="text"]:not([readonly]), main input:not([type]):not([readonly])').forEach((el) => {
-      if (!el.value) set(el, "Residencial Test");
+      if (el.value) return;
+      const ph = (el.placeholder || "").toLowerCase();
+      if (/ciudad|direcci|ubicaci|zona|localidad/.test(ph)) {
+        set(el, "Marbella");
+        el.focus();
+      } else {
+        set(el, "Residencial Test");
+      }
     });
     document.querySelectorAll('main input[type="email"]').forEach((el) => { if (!el.value) set(el, "test@example.com"); });
     document.querySelectorAll('main input[type="tel"]').forEach((el) => { if (!el.value) set(el, "+34600000000"); });
@@ -93,36 +104,67 @@ async function fillStep(page, heading) {
   });
   if (filled) actions.push(`filled:${filled}`);
 
+  // Dejar que aparezca el dropdown del autocomplete y clicar la 1ª opción.
+  await page.waitForTimeout(300);
+  const sugClicked = await page.evaluate(() => {
+    // Radix/custom dropdowns tipo lista en document.body
+    const candidates = Array.from(document.querySelectorAll('[role="option"], [role="listbox"] li, [role="listbox"] button, ul[class*="absolute"] li, ul[class*="absolute"] button'));
+    const visible = candidates.find((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 30 && r.height > 20;
+    });
+    if (visible) {
+      visible.click();
+      return 1;
+    }
+    return 0;
+  });
+  if (sugClicked) actions.push("picked-suggestion");
+
   // 2) Si el botón Siguiente ya se habilitó, paramos de tocar.
   let state = await captureState(page);
   if (state.next && !state.next.disabled) return { actions, state };
 
-  // 3) Clic en la primera opción "card" visible. Heurísticas:
-  //    · Elementos con clases de tarjeta seleccionable (border-2,
-  //      cursor-pointer, rounded-xl o rounded-2xl), que NO sean el
-  //      botón Siguiente.
-  //    · `role="button"` divs.
-  const clicked = await page.evaluate(() => {
-    const cands = Array.from(document.querySelectorAll("main button, main [role=\"button\"], main div[tabindex=\"0\"]"));
-    const clickable = cands.filter((el) => {
-      const cs = getComputedStyle(el);
-      if (cs.display === "none" || cs.visibility === "hidden") return false;
-      const rect = el.getBoundingClientRect();
-      if (rect.width < 60 || rect.height < 40) return false; // toggles pequeños no
-      // Excluir el header X y botones del footer
-      if (el.closest("footer")) return false;
-      if (el.getAttribute("aria-label") === "Cerrar") return false;
-      if (/Siguiente|Atrás|Publicar|Cancelar|Omitir/i.test(el.textContent)) return false;
-      return true;
-    });
-    if (clickable.length === 0) return 0;
-    clickable[0].click();
-    return 1;
-  });
-  if (clicked) actions.push("clicked-first-card");
+  // 3) Clic iterativo en cards. Algunos pasos requieren selección en
+  //    múltiples grupos (p.ej. "Tipología y estilo" pide 1 tipología +
+  //    1 estilo arquitectónico). Seguimos clicando cards distintas
+  //    hasta que "Siguiente" se habilite o nos quedemos sin candidatos.
+  const clickedSet = new Set();
+  let clicks = 0;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const picked = await page.evaluate((alreadyClicked) => {
+      const cands = Array.from(document.querySelectorAll("main button, main [role=\"button\"], main div[tabindex=\"0\"]"));
+      const clickable = cands.filter((el) => {
+        const cs = getComputedStyle(el);
+        if (cs.display === "none" || cs.visibility === "hidden") return false;
+        const rect = el.getBoundingClientRect();
+        if (rect.width < 60 || rect.height < 40) return false;
+        if (el.closest("footer")) return false;
+        if (el.getAttribute("aria-label") === "Cerrar") return false;
+        if (/Siguiente|Atrás|Publicar|Cancelar|Omitir|Añadir|Subir|Quitar/i.test(el.textContent)) return false;
+        // No reclickear cards ya seleccionadas (detectar estado "pressed"/selected)
+        if (el.getAttribute("aria-pressed") === "true") return false;
+        if (el.getAttribute("data-selected") === "true") return false;
+        // No reclickear los que ya probamos en este paso
+        const sig = (el.textContent || "").trim().slice(0, 60);
+        if (alreadyClicked.includes(sig)) return false;
+        return true;
+      });
+      if (!clickable.length) return null;
+      const target = clickable[0];
+      const sig = (target.textContent || "").trim().slice(0, 60);
+      target.click();
+      return sig;
+    }, [...clickedSet]);
 
-  await page.waitForTimeout(300);
-  state = await captureState(page);
+    if (!picked) break;
+    clickedSet.add(picked);
+    clicks++;
+    await page.waitForTimeout(200);
+    state = await captureState(page);
+    if (state.next && !state.next.disabled) break;
+  }
+  if (clicks) actions.push(`cards:${clicks}`);
 
   // 4) Reintentar fill por si aparecieron inputs tras la selección.
   if (state.next && state.next.disabled) {
@@ -175,6 +217,7 @@ async function main() {
   const visited = new Set();
   let n = 0;
 
+  let missingOnPublish = null;
   while (n < MAX_STEPS) {
     n++;
     const initial = await captureState(page);
@@ -187,6 +230,45 @@ async function main() {
     if (loop) {
       console.log(`↻ ${n} loop en "${key}" — paro`);
       steps.push({ n, heading: key, loop: true, screenshot: shot });
+      break;
+    }
+
+    // Si es el paso de Revisión, extraemos los requisitos que faltan
+    // para publicar directamente del banner (sin clicar nada que haga
+    // navegar atrás).
+    if (/Revisi[oó]n/i.test(key)) {
+      missingOnPublish = await page.evaluate(() => {
+        const out = [];
+        // El banner "Faltan N requisitos" tiene items clickables que
+        // llevan al paso correspondiente. Los extraemos como texto.
+        document.querySelectorAll("main button, main a").forEach((el) => {
+          const t = (el.textContent || "").trim();
+          if (/^(Añade|Define|Configura|Selecciona|Completa|Sube)/i.test(t) && t.length < 120) {
+            out.push(t);
+          }
+        });
+        return [...new Set(out)];
+      });
+      const nextBtn = initial.next;
+      const record = {
+        n, heading: key, screenshot: shot,
+        isFinalReview: true,
+        missingOnPublish,
+        publishEnabled: nextBtn && !nextBtn.disabled,
+        nextAfterFill: nextBtn,
+      };
+      if (nextBtn && !nextBtn.disabled) {
+        console.log(`✓ ${n} "${key}" listo para publicar`);
+        record.advanced = true;
+        steps.push(record);
+        await page.click('footer button:has-text("Publicar")').catch(() => null);
+        await page.waitForURL(/\/promociones/, { timeout: 10000 }).catch(() => null);
+        break;
+      }
+      console.log(`⏸ ${n} "${key}" bloqueado por ${missingOnPublish.length} requisitos:`);
+      missingOnPublish.forEach((m) => console.log(`     · ${m}`));
+      record.blocked = true;
+      steps.push(record);
       break;
     }
 
@@ -242,6 +324,7 @@ async function main() {
     blockedAt: blocked ? blocked.heading : null,
     blockedInputs: blocked ? blocked.inputs : null,
     blockedLabels: blocked ? blocked.fieldsSeen : null,
+    missingOnPublish,
     consoleErrors,
     netErrors,
     steps,
