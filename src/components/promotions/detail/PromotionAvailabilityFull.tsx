@@ -897,15 +897,21 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                               )}
                             </td>
 
-                            {/* Precio */}
+                            {/* Precio · input con miles "476.000" para
+                                coincidir con el formato de lectura y evitar
+                                confusiones entre 500000 y 500.000. */}
                             <td className="px-3 py-2 text-right" onClick={e => editing && isFieldEditable("price") && e.stopPropagation()}>
                               {renderEditableCell(u, "price",
                                 <span className="text-sm font-semibold text-foreground tabular-nums">{formatPrice(u.price)}</span>,
                                 <input
-                                  type="number"
-                                  value={getVal(u, "price")}
-                                  onChange={e => updateField(u.id, "price", Number(e.target.value))}
-                                  className={cn("w-24 h-7 px-2 text-xs text-right font-semibold", editableCellClass)}
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={Number(getVal(u, "price") || 0).toLocaleString("es-ES")}
+                                  onChange={e => {
+                                    const digits = e.target.value.replace(/[^0-9]/g, "");
+                                    updateField(u.id, "price", digits === "" ? 0 : Number(digits));
+                                  }}
+                                  className={cn("w-28 h-7 px-2 text-xs text-right font-semibold tabular-nums", editableCellClass)}
                                 />
                               )}
                             </td>

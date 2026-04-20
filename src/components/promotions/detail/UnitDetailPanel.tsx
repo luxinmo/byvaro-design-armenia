@@ -419,15 +419,33 @@ function EditUnitForm({ unit, onClose, onSave }: { unit: Unit; onClose: () => vo
     });
   };
 
-  const Field = ({ label, value, onChange, suffix }: { label: string; value: number; onChange: (v: number) => void; suffix?: string }) => (
-    <div>
-      <label className="text-xs text-muted-foreground font-medium">{label}</label>
-      <div className="relative mt-0.5">
-        <Input type="number" value={value} onChange={e => onChange(Number(e.target.value))} className="h-8 text-xs pr-8 rounded-xl border-border/40 bg-muted/20 focus:bg-background" />
-        {suffix && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">{suffix}</span>}
+  const Field = ({ label, value, onChange, suffix }: { label: string; value: number; onChange: (v: number) => void; suffix?: string }) => {
+    // Campos de precio (€) se muestran con separador de miles "500.000"
+    // para evitar confusión visual con valores pequeños.
+    const isPrice = /precio|€/i.test(label);
+    return (
+      <div>
+        <label className="text-xs text-muted-foreground font-medium">{label}</label>
+        <div className="relative mt-0.5">
+          {isPrice ? (
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={Number(value || 0).toLocaleString("es-ES")}
+              onChange={e => {
+                const digits = e.target.value.replace(/[^0-9]/g, "");
+                onChange(digits === "" ? 0 : Number(digits));
+              }}
+              className="h-8 text-xs pr-8 rounded-xl border-border/40 bg-muted/20 focus:bg-background tabular-nums"
+            />
+          ) : (
+            <Input type="number" value={value} onChange={e => onChange(Number(e.target.value))} className="h-8 text-xs pr-8 rounded-xl border-border/40 bg-muted/20 focus:bg-background" />
+          )}
+          {suffix && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">{suffix}</span>}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const selectClass = "w-full h-8 rounded-xl border border-border/40 bg-muted/20 text-xs px-2.5 mt-0.5 focus:bg-background focus:outline-none focus:ring-1 focus:ring-ring transition-colors";
 

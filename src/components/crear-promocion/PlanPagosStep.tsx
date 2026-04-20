@@ -397,12 +397,14 @@ export function PlanPagosStep({
               <label className="text-xs font-medium text-muted-foreground">Importe de reserva</label>
               <div className="relative">
                 <input
-                  type="number"
-                  value={state.importeReserva}
-                  onChange={(e) =>
-                    update("importeReserva", Math.max(0, Number(e.target.value)))
-                  }
-                  placeholder="5000"
+                  type="text"
+                  inputMode="numeric"
+                  value={Number(state.importeReserva || 0).toLocaleString("es-ES")}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/[^0-9]/g, "");
+                    update("importeReserva", digits === "" ? 0 : Number(digits));
+                  }}
+                  placeholder="5.000"
                   className={cn(inputBase, "h-9 w-full text-sm px-3 pr-8 tnum")}
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
