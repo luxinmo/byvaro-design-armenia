@@ -522,7 +522,18 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               })}
             </div>
 
-            {/* ── 3. STRUCTURE & CONSTRUCTION ── */}
+            {/* ── ORDEN DE SECCIONES DE OVERVIEW ──
+                 1. Estructura y construcción
+                 2. Unidades y disponibilidad · Plan de pagos
+                 3. Descripción
+                 4. Memoria / Planos / Brochure
+                 5. Ubicación
+                 6. Información básica (+amenities)
+                 7. Piso piloto
+                 8. ContactFooter (contactos, al final)
+            */}
+
+            {/* ── 1. ESTRUCTURA Y CONSTRUCCIÓN ── */}
             <SectionCard title="Estructura y construcción" stepName="Basic info" missing={realMissing.has("estado")} onEdit={() => setEditOpen("structure")} hideEdit={viewAsCollaborator}>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <InfoItem icon={Building2} label="Tipo" value={typeLabel || "Sin definir"} />
@@ -551,114 +562,94 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               )}
             </SectionCard>
 
-            {/* ── 4. BASIC INFORMATION (no Location — has its own section) ── */}
-            <SectionCard title="Información básica" stepName="Basic info" missing={missingSet.has("Basic info")} onEdit={() => setEditOpen("basicInfo")} hideEdit={viewAsCollaborator}>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Tipologías</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(p.propertyTypes.length > 0 ? p.propertyTypes : ["Sin definir"]).map(t => (
-                      <Tag key={t} variant="default" size="sm">{t}</Tag>
-                    ))}
+            {/* ── 2. PAGO Y DISPONIBILIDAD (Unidades + Plan de pagos) ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <SectionCard title="Unidades y disponibilidad" stepName="Units" missing={missingSet.has("Units") || realMissing.has("units")} onEdit={() => setEditOpen("inventory")} hideEdit={viewAsCollaborator}>
+                <PromotionAvailabilitySummary promotionId={p.id} onViewAll={() => setActiveTab(1)} />
+              </SectionCard>
+
+              <SectionCard title="Plan de pagos" stepName="Payment plan" missing={missingSet.has("Payment plan") || realMissing.has("paymentPlan")} onEdit={() => setEditOpen("paymentPlan")} hideEdit={viewAsCollaborator}>
+                {p.reservationCost > 0 ? (
+                  <div className="space-y-4">
+                    {/* Summary row */}
+                    <div className="grid grid-cols-3 gap-3 pb-3 border-b border-border">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Reserva</p>
+                        <p className="text-sm font-semibold text-foreground tabular-nums">{formatPrice(p.reservationCost)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Validez</p>
+                        <p className="text-sm font-semibold text-foreground">60 días</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Método</p>
+                        <p className="text-sm font-semibold text-foreground">Hitos</p>
+                      </div>
+                    </div>
+
+                    {/* Milestones — minimal list */}
+                    <div className="space-y-2">
+                      {[
+                        { pct: "10%", label: "Firma de reserva" },
+                        { pct: "20%", label: "Finalización de estructura" },
+                        { pct: "30%", label: "Instalaciones" },
+                        { pct: "40%", label: "Notaría (llaves)" },
+                      ].map((m, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2.5">
+                            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+                            <span className="text-foreground">{m.label}</span>
+                          </div>
+                          <span className="font-medium text-foreground tabular-nums">{m.pct}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Aval bancario · estado resumido */}
+                    {(() => {
+                      // TODO(backend): leer p.avalBancario cuando exista.
+                      const hasAval = true;
+                      const entidad = ""; // p.avalEntidad
+                      return (
+                        <div className="w-full flex items-center justify-between pt-3 border-t border-border">
+                          <div className="flex items-center gap-2">
+                            <span className={`h-1.5 w-1.5 rounded-full ${hasAval ? "bg-primary" : "bg-muted-foreground/40"}`} />
+                            <span className="text-xs text-muted-foreground">
+                              {hasAval ? "Con aval bancario" : "Sin aval bancario"}
+                            </span>
+                          </div>
+                          {hasAval && entidad && (
+                            <span className="text-xs font-medium text-foreground tabular-nums">
+                              {entidad}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
+                ) : (
+                  <EmptyState icon={CreditCard} message="Sin plan de pagos definido" sub="Define cómo pagarán los compradores" />
+                )}
+              </SectionCard>
+            </div>
+
+            {/* ── 3. DESCRIPCIÓN ── */}
+            <SectionCard title="Descripción" stepName="Description" missing={missingSet.has("Description")} onEdit={() => setEditOpen("description")} hideEdit={viewAsCollaborator}>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Tag variant="default" size="sm"><Globe className="h-3 w-3" /> ES</Tag>
+                  <Tag variant="default" size="sm"><Globe className="h-3 w-3" /> EN</Tag>
                 </div>
-                <div className="h-px bg-border/40" />
-                <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Amenities</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {["Piscina", "Gimnasio", "Jardín", "Seguridad", "Parking"].map(a => (
-                      <Tag key={a} variant="default" size="sm">{a}</Tag>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Características del hogar</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {["Cocina equipada", "Aire acondicionado", "Terraza", "Smart home"].map(f => (
-                      <Tag key={f} variant="default" size="sm">{f}</Tag>
-                    ))}
-                  </div>
-                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {p.name} es una promoción {typeLabel?.toLowerCase() || "residencial"} situada en {p.location || "España"}.
+                  {p.developer && ` Desarrollada por ${p.developer}.`}
+                  {p.totalUnits > 0 && ` El proyecto consta de ${p.totalUnits} unidades con entrega estimada para ${p.delivery || "por definir"}.`}
+                  {p.propertyTypes.length > 0 && ` Las tipologías incluyen ${p.propertyTypes.join(", ").toLowerCase()}.`}
+                </p>
               </div>
             </SectionCard>
 
-            {/* ── PISO PILOTO (Show House) ── */}
-            {(() => {
-              const promoUnits = unitsByPromotion[p.id] || [];
-              const showFlatUnit = showFlatUnitId ? promoUnits.find(u => u.id === showFlatUnitId) : null;
-
-              // Collaborator only sees this section if a show flat is actually set
-              if (viewAsCollaborator && !showFlatUnit) return null;
-
-              return (
-                <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
-                  <div className="px-5 pt-4 pb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Eye className="h-3.5 w-3.5 text-primary" />
-                      </div>
-                      <div>
-                        <h2 className="text-base font-semibold text-foreground">Piso piloto</h2>
-                        <p className="text-[10px] text-muted-foreground">Unidad modelo disponible para visitas</p>
-                      </div>
-                    </div>
-                    {!viewAsCollaborator && showFlatUnit && (
-                      <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 rounded-full" onClick={() => setShowFlatPickerOpen(true)}>
-                        <Pencil className="h-3 w-3" /> Cambiar unidad
-                      </Button>
-                    )}
-                  </div>
-                  <div className="px-5 pb-5">
-                    {showFlatUnit ? (
-                      <div className="flex gap-4 p-4 rounded-xl border border-primary/20 bg-primary/5">
-                        <div className="w-[180px] h-[130px] rounded-xl overflow-hidden shrink-0 relative group cursor-pointer">
-                          <img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=400&h=300&fit=crop" alt="Piso piloto" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                          <div className="absolute top-2 left-2">
-                            <Tag variant="overlay" size="sm"><Star className="h-2.5 w-2.5" /> Piso piloto</Tag>
-                          </div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-sm font-bold text-foreground">{showFlatUnit.block} - P{showFlatUnit.floor} {showFlatUnit.door}</h3>
-                            <Tag variant="success" size="sm">Piso piloto</Tag>
-                          </div>
-                          <p className="text-lg font-bold text-foreground mb-3">{formatPrice(showFlatUnit.price)}</p>
-                          <div className="grid grid-cols-3 gap-3">
-                            <div>
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Dormitorios</p>
-                              <p className="text-sm font-semibold text-foreground">{showFlatUnit.bedrooms}</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Superficie</p>
-                              <p className="text-sm font-semibold text-foreground">{showFlatUnit.builtArea} m²</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Planta</p>
-                              <p className="text-sm font-semibold text-foreground">{showFlatUnit.floor}ª</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3 mt-3 text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Lun–Vie, 10:00 - 18:00</span>
-                            <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> Con cita previa</span>
-                          </div>
-                        </div>
-                      </div>
-                    ) : !viewAsCollaborator ? (
-                      <div className="flex flex-col items-center justify-center py-8 text-center rounded-xl border border-dashed border-border bg-muted/10">
-                        <Eye className="h-8 w-8 text-muted-foreground/20 mb-2" />
-                        <p className="text-sm font-medium text-muted-foreground">Sin piso piloto seleccionado</p>
-                        <p className="text-xs text-muted-foreground/60 mt-0.5 mb-3">Elige una unidad del listado de disponibilidad</p>
-                        <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8 rounded-full" onClick={() => setShowFlatPickerOpen(true)}>
-                          <Plus className="h-3 w-3" /> Seleccionar unidad
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* ── DOCUMENTACIÓN: Planos generales + Brochure ── */}
+            {/* ── 4. DOCUMENTACIÓN: Memoria + Planos + Brochure ── */}
             <div className={`grid grid-cols-1 ${p.totalUnits > 1 ? "lg:grid-cols-3" : "lg:grid-cols-2"} gap-4`}>
               {/* Memoria de calidades */}
               <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden group/section relative">
@@ -812,99 +803,9 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               </div>
             </div>
 
-            {/* ── 5. UNITS / PAYMENT PLAN / COMMISSIONS ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <SectionCard title="Unidades y disponibilidad" stepName="Units" missing={missingSet.has("Units") || realMissing.has("units")} onEdit={() => setEditOpen("inventory")} hideEdit={viewAsCollaborator}>
-                <PromotionAvailabilitySummary promotionId={p.id} onViewAll={() => setActiveTab(1)} />
-              </SectionCard>
-
-              <SectionCard title="Plan de pagos" stepName="Payment plan" missing={missingSet.has("Payment plan") || realMissing.has("paymentPlan")} onEdit={() => setEditOpen("paymentPlan")} hideEdit={viewAsCollaborator}>
-                {p.reservationCost > 0 ? (
-                  <div className="space-y-4">
-                    {/* Summary row */}
-                    <div className="grid grid-cols-3 gap-3 pb-3 border-b border-border">
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Reserva</p>
-                        <p className="text-sm font-semibold text-foreground tabular-nums">{formatPrice(p.reservationCost)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Validez</p>
-                        <p className="text-sm font-semibold text-foreground">60 días</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Método</p>
-                        <p className="text-sm font-semibold text-foreground">Hitos</p>
-                      </div>
-                    </div>
-
-                    {/* Milestones — minimal list */}
-                    <div className="space-y-2">
-                      {[
-                        { pct: "10%", label: "Firma de reserva" },
-                        { pct: "20%", label: "Finalización de estructura" },
-                        { pct: "30%", label: "Instalaciones" },
-                        { pct: "40%", label: "Notaría (llaves)" },
-                      ].map((m, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2.5">
-                            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
-                            <span className="text-foreground">{m.label}</span>
-                          </div>
-                          <span className="font-medium text-foreground tabular-nums">{m.pct}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Aval bancario · estado resumido */}
-                    {(() => {
-                      // TODO(backend): leer p.avalBancario cuando exista. Por
-                      // ahora mock a true para prototipo de diseño.
-                      const hasAval = true;
-                      const entidad = ""; // p.avalEntidad
-                      return (
-                        <div className="w-full flex items-center justify-between pt-3 border-t border-border">
-                          <div className="flex items-center gap-2">
-                            <span className={`h-1.5 w-1.5 rounded-full ${hasAval ? "bg-primary" : "bg-muted-foreground/40"}`} />
-                            <span className="text-xs text-muted-foreground">
-                              {hasAval ? "Con aval bancario" : "Sin aval bancario"}
-                            </span>
-                          </div>
-                          {hasAval && entidad && (
-                            <span className="text-xs font-medium text-foreground tabular-nums">
-                              {entidad}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                ) : (
-                  <EmptyState icon={CreditCard} message="Sin plan de pagos definido" sub="Define cómo pagarán los compradores" />
-                )}
-              </SectionCard>
-            </div>
 
 
-
-
-
-            {/* ── 8. DESCRIPTION ── */}
-            <SectionCard title="Descripción" stepName="Description" missing={missingSet.has("Description")} onEdit={() => setEditOpen("description")} hideEdit={viewAsCollaborator}>
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <Tag variant="default" size="sm"><Globe className="h-3 w-3" /> ES</Tag>
-                  <Tag variant="default" size="sm"><Globe className="h-3 w-3" /> EN</Tag>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  {p.name} es una promoción {typeLabel?.toLowerCase() || "residencial"} situada en {p.location || "España"}.
-                  {p.developer && ` Desarrollada por ${p.developer}.`}
-                  {p.totalUnits > 0 && ` El proyecto consta de ${p.totalUnits} unidades con entrega estimada para ${p.delivery || "por definir"}.`}
-                  {p.propertyTypes.length > 0 && ` Las tipologías incluyen ${p.propertyTypes.join(", ").toLowerCase()}.`}
-                </p>
-              </div>
-            </SectionCard>
-
-            {/* ── 9. LOCATION ── */}
+            {/* ── 5. UBICACIÓN ── */}
             <SectionCard title="Ubicación" stepName="Basic info" missing={realMissing.has("location")} onEdit={() => setEditOpen("location")} hideEdit={viewAsCollaborator}>
               <div className="rounded-xl overflow-hidden h-[200px] bg-muted/30 flex items-center justify-center">
                 <div className="text-center">
@@ -914,7 +815,113 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               </div>
             </SectionCard>
 
-            {/* ── 10. CONTACTS ── */}
+            {/* ── 6. INFORMACIÓN BÁSICA (tipologías + amenities) ── */}
+            <SectionCard title="Información básica" stepName="Basic info" missing={missingSet.has("Basic info")} onEdit={() => setEditOpen("basicInfo")} hideEdit={viewAsCollaborator}>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Tipologías</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(p.propertyTypes.length > 0 ? p.propertyTypes : ["Sin definir"]).map(t => (
+                      <Tag key={t} variant="default" size="sm">{t}</Tag>
+                    ))}
+                  </div>
+                </div>
+                <div className="h-px bg-border/40" />
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Amenities</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {["Piscina", "Gimnasio", "Jardín", "Seguridad", "Parking"].map(a => (
+                      <Tag key={a} variant="default" size="sm">{a}</Tag>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Características del hogar</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {["Cocina equipada", "Aire acondicionado", "Terraza", "Smart home"].map(f => (
+                      <Tag key={f} variant="default" size="sm">{f}</Tag>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </SectionCard>
+
+            {/* ── 7. PISO PILOTO ── */}
+            {(() => {
+              const promoUnits = unitsByPromotion[p.id] || [];
+              const showFlatUnit = showFlatUnitId ? promoUnits.find(u => u.id === showFlatUnitId) : null;
+
+              if (viewAsCollaborator && !showFlatUnit) return null;
+
+              return (
+                <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
+                  <div className="px-5 pt-4 pb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Eye className="h-3.5 w-3.5 text-primary" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-semibold text-foreground">Piso piloto</h2>
+                        <p className="text-[10px] text-muted-foreground">Unidad modelo disponible para visitas</p>
+                      </div>
+                    </div>
+                    {!viewAsCollaborator && showFlatUnit && (
+                      <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 rounded-full" onClick={() => setShowFlatPickerOpen(true)}>
+                        <Pencil className="h-3 w-3" /> Cambiar unidad
+                      </Button>
+                    )}
+                  </div>
+                  <div className="px-5 pb-5">
+                    {showFlatUnit ? (
+                      <div className="flex gap-4 p-4 rounded-xl border border-primary/20 bg-primary/5">
+                        <div className="w-[180px] h-[130px] rounded-xl overflow-hidden shrink-0 relative group cursor-pointer">
+                          <img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=400&h=300&fit=crop" alt="Piso piloto" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                          <div className="absolute top-2 left-2">
+                            <Tag variant="overlay" size="sm"><Star className="h-2.5 w-2.5" /> Piso piloto</Tag>
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="text-sm font-bold text-foreground">{showFlatUnit.block} - P{showFlatUnit.floor} {showFlatUnit.door}</h3>
+                            <Tag variant="success" size="sm">Piso piloto</Tag>
+                          </div>
+                          <p className="text-lg font-bold text-foreground mb-3">{formatPrice(showFlatUnit.price)}</p>
+                          <div className="grid grid-cols-3 gap-3">
+                            <div>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Dormitorios</p>
+                              <p className="text-sm font-semibold text-foreground">{showFlatUnit.bedrooms}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Superficie</p>
+                              <p className="text-sm font-semibold text-foreground">{showFlatUnit.builtArea} m²</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Planta</p>
+                              <p className="text-sm font-semibold text-foreground">{showFlatUnit.floor}ª</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 mt-3 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Lun–Vie, 10:00 - 18:00</span>
+                            <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> Con cita previa</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : !viewAsCollaborator ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-center rounded-xl border border-dashed border-border bg-muted/10">
+                        <Eye className="h-8 w-8 text-muted-foreground/20 mb-2" />
+                        <p className="text-sm font-medium text-muted-foreground">Sin piso piloto seleccionado</p>
+                        <p className="text-xs text-muted-foreground/60 mt-0.5 mb-3">Elige una unidad del listado de disponibilidad</p>
+                        <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8 rounded-full" onClick={() => setShowFlatPickerOpen(true)}>
+                          <Plus className="h-3 w-3" /> Seleccionar unidad
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── 8. CONTACTOS (al final) ── */}
             <ContactFooter
               contacts={contacts}
               website={website}
@@ -940,8 +947,8 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 ];
                 return (
                   <TooltipProvider delayDuration={150}>
-                    <aside className="w-full lg:w-12 2xl:w-[260px] lg:shrink-0 order-1 lg:order-2">
-                      <div className="lg:sticky lg:top-6">
+                    <aside className="w-full lg:w-12 2xl:w-[260px] lg:shrink-0 order-1 lg:order-2 lg:self-start lg:sticky lg:top-4">
+                      <div className="lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto no-scrollbar">
                         {/* Compact dock — visible md/lg, hidden on 2xl */}
                         <div className="2xl:hidden flex lg:flex-col gap-1.5 rounded-2xl bg-card border border-border shadow-soft p-1.5">
                           {items.map((item, i) => (
