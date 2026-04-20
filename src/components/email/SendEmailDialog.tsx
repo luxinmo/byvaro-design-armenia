@@ -165,6 +165,16 @@ export function SendEmailDialog({
   const [recipientSearch, setRecipientSearch] = useState("");
   /** selected recipient emails */
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
+  /**
+   * Cómo se seleccionaron los destinatarios — se usa en el chip "Para:"
+   * del compose para mostrar etiquetas semánticas ("Todos los colaboradores",
+   * "Favoritos") en vez de los N nombres o emails sueltos.
+   *   · "all"      → enviar a todos los colaboradores
+   *   · "favorites"→ enviar sólo a favoritos
+   *   · "pick"     → elegidos manualmente (mostrar nombres)
+   *   · null/undef → no aplica (flujo clientes o sin selección previa)
+   */
+  const [recipientMode, setRecipientMode] = useState<"all" | "favorites" | "pick" | null>(null);
   /** ad-hoc external recipients added by typing an email */
   const [externalRecipients, setExternalRecipients] = useState<Recipient[]>([]);
   /** Which sub-tab inside the recipient picker is active */
@@ -218,6 +228,7 @@ export function SendEmailDialog({
       setExternalRecipients([]);
       setRecipientSearch("");
       setPickerTab("all");
+      setRecipientMode(null);
       // editMode is always true now (inline editing always on)
       setIncludeSignature(true);
       setIncludeAvailability(true);
@@ -462,6 +473,7 @@ export function SendEmailDialog({
               <button
                 onClick={() => {
                   setSelectedRecipients(agencies.map(a => `contact@${a.name.toLowerCase().replace(/[^a-z0-9]+/g, "")}.com`));
+                  setRecipientMode("all");
                   setStep("template");
                 }}
                 className="w-full bg-card border border-border hover:border-foreground/40 hover:shadow-soft rounded-2xl p-5 text-left transition-all flex items-center gap-4 group"
@@ -488,6 +500,7 @@ export function SendEmailDialog({
                 onClick={() => {
                   const favs = agencies.filter(a => FAVORITE_AGENCY_IDS.has(a.id));
                   setSelectedRecipients(favs.map(a => `contact@${a.name.toLowerCase().replace(/[^a-z0-9]+/g, "")}.com`));
+                  setRecipientMode("favorites");
                   setStep("template");
                 }}
                 className="w-full bg-card border border-border hover:border-amber-500/40 hover:shadow-soft rounded-2xl p-5 text-left transition-all flex items-center gap-4 group"
@@ -511,7 +524,7 @@ export function SendEmailDialog({
 
               {/* Opción 3 · ELEGIR ENTRE COLABORADORES */}
               <button
-                onClick={() => setStep("collab-pick")}
+                onClick={() => { setRecipientMode("pick"); setStep("collab-pick"); }}
                 className="w-full bg-card border border-border hover:border-foreground/40 hover:shadow-soft rounded-2xl p-5 text-left transition-all flex items-center gap-4 group"
               >
                 <div className="h-12 w-12 rounded-2xl bg-foreground/5 group-hover:bg-foreground/10 flex items-center justify-center shrink-0 transition-colors">
@@ -923,8 +936,22 @@ export function SendEmailDialog({
                         <span className="text-xs text-muted-foreground">
                           {language === "es" ? "Añadir destinatarios..." : "Add recipients..."}
                         </span>
+                      ) : recipientMode === "all" && audience === "collaborator" ? (
+                        // Etiqueta semántica: todos los colaboradores
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-foreground">
+                          <Users className="h-3 w-3 text-muted-foreground" strokeWidth={1.5} />
+                          {language === "es" ? `Colaboradores` : `Collaborators`}
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-foreground text-background">{recipientChips.length}</span>
+                        </span>
+                      ) : recipientMode === "favorites" && audience === "collaborator" ? (
+                        // Etiqueta semántica: favoritos
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-foreground">
+                          <Star className="h-3 w-3 text-amber-600 fill-amber-500" strokeWidth={1.5} />
+                          {language === "es" ? `Favoritos` : `Favorites`}
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-700">{recipientChips.length}</span>
+                        </span>
                       ) : recipientChips.length > 3 ? (
-                        // Bulk summary when sending to many recipients
+                        // Bulk summary cuando no hay etiqueta semántica pero son muchos.
                         <span className="inline-flex items-center gap-2 text-[11px] font-medium text-foreground">
                           <Users className="h-3 w-3 text-muted-foreground" strokeWidth={1.5} />
                           {language === "es"

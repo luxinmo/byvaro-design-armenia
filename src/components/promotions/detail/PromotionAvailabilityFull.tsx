@@ -381,11 +381,21 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
 
     const labels = Array.from(activeEditFields).map(f => editableFieldOptions.find(o => o.key === f)?.label || f);
     setEditedFieldLabels(labels);
+    // Sólo disparamos el modal "Avisar colaboradores" cuando la edición
+    // afecta a campos relevantes comercialmente: precio o estado
+    // (disponibilidad). Para otros campos (tipología, superficies, etc.)
+    // guardamos en silencio con un toast.
+    const fields = Array.from(activeEditFields);
+    const notifyRelevant = fields.some(f => f === "price" || f === "status");
     setBulkEditing(false);
     setEditedData({});
     setActiveEditFields(new Set());
     clearSelection();
-    setNotifyDialogOpen(true);
+    if (notifyRelevant) {
+      setNotifyDialogOpen(true);
+    } else {
+      toast({ title: "Cambios guardados", description: `Se han actualizado: ${labels.join(", ")}.` });
+    }
   };
 
   const updateField = (unitId: string, field: keyof EditedFields, value: string | number) => {
@@ -547,16 +557,31 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
         </DialogContent>
       </Dialog>
 
-      {/* Notify / Share dialog */}
+      {/* Notify / Share dialog — texto adaptado al campo editado
+          (precio vs disponibilidad vs ambos). Sólo se abre cuando la
+          edición afectó a uno de estos dos campos. */}
+      {(() => {
+        const hasPrice = editedFieldLabels.some(l => /precio/i.test(l));
+        const hasStatus = editedFieldLabels.some(l => /estado/i.test(l));
+        const noun = hasPrice && hasStatus
+          ? "precios y disponibilidad"
+          : hasPrice ? "precios" : "disponibilidad";
+        const verbShort = hasPrice && hasStatus
+          ? "nuevos precios y nueva disponibilidad"
+          : hasPrice ? "nuevos precios" : "nueva disponibilidad";
+        return (
       <Dialog open={notifyDialogOpen} onOpenChange={setNotifyDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Cambios guardados correctamente</DialogTitle>
+            <DialogTitle>
+              {hasPrice && hasStatus
+                ? "Precios y disponibilidad actualizados"
+                : hasPrice ? "Precios actualizados" : "Disponibilidad actualizada"}
+            </DialogTitle>
             <DialogDescription>
               {isCollaboratorView
-                ? `Se han actualizado los campos: ${editedFieldLabels.join(", ")}. ¿Deseas compartir esta actualización con tus clientes?`
-                : `Se han actualizado los campos: ${editedFieldLabels.join(", ")}. ¿Deseas avisar a los colaboradores de esta actualización?`
-              }
+                ? `¿Quieres compartir ${verbShort} con tus clientes?`
+                : `¿Quieres avisar a los colaboradores de ${verbShort}?`}
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex items-start gap-3">
@@ -565,13 +590,14 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
             </div>
             <div>
               <p className="text-sm font-medium text-foreground">
-                {isCollaboratorView ? "Compartir actualización con clientes" : "Notificar actualización de precios"}
+                {isCollaboratorView
+                  ? `Avisar ${verbShort} a clientes`
+                  : `Avisar ${verbShort} a colaboradores`}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 {isCollaboratorView
-                  ? "Se enviará un resumen de los cambios a los clientes que tengan interés en estas unidades."
-                  : "Se enviará un aviso a todas las agencias colaboradoras informando de los cambios realizados."
-                }
+                  ? `Se enviará un resumen con ${noun} a los clientes interesados en estas unidades.`
+                  : `Se enviará un aviso a las agencias colaboradoras con ${noun} actualizados.`}
               </p>
             </div>
           </div>
@@ -593,6 +619,8 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        );
+      })()}
 
       {/* Notify email compose — paso 2 del flujo "Avisar colaboradores".
           Abre SendEmailDialog preseleccionando la audiencia (colaboradores
@@ -697,9 +725,10 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
 
           <div className="flex items-center gap-1 ml-auto">
             {/* Edición masiva directa — no requiere pre-selección, aplica a
-                todas las unidades disponibles (Excel-like). */}
+                todas las unidades disponibles (Excel-like). Oculta en móvil:
+                Excel-like no funciona bien con pantallas estrechas. */}
             {!isCollaboratorView && !bulkEditing && (
-              <Button variant="outline" size="sm" className="h-9 text-xs gap-1.5 rounded-full mr-1" onClick={openFieldSelector}>
+              <Button variant="outline" size="sm" className="hidden md:inline-flex h-9 text-xs gap-1.5 rounded-full mr-1" onClick={openFieldSelector}>
                 <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} /> Edición masiva
               </Button>
             )}
