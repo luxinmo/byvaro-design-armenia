@@ -1,5 +1,5 @@
-import { Menu, Bell, X } from "lucide-react";
-import { NavLink, useLocation } from "react-router-dom";
+import { Menu, Bell, X, ArrowLeft } from "lucide-react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import {
   Home, Tag, FileText, CircleDollarSign, CalendarDays,
@@ -28,26 +28,47 @@ const drawerGroups = [
 
 export function MobileHeader() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+
+  // Rutas "raíz" del menú principal — fuera de ellas mostramos la
+  // flecha de volver en lugar del logo.
+  const rootPaths = ["/inicio", "/promociones", "/registros", "/ventas", "/calendario", "/colaboradores", "/contactos", "/microsites", "/emails", "/ajustes", "/empresa"];
+  const isRoot = rootPaths.includes(location.pathname);
 
   return (
     <>
-      {/* Topbar minimalista: hamburguesa + brand pequeño + campana. El
-          título de la página vive en el H1 del body para no duplicar. */}
+      {/* Topbar minimalista: izquierda → logo completo (lockup) o
+          flecha atrás si estamos dentro de un detalle · derecha →
+          campana + hamburguesa (menú). */}
       <header className="lg:hidden sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border">
         <div className="h-12 px-3 flex items-center justify-between gap-3">
-          <button
-            onClick={() => setOpen(true)}
-            className="p-2 -ml-2 rounded-lg hover:bg-muted text-foreground"
-            aria-label="Abrir menú"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-          <BrandLogo variant="icon" iconSize={24} />
-          <button className="relative p-2 -mr-2 rounded-lg hover:bg-muted text-foreground" aria-label="Notificaciones">
-            <Bell className="h-5 w-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary ring-2 ring-background" />
-          </button>
+          {isRoot ? (
+            <div className="flex items-center">
+              <BrandLogo variant="lockup" iconSize={22} wordmarkHeight={12} />
+            </div>
+          ) : (
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 -ml-2 rounded-lg hover:bg-muted text-foreground inline-flex items-center gap-1"
+              aria-label="Volver"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
+          <div className="flex items-center gap-1">
+            <button className="relative p-2 rounded-lg hover:bg-muted text-foreground" aria-label="Notificaciones">
+              <Bell className="h-5 w-5" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary ring-2 ring-background" />
+            </button>
+            <button
+              onClick={() => setOpen(true)}
+              className="p-2 -mr-2 rounded-lg hover:bg-muted text-foreground"
+              aria-label="Abrir menú"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -55,7 +76,7 @@ export function MobileHeader() {
       {open && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <aside className="absolute left-0 top-0 bottom-0 w-[280px] bg-sidebar shadow-2xl flex flex-col animate-fade-up">
+          <aside className="absolute right-0 top-0 bottom-0 w-[280px] bg-sidebar shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
             <div className="h-14 flex items-center justify-between px-5 border-b border-sidebar-border">
               <BrandLogo variant="lockup" iconSize={32} wordmarkHeight={16} />
               <button onClick={() => setOpen(false)} className="p-2 -mr-2 rounded-lg hover:bg-muted">
