@@ -247,7 +247,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             con fondo. El <Separator> desaparece porque el borde inferior
             del <nav> hace de separador visual. */}
       <Toaster position="top-center" richColors closeButton />
-      <header className="px-5 sm:px-8 lg:px-10 pt-6 pb-0">
+      <header className="px-3 sm:px-8 lg:px-10 pt-4 sm:pt-6 pb-0">
         {/* Breadcrumb / eyebrow */}
         <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-3">
           <button
@@ -386,7 +386,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         </div>
 
         {/* Tabs · subrayado Byvaro (patrón de /empresa) */}
-        <nav className="flex items-center gap-1 border-b border-border overflow-x-auto no-scrollbar -mx-5 sm:-mx-8 lg:-mx-10 px-5 sm:px-8 lg:px-10">
+        <nav className="flex items-center gap-1 border-b border-border overflow-x-auto no-scrollbar -mx-3 sm:-mx-8 lg:-mx-10 px-3 sm:px-8 lg:px-10">
           {visibleTabs.map((tab, i) => {
             const requestCount = !viewAsCollaborator && tab === "Agencies" ? agencies.filter(a => a.isNewRequest).length : 0;
             const active = activeTab === i;
@@ -414,7 +414,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         </nav>
       </header>
 
-      <div className="p-[25px] w-full min-w-0" style={{ maxWidth: (activeTabKey === "Availability" || activeTabKey === "Agencies" || activeTabKey === "Overview") ? undefined : "1250px" }}>
+      <div className="p-3 sm:p-[25px] w-full min-w-0" style={{ maxWidth: (activeTabKey === "Availability" || activeTabKey === "Agencies" || activeTabKey === "Overview") ? undefined : "1250px" }}>
 
         {activeTabKey === "Overview" && (
           <>
@@ -1077,9 +1077,10 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               <PromotionAvailabilityFull promotionId={p.id} isCollaboratorView={viewAsCollaborator} />
             </div>
 
-            {/* Right rail — minimalist icon dock */}
+            {/* Right rail — minimalist icon dock. Oculto en móvil: las
+                acciones viven en el FAB "+". */}
             <TooltipProvider delayDuration={150}>
-              <aside className="w-full lg:w-12 lg:shrink-0 order-1 lg:order-2">
+              <aside className="hidden lg:block w-full lg:w-12 lg:shrink-0 order-1 lg:order-2">
                 <div className="lg:sticky lg:top-6 flex lg:flex-col gap-1.5 rounded-2xl bg-card border border-border shadow-soft p-1.5">
                   {[
                     { icon: FileText, label: "Descargar brochure" },

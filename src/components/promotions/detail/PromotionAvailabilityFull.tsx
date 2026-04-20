@@ -682,7 +682,9 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
         onSave={(v) => setVisibleCols(v as Set<CatalogCol>)}
       />
 
-      <div className="relative border border-border rounded-2xl bg-card p-4 shadow-soft">
+      {/* Card contenedora de filtros — en móvil se colapsa (no hay filtros
+          ni view toggles visibles). */}
+      <div className="hidden sm:block relative border border-border rounded-2xl bg-card p-4 shadow-soft">
         {/* Selection overlay */}
         {hasSelection && !bulkEditing && (
           <div className="absolute inset-0 z-10 rounded-2xl bg-card border border-border flex items-center justify-between px-5">
@@ -708,7 +710,10 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+        {/* Toolbar de filtros — oculta en móvil. Las cards apiladas
+            rinden suficiente y los filtros añaden ruido en pantallas
+            estrechas. */}
+        <div className="hidden sm:flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
           <div className="relative w-full sm:flex-1 sm:min-w-[200px] sm:max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
             <input
@@ -775,13 +780,14 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
             {/* Block header */}
             <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30 border-b border-border transition-colors">
               <div className="flex items-center gap-3">
+                {/* Checkbox de bloque — oculto en móvil (sin edición masiva). */}
                 {!isCollaboratorView && (
                   <Checkbox
                     checked={allBlockSelected}
                     // @ts-ignore
                     indeterminate={someBlockSelected && !allBlockSelected}
                     onCheckedChange={() => toggleSelectBlock(blockUnits)}
-                    className="h-4 w-4"
+                    className="hidden sm:inline-flex h-4 w-4"
                     onClick={(e) => e.stopPropagation()}
                   />
                 )}
@@ -1151,11 +1157,8 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                         isSelected && "bg-primary/5"
                       )}
                     >
-                      {!isCollaboratorView && (
-                        <div onClick={(e) => e.stopPropagation()} className="shrink-0">
-                          <Checkbox checked={isSelected} onCheckedChange={() => toggleSelect(u.id)} className="h-3.5 w-3.5" />
-                        </div>
-                      )}
+                      {/* Checkbox individual oculto en cards móvil —
+                          no hay edición masiva aquí. */}
                       <div className="w-[64px] h-[48px] rounded-lg overflow-hidden bg-muted/30 shrink-0">
                         <img src={`https://picsum.photos/seed/${u.id}/160/108`} alt="" className="w-full h-full object-cover" loading="lazy" />
                       </div>
