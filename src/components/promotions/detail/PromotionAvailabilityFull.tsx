@@ -338,9 +338,11 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
 
   const confirmFieldSelection = () => {
     if (selectedFields.size === 0) return;
-    // Initialize edit data for selected units
+    // Initialize edit data for ALL AVAILABLE units (Excel-like editing).
+    // La edición masiva ya no requiere pre-seleccionar: se aplica sobre
+    // todas las unidades disponibles a la vez.
     const initial: Record<string, EditedFields> = {};
-    allUnits.filter(u => selectedUnits.has(u.id)).forEach(u => {
+    allUnits.filter(u => u.status === "available").forEach(u => {
       const fields: EditedFields = {};
       selectedFields.forEach(f => {
         (fields as any)[f] = (u as any)[f];
@@ -361,7 +363,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
 
   const saveBulkEdit = () => {
     setAllUnits(prev => prev.map(u => (
-      selectedUnits.has(u.id) && editedData[u.id]
+      u.status === "available" && editedData[u.id]
         ? { ...u, ...editedData[u.id] }
         : u
     )));
@@ -408,7 +410,11 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
     return (u as any)[field];
   };
 
-  const isEditable = (id: string) => bulkEditing && selectedUnits.has(id);
+  const isEditable = (id: string) => {
+    if (!bulkEditing) return false;
+    const u = allUnits.find(x => x.id === id);
+    return u?.status === "available";
+  };
   const isFieldEditable = (field: EditableFieldKey) => activeEditFields.has(field);
 
   const editableCellClass = "border-2 border-amber-300 bg-amber-50/50 dark:bg-amber-950/20 rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all";
@@ -432,7 +438,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
         <div className="border border-amber-300 rounded-xl bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 px-4 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Pencil className="h-4 w-4 text-amber-600" strokeWidth={1.5} />
-            <span className="text-xs font-semibold text-foreground">Edición masiva · {selectedUnits.size} unidad{selectedUnits.size > 1 ? "es" : ""}</span>
+            <span className="text-xs font-semibold text-foreground">Edición masiva · {available} unidad{available !== 1 ? "es" : ""} disponible{available !== 1 ? "s" : ""}</span>
             <div className="flex items-center gap-1">
               {Array.from(activeEditFields).map(f => (
                 <span key={f} className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-200/60 text-amber-800 dark:bg-amber-800/30 dark:text-amber-300">
@@ -606,6 +612,13 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
           </select>
 
           <div className="flex items-center gap-1 ml-auto">
+            {/* Edición masiva directa — no requiere pre-selección, aplica a
+                todas las unidades disponibles (Excel-like). */}
+            {!isCollaboratorView && !bulkEditing && (
+              <Button variant="outline" size="sm" className="h-9 text-xs gap-1.5 rounded-full mr-1" onClick={openFieldSelector}>
+                <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} /> Edición masiva
+              </Button>
+            )}
             <Button variant={viewMode === "table" ? "secondary" : "ghost"} size="icon" className="h-9 w-9" onClick={() => setViewMode("table")}>
               <List className="h-4 w-4" />
             </Button>
