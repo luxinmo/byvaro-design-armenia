@@ -642,7 +642,8 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   {p.name} es una promoción {typeLabel?.toLowerCase() || "residencial"} situada en {p.location || "España"}.
-                  {p.developer && ` Desarrollada por ${p.developer}.`}
+                  {/* El nombre del promotor se oculta en vista colaborador (la agencia no expone al promotor). */}
+                  {!viewAsCollaborator && p.developer && ` Desarrollada por ${p.developer}.`}
                   {p.totalUnits > 0 && ` El proyecto consta de ${p.totalUnits} unidades con entrega estimada para ${p.delivery || "por definir"}.`}
                   {p.propertyTypes.length > 0 && ` Las tipologías incluyen ${p.propertyTypes.join(", ").toLowerCase()}.`}
                 </p>
@@ -935,14 +936,22 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               </div>
               {/* ── END LEFT COLUMN ── */}
 
-              {/* ── RIGHT RAIL: icon dock (md/lg) → labeled card (2xl) ── */}
-              {!viewAsCollaborator && (() => {
+              {/* ── RIGHT RAIL: icon dock (md/lg) → labeled card (2xl).
+                   Visible tanto para promotor como para agencia. En modo
+                   agencia se ocultan las acciones reservadas al promotor
+                   (invitar colaboradores, compartir con más agencias,
+                   badge "Incompleta" de publicación). */}
+              {(() => {
                 const items: { icon: typeof Users; label: string; hint?: string; onClick?: () => void; danger?: boolean; info?: boolean }[] = [
-                  { icon: Users, label: "Invitar agencias", hint: "Invitar colaboradores", onClick: () => setActiveTab(visibleTabs.indexOf("Agencies")) },
-                  { icon: Share2, label: "Compartir", hint: "Compartir con colaboradores", onClick: () => setActiveTab(visibleTabs.indexOf("Agencies")) },
+                  // Invitar/Compartir son acciones del promotor — en agencia no aplica.
+                  ...(!viewAsCollaborator ? [
+                    { icon: Users, label: "Invitar agencias", hint: "Invitar colaboradores", onClick: () => setActiveTab(visibleTabs.indexOf("Agencies")) },
+                    { icon: Share2, label: "Compartir", hint: "Compartir con colaboradores", onClick: () => setActiveTab(visibleTabs.indexOf("Agencies")) },
+                  ] : []),
                   { icon: FileText, label: "Brochure", hint: "Descargar brochure", onClick: () => {} },
                   { icon: Download, label: "Listado de precios", hint: "Descargar en PDF", onClick: () => setPriceListOpen(true) },
-                  ...(hasMissing ? [{ icon: AlertTriangle, label: "Incompleta", hint: `${completedSteps.length}/${allSteps.length} pasos · Click para completar`, onClick: () => navigate(getWizardUrl(p.missingSteps?.[0], returnPath)), danger: true }] : []),
+                  // "Incompleta" sólo para promotor (agencia no publica).
+                  ...(!viewAsCollaborator && hasMissing ? [{ icon: AlertTriangle, label: "Incompleta", hint: `${completedSteps.length}/${allSteps.length} pasos · Click para completar`, onClick: () => navigate(getWizardUrl(p.missingSteps?.[0], returnPath)), danger: true }] : []),
                   { icon: Info, label: "Datos en vivo", hint: "Precios y disponibilidad se actualizan en tiempo real. Confirma antes de cerrar.", info: true },
                 ];
                 return (
