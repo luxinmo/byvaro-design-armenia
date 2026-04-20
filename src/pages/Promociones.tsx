@@ -349,6 +349,17 @@ export default function Promociones() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sort, setSort] = useState<string>("recent");
   const [viewMode, setViewMode] = useState<"list" | "grid" | "map">("list");
+  // En móvil (<sm) siempre mostramos la lista, sin importar el
+  // viewMode que hubiera elegido el usuario en desktop.
+  const [isMobile, setIsMobile] = useState<boolean>(() =>
+    typeof window !== "undefined" ? window.innerWidth < 640 : false
+  );
+  useEffect(() => {
+    const onR = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", onR);
+    return () => window.removeEventListener("resize", onR);
+  }, []);
+  const effectiveViewMode = isMobile ? "list" : viewMode;
 
   // Drawer de filtros
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -438,11 +449,14 @@ export default function Promociones() {
     setStatusFilter("all");
   };
 
+  // En móvil: sólo Activas / Incompletas / Vendidas (el "Todas" es
+  // implícito al no tener ninguno seleccionado). Mantenemos "Todas"
+  // como opción visible desde sm+ para consistencia.
   const statusFilterOptions = [
-    { key: "all", label: "Todas" },
-    { key: "active", label: "Activas" },
-    { key: "incomplete", label: "Incompletas" },
-    { key: "sold-out", label: "Vendidas" },
+    { key: "all", label: "Todas", mobile: false },
+    { key: "active", label: "Activas", mobile: true },
+    { key: "incomplete", label: "Incompletas", mobile: true },
+    { key: "sold-out", label: "Vendidas", mobile: true },
   ] as const;
 
   /* ─── Filtrado (gestión + búsqueda avanzada combinadas) ─── */
@@ -622,8 +636,8 @@ export default function Promociones() {
 
       {/* ═══════════ Toolbar ═══════════ */}
       <div className="px-3 sm:px-6 lg:px-8 py-2.5">
-        <div className="max-w-[1400px] mx-auto flex items-center gap-3 flex-wrap">
-          {/* Izquierda: status tabs */}
+        <div className="max-w-[1400px] mx-auto flex items-center gap-2 sm:gap-3 flex-wrap">
+          {/* Izquierda: status tabs · "Todas" oculto en móvil. */}
           <div className="flex items-center gap-0.5">
             {statusFilterOptions.map((opt) => (
               <button
@@ -631,6 +645,7 @@ export default function Promociones() {
                 onClick={() => setStatusFilter(opt.key)}
                 className={cn(
                   "px-3 py-1.5 rounded-full text-[12.5px] font-medium transition-colors whitespace-nowrap",
+                  !opt.mobile && "hidden sm:inline-flex",
                   statusFilter === opt.key
                     ? "bg-foreground text-background"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
@@ -641,7 +656,8 @@ export default function Promociones() {
             ))}
           </div>
 
-          {/* Derecha: contador + sort + 3 vistas */}
+          {/* Derecha: en móvil sólo la ordenación en la misma línea que
+              los tabs. En sm+ contador + sort + 3 vistas. */}
           <div className="ml-auto flex items-center gap-3 sm:gap-4">
             <span className="text-xs text-muted-foreground hidden sm:inline">
               <span className="font-semibold text-foreground tnum">{sortedAndFiltered.length}</span> resultados
@@ -649,8 +665,9 @@ export default function Promociones() {
 
             <MinimalSort value={sort} options={sortOptions} onChange={setSort} />
 
-            {/* Toggle Lista / Cuadrícula / Mapa */}
-            <div className="inline-flex items-center bg-muted/40 border border-border rounded-full p-0.5 text-xs">
+            {/* Toggle Lista / Cuadrícula / Mapa — sólo desde sm+. En
+                móvil mostramos una sola vista (lista) para simplificar. */}
+            <div className="hidden sm:inline-flex items-center bg-muted/40 border border-border rounded-full p-0.5 text-xs">
               <ViewToggleBtn active={viewMode === "list"} onClick={() => setViewMode("list")} icon={List} label="Lista" />
               <ViewToggleBtn active={viewMode === "grid"} onClick={() => setViewMode("grid")} icon={LayoutGrid} label="Cuadrícula" />
               <ViewToggleBtn active={viewMode === "map"} onClick={() => setViewMode("map")} icon={MapIcon} label="Mapa" />
@@ -660,7 +677,7 @@ export default function Promociones() {
       </div>
 
       {/* ═══════════ Vista MAPA ═══════════ */}
-      {viewMode === "map" && (
+      {effectiveViewMode === "map" && (
         <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
           <div className="max-w-[1400px] mx-auto">
             <PromocionesMap promotions={sortedAndFiltered} />
@@ -669,7 +686,7 @@ export default function Promociones() {
       )}
 
       {/* ═══════════ Vista CUADRÍCULA ═══════════ */}
-      {viewMode === "grid" && (
+      {effectiveViewMode === "grid" && (
         <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
           <div className="max-w-[1400px] mx-auto">
             {sortedAndFiltered.length === 0 ? (
@@ -686,7 +703,7 @@ export default function Promociones() {
       )}
 
       {/* ═══════════ Vista LISTA (horizontal cards) ═══════════ */}
-      {viewMode === "list" && (
+      {effectiveViewMode === "list" && (
       <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
         <div className="max-w-[1400px] mx-auto flex flex-col gap-3 lg:gap-4">
           {sortedAndFiltered.length === 0 ? (
