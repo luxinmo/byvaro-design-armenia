@@ -43,7 +43,7 @@ export function MobileHeader() {
           espacio para la flecha atrás cuando estamos en un detalle;
           derecha: campana + hamburguesa. */}
       <header className="lg:hidden sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border">
-        <div className="h-16 px-4 grid grid-cols-[auto_1fr_auto] items-center gap-2">
+        <div className="h-14 px-4 grid grid-cols-[auto_1fr_auto] items-center gap-2">
           {/* Izquierda */}
           <div className="flex items-center">
             {!isRoot && (
@@ -93,7 +93,7 @@ export function MobileHeader() {
               transition={{ type: "tween", duration: 0.25, ease: "easeOut" }}
               className="absolute right-0 top-0 bottom-0 w-full sm:w-[360px] bg-sidebar shadow-soft-lg flex flex-col"
             >
-              <div className="h-16 flex items-center justify-between px-5 border-b border-sidebar-border">
+              <div className="h-14 flex items-center justify-between px-5 border-b border-sidebar-border">
                 <BrandLogo variant="wordmark" wordmarkHeight={22} />
                 <button onClick={() => setOpen(false)} className="p-2 -mr-2 rounded-lg hover:bg-muted">
                   <X className="h-5 w-5" />
