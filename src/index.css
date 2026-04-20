@@ -78,6 +78,22 @@
   input, select, textarea { font-size: 16px !important; }
 }
 
+/* Preview del listado de precios · A4 (210mm) se escala para que
+   quepa en el viewport del móvil sin overflow horizontal. En sm+
+   se respeta el tamaño real. */
+@media (max-width: 767px) {
+  #price-list-printable {
+    transform: scale(calc((100vw - 28px) / 794px));
+    transform-origin: top left;
+    /* 794px = 210mm a 96dpi. Compensamos el alto visible para que
+       el scroll coincida con el tamaño escalado. */
+    margin-bottom: calc((100vw - 28px) / 794px * 1200px - 1200px);
+  }
+}
+@media print {
+  #price-list-printable { transform: none !important; margin-bottom: 0 !important; }
+}
+
 @layer utilities {
 
   /* Active sidebar item · left color bar */

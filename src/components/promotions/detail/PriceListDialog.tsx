@@ -31,13 +31,14 @@
  */
 
 import { useMemo, useState } from "react";
-import { Download, Printer, X, Building2, QrCode, MapPin, CreditCard, PenLine, Map as MapIcon, LayoutTemplate, ShieldCheck } from "lucide-react";
+import { Download, Printer, X, Building2, QrCode, MapPin, CreditCard, PenLine, Map as MapIcon, LayoutTemplate, ShieldCheck, Settings } from "lucide-react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
 import type { Promotion } from "@/data/promotions";
 import { unitsByPromotion, type Unit } from "@/data/units";
 import { useEmpresa } from "@/lib/empresa";
 import { cn, priceForDisplay } from "@/lib/utils";
+import { MinimalSort } from "@/components/ui/MinimalSort";
 
 type Idioma = "es" | "en";
 type UnitFilter = "available" | "available-reserved" | "all";
@@ -183,6 +184,8 @@ export function PriceListDialog({ open, onOpenChange, promotion, agencyMode = fa
   const [showDeveloperInfo, setShowDeveloperInfo] = useState(!agencyMode);
   // Aval bancario — configurable como bloque informativo en el PDF.
   const [includeAval, setIncludeAval] = useState(true);
+  // Móvil/tablet: el panel de opciones es colapsable; en desktop siempre visible.
+  const [mobileOptionsOpen, setMobileOptionsOpen] = useState(false);
   // Secciones opcionales de la Plantilla 2 (editorial multi-página).
   const [showPayment, setShowPayment] = useState(true);
   const [showLocation, setShowLocation] = useState(true);
@@ -237,42 +240,68 @@ export function PriceListDialog({ open, onOpenChange, promotion, agencyMode = fa
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 print:static print:inset-auto print:p-0">
+    <div className="fixed inset-0 z-50 flex lg:items-center lg:justify-center lg:p-4 print:static print:inset-auto print:p-0">
       {/* Overlay — se oculta al imprimir */}
       <div
-        className="absolute inset-0 bg-foreground/40 backdrop-blur-sm print:hidden"
+        className="hidden lg:block absolute inset-0 bg-foreground/40 backdrop-blur-sm print:hidden"
         onClick={() => onOpenChange(false)}
       />
 
-      {/* Shell */}
-      <div className="relative w-full max-w-[1200px] h-[92vh] bg-card border border-border rounded-2xl shadow-soft-lg overflow-hidden flex flex-col print:border-0 print:rounded-none print:shadow-none print:h-auto print:max-w-none">
-        {/* Header del modal — oculto al imprimir */}
-        <header className="h-14 shrink-0 flex items-center justify-between px-5 border-b border-border print:hidden">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary/10 grid place-items-center">
+      {/* Shell · móvil/tablet fullscreen; desktop modal centrado. */}
+      <div className="relative w-full h-full lg:w-full lg:max-w-[1200px] lg:h-[92vh] bg-card lg:border lg:border-border lg:rounded-2xl lg:shadow-soft-lg overflow-hidden flex flex-col print:border-0 print:rounded-none print:shadow-none print:h-auto print:max-w-none">
+        {/* Header del modal — selector de plantilla + idioma + X.
+            Oculto al imprimir. */}
+        <header className="h-14 shrink-0 flex items-center justify-between gap-3 px-3 sm:px-5 border-b border-border print:hidden">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 grid place-items-center shrink-0">
               <Download className="h-4 w-4 text-primary" />
             </div>
-            <div>
-              <p className="text-[13px] font-semibold text-foreground leading-tight">
-                {t.title}
-              </p>
-              <p className="text-[11px] text-muted-foreground leading-tight">{promotion.name}</p>
+            <div className="min-w-0 flex-1 flex items-center gap-3">
+              {/* Selector de plantilla inline · MinimalSort look. */}
+              <MinimalSort
+                value={String(template)}
+                onChange={(v) => setTemplate(Number(v) as Template)}
+                align="left"
+                options={[
+                  { value: "1", label: "Plantilla 1 · Clásica" },
+                  { value: "2", label: "Plantilla 2 · Editorial" },
+                ]}
+              />
+              {/* Idioma · pills compactas. */}
+              <div className="hidden sm:flex items-center gap-1 text-[11px]">
+                {(["es", "en"] as Idioma[]).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => setIdioma(l)}
+                    className={cn(
+                      "px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors border",
+                      idioma === l
+                        ? "bg-foreground text-background border-foreground"
+                        : "border-border text-muted-foreground"
+                    )}
+                  >
+                    {l.toUpperCase()}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <button
             type="button"
             aria-label="Cerrar"
             onClick={() => onOpenChange(false)}
-            className="h-8 w-8 rounded-full grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="h-9 w-9 rounded-full grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
           >
             <X className="h-4 w-4" />
           </button>
         </header>
 
-        {/* Cuerpo: preview + opciones */}
-        <div className="flex-1 flex overflow-hidden print:overflow-visible">
-          {/* Preview scrollable */}
-          <div className="flex-1 overflow-auto bg-muted/30 p-6 print:p-0 print:bg-background print:overflow-visible">
+        {/* Cuerpo: preview + opciones · columna en móvil, fila en desktop. */}
+        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden print:overflow-visible">
+          {/* Preview scrollable · padding reducido en móvil + zoom
+              automático para que la A4 (210mm) quepa en el viewport. */}
+          <div className="flex-1 overflow-auto bg-muted/30 p-2 sm:p-4 lg:p-6 print:p-0 print:bg-background print:overflow-visible">
             {template === 2 ? (
               <TemplateEditorial
                 promotion={promotion}
@@ -455,39 +484,18 @@ export function PriceListDialog({ open, onOpenChange, promotion, agencyMode = fa
             )}
           </div>
 
-          {/* Opciones — oculto al imprimir */}
-          <aside className="w-[280px] shrink-0 border-l border-border bg-card overflow-y-auto print:hidden">
+          {/* Opciones · desktop lateral (280px); en móvil/tablet baja
+              abajo como panel desplegable controlado por estado. */}
+          <aside
+            className={cn(
+              "shrink-0 border-t lg:border-t-0 lg:border-l border-border bg-card overflow-y-auto print:hidden",
+              // Desktop: siempre visible, ancho fijo.
+              "lg:w-[280px] lg:block",
+              // Móvil/tablet: sólo visible cuando mobileOptionsOpen=true.
+              mobileOptionsOpen ? "block max-h-[55vh]" : "hidden"
+            )}
+          >
             <div className="p-5 space-y-5">
-              {/* Selector de plantilla */}
-              <div>
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">
-                  Plantilla
-                </p>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {([
-                    { n: 1 as Template, label: "Clásica", desc: "1 página" },
-                    { n: 2 as Template, label: "Editorial", desc: "Multi-página" },
-                  ]).map((opt) => (
-                    <button
-                      key={opt.n}
-                      type="button"
-                      onClick={() => setTemplate(opt.n)}
-                      className={cn(
-                        "flex flex-col items-start gap-0.5 h-auto px-3 py-2 rounded-xl border text-left transition-colors",
-                        template === opt.n
-                          ? "border-primary/40 bg-primary/5 text-foreground"
-                          : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-                      )}
-                    >
-                      <span className="flex items-center gap-1.5 text-[12px] font-semibold">
-                        <LayoutTemplate className="h-3 w-3" /> Plantilla {opt.n}
-                      </span>
-                      <span className="text-[10px] leading-tight">{opt.label} · {opt.desc}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Secciones (solo Plantilla 2) */}
               {template === 2 && (
                 <div>
@@ -615,8 +623,10 @@ export function PriceListDialog({ open, onOpenChange, promotion, agencyMode = fa
               </div>
             </div>
 
-            {/* Footer de acciones */}
-            <div className="sticky bottom-0 border-t border-border bg-card p-4 flex flex-col gap-2">
+            {/* Footer de acciones · SOLO desktop. En móvil/tablet el
+                footer vive fuera del aside (barra inferior siempre
+                visible). */}
+            <div className="hidden lg:flex sticky bottom-0 border-t border-border bg-card p-4 flex-col gap-2">
               <button
                 type="button"
                 onClick={handlePrint}
@@ -634,6 +644,34 @@ export function PriceListDialog({ open, onOpenChange, promotion, agencyMode = fa
               </button>
             </div>
           </aside>
+        </div>
+
+        {/* Bottom bar móvil/tablet · "Opciones" toggle + "Descargar PDF". */}
+        <div
+          className="lg:hidden shrink-0 border-t border-border bg-card p-3 flex items-center gap-2 print:hidden"
+          style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
+        >
+          <button
+            type="button"
+            onClick={() => setMobileOptionsOpen((v) => !v)}
+            className={cn(
+              "inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-full border text-sm font-medium transition-colors",
+              mobileOptionsOpen
+                ? "border-foreground bg-foreground text-background"
+                : "border-border text-foreground hover:bg-muted"
+            )}
+          >
+            <Settings className="h-4 w-4" />
+            {idioma === "es" ? "Opciones" : "Options"}
+          </button>
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="flex-1 inline-flex items-center justify-center gap-2 h-10 px-4 rounded-full bg-foreground text-background text-sm font-semibold hover:bg-foreground/90 transition-colors shadow-soft"
+          >
+            <Printer className="h-4 w-4" />
+            {idioma === "es" ? "Descargar PDF" : "Download PDF"}
+          </button>
         </div>
       </div>
     </div>
