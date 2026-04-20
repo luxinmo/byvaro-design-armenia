@@ -47,7 +47,7 @@
 // Iconos lucide: Check para hitos pasados, Clock para el hito actual,
 // Circle vacío para los futuros. Decisión visual: el "current" usa
 // Clock (reloj) porque comunica "en curso" mejor que un círculo relleno.
-import { CheckCircle2, Circle, Clock } from "lucide-react";
+import { CheckCircle2, Circle, Clock, Landmark, ShieldOff } from "lucide-react";
 
 const milestones = [
   { label: "Reserva", amount: "6.000 €", percent: "~1.7%", status: "current" as const, description: "Señal inicial para reservar la unidad" },
@@ -65,7 +65,14 @@ const statusIcon = {
   upcoming: <Circle className="h-5 w-5 text-muted-foreground/40" />,
 };
 
-export function PromotionPaymentPlan() {
+interface PromotionPaymentPlanProps {
+  /** Indica si la promoción tiene aval bancario constituido (Ley 38/1999). */
+  avalBancario?: boolean;
+  /** Entidad emisora del aval (opcional, p.ej. "Banco Santander"). */
+  avalEntidad?: string;
+}
+
+export function PromotionPaymentPlan({ avalBancario = true, avalEntidad }: PromotionPaymentPlanProps = {}) {
   return (
     <div className="rounded-2xl border border-border/40 bg-card p-5 shadow-soft">
       <h2 className="text-base font-semibold text-foreground mb-0.5">Forma de pago</h2>
@@ -96,6 +103,41 @@ export function PromotionPaymentPlan() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Aval bancario — garantía sobre las cantidades anticipadas.
+          Visible como bloque destacado al pie del plan de pagos. */}
+      <div className="mt-4 pt-4 border-t border-border/60">
+        {avalBancario ? (
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-primary/5 border border-primary/20">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
+              <Landmark className="h-4 w-4" strokeWidth={1.75} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12.5px] font-semibold text-foreground leading-tight">
+                Aval bancario constituido
+              </p>
+              <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-relaxed">
+                Cantidades anticipadas avaladas según Ley 38/1999.
+                {avalEntidad && <> Entidad emisora: <span className="text-foreground font-medium">{avalEntidad}</span>.</>}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/30 border border-border">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground shrink-0">
+              <ShieldOff className="h-4 w-4" strokeWidth={1.75} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12.5px] font-semibold text-foreground leading-tight">
+                Sin aval bancario
+              </p>
+              <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-relaxed">
+                Las cantidades anticipadas no están cubiertas por aval.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

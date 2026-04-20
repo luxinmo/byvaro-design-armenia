@@ -1208,7 +1208,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       <SendEmailDialog open={sendEmailOpen} onOpenChange={setSendEmailOpen} mode="promotion" promotionId={id} />
 
       {/* Listado de precios descargable (PDF vía window.print). */}
-      <PriceListDialog open={priceListOpen} onOpenChange={setPriceListOpen} promotion={p} />
+      <PriceListDialog open={priceListOpen} onOpenChange={setPriceListOpen} promotion={p} agencyMode={viewAsCollaborator || agentMode} />
 
       {/* ═══ EDIT SECTION DIALOGS ═══ */}
       <EditMultimediaDialog open={editOpen === "multimedia"} onOpenChange={(v) => setEditOpen(v ? "multimedia" : null)} images={galleryImages} onSave={() => {}} />

@@ -20,7 +20,7 @@
  */
 
 import {
-  Plus, Trash2, Info, FileText, ListChecks, HardHat, ShieldCheck, ShieldOff,
+  Plus, Trash2, Info, FileText, ListChecks, HardHat, ShieldCheck, ShieldOff, Landmark,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OptionCard } from "./SharedWidgets";
@@ -427,6 +427,82 @@ export function PlanPagosStep({
                 ))}
               </select>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* ═══ Aval bancario ═══ Ley 38/1999 · garantía sobre cantidades
+           anticipadas por el comprador. El promotor puede declararlo
+           para mostrarlo en la ficha pública y en el PDF. */}
+      <div className="rounded-2xl bg-card border border-border p-5 shadow-soft">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
+            <Landmark className="h-3.5 w-3.5" strokeWidth={1.75} />
+          </div>
+          <div>
+            <p className="text-[13.5px] font-semibold text-foreground leading-tight">Aval bancario</p>
+            <p className="text-[11.5px] text-muted-foreground">
+              Garantía sobre cantidades anticipadas (Ley 38/1999)
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => update("avalBancario", true)}
+            className={cn(
+              "flex items-center gap-3 p-3 rounded-xl border transition-colors text-left",
+              state.avalBancario
+                ? "border-primary/40 bg-primary/5"
+                : "border-border hover:border-foreground/30"
+            )}
+          >
+            <div className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-lg shrink-0",
+              state.avalBancario ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+            )}>
+              <ShieldCheck className="h-4 w-4" strokeWidth={1.5} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-foreground">Sí, con aval</p>
+              <p className="text-xs text-muted-foreground">Aval individual entregado al firmar</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => update("avalBancario", false)}
+            className={cn(
+              "flex items-center gap-3 p-3 rounded-xl border transition-colors text-left",
+              !state.avalBancario
+                ? "border-primary/40 bg-primary/5"
+                : "border-border hover:border-foreground/30"
+            )}
+          >
+            <div className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-lg shrink-0",
+              !state.avalBancario ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+            )}>
+              <ShieldOff className="h-4 w-4" strokeWidth={1.5} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-foreground">Sin aval</p>
+              <p className="text-xs text-muted-foreground">Garantía no constituida</p>
+            </div>
+          </button>
+        </div>
+
+        {state.avalBancario && (
+          <div className="flex flex-col gap-1.5 pt-3 mt-3 border-t border-border">
+            <label className="text-xs font-medium text-muted-foreground">Entidad emisora (opcional)</label>
+            <input
+              type="text"
+              value={state.avalEntidad}
+              onChange={(e) => update("avalEntidad", e.target.value)}
+              placeholder="Ej. Banco Santander, CaixaBank, BBVA…"
+              className={cn(inputBase, "h-9 w-full text-sm px-3")}
+            />
           </div>
         )}
       </div>

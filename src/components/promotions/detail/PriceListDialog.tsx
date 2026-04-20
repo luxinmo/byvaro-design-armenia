@@ -31,7 +31,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { Download, Printer, X, Building2, QrCode, MapPin, CreditCard, PenLine, Map as MapIcon, LayoutTemplate } from "lucide-react";
+import { Download, Printer, X, Building2, QrCode, MapPin, CreditCard, PenLine, Map as MapIcon, LayoutTemplate, ShieldCheck } from "lucide-react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
 import type { Promotion } from "@/data/promotions";
@@ -47,7 +47,29 @@ interface PriceListDialogProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   promotion: Promotion;
+  /**
+   * Cuando la ficha está en modo colaborador (agencia), el PDF debe
+   * imprimirse con branding y contacto de la AGENCIA, ocultando
+   * datos del promotor real salvo que el usuario lo habilite.
+   */
+  agencyMode?: boolean;
 }
+
+/**
+ * Identidad mock del colaborador (agencia) — reemplazaría a
+ * `useEmpresa()` cuando el usuario logueado fuese una agencia.
+ * En este prototipo hardcodeamos una agencia de referencia.
+ * TODO(backend): leer del perfil real de la agencia autenticada.
+ */
+const AGENCY_IDENTITY = {
+  nombreComercial: "Luxinmo Real Estate",
+  sitioWeb: "luxinmo.com",
+  email: "contacto@luxinmo.com",
+  telefono: "+34 965 00 00 00",
+  colorCorporativo: "#0f172a",
+  logoUrl: "",
+  logoShape: "circle" as const,
+};
 
 /* ═══════════════════════════════════════════════════════════════════
    Strings por idioma
@@ -143,13 +165,24 @@ function statusDot(s: Unit["status"]) {
 /* ═══════════════════════════════════════════════════════════════════
    Componente principal
    ═══════════════════════════════════════════════════════════════════ */
-export function PriceListDialog({ open, onOpenChange, promotion }: PriceListDialogProps) {
-  const { empresa } = useEmpresa();
+export function PriceListDialog({ open, onOpenChange, promotion, agencyMode = false }: PriceListDialogProps) {
+  const { empresa: rawEmpresa } = useEmpresa();
+  // Identidad del emisor del PDF: en modo agencia es la agencia; en
+  // modo promotor, la empresa del promotor. Reusa la misma forma para
+  // que todo el render downstream (plantillas 1 y 2) siga usando `empresa`.
+  const empresa = agencyMode ? AGENCY_IDENTITY : rawEmpresa;
+
   const [template, setTemplate] = useState<Template>(1);
   const [filter, setFilter] = useState<UnitFilter>("available");
   const [includeQR, setIncludeQR] = useState(true);
   const [idioma, setIdioma] = useState<Idioma>("es");
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
+  // En modo agencia el "Mostrar datos del promotor" arranca apagado
+  // por defecto: la agencia no expone al promotor salvo que lo active
+  // explícitamente.
+  const [showDeveloperInfo, setShowDeveloperInfo] = useState(!agencyMode);
+  // Aval bancario — configurable como bloque informativo en el PDF.
+  const [includeAval, setIncludeAval] = useState(true);
   // Secciones opcionales de la Plantilla 2 (editorial multi-página).
   const [showPayment, setShowPayment] = useState(true);
   const [showLocation, setShowLocation] = useState(true);
@@ -168,16 +201,21 @@ export function PriceListDialog({ open, onOpenChange, promotion }: PriceListDial
     return [...units].sort(sorter);
   }, [units, filter]);
 
+  // URL del microsite. En modo agencia apunta a la web de la agencia;
+  // en modo promotor al microsite público byvaro.com/<slug>.
+  const micrositeUrl = agencyMode
+    ? (empresa.sitioWeb ? empresa.sitioWeb.replace(/^https?:\/\//, "") : "")
+    : `byvaro.com/${promotion.name.toLowerCase().replace(/\s+/g, "-")}`;
+
   // Generar QR del microsite (si activo).
   useMemo(() => {
-    if (!includeQR) {
+    if (!includeQR || !micrositeUrl) {
       setQrDataUrl("");
       return;
     }
-    const slug = promotion.name.toLowerCase().replace(/\s+/g, "-");
-    const url = `https://byvaro.com/${slug}`;
+    const url = `https://${micrositeUrl}`;
     QRCode.toDataURL(url, { margin: 1, width: 160 }).then(setQrDataUrl).catch(() => setQrDataUrl(""));
-  }, [promotion.name, includeQR]);
+  }, [micrositeUrl, includeQR]);
 
   const handlePrint = () => {
     window.print();
@@ -245,9 +283,12 @@ export function PriceListDialog({ open, onOpenChange, promotion }: PriceListDial
                 showPayment={showPayment}
                 showLocation={showLocation}
                 showSignature={showSignature}
+                showDeveloperInfo={showDeveloperInfo}
+                includeAval={includeAval}
                 today={today}
                 qrDataUrl={qrDataUrl}
                 includeQR={includeQR}
+                micrositeUrl={micrositeUrl}
                 t={t}
               />
             ) : (
@@ -544,11 +585,27 @@ export function PriceListDialog({ open, onOpenChange, promotion }: PriceListDial
                 <div className="space-y-2">
                   <ToggleRow
                     label="Incluir QR del microsite"
-                    description="Enlace directo a la web pública"
+                    description={agencyMode ? "Enlace a tu web" : "Enlace a la web pública"}
                     checked={includeQR}
                     onChange={setIncludeQR}
                     icon={QrCode}
                   />
+                  <ToggleRow
+                    label="Incluir aval bancario"
+                    description="Garantías Ley 38/1999 en el PDF"
+                    checked={includeAval}
+                    onChange={setIncludeAval}
+                    icon={ShieldCheck}
+                  />
+                  {agencyMode && (
+                    <ToggleRow
+                      label="Mostrar datos del promotor"
+                      description="Por defecto oculto en modo agencia"
+                      checked={showDeveloperInfo}
+                      onChange={setShowDeveloperInfo}
+                      icon={Building2}
+                    />
+                  )}
                 </div>
               </div>
 
@@ -675,9 +732,12 @@ function TemplateEditorial({
   showPayment,
   showLocation,
   showSignature,
+  showDeveloperInfo,
+  includeAval,
   today,
   qrDataUrl,
   includeQR,
+  micrositeUrl,
   t,
 }: {
   promotion: Promotion;
@@ -688,9 +748,12 @@ function TemplateEditorial({
   showPayment: boolean;
   showLocation: boolean;
   showSignature: boolean;
+  showDeveloperInfo: boolean;
+  includeAval: boolean;
   today: string;
   qrDataUrl: string;
   includeQR: boolean;
+  micrositeUrl: string;
   t: typeof T["es"];
 }) {
   // Plan de pagos demo (en la ficha real vendrá de promotion.paymentPlan).
@@ -772,7 +835,7 @@ function TemplateEditorial({
           <p className="mt-1.5 text-sm text-muted-foreground inline-flex items-center gap-1.5">
             <MapPin className="h-3.5 w-3.5" />
             {promotion.location}
-            {promotion.developer ? ` · ${promotion.developer}` : ""}
+            {showDeveloperInfo && promotion.developer ? ` · ${promotion.developer}` : ""}
           </p>
         </div>
 
@@ -811,14 +874,14 @@ function TemplateEditorial({
             {idioma === "es" ? (
               <>
                 {promotion.name} es un desarrollo residencial situado en <strong>{promotion.location}</strong>
-                {promotion.developer && <> promovido por <strong>{promotion.developer}</strong></>}.
+                {showDeveloperInfo && promotion.developer && <> promovido por <strong>{promotion.developer}</strong></>}.
                 Cuenta con {promotion.totalUnits} unidades totales, de las cuales {promotion.availableUnits} están disponibles.
                 {promotion.constructionProgress != null && ` Estado de construcción: ${promotion.constructionProgress}%.`}
               </>
             ) : (
               <>
                 {promotion.name} is a residential development located in <strong>{promotion.location}</strong>
-                {promotion.developer && <> by <strong>{promotion.developer}</strong></>}.
+                {showDeveloperInfo && promotion.developer && <> by <strong>{promotion.developer}</strong></>}.
                 It features {promotion.totalUnits} units, with {promotion.availableUnits} currently available.
                 {promotion.constructionProgress != null && ` Construction progress: ${promotion.constructionProgress}%.`}
               </>
@@ -839,7 +902,7 @@ function TemplateEditorial({
                   <p className="font-semibold text-foreground uppercase tracking-[0.12em] text-[9px]">
                     {idioma === "es" ? "Microsite público" : "Public microsite"}
                   </p>
-                  <p className="truncate">byvaro.com/{promotion.name.toLowerCase().replace(/\s+/g, "-")}</p>
+                  <p className="truncate">{micrositeUrl}</p>
                 </>
               )}
               <p className={cn("truncate uppercase tracking-wider text-[9px]", includeQR && "mt-1")}>
@@ -966,7 +1029,7 @@ function TemplateEditorial({
             </tbody>
           </table>
 
-          <div className="mt-5 grid grid-cols-2 gap-4">
+          <div className={cn("mt-5 grid gap-4", includeAval ? "grid-cols-2" : "grid-cols-1")}>
             <div className="border border-border p-4 rounded-xl">
               <p className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">{idioma === "es" ? "Forma de pago" : "Payment method"}</p>
               <p className="mt-1 text-[11px] text-foreground/90 leading-relaxed">
@@ -975,14 +1038,19 @@ function TemplateEditorial({
                   : "Bank transfer to escrow account. Each payment issues a nominal receipt."}
               </p>
             </div>
-            <div className="border border-border p-4 rounded-xl">
-              <p className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">{idioma === "es" ? "Garantías" : "Guarantees"}</p>
-              <p className="mt-1 text-[11px] text-foreground/90 leading-relaxed">
-                {idioma === "es"
-                  ? "Cantidades anticipadas avaladas según Ley 38/1999. Aval bancario individual."
-                  : "Advance amounts backed under Spanish Law 38/1999. Individual bank guarantee."}
-              </p>
-            </div>
+            {includeAval && (
+              <div className="border border-border p-4 rounded-xl">
+                <p className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground inline-flex items-center gap-1.5">
+                  <ShieldCheck className="h-3 w-3" />
+                  {idioma === "es" ? "Aval bancario" : "Bank guarantee"}
+                </p>
+                <p className="mt-1 text-[11px] text-foreground/90 leading-relaxed">
+                  {idioma === "es"
+                    ? "Cantidades anticipadas avaladas según Ley 38/1999. Aval bancario individual entregado al firmar contrato privado."
+                    : "Advance amounts backed under Spanish Law 38/1999. Individual bank guarantee delivered on private contract signing."}
+                </p>
+              </div>
+            )}
           </div>
 
           <footer className="mt-auto pt-4 border-t border-border flex items-center justify-between text-[9px] text-muted-foreground uppercase tracking-wider">

@@ -251,6 +251,9 @@ export interface WizardState {
   requiereReserva: boolean | null;
   importeReserva: number;
   validezReserva: number;
+  // Aval bancario (Ley 38/1999) — garantía sobre cantidades anticipadas.
+  avalBancario: boolean;
+  avalEntidad: string; // nombre del banco emisor (opcional)
 }
 
 export const defaultWizardState: WizardState = {
@@ -317,4 +320,6 @@ export const defaultWizardState: WizardState = {
   requiereReserva: null,
   importeReserva: 5000,
   validezReserva: 30,
+  avalBancario: false,
+  avalEntidad: "",
 };
