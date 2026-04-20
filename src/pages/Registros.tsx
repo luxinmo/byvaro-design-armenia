@@ -234,7 +234,7 @@ export default function Registros() {
       <Toaster position="top-center" richColors closeButton />
 
       {/* ═══════════ HEADER ═══════════ */}
-      <div className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-3">
+      <div className="px-3 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-3">
         <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
           <div className="shrink-0 min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground leading-none">
@@ -278,7 +278,7 @@ export default function Registros() {
       <div className="h-px bg-border/60" />
 
       {/* ═══════════ Toolbar · filtros ═══════════ */}
-      <div className="px-4 sm:px-6 lg:px-8 py-2.5">
+      <div className="px-3 sm:px-6 lg:px-8 py-2.5">
         <div className="max-w-[1400px] mx-auto flex items-center gap-2 sm:gap-3 flex-wrap">
           {/* Tabs de estado */}
           <div className="flex items-center gap-0.5 overflow-x-auto no-scrollbar -mx-1 px-1 shrink-0">
@@ -342,7 +342,7 @@ export default function Registros() {
       </div>
 
       {/* ═══════════ Contenido master-detail ═══════════ */}
-      <div className="flex-1 px-4 sm:px-6 lg:px-8 pb-24 lg:pb-8">
+      <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-24 lg:pb-8">
         <div className="max-w-[1400px] mx-auto">
           {filtered.length === 0 ? (
             <EmptyState hasFilters={hasFilters} onReset={clearFilters} />

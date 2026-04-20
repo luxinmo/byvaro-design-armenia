@@ -85,7 +85,7 @@ export default function Inicio() {
   return (
     <div className="flex-1 flex flex-col min-h-full bg-background">
       {/* ══════════════ PAGE HEADER ══════════════ */}
-      <div className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8">
+      <div className="px-3 sm:px-6 lg:px-8 pt-6 sm:pt-8">
         <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
             <p className="text-xs text-muted-foreground font-medium">Domingo 19 abril · Semana 16</p>
@@ -107,7 +107,7 @@ export default function Inicio() {
       </div>
 
       {/* ══════════════ CONTENT ══════════════ */}
-      <div className="px-4 sm:px-6 lg:px-8 mt-6 space-y-5 pb-8">
+      <div className="px-3 sm:px-6 lg:px-8 mt-6 space-y-5 pb-8">
         <div className="max-w-[1400px] mx-auto space-y-5">
 
           {/* ─── KPIs ─── */}

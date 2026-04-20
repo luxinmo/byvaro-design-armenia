@@ -561,7 +561,7 @@ export default function Promociones() {
   return (
     <div className="flex flex-col min-h-full bg-background">
       {/* ═══════════ HEADER ═══════════ */}
-      <div className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-3">
+      <div className="px-3 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-3">
         <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
           {/* Title · visible en todos los breakpoints, tamaño igual a Inicio */}
           <div className="shrink-0 min-w-0">
@@ -621,7 +621,7 @@ export default function Promociones() {
       <div className="h-px bg-border/60" />
 
       {/* ═══════════ Toolbar ═══════════ */}
-      <div className="px-4 sm:px-6 lg:px-8 py-2.5">
+      <div className="px-3 sm:px-6 lg:px-8 py-2.5">
         <div className="max-w-[1400px] mx-auto flex items-center gap-3 flex-wrap">
           {/* Izquierda: status tabs */}
           <div className="flex items-center gap-0.5">
@@ -661,7 +661,7 @@ export default function Promociones() {
 
       {/* ═══════════ Vista MAPA ═══════════ */}
       {viewMode === "map" && (
-        <div className="flex-1 px-4 sm:px-6 lg:px-8 pb-8">
+        <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
           <div className="max-w-[1400px] mx-auto">
             <PromocionesMap promotions={sortedAndFiltered} />
           </div>
@@ -670,7 +670,7 @@ export default function Promociones() {
 
       {/* ═══════════ Vista CUADRÍCULA ═══════════ */}
       {viewMode === "grid" && (
-        <div className="flex-1 px-4 sm:px-6 lg:px-8 pb-8">
+        <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
           <div className="max-w-[1400px] mx-auto">
             {sortedAndFiltered.length === 0 ? (
               <EmptyState />
@@ -687,7 +687,7 @@ export default function Promociones() {
 
       {/* ═══════════ Vista LISTA (horizontal cards) ═══════════ */}
       {viewMode === "list" && (
-      <div className="flex-1 px-4 sm:px-6 lg:px-8 pb-8">
+      <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
         <div className="max-w-[1400px] mx-auto flex flex-col gap-3 lg:gap-4">
           {sortedAndFiltered.length === 0 ? (
             <EmptyState />

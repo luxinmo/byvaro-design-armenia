@@ -184,7 +184,7 @@ export default function Colaboradores() {
       <Toaster position="top-center" richColors closeButton />
 
       {/* ══════════ HEADER ══════════ */}
-      <div className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-3">
+      <div className="px-3 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-3">
         <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
           {/* Título */}
           <div className="shrink-0 min-w-0">
@@ -229,7 +229,7 @@ export default function Colaboradores() {
       {/* ══════════ TABS (subrayado · patrón DeveloperPromotionDetail) ══════════ */}
       <nav
         role="tablist"
-        className="px-4 sm:px-6 lg:px-8 border-b border-border overflow-x-auto no-scrollbar"
+        className="px-3 sm:px-6 lg:px-8 border-b border-border overflow-x-auto no-scrollbar"
       >
         <div className="max-w-[1400px] mx-auto flex items-center gap-1">
           {([
@@ -263,7 +263,7 @@ export default function Colaboradores() {
       </nav>
 
       {/* ══════════ BODY ══════════ */}
-      <div className="flex-1 px-4 sm:px-6 lg:px-8 pt-5 pb-8">
+      <div className="flex-1 px-3 sm:px-6 lg:px-8 pt-5 pb-8">
         <div className="max-w-[1400px] mx-auto">
           {tab === "red" ? (
             <RedTab
