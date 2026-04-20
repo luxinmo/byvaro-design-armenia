@@ -42,6 +42,11 @@ import { activeTeamMembers } from "@/data/teamMembers";
 import { companyOffices } from "@/data/companyOffices";
 import { SendEmailDialog } from "@/components/email/SendEmailDialog";
 import { PriceListDialog } from "@/components/promotions/detail/PriceListDialog";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuItem, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { RefreshCw, Trash2 } from "lucide-react";
 import { toast, Toaster } from "sonner"; // feedback tras publicar
 
 function formatPrice(n: number) {
@@ -663,9 +668,31 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     <h2 className="text-base font-semibold text-foreground">Memoria de calidades</h2>
                   </div>
                   {!viewAsCollaborator && (
-                    <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 opacity-0 group-hover/section:opacity-100 transition-opacity rounded-full" onClick={() => setEditOpen("memoria")}>
-                      <Upload className="h-3 w-3" /> Subir
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          aria-label="Acciones memoria"
+                          className="h-7 w-7 rounded-full inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100 transition-opacity"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onClick={() => setEditOpen("memoria")}>
+                          <RefreshCw className="h-3.5 w-3.5 mr-2" /> Reemplazar archivo
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toast.success("Descarga iniciada")}>
+                          <Download className="h-3.5 w-3.5 mr-2" /> Descargar
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => toast.success("Memoria eliminada")}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
                 </div>
                 <div className="px-5 pb-5">
@@ -692,9 +719,31 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                       {!viewAsCollaborator && <Share2 className="h-3 w-3 text-primary/60" />}
                     </div>
                     {!viewAsCollaborator && (
-                      <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 opacity-0 group-hover/section:opacity-100 transition-opacity rounded-full" onClick={() => setEditOpen("planos")}>
-                        <Upload className="h-3 w-3" /> Subir
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            aria-label="Acciones planos"
+                            className="h-7 w-7 rounded-full inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100 transition-opacity"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem onClick={() => setEditOpen("planos")}>
+                            <Upload className="h-3.5 w-3.5 mr-2" /> Añadir archivos
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("planos"); }}>
+                            <FolderOpen className="h-3.5 w-3.5 mr-2" /> Gestionar archivos
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => toast.success("Carpeta de planos vaciada")}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-2" /> Vaciar carpeta
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
                   </div>
                   <div className="px-5 pb-5">
@@ -721,9 +770,31 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                       {!viewAsCollaborator && <Share2 className="h-3 w-3 text-primary/60" />}
                     </div>
                   {!viewAsCollaborator && (
-                    <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 opacity-0 group-hover/section:opacity-100 transition-opacity rounded-full" onClick={() => setEditOpen("brochure")}>
-                      <Upload className="h-3 w-3" /> Subir
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          aria-label="Acciones brochure"
+                          className="h-7 w-7 rounded-full inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100 transition-opacity"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onClick={() => setEditOpen("brochure")}>
+                          <RefreshCw className="h-3.5 w-3.5 mr-2" /> Reemplazar archivo
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toast.success("Descarga iniciada")}>
+                          <Download className="h-3.5 w-3.5 mr-2" /> Descargar
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => toast.success("Brochure eliminado")}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
                 </div>
                 <div className="px-5 pb-5">
