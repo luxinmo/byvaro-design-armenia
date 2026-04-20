@@ -67,8 +67,52 @@ async function captureState(page) {
   });
 }
 
+// PNG 1x1 transparente válido — para subir al input file en Multimedia.
+const FAKE_PNG_BUFFER = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "base64"
+);
+
+// Fillers específicos por heading — algunos pasos requieren interacciones
+// que no se detectan con heurísticas genéricas.
+async function runStepSpecificFiller(page, heading, actions) {
+  // Multimedia — el botón "Subir imágenes" abre un modal mock que inserta
+  // 3 fotos de Unsplash al confirmar. Replicamos ese flujo.
+  if (/multimedia/i.test(heading)) {
+    const clicked = await page.evaluate(() => {
+      const btn = Array.from(document.querySelectorAll("main button")).find(
+        (b) => /Subir imágenes|Subir foto|Añadir imagen/i.test(b.textContent)
+      );
+      if (btn) { btn.click(); return true; }
+      return false;
+    });
+    if (clicked) {
+      await page.waitForTimeout(400);
+      // Confirmar en el modal (botón con texto tipo "Añadir", "Subir", "Confirmar")
+      const confirmed = await page.evaluate(() => {
+        const modalBtns = Array.from(document.querySelectorAll('div[class*="fixed"] button, [role="dialog"] button'));
+        const target = modalBtns.find((b) =>
+          /^Añadir|^Subir|^Confirmar|^Aceptar|mock|generar/i.test(b.textContent.trim())
+        );
+        if (target) { target.click(); return true; }
+        return false;
+      });
+      if (confirmed) {
+        actions.push("uploaded-photos");
+        await page.waitForTimeout(400);
+      } else {
+        // Cerramos el modal si no encontramos el botón de confirmar
+        await page.keyboard.press("Escape");
+      }
+    }
+  }
+}
+
 async function fillStep(page, heading) {
   const actions = [];
+
+  // 0) Filler específico por heading (uploads, interacciones custom).
+  await runStepSpecificFiller(page, heading, actions);
 
   // 1) Text inputs y textareas con defaults sensatos.
   //    Inputs que son autocomplete de ubicación (placeholder menciona
@@ -121,14 +165,13 @@ async function fillStep(page, heading) {
   });
   if (sugClicked) actions.push("picked-suggestion");
 
-  // 2) Si el botón Siguiente ya se habilitó, paramos de tocar.
   let state = await captureState(page);
-  if (state.next && !state.next.disabled) return { actions, state };
 
-  // 3) Clic iterativo en cards. Algunos pasos requieren selección en
-  //    múltiples grupos (p.ej. "Tipología y estilo" pide 1 tipología +
-  //    1 estilo arquitectónico). Seguimos clicando cards distintas
-  //    hasta que "Siguiente" se habilite o nos quedemos sin candidatos.
+  // 2) Clic iterativo en cards — SIEMPRE, no sólo cuando Siguiente está
+  //    deshabilitado. Muchos pasos (Detalles finales, Plan de pagos…)
+  //    permiten avanzar sin selección pero luego la Revisión exige que
+  //    ciertos campos estén rellenos. Clicar una card por cada grupo
+  //    garantiza que el WizardState acumule lo necesario para publicar.
   const clickedSet = new Set();
   let clicks = 0;
   for (let attempt = 0; attempt < 6; attempt++) {
@@ -162,7 +205,11 @@ async function fillStep(page, heading) {
     clicks++;
     await page.waitForTimeout(200);
     state = await captureState(page);
-    if (state.next && !state.next.disabled) break;
+    // Clicamos al menos 3 veces aunque Siguiente ya esté habilitado:
+    // pasos como "Plan de pagos" o "Detalles finales" tienen múltiples
+    // grupos y solo uno afecta a `canContinue`, pero los demás son
+    // necesarios para `canPublishWizard`.
+    if (clicks >= 3 && state.next && !state.next.disabled) break;
   }
   if (clicks) actions.push(`cards:${clicks}`);
 

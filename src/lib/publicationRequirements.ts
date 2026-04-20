@@ -112,15 +112,20 @@ export function getMissingForWizard(state: WizardState): MissingRequirement[] {
     });
   }
 
-  // 6. Entrega (al menos uno de los tres: fecha, trimestre o condición)
-  const tieneEntrega =
-    !!state.fechaEntrega || !!state.trimestreEntrega || !!state.tipoEntrega;
-  if (!tieneEntrega) {
-    missing.push({
-      key: "entrega",
-      label: "Define cuándo se entrega la promoción",
-      jumpTo: "detalles",
-    });
+  // 6. Entrega (al menos uno de los tres: fecha, trimestre o condición).
+  //    Si la promoción está "terminada", la entrega ya ocurrió y no
+  //    aplica — DetallesStep oculta esa pregunta, así que aquí tampoco
+  //    debe exigirla.
+  if (state.estado !== "terminado") {
+    const tieneEntrega =
+      !!state.fechaEntrega || !!state.trimestreEntrega || !!state.tipoEntrega;
+    if (!tieneEntrega) {
+      missing.push({
+        key: "entrega",
+        label: "Define cuándo se entrega la promoción",
+        jumpTo: "detalles",
+      });
+    }
   }
 
   // 7. Estado de construcción

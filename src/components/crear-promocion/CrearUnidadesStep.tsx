@@ -237,7 +237,10 @@ export function CrearUnidadesStep({
     if (state.plantaBajaTipo === "viviendas") opts.push({ value: 0, label: "Planta Baja" });
     const endFloor = state.plantaBajaTipo === "viviendas" ? state.plantas - 1 : state.plantas;
     for (let i = 1; i < endFloor; i++) opts.push({ value: i, label: `Planta ${i}` });
-    opts.push({ value: endFloor, label: `Ático (P${endFloor})` });
+    // Si hay Planta Baja y el endFloor es 0, ya está cubierto: no dupliques.
+    if (!(state.plantaBajaTipo === "viviendas" && endFloor === 0)) {
+      opts.push({ value: endFloor, label: `Ático (P${endFloor})` });
+    }
     return opts;
   }, [state.plantas, state.plantaBajaTipo]);
 
