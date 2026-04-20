@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "audit:responsive": "node scripts/responsive-audit.mjs"
+    "audit:responsive": "node scripts/responsive-audit.mjs",
+    "audit:wizard": "node scripts/wizard-audit.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",
