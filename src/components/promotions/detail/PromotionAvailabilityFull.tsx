@@ -259,6 +259,9 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
     let result = [...allUnits];
     // In collaborator view, only show available units
     if (isCollaboratorView) result = result.filter(u => u.status === "available");
+    // En edición masiva: sólo mostramos las disponibles (son las únicas
+    // editables). Así el usuario no ve filas no editables en la tabla.
+    if (bulkEditing) result = result.filter(u => u.status === "available");
     if (filterStatus !== "all") result = result.filter(u => u.status === filterStatus);
     if (filterBlock !== "all") result = result.filter(u => u.block === filterBlock);
     if (filterType !== "all") result = result.filter(u => u.type === filterType);
@@ -284,7 +287,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
       return sortDir === "asc" ? cmp : -cmp;
     });
     return result;
-  }, [allUnits, filterStatus, filterBlock, filterType, searchQuery, sortField, sortDir]);
+  }, [allUnits, filterStatus, filterBlock, filterType, searchQuery, sortField, sortDir, isCollaboratorView, bulkEditing]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -352,6 +355,10 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
     setEditedData(initial);
     setActiveEditFields(new Set(selectedFields));
     setBulkEditing(true);
+    // Forzar la vista de tabla — el modo "catalog" (default) no renderiza
+    // celdas editables, así que cambiamos automáticamente al activar la
+    // edición masiva.
+    setViewMode("table");
     setFieldSelectorOpen(false);
   };
 
@@ -464,7 +471,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
           <DialogHeader>
             <DialogTitle>¿Qué campos quieres editar?</DialogTitle>
             <DialogDescription>
-              Selecciona los campos que deseas modificar en las {selectedUnits.size} unidad{selectedUnits.size > 1 ? "es" : ""} seleccionada{selectedUnits.size > 1 ? "s" : ""}. Solo estos campos serán editables.
+              Selecciona los campos que quieres modificar. Se aplicarán a las {available} unidad{available !== 1 ? "es" : ""} disponible{available !== 1 ? "s" : ""} a la vez (estilo Excel).
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-2 py-4">
