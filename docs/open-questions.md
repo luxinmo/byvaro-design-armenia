@@ -294,6 +294,35 @@ NestJS standalone) pero no hay decisión final.
 - Identificador del tenant: ¿`company_id` en JWT claims?
 - ¿Usuarios pueden pertenecer a múltiples empresas?
 
+### Q23 · Ventas · cálculo de comisión y modelo de pagos
+
+**Contexto.** Pantalla `/ventas` implementada en Fase 1 con mocks
+(`src/data/sales.ts`, `src/pages/Ventas.tsx`). Cada venta tiene
+`comisionPct`, `precioFinal` y un booleano `comisionPagada`.
+
+**No decidido:**
+- **Base del cálculo**: ¿la comisión se aplica sobre `precioFinal` con IVA
+  incluido o sobre la base imponible (sin IVA)? Afecta directamente al
+  importe que se muestra al promotor y a la agencia.
+- **Hitos parciales**: la estructura `CollaborationConfig.hitosComision`
+  ya define pagos escalonados (%, momento: reserva/contrato/escritura).
+  ¿La pantalla de ventas debe calcular y mostrar los hitos individualmente
+  (con su propio estado pagado/pendiente por hito), o basta un flag
+  global `comisionPagada`?
+- **Modelo de datos**: si se opta por hitos individuales, ¿se añade una
+  colección `ComisionPago[] { id, ventaId, hitoKey, importe, fechaPago,
+  estado }` a nivel de datos, o se deriva al vuelo desde
+  `venta.pagos[]` + config de la promoción?
+- **Retención por caída**: cuando una venta pasa a `caida`, ¿la comisión
+  devengada hasta ese momento se retiene, se devuelve o se negocia caso a
+  caso? Actualmente el mock asume que queda `comisionPagada=false` sin más.
+
+**Impacto de no decidir:** la UI muestra un importe bruto agregado y un
+único booleano. Para la operativa real del promotor esto probablemente se
+queda corto (varias agencias × varios hitos × varios meses).
+
+---
+
 ### Q22 · Cron jobs / tareas programadas
 
 **Contexto.** Hay procesos que corren periódicamente:

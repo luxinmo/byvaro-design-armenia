@@ -18,6 +18,27 @@ export type Agency = {
   totalPromotionsAvailable: number;
   /** Is this a new request for collaboration? */
   isNewRequest?: boolean;
+
+  /* ─── Byvaro v2 · módulo Colaboradores ─── */
+  /** Origen de la agencia en la red del promotor:
+   *  - "invited"     · la trajo el promotor (plan 0€)
+   *  - "marketplace" · llegó desde el marketplace (plan 99€) */
+  origen?: "invited" | "marketplace";
+  /** Estado operativo de la colaboración dentro de Byvaro v2.
+   *  Se solapa con `status` (legacy). Para la vista Colaboradores usamos
+   *  estados del negocio actual: activa, contrato pendiente, pausada. */
+  estadoColaboracion?: "activa" | "contrato-pendiente" | "pausada";
+  /** Nº de registros que la agencia ha aportado al promotor (histórico). */
+  registrosAportados?: number;
+  /** Nº de ventas cerradas originadas por la agencia. */
+  ventasCerradas?: number;
+  /** Comisión media pactada con la agencia (%). */
+  comisionMedia?: number;
+  /** Si tiene una solicitud pendiente de aprobar (flag UI). Equivalente
+   *  funcional a isNewRequest pero en nomenclatura español. */
+  solicitudPendiente?: boolean;
+  /** Mensaje opcional que la agencia envió al solicitar colaboración. */
+  mensajeSolicitud?: string;
 };
 
 export const agencies: Agency[] = [
@@ -40,6 +61,11 @@ export const agencies: Agency[] = [
     ],
     promotionsCollaborating: ["dev-1", "dev-2"],
     totalPromotionsAvailable: 4,
+    origen: "invited",
+    estadoColaboracion: "activa",
+    registrosAportados: 38,
+    ventasCerradas: 6,
+    comisionMedia: 4,
   },
   {
     id: "ag-2",
@@ -59,6 +85,11 @@ export const agencies: Agency[] = [
     ],
     promotionsCollaborating: ["dev-1", "dev-2", "dev-3", "dev-4"],
     totalPromotionsAvailable: 4,
+    origen: "invited",
+    estadoColaboracion: "activa",
+    registrosAportados: 62,
+    ventasCerradas: 11,
+    comisionMedia: 5,
   },
   {
     id: "ag-3",
@@ -80,6 +111,11 @@ export const agencies: Agency[] = [
     ],
     promotionsCollaborating: ["dev-2", "dev-3"],
     totalPromotionsAvailable: 4,
+    origen: "marketplace",
+    estadoColaboracion: "activa",
+    registrosAportados: 21,
+    ventasCerradas: 3,
+    comisionMedia: 4.5,
   },
   {
     id: "ag-4",
@@ -99,6 +135,11 @@ export const agencies: Agency[] = [
     ],
     promotionsCollaborating: [],
     totalPromotionsAvailable: 4,
+    origen: "invited",
+    estadoColaboracion: "pausada",
+    registrosAportados: 12,
+    ventasCerradas: 1,
+    comisionMedia: 3,
   },
   {
     id: "ag-5",
@@ -119,6 +160,14 @@ export const agencies: Agency[] = [
     promotionsCollaborating: [],
     totalPromotionsAvailable: 4,
     isNewRequest: true,
+    origen: "marketplace",
+    estadoColaboracion: "contrato-pendiente",
+    registrosAportados: 0,
+    ventasCerradas: 0,
+    comisionMedia: 0,
+    solicitudPendiente: true,
+    mensajeSolicitud:
+      "Nos especializamos en compradores portugueses y brasileños con presupuesto premium. Nos encantaría colaborar en las promociones de la Costa del Sol.",
   },
   {
     id: "ag-6",
@@ -138,5 +187,13 @@ export const agencies: Agency[] = [
     promotionsCollaborating: [],
     totalPromotionsAvailable: 4,
     isNewRequest: true,
+    origen: "marketplace",
+    estadoColaboracion: "contrato-pendiente",
+    registrosAportados: 0,
+    ventasCerradas: 0,
+    comisionMedia: 0,
+    solicitudPendiente: true,
+    mensajeSolicitud:
+      "Buscamos partnerships en Costa Blanca para nuestra red de clientes escandinavos. Ya colaboramos con 3 promotores en España.",
   },
 ];

@@ -423,3 +423,30 @@ integraciones — asumiendo implementación mock hasta fase de integraciones.
 asistente) se definirán más adelante. Por ahora, asumimos un único rol con
 permisos totales en la cuenta. Cuando se añada granularidad de roles, se
 documentará aquí y en `docs/data-model.md`.
+
+---
+
+## 2026-04-20 · ADR-030 · Colaboradores con dos tabs (Red · Analítica)
+
+**Contexto:** El módulo legacy "Agencies" era una tabla simple. En v2 la
+pantalla `/colaboradores` debe cubrir dos necesidades muy distintas:
+gestión diaria (aprobar, pausar, filtrar) y visión agregada (top
+performers, heatmap, conversión).
+
+**Decisión:** Dos tabs **subrayado** (NO pills) — "Red" (grid de cards
+con acciones) y "Analítica" (KPIs + top 5 + heatmap + conversión).
+Añadidos campos al tipo `Agency`: `origen` (`invited` | `marketplace`),
+`estadoColaboracion`, `registrosAportados`, `ventasCerradas`,
+`comisionMedia`, `solicitudPendiente`, `mensajeSolicitud`. Mock
+adicional en `src/data/collaboratorActivity.ts` para el heatmap.
+
+**Alternativas:** Una sola vista con sección colapsable de analítica ·
+tres tabs separando "Solicitudes" · árbol sidebar + detalle.
+
+**Razón:** La separación Red/Analítica encaja con la frecuencia de uso
+(Red es diaria, Analítica semanal/mensual) y evita saturar la vista
+principal. Tabs subrayado mantienen consistencia con
+`PromocionDetalle.tsx`.
+
+**Modal invitar**: se reutiliza `components/empresa/InvitarAgenciaModal`
+para no duplicar el wizard de 3 pasos.

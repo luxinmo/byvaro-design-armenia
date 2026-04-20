@@ -1,0 +1,501 @@
+/**
+ * records.ts · Mock de registros (leads entrantes de agencias)
+ *
+ * QUÉ
+ * ----
+ * Fuente de datos mock para la pantalla `/registros` (src/pages/Registros.tsx).
+ * Un "Registro" representa la solicitud de una agencia colaboradora para
+ * "apartar" un cliente potencial ante el promotor dentro de una promoción
+ * concreta. Es el núcleo del diferencial IA de duplicados (ver
+ * `docs/product.md` y `docs/data-model.md`).
+ *
+ * CÓMO
+ * ----
+ * - `promotionId` referencia a `src/data/promotions.ts`.
+ * - `agencyId`    referencia a `src/data/agencies.ts`.
+ * - `matchPercentage` (0-100) lo calcula el detector de duplicados:
+ *     < 30%  → limpio (aprobación fluida)
+ *     30-69% → ambiguo (promotor decide con comparación lado-a-lado)
+ *     >= 70% → muy probable duplicado (se recomienda rechazar)
+ * - `matchWith` es el ID/descripción del contacto o registro con el que
+ *   colisiona, para poder mostrar la comparación.
+ *
+ * Ver también: `docs/screens/registros.md`.
+ *
+ * TODO(backend): GET /api/records — paginado, filtrado server-side.
+ * TODO(logic): cuando exista IA real, el `matchPercentage` y `matchWith`
+ *   vendrán del backend; el frontend solo los renderiza.
+ */
+
+export type RegistroEstado = "pendiente" | "aprobado" | "rechazado" | "duplicado";
+
+export type RegistroCliente = {
+  nombre: string;
+  email: string;
+  telefono: string;
+  /** DNI / NIE / pasaporte — string libre para mocks. */
+  dni: string;
+  /** Nacionalidad en español. Emoji opcional: el pipeline real lo deduce. */
+  nacionalidad: string;
+  flag?: string;
+};
+
+export type Registro = {
+  id: string;
+  /** FK → src/data/promotions.ts::Promotion.id */
+  promotionId: string;
+  /** FK → src/data/agencies.ts::Agency.id */
+  agencyId: string;
+  cliente: RegistroCliente;
+  /** ISO 8601 (se formatea con date-fns/formatDistanceToNow en la UI). */
+  fecha: string;
+  estado: RegistroEstado;
+  /** 0-100. 0 = sin duplicado detectado. */
+  matchPercentage: number;
+  /**
+   * Descripción humana del candidato a duplicado (nombre del contacto
+   * existente o id de registro previo). Undefined si matchPercentage === 0.
+   */
+  matchWith?: string;
+  /**
+   * Datos del contacto/registro con el que colisiona, para mostrar la
+   * comparación lado-a-lado sin tener que hacer otra búsqueda.
+   */
+  matchCliente?: Partial<RegistroCliente>;
+  notas?: string;
+  /** El agente marca haber obtenido el consentimiento RGPD del cliente. */
+  consent: boolean;
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   Helpers de fecha: minutos/horas/días atrás desde HOY.
+   ═══════════════════════════════════════════════════════════════════ */
+const now = Date.now();
+const minsAgo = (m: number) => new Date(now - m * 60 * 1000).toISOString();
+const hoursAgo = (h: number) => new Date(now - h * 60 * 60 * 1000).toISOString();
+const daysAgo = (d: number) => new Date(now - d * 24 * 60 * 60 * 1000).toISOString();
+
+/* ═══════════════════════════════════════════════════════════════════
+   Mocks — mezcla variada de limpios, ambiguos y duplicados claros.
+   ═══════════════════════════════════════════════════════════════════ */
+export const registros: Registro[] = [
+  /* ───── Limpios (matchPercentage = 0) ───── */
+  {
+    id: "reg-001",
+    promotionId: "1",
+    agencyId: "ag-1",
+    cliente: {
+      nombre: "Émilie Rousseau",
+      email: "emilie.rousseau@gmail.com",
+      telefono: "+33 6 12 34 56 78",
+      dni: "FR-21837291",
+      nacionalidad: "Francia",
+      flag: "🇫🇷",
+    },
+    fecha: minsAgo(14),
+    estado: "pendiente",
+    matchPercentage: 0,
+    consent: true,
+    notas: "Buscando ático con vistas al mar, presupuesto hasta 1.2M€.",
+  },
+  {
+    id: "reg-002",
+    promotionId: "2",
+    agencyId: "ag-2",
+    cliente: {
+      nombre: "Lars Bergström",
+      email: "l.bergstrom@nordichomes.se",
+      telefono: "+46 70 987 1123",
+      dni: "SE-19810423",
+      nacionalidad: "Suecia",
+      flag: "🇸🇪",
+    },
+    fecha: hoursAgo(2),
+    estado: "pendiente",
+    matchPercentage: 0,
+    consent: true,
+  },
+  {
+    id: "reg-003",
+    promotionId: "3",
+    agencyId: "ag-3",
+    cliente: {
+      nombre: "Joris van der Berg",
+      email: "joris.vdb@dutchrealty.nl",
+      telefono: "+31 6 2345 6789",
+      dni: "NL-PS5419230",
+      nacionalidad: "Países Bajos",
+      flag: "🇳🇱",
+    },
+    fecha: hoursAgo(5),
+    estado: "pendiente",
+    matchPercentage: 0,
+    consent: true,
+  },
+  {
+    id: "reg-004",
+    promotionId: "1",
+    agencyId: "ag-2",
+    cliente: {
+      nombre: "Anna-Liisa Virtanen",
+      email: "anna.virtanen@outlook.fi",
+      telefono: "+358 40 555 2211",
+      dni: "FI-120385-999X",
+      nacionalidad: "Finlandia",
+      flag: "🇫🇮",
+    },
+    fecha: daysAgo(1),
+    estado: "aprobado",
+    matchPercentage: 0,
+    consent: true,
+  },
+
+  /* ───── Ambiguos (30 - 69%) ───── */
+  {
+    id: "reg-005",
+    promotionId: "2",
+    agencyId: "ag-1",
+    cliente: {
+      nombre: "James O'Connor",
+      email: "james.oconnor@gmail.com",
+      telefono: "+44 7700 900 301",
+      dni: "GB-98765432",
+      nacionalidad: "Reino Unido",
+      flag: "🇬🇧",
+    },
+    fecha: hoursAgo(7),
+    estado: "pendiente",
+    matchPercentage: 42,
+    matchWith: "Jamie O'Connor · contacto propio desde 2025",
+    matchCliente: {
+      nombre: "Jamie O'Connor",
+      email: "jamie.connor@outlook.com",
+      telefono: "+44 7700 900 499",
+      dni: "GB-98765491",
+      nacionalidad: "Reino Unido",
+    },
+    consent: true,
+    notas: "Coincide el apellido y nacionalidad, pero teléfono y email distintos.",
+  },
+  {
+    id: "reg-006",
+    promotionId: "4",
+    agencyId: "ag-3",
+    cliente: {
+      nombre: "Sofía Martínez Ruiz",
+      email: "sofia.mruiz@hotmail.com",
+      telefono: "+34 656 443 221",
+      dni: "12345678B",
+      nacionalidad: "España",
+      flag: "🇪🇸",
+    },
+    fecha: hoursAgo(10),
+    estado: "pendiente",
+    matchPercentage: 55,
+    matchWith: "Sofía M. Ruiz · registrada por Prime Properties (hace 11 días)",
+    matchCliente: {
+      nombre: "Sofía M. Ruiz",
+      email: "sofimr@gmail.com",
+      telefono: "+34 656 443 221",
+      dni: "12345678B",
+      nacionalidad: "España",
+    },
+    consent: true,
+  },
+  {
+    id: "reg-007",
+    promotionId: "3",
+    agencyId: "ag-2",
+    cliente: {
+      nombre: "Mikhail Volkov",
+      email: "mvolkov@mail.ru",
+      telefono: "+7 916 234 5678",
+      dni: "RU-7701985",
+      nacionalidad: "Rusia",
+      flag: "🇷🇺",
+    },
+    fecha: daysAgo(2),
+    estado: "pendiente",
+    matchPercentage: 38,
+    matchWith: "Mikhail V. · contacto propio (email diferente)",
+    matchCliente: {
+      nombre: "Mikhail V.",
+      email: "volkov.m@yandex.ru",
+      telefono: "+7 916 234 5699",
+      dni: "RU-7701985",
+      nacionalidad: "Rusia",
+    },
+    consent: true,
+  },
+  {
+    id: "reg-008",
+    promotionId: "1",
+    agencyId: "ag-3",
+    cliente: {
+      nombre: "Hans Dieter Schmidt",
+      email: "hd.schmidt@t-online.de",
+      telefono: "+49 170 4455 889",
+      dni: "DE-AR3928473",
+      nacionalidad: "Alemania",
+      flag: "🇩🇪",
+    },
+    fecha: daysAgo(3),
+    estado: "pendiente",
+    matchPercentage: 61,
+    matchWith: "Hans D. Schmidt · registrado hace 45 días",
+    matchCliente: {
+      nombre: "Hans D. Schmidt",
+      email: "hds@gmx.de",
+      telefono: "+49 170 4455 889",
+      dni: "DE-AR3928473",
+      nacionalidad: "Alemania",
+    },
+    consent: true,
+  },
+
+  /* ───── Duplicados fuertes (>= 70%) ───── */
+  {
+    id: "reg-009",
+    promotionId: "2",
+    agencyId: "ag-3",
+    cliente: {
+      nombre: "Lars Bergström",
+      email: "l.bergstrom@nordichomes.se",
+      telefono: "+46 70 987 1123",
+      dni: "SE-19810423",
+      nacionalidad: "Suecia",
+      flag: "🇸🇪",
+    },
+    fecha: hoursAgo(1),
+    estado: "pendiente",
+    matchPercentage: 96,
+    matchWith: "reg-002 · Nordic Home Finders (hace 2h)",
+    matchCliente: {
+      nombre: "Lars Bergström",
+      email: "l.bergstrom@nordichomes.se",
+      telefono: "+46 70 987 1123",
+      dni: "SE-19810423",
+      nacionalidad: "Suecia",
+    },
+    consent: true,
+    notas: "Mismo cliente exacto: teléfono, DNI y email coinciden.",
+  },
+  {
+    id: "reg-010",
+    promotionId: "1",
+    agencyId: "ag-2",
+    cliente: {
+      nombre: "Émilie Rousseau",
+      email: "emilie.r@gmail.com",
+      telefono: "+33 6 12 34 56 78",
+      dni: "FR-21837291",
+      nacionalidad: "Francia",
+      flag: "🇫🇷",
+    },
+    fecha: minsAgo(45),
+    estado: "pendiente",
+    matchPercentage: 88,
+    matchWith: "reg-001 · Prime Properties (hace 14 min)",
+    matchCliente: {
+      nombre: "Émilie Rousseau",
+      email: "emilie.rousseau@gmail.com",
+      telefono: "+33 6 12 34 56 78",
+      dni: "FR-21837291",
+      nacionalidad: "Francia",
+    },
+    consent: true,
+  },
+  {
+    id: "reg-011",
+    promotionId: "4",
+    agencyId: "ag-1",
+    cliente: {
+      nombre: "Sofía Martínez",
+      email: "sofimr@gmail.com",
+      telefono: "+34 656 443 221",
+      dni: "12345678B",
+      nacionalidad: "España",
+      flag: "🇪🇸",
+    },
+    fecha: daysAgo(5),
+    estado: "duplicado",
+    matchPercentage: 92,
+    matchWith: "Contacto CRM propio (desde Nov 2025)",
+    matchCliente: {
+      nombre: "Sofía M. Ruiz",
+      email: "sofimr@gmail.com",
+      telefono: "+34 656 443 221",
+      dni: "12345678B",
+      nacionalidad: "España",
+    },
+    consent: true,
+  },
+  {
+    id: "reg-012",
+    promotionId: "3",
+    agencyId: "ag-1",
+    cliente: {
+      nombre: "Johan De Vries",
+      email: "j.devries@ziggo.nl",
+      telefono: "+31 6 1122 3344",
+      dni: "NL-BSN8839921",
+      nacionalidad: "Países Bajos",
+      flag: "🇳🇱",
+    },
+    fecha: daysAgo(4),
+    estado: "rechazado",
+    matchPercentage: 78,
+    matchWith: "Registrado previamente por Dutch & Belgian Realty",
+    matchCliente: {
+      nombre: "Johan De Vries",
+      email: "jdv@gmail.com",
+      telefono: "+31 6 1122 3344",
+      dni: "NL-BSN8839921",
+      nacionalidad: "Países Bajos",
+    },
+    consent: true,
+    notas: "Rechazado — la otra agencia registró primero.",
+  },
+
+  /* ───── Más volumen limpio para que los filtros se sientan vivos ───── */
+  {
+    id: "reg-013",
+    promotionId: "2",
+    agencyId: "ag-2",
+    cliente: {
+      nombre: "Ingrid Johansen",
+      email: "ingrid.johansen@gmail.com",
+      telefono: "+47 918 44 552",
+      dni: "NO-23048811",
+      nacionalidad: "Noruega",
+      flag: "🇳🇴",
+    },
+    fecha: daysAgo(1),
+    estado: "aprobado",
+    matchPercentage: 0,
+    consent: true,
+  },
+  {
+    id: "reg-014",
+    promotionId: "1",
+    agencyId: "ag-1",
+    cliente: {
+      nombre: "Pierre Lefèvre",
+      email: "pierre.lefevre@orange.fr",
+      telefono: "+33 6 78 90 12 34",
+      dni: "FR-43298172",
+      nacionalidad: "Francia",
+      flag: "🇫🇷",
+    },
+    fecha: daysAgo(2),
+    estado: "aprobado",
+    matchPercentage: 15,
+    matchWith: "Contacto parecido (nombre frecuente)",
+    matchCliente: {
+      nombre: "Pierre Lefebvre",
+      email: "p.lefebvre@wanadoo.fr",
+      telefono: "+33 6 78 90 99 99",
+      dni: "FR-43290000",
+      nacionalidad: "Francia",
+    },
+    consent: true,
+  },
+  {
+    id: "reg-015",
+    promotionId: "4",
+    agencyId: "ag-2",
+    cliente: {
+      nombre: "Olivia Thompson",
+      email: "o.thompson@icloud.com",
+      telefono: "+44 7712 445 889",
+      dni: "GB-PP1122334",
+      nacionalidad: "Reino Unido",
+      flag: "🇬🇧",
+    },
+    fecha: hoursAgo(4),
+    estado: "pendiente",
+    matchPercentage: 0,
+    consent: true,
+    notas: "Interesada en duplex con terraza orientación sur.",
+  },
+  {
+    id: "reg-016",
+    promotionId: "3",
+    agencyId: "ag-3",
+    cliente: {
+      nombre: "Matteo Ricci",
+      email: "matteo.ricci@tiscali.it",
+      telefono: "+39 333 445 6677",
+      dni: "IT-RCCMTT80",
+      nacionalidad: "Italia",
+      flag: "🇮🇹",
+    },
+    fecha: daysAgo(6),
+    estado: "rechazado",
+    matchPercentage: 0,
+    consent: false,
+    notas: "Rechazado por falta de consentimiento RGPD.",
+  },
+  {
+    id: "reg-017",
+    promotionId: "2",
+    agencyId: "ag-1",
+    cliente: {
+      nombre: "Katarzyna Nowak",
+      email: "k.nowak@onet.pl",
+      telefono: "+48 602 334 891",
+      dni: "PL-82051244765",
+      nacionalidad: "Polonia",
+      flag: "🇵🇱",
+    },
+    fecha: minsAgo(35),
+    estado: "pendiente",
+    matchPercentage: 0,
+    consent: true,
+  },
+  {
+    id: "reg-018",
+    promotionId: "1",
+    agencyId: "ag-3",
+    cliente: {
+      nombre: "Carlos Mendoza Vega",
+      email: "carlos.mvega@gmail.com",
+      telefono: "+52 55 6632 1144",
+      dni: "MX-MEVC850203",
+      nacionalidad: "México",
+      flag: "🇲🇽",
+    },
+    fecha: hoursAgo(9),
+    estado: "pendiente",
+    matchPercentage: 33,
+    matchWith: "Carlos M. Vega · contacto con email parecido",
+    matchCliente: {
+      nombre: "Carlos M. Vega",
+      email: "carlos.mvega.01@gmail.com",
+      telefono: "+52 55 6632 9988",
+      dni: "MX-MEVC850299",
+      nacionalidad: "México",
+    },
+    consent: true,
+  },
+];
+
+/* ═══════════════════════════════════════════════════════════════════
+   Helpers derivados
+   ═══════════════════════════════════════════════════════════════════ */
+
+/** Banda de riesgo de duplicado para badge/colores (ver design-system.md). */
+export function getMatchLevel(pct: number): "none" | "low" | "medium" | "high" {
+  if (pct === 0) return "none";
+  if (pct < 30) return "low";
+  if (pct < 70) return "medium";
+  return "high";
+}
+
+/** Label humano del estado. */
+export const estadoLabel: Record<RegistroEstado, string> = {
+  pendiente: "Pendiente",
+  aprobado: "Aprobado",
+  rechazado: "Rechazado",
+  duplicado: "Duplicado",
+};

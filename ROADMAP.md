@@ -27,7 +27,7 @@ Leyenda: ✅ hecho · 🟡 en curso · 🎨 placeholder · ⬜ pendiente
 | 🎨 | Registros | `/registros` | Placeholder |
 | 🎨 | Ventas | `/ventas` | Placeholder |
 | 🎨 | Calendario | `/calendario` | Placeholder |
-| 🎨 | Colaboradores | `/colaboradores` | Placeholder · incluirá analítica Agencia×Nacionalidad |
+| ✅ | Colaboradores | `/colaboradores` | Red + Analítica (KPIs · Top 5 · Heatmap · Conversión) |
 | 🎨 | Contactos | `/contactos` | Placeholder |
 | 🎨 | Microsites | `/microsites` | Placeholder |
 | 🎨 | Emails | `/emails` | Placeholder |
