@@ -777,8 +777,10 @@ export function SendEmailDialog({
         {/* ─────── STEP 3 · COMPOSE ─────── */}
         {step === "compose" && (
           <>
-            {/* Top bar — primary row */}
-            <div className="flex items-center justify-between gap-3 pl-5 pr-16 py-3 border-b border-border/30 bg-card">
+            {/* Top bar — plantilla + "De" remitente + idioma. El botón
+                Enviar vive abajo en la barra sticky, dando aire al
+                cuerpo del email. */}
+            <div className="flex items-center justify-between gap-3 pl-3 sm:pl-5 pr-14 py-2.5 border-b border-border/30 bg-card flex-wrap">
               <div className="flex items-center gap-2 min-w-0">
                 {!defaultTemplateId && (
                   <button
@@ -789,7 +791,7 @@ export function SendEmailDialog({
                     <ArrowLeft className="h-4 w-4" strokeWidth={1.5} />
                   </button>
                 )}
-                <Mail className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={1.5} />
+                <Mail className="hidden sm:inline-block h-4 w-4 text-muted-foreground shrink-0" strokeWidth={1.5} />
 
                 {/* Template selector */}
                 <Popover>
@@ -895,36 +897,39 @@ export function SendEmailDialog({
                   );
                 })()}
 
-                {/* Inline editing is always active — no Edit button */}
-
-                <Button
-                  size="sm"
-                  className="rounded-full h-8 gap-1.5 px-4 text-xs"
-                  onClick={handleSend}
-                >
-                  <Send className="h-3 w-3" strokeWidth={1.5} />
-                  {language === "es" ? "Enviar" : "Send"}
-                </Button>
+                {/* "De" remitente · chip compacto a la derecha del template.
+                    Antes vivía en una segunda barra; ahora inline arriba
+                    para ahorrar una línea vertical. */}
+                <div className="hidden sm:inline-flex items-center gap-1.5 pl-3 ml-1 border-l border-border/40 min-w-0">
+                  <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground shrink-0">
+                    {language === "es" ? "De" : "From"}
+                  </span>
+                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-muted/40 border border-border/30 min-w-0">
+                    <img
+                      src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=64&h=64&fit=crop&crop=faces&q=80"
+                      alt=""
+                      className="h-4 w-4 rounded-full object-cover shrink-0"
+                    />
+                    <span className="text-[11px] font-medium truncate">Laura Martín</span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Secondary bar — From + recipients + subject */}
-            <div className="flex items-center gap-4 px-5 py-2.5 border-b border-border/30 bg-card flex-wrap">
-              {/* From (sender) */}
-              <div className="flex items-center gap-2 min-w-[220px]">
+            {/* Secondary bar — "Para" + subject (el "De" se movió arriba). */}
+            <div className="flex items-center gap-4 px-3 sm:px-5 py-2.5 border-b border-border/30 bg-card flex-wrap">
+              {/* "De" inline compacto · SOLO móvil (en sm+ está en el top bar). */}
+              <div className="sm:hidden flex items-center gap-1.5 min-w-0">
                 <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground shrink-0">
                   {language === "es" ? "De" : "From"}
                 </span>
-                <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-muted/40 border border-border/30 min-w-0">
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-muted/40 border border-border/30">
                   <img
                     src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=64&h=64&fit=crop&crop=faces&q=80"
                     alt=""
-                    className="h-5 w-5 rounded-full object-cover shrink-0"
+                    className="h-4 w-4 rounded-full object-cover shrink-0"
                   />
-                  <div className="flex items-center gap-1.5 min-w-0 text-[11px]">
-                    <span className="font-medium truncate">Laura Martín</span>
-                    <span className="text-muted-foreground truncate">&lt;laura@mycompany.com&gt;</span>
-                  </div>
+                  <span className="text-[11px] font-medium truncate">Laura Martín</span>
                 </div>
               </div>
 
@@ -1191,6 +1196,30 @@ export function SendEmailDialog({
                 className="w-full h-full min-h-[400px] border-0 block"
               />
             </main>
+
+            {/* Bottom bar sticky · Cancelar + Enviar primario. Respeta
+                safe-area en iOS. Mismo patrón que PriceListDialog. */}
+            <div
+              className="shrink-0 border-t border-border bg-card p-3 flex items-center gap-2 print:hidden"
+              style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
+            >
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-full h-10 px-4 text-sm"
+                onClick={() => onOpenChange(false)}
+              >
+                {language === "es" ? "Cancelar" : "Cancel"}
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1 rounded-full h-10 gap-1.5 text-sm font-semibold"
+                onClick={handleSend}
+              >
+                <Send className="h-4 w-4" strokeWidth={1.75} />
+                {language === "es" ? "Enviar" : "Send"}
+              </Button>
+            </div>
           </>
         )}
       </DialogContent>
