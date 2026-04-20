@@ -144,9 +144,35 @@ export function AddressAutocomplete({
     setQuery(text);
     setOpen(true);
     setHighlight(0);
-    // Texto libre → solo guardamos la dirección "display". Al seleccionar
-    // una sugerencia ya rellenamos pais/provincia/ciudad correctamente.
-    onChange({ ...value, direccion: text });
+    const clean = text.trim();
+    // Si el texto coincide exactamente con la ciudad o el label de una
+    // sugerencia, la aplicamos completa (pais + provincia + ciudad).
+    const match = clean
+      ? SUGERENCIAS.find(
+          (s) =>
+            s.label.toLowerCase() === clean.toLowerCase() ||
+            s.ciudad.toLowerCase() === clean.toLowerCase()
+        )
+      : null;
+    if (match) {
+      onChange({
+        pais: match.pais,
+        provincia: match.provincia,
+        ciudad: match.ciudad,
+        direccion: text,
+      });
+      return;
+    }
+    // Texto libre sin match exacto: usamos la primera coma para partir
+    // "Ciudad, Provincia, País" manualmente; si no hay comas, asumimos
+    // que el usuario está escribiendo una ciudad y hacemos el país por
+    // defecto (España) — así `canContinue()` no bloquea por pais/ciudad
+    // vacíos y el usuario puede avanzar con texto libre.
+    const parts = clean.split(",").map((s) => s.trim()).filter(Boolean);
+    const ciudad = parts[0] || "";
+    const provincia = parts[1] || "";
+    const pais = parts[2] || (ciudad ? "España" : "");
+    onChange({ pais, provincia, ciudad, direccion: text });
   };
 
   const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
