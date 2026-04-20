@@ -8,19 +8,6 @@ import {
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/BrandLogo";
 
-const titles: Record<string, string> = {
-  "/inicio": "Inicio",
-  "/promociones": "Promociones",
-  "/registros": "Registros",
-  "/ventas": "Ventas",
-  "/calendario": "Calendario",
-  "/colaboradores": "Colaboradores",
-  "/contactos": "Contactos",
-  "/microsites": "Microsites",
-  "/emails": "Emails",
-  "/ajustes": "Ajustes",
-};
-
 const drawerGroups = [
   { label: "General", items: [{ title: "Inicio", url: "/inicio", icon: Home }] },
   { label: "Comercial", items: [
@@ -42,12 +29,13 @@ const drawerGroups = [
 export function MobileHeader() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
-  const title = titles[location.pathname] || "Byvaro";
 
   return (
     <>
+      {/* Topbar minimalista: hamburguesa + brand pequeño + campana. El
+          título de la página vive en el H1 del body para no duplicar. */}
       <header className="lg:hidden sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border">
-        <div className="h-14 px-4 flex items-center justify-between gap-3">
+        <div className="h-12 px-3 flex items-center justify-between gap-3">
           <button
             onClick={() => setOpen(true)}
             className="p-2 -ml-2 rounded-lg hover:bg-muted text-foreground"
@@ -55,7 +43,7 @@ export function MobileHeader() {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <h1 className="text-[15px] font-semibold tracking-tight">{title}</h1>
+          <BrandLogo variant="icon" iconSize={24} />
           <button className="relative p-2 -mr-2 rounded-lg hover:bg-muted text-foreground" aria-label="Notificaciones">
             <Bell className="h-5 w-5" />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary ring-2 ring-background" />
