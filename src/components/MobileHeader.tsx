@@ -1,4 +1,4 @@
-import { Menu, Bell, X, ArrowLeft } from "lucide-react";
+import { Menu, X, ArrowLeft } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import {
@@ -38,29 +38,29 @@ export function MobileHeader() {
 
   return (
     <>
-      {/* Topbar minimalista: izquierda → logo completo (lockup) o
-          flecha atrás si estamos dentro de un detalle · derecha →
-          campana + hamburguesa (menú). */}
+      {/* Topbar 3-cols · el logo SIEMPRE en el centro; izquierda cede
+          espacio para la flecha atrás cuando estamos en un detalle;
+          derecha: campana + hamburguesa. */}
       <header className="lg:hidden sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border">
-        <div className="h-12 px-3 flex items-center justify-between gap-3">
-          {isRoot ? (
-            <div className="flex items-center">
-              <BrandLogo variant="lockup" iconSize={22} wordmarkHeight={12} />
-            </div>
-          ) : (
-            <button
-              onClick={() => navigate(-1)}
-              className="p-2 -ml-2 rounded-lg hover:bg-muted text-foreground inline-flex items-center gap-1"
-              aria-label="Volver"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-          )}
-          <div className="flex items-center gap-1">
-            <button className="relative p-2 rounded-lg hover:bg-muted text-foreground" aria-label="Notificaciones">
-              <Bell className="h-5 w-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary ring-2 ring-background" />
-            </button>
+        <div className="h-12 px-3 grid grid-cols-[auto_1fr_auto] items-center gap-2">
+          {/* Izquierda */}
+          <div className="flex items-center">
+            {!isRoot && (
+              <button
+                onClick={() => navigate(-1)}
+                className="p-2 -ml-2 rounded-lg hover:bg-muted text-foreground"
+                aria-label="Volver"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+            )}
+          </div>
+          {/* Centro · logo fijo */}
+          <div className="flex items-center justify-center">
+            <BrandLogo variant="lockup" iconSize={22} wordmarkHeight={12} />
+          </div>
+          {/* Derecha · menú (las notificaciones viven en la bottom bar). */}
+          <div className="flex items-center justify-end">
             <button
               onClick={() => setOpen(true)}
               className="p-2 -mr-2 rounded-lg hover:bg-muted text-foreground"
