@@ -248,8 +248,9 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             del <nav> hace de separador visual. */}
       <Toaster position="top-center" richColors closeButton />
       <header className="px-3 sm:px-8 lg:px-10 pt-4 sm:pt-6 pb-0">
-        {/* Breadcrumb / eyebrow */}
-        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-3">
+        {/* Breadcrumb / eyebrow · sólo desde sm+. En móvil el back
+            arrow del MobileHeader sustituye esta ruta. */}
+        <div className="hidden sm:flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-3">
           <button
             onClick={() => navigate(agentMode ? "/promotions-agent" : "/developer-promotions")}
             className="hover:text-foreground transition-colors"
@@ -261,38 +262,26 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         </div>
 
         {/* Título + acciones · relative para posicionar el ojo en móvil. */}
-        <div className="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-5">
-          {/* Eye móvil: icono flotante en esquina superior derecha
-              junto al título, sólo en móvil. En sm+ vive dentro de la
-              barra de acciones con texto. */}
-          {!agentMode && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handleToggleCollabView}
-              className="sm:hidden absolute top-0 right-0 h-9 w-9 px-0"
-              title="Vista colaborador"
-              aria-label="Vista colaborador"
-            >
-              <Eye className="h-4 w-4" strokeWidth={1.5} />
-            </Button>
-          )}
+        <div className="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-4 sm:mb-5">
           <div className="min-w-0">
-            <div className="flex items-center gap-2.5 flex-wrap pr-10 sm:pr-0">
-              <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight text-foreground leading-tight">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-[20px] sm:text-[28px] font-bold tracking-tight text-foreground leading-tight">
                 {p.name}
               </h1>
-              <Tag variant={status.variant} size="sm">{status.label}</Tag>
-              {typeLabel && <Tag variant="default" size="sm">{typeLabel}</Tag>}
+              {/* Chips de estado y tipo · ocultos en móvil (se muestran
+                  los KPIs y estado más abajo). */}
+              <Tag variant={status.variant} size="sm" className="hidden sm:inline-flex">{status.label}</Tag>
+              {typeLabel && <Tag variant="default" size="sm" className="hidden sm:inline-flex">{typeLabel}</Tag>}
             </div>
             <div className="flex items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1.5 flex-wrap">
-              <span className="inline-flex items-center gap-1">
+              {/* Ubicación · oculta en móvil (menos ruido). */}
+              <span className="hidden sm:inline-flex items-center gap-1">
                 <MapPin className="h-3.5 w-3.5 shrink-0" />
                 {p.location || "Sin ubicación"}
               </span>
               {p.developer && (
                 <>
-                  <span className="text-border">·</span>
+                  <span className="hidden sm:inline text-border">·</span>
                   <span className="inline-flex items-center gap-1">
                     <Building2 className="h-3.5 w-3.5 shrink-0" />
                     {p.developer}
@@ -484,7 +473,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             <SectionCard title="Multimedia" stepName="Multimedia" missing={missingSet.has("Multimedia") || realMissing.has("multimedia")} onEdit={() => setEditOpen("multimedia")} hideEdit={viewAsCollaborator} flush>
               {/* Móvil: sólo la foto principal. Tablet/desktop: mosaico
                   4×2 con foto hero + 3 thumbs + celda de vídeos. */}
-              <div className="sm:hidden relative cursor-pointer group h-[220px]">
+              <div className="sm:hidden relative cursor-pointer group h-[280px] rounded-lg overflow-hidden">
                 <img src={galleryImages[0]} alt={p.name} className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-black/0 group-active:bg-black/10 transition-colors" />
                 <Tag variant="overlay" size="sm" className="absolute bottom-3 left-3"><Image className="h-3 w-3" /> 12 fotos</Tag>
