@@ -205,9 +205,12 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
   const [fieldSelectorOpen, setFieldSelectorOpen] = useState(false);
   const [selectedFields, setSelectedFields] = useState<Set<EditableFieldKey>>(new Set());
   const [activeEditFields, setActiveEditFields] = useState<Set<EditableFieldKey>>(new Set());
-  // Notify collaborators dialog
+  // Notify collaborators dialog + compose email dialog (2 pasos).
   const [notifyDialogOpen, setNotifyDialogOpen] = useState(false);
+  const [notifyEmailOpen, setNotifyEmailOpen] = useState(false);
   const [editedFieldLabels, setEditedFieldLabels] = useState<string[]>([]);
+  // Dialog de confirmación al cancelar / salir con cambios sin guardar.
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
   // Catalog column visibility — on large screens (≥1536px, e.g. MacBook 16")
   // we show the full column set; on smaller screens we show a compact set.
   type CatalogCol = "photo" | "ref" | "type" | "dormBath" | "area" | "floorParcel" | "plans" | "status" | "price" | "orientation" | "client";
@@ -437,12 +440,41 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
   const reservedPct = (reserved / total) * 100;
   const soldPct = (sold / total) * 100;
 
+  // ¿Hay cambios sin guardar? Comparamos el valor editado con el original.
+  const hasUnsavedEdits = bulkEditing && Object.entries(editedData).some(([uid, fields]) => {
+    const orig = allUnits.find(u => u.id === uid);
+    if (!orig) return false;
+    return Object.entries(fields).some(([k, v]) => (orig as any)[k] !== v);
+  });
+
+  // Avisar al usuario si intenta cerrar la pestaña con cambios sin guardar.
+  useEffect(() => {
+    if (!hasUnsavedEdits) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsavedEdits]);
+
+  // Wrapper de cancelBulkEdit que confirma si hay cambios.
+  const requestCancelBulkEdit = () => {
+    if (hasUnsavedEdits) {
+      setConfirmLeaveOpen(true);
+      return;
+    }
+    cancelBulkEdit();
+  };
+
   return (
     <div className="space-y-5">
 
-      {/* Bulk editing bar */}
+      {/* Bulk editing bar · sticky para que las acciones Guardar / Cancelar
+          estén siempre visibles mientras el usuario edita en medio de una
+          tabla larga. */}
       {bulkEditing && (
-        <div className="border border-amber-300 rounded-xl bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 px-4 py-2.5 flex items-center justify-between">
+        <div className="sticky top-2 z-20 border border-amber-300 rounded-xl bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 px-4 py-2.5 flex items-center justify-between shadow-soft-lg">
           <div className="flex items-center gap-3">
             <Pencil className="h-4 w-4 text-amber-600" strokeWidth={1.5} />
             <span className="text-xs font-semibold text-foreground">Edición masiva · {available} unidad{available !== 1 ? "es" : ""} disponible{available !== 1 ? "s" : ""}</span>
@@ -455,7 +487,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={cancelBulkEdit}>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={requestCancelBulkEdit}>
               <X className="h-3 w-3 mr-1" /> Cancelar
             </Button>
             <Button size="sm" className="h-7 text-xs gap-1.5 rounded-full" onClick={saveBulkEdit}>
@@ -544,10 +576,48 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
               {isCollaboratorView ? "No compartir" : "No avisar"}
             </Button>
             <Button onClick={() => {
+              // Paso 2 del flujo (como Lovable): abrir el compose email
+              // con destinatarios + plantilla "new-availability" preseleccionados.
               setNotifyDialogOpen(false);
-              toast({ title: isCollaboratorView ? "Compartido con clientes" : "Colaboradores notificados", description: isCollaboratorView ? "Se ha enviado la actualización a los clientes interesados." : "Se ha enviado un aviso de actualización a todas las agencias." });
+              setNotifyEmailOpen(true);
+            }} className="gap-1.5 rounded-full">
+              <Send className="h-3.5 w-3.5" /> {isCollaboratorView ? "Compartir con clientes" : "Avisar colaboradores"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Notify email compose — paso 2 del flujo "Avisar colaboradores".
+          Abre SendEmailDialog preseleccionando la audiencia (colaboradores
+          o clientes) y la plantilla "new-availability". */}
+      <SendEmailDialog
+        open={notifyEmailOpen}
+        onOpenChange={setNotifyEmailOpen}
+        defaultAudience={isCollaboratorView ? "client" : "collaborator"}
+        defaultTemplateId="new-availability"
+        mode="promotion"
+        promotionId={promotionId}
+      />
+
+      {/* Confirmación al cancelar con cambios sin guardar. */}
+      <Dialog open={confirmLeaveOpen} onOpenChange={setConfirmLeaveOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>¿Descartar cambios?</DialogTitle>
+            <DialogDescription>
+              Tienes cambios sin guardar en la edición masiva. Si cancelas
+              ahora se perderán.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setConfirmLeaveOpen(false)}>
+              Seguir editando
+            </Button>
+            <Button variant="destructive" onClick={() => {
+              setConfirmLeaveOpen(false);
+              cancelBulkEdit();
             }} className="gap-1.5">
-              <Check className="h-3.5 w-3.5" /> {isCollaboratorView ? "Compartir con clientes" : "Avisar colaboradores"}
+              <X className="h-3.5 w-3.5" /> Descartar cambios
             </Button>
           </DialogFooter>
         </DialogContent>
