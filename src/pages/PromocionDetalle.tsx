@@ -157,6 +157,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const publishMissing = getMissingForPromotion(p);
   const isIncomplete = publishMissing.length > 0;
   const canPublish = !isIncomplete && p.status !== "active";
+  // Set de secciones de la ficha que deben renderizarse con tratamiento
+  // rojizo (SectionCard con border-dashed destructive). Se usa en cada
+  // SectionCard prop `missing` via OR con el legacy missingSet.
+  const realMissing = new Set(
+    publishMissing.map((m) => m.ficha).filter(Boolean) as string[],
+  );
 
   const baseStatus = statusConfig(p.status);
   const status = isIncomplete
@@ -378,6 +384,63 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
         {activeTabKey === "Overview" && (
           <>
+            {/* Banner de requisitos pendientes · visible si la promoción
+                aún no cumple alguno de los 7 requisitos para publicar.
+                Cada línea ofrece un CTA "Completar" que abre el dialog
+                correspondiente in situ — el usuario NO tiene que volver
+                al wizard para arreglarlos. */}
+            {!viewAsCollaborator && isIncomplete && (
+              <div className="mb-5 rounded-2xl border border-destructive/30 bg-destructive/5 p-5">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" strokeWidth={1.5} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">
+                      Faltan {publishMissing.length} requisito{publishMissing.length > 1 ? "s" : ""} para publicar
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Completa cada uno sin salir de esta pantalla · al terminar podrás pulsar "Publicar" arriba a la derecha.
+                    </p>
+                    <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {publishMissing.map((m) => {
+                        // Mapeo de ficha → dialog edit in-place. "delivery" y
+                        // "estado" comparten diálogo structure; "collaborators"
+                        // salta al tab dedicado (no hay dialog inline).
+                        const openInline = () => {
+                          switch (m.ficha) {
+                            case "multimedia":   return setEditOpen("multimedia");
+                            case "units":        return setEditOpen("inventory");
+                            case "paymentPlan":  return setEditOpen("paymentPlan");
+                            case "location":     return setEditOpen("location");
+                            case "estado":
+                            case "delivery":     return setEditOpen("structure");
+                            case "collaborators": return setActiveTab(visibleTabs.indexOf("Comisiones"));
+                            default:             return;
+                          }
+                        };
+                        return (
+                          <li key={m.key}>
+                            <button
+                              type="button"
+                              onClick={openInline}
+                              className="w-full inline-flex items-center justify-between gap-2 rounded-lg bg-card border border-destructive/20 hover:border-destructive/40 px-3 py-2 text-left transition-colors group"
+                            >
+                              <span className="inline-flex items-center gap-2 text-xs text-foreground">
+                                <span className="h-1.5 w-1.5 rounded-full bg-destructive shrink-0" />
+                                {m.label}
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground group-hover:text-foreground transition-colors shrink-0">
+                                Completar <ArrowRight className="h-3 w-3" />
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Mobile: collaboration + completion (shown above content on small screens) */}
             {!viewAsCollaborator && (
               <div className="lg:hidden space-y-4">
@@ -397,7 +460,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               <div className="flex-1 min-w-0 space-y-5 order-2 lg:order-1">
 
             {/* ── 1. GALLERY ── */}
-            <SectionCard title="Multimedia" stepName="Multimedia" missing={missingSet.has("Multimedia")} onEdit={() => setEditOpen("multimedia")} hideEdit={viewAsCollaborator} flush>
+            <SectionCard title="Multimedia" stepName="Multimedia" missing={missingSet.has("Multimedia") || realMissing.has("multimedia")} onEdit={() => setEditOpen("multimedia")} hideEdit={viewAsCollaborator} flush>
               <div className="grid grid-cols-4 grid-rows-2 gap-1.5 h-[320px]">
                 <div className="col-span-2 row-span-2 relative group cursor-pointer">
                   <img src={galleryImages[0]} alt={p.name} className="w-full h-full object-cover" />
@@ -453,7 +516,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             </div>
 
             {/* ── 3. STRUCTURE & CONSTRUCTION ── */}
-            <SectionCard title="Estructura y construcción" stepName="Basic info" missing={false} onEdit={() => setEditOpen("structure")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Estructura y construcción" stepName="Basic info" missing={realMissing.has("estado")} onEdit={() => setEditOpen("structure")} hideEdit={viewAsCollaborator}>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <InfoItem icon={Building2} label="Tipo" value={typeLabel || "Sin definir"} />
                 <InfoItem icon={Layers} label="Estructura" value={p.totalUnits > 10 ? "Multibloque" : "Bloque único"} />
@@ -678,11 +741,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
             {/* ── 5. UNITS / PAYMENT PLAN / COMMISSIONS ── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <SectionCard title="Unidades y disponibilidad" stepName="Units" missing={missingSet.has("Units")} onEdit={() => setEditOpen("inventory")} hideEdit={viewAsCollaborator}>
+              <SectionCard title="Unidades y disponibilidad" stepName="Units" missing={missingSet.has("Units") || realMissing.has("units")} onEdit={() => setEditOpen("inventory")} hideEdit={viewAsCollaborator}>
                 <PromotionAvailabilitySummary promotionId={p.id} onViewAll={() => setActiveTab(1)} />
               </SectionCard>
 
-              <SectionCard title="Plan de pagos" stepName="Payment plan" missing={missingSet.has("Payment plan")} onEdit={() => setEditOpen("paymentPlan")} hideEdit={viewAsCollaborator}>
+              <SectionCard title="Plan de pagos" stepName="Payment plan" missing={missingSet.has("Payment plan") || realMissing.has("paymentPlan")} onEdit={() => setEditOpen("paymentPlan")} hideEdit={viewAsCollaborator}>
                 {p.reservationCost > 0 ? (
                   <div className="space-y-4">
                     {/* Summary row */}
@@ -771,7 +834,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             </SectionCard>
 
             {/* ── 9. LOCATION ── */}
-            <SectionCard title="Ubicación" stepName="Basic info" missing={false} onEdit={() => setEditOpen("location")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Ubicación" stepName="Basic info" missing={realMissing.has("location")} onEdit={() => setEditOpen("location")} hideEdit={viewAsCollaborator}>
               <div className="rounded-xl overflow-hidden h-[200px] bg-muted/30 flex items-center justify-center">
                 <div className="text-center">
                   <MapPin className="h-6 w-6 text-muted-foreground/30 mx-auto mb-2" />
