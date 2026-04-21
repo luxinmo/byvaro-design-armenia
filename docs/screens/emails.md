@@ -9,6 +9,11 @@ enriquecidas y delegación de acceso.
 datos exacto pero se adapta la UI al sistema visual Byvaro v2 (tokens HSL,
 radios, sombras).
 
+> 📦 **Para llevar este módulo al proyecto real con backend**:
+> lee [`emails-handoff.md`](./emails-handoff.md) — guía paso a paso de
+> migración mock → producción, contrato API completo, variables de entorno,
+> consideraciones de seguridad y gotchas conocidos.
+
 **Estado:** 🟢 funcional (mock). 8 pasos del plan original completados.
 Último update: 2026-04-21.
 
