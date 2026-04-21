@@ -20,7 +20,7 @@ contract, permisos, estados, enlaces salientes.
 | Colaboradores | `/colaboradores` | (pendiente) | 🎨 placeholder |
 | Contactos | `/contactos` | (pendiente) | 🎨 placeholder |
 | Microsites | `/microsites` | (pendiente) | 🎨 placeholder |
-| Emails | `/emails` | (pendiente) | 🎨 placeholder |
+| Emails | `/emails` | [`emails.md`](emails.md) | 🟡 doc + tipos (falta UI) |
 | Ajustes | `/ajustes` | (pendiente) | 🎨 placeholder |
 
 ### Auth & Onboarding

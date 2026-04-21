@@ -30,7 +30,7 @@ Leyenda: ✅ hecho · 🟡 en curso · 🎨 placeholder · ⬜ pendiente
 | ✅ | Colaboradores | `/colaboradores` | Red + Analítica (KPIs · Top 5 · Heatmap · Conversión) |
 | 🎨 | Contactos | `/contactos` | Placeholder |
 | 🎨 | Microsites | `/microsites` | Placeholder |
-| 🎨 | Emails | `/emails` | Placeholder |
+| 🟡 | Emails | `/emails` | Paso 1 hecho (doc + tipos + data). Falta UI |
 | 🎨 | Ajustes | `/ajustes` | Placeholder |
 | ✅ | Promoción · detalle | `/promociones/:id` | Ficha con 6 tabs (Información · Disponibilidad · Multimedia · Docs · Colaboradores · Registros) |
 
@@ -144,7 +144,19 @@ Tabs Overview / Availability / Comisiones / Documents / Agencies.
 
 ### ⬜ Fase 12 — Colaboradores + Analítica Agencia × Nacionalidad
 
-### ⬜ Fase 13 — Emails · plantillas + campañas
+### 🟡 Fase 13 — Emails · cliente Gmail + plantillas + campañas
+
+Cliente de correo completo portado del ref (`figgy-friend-forge`).
+Dependencias y plan detallado en [`docs/screens/emails.md`](docs/screens/emails.md).
+
+- ✅ Paso 1 — Doc + tipos + mocks (`accounts.ts`, `signatures.ts`, `emails.md`)
+- ⬜ Paso 2 — `EmailSetup` + wrapper `Emails.tsx` (onboarding con providers)
+- ⬜ Paso 3 — `GmailInterface` layout (sidebar + lista + detalle)
+- ⬜ Paso 4 — `AccountSwitcher` + bandeja unificada
+- ⬜ Paso 5 — `InlineReply` (editor enriquecido Reply/Forward)
+- ⬜ Paso 6 — `SignatureManagerDialog`
+- ⬜ Paso 7 — `ManageAccountsDialog` (cuentas + delegación + IMAP)
+- ⬜ Paso 8 — Sub-rutas de `/ajustes/email/*` (firma, plantillas, auto-respuesta, SMTP)
 
 ### ⬜ Fase 14 — Ajustes · Empresa, Equipo, Facturación
 
