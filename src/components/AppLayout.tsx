@@ -58,11 +58,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex w-full bg-background">
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar — se colapsa a iconos automáticamente en
+       * rutas como /emails (ver COLLAPSED_ROUTES en AppSidebar). */}
       <AppSidebar />
 
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Desktop header */}
         <AppHeader />
 
         {/* Mobile header */}

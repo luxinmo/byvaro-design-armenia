@@ -1,17 +1,17 @@
 import { useState, useMemo } from "react";
-import { Unit, UnitStatus } from "@/data/units";
+import { Unit, UnitStatus, PromotionContext } from "@/data/units";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
-  Compass, Bed, Bath, Maximize, Building2, Waves, Eye, Sun,
+  Bed, Bath, Maximize, Building2, Waves, Eye,
   ChevronLeft, ChevronRight, Download, Send, Pencil, Bookmark,
-  FileText, Image as ImageIcon, Video, MapPin, Calendar, Tag,
-  TreePine, Car, Package, Shield, Wifi, Dumbbell, Wind, Snowflake,
-  Sparkles, CheckCircle2, Phone, Mail, Share2, Heart, Star, Award,
-  Zap, Home, Layers, Ruler,
+  FileText, Image as ImageIcon, Video, MapPin, Calendar,
+  TreePine, Car, Package, Shield, Dumbbell,
+  Sparkles, Share2, Heart, Award,
+  Ruler,
 } from "lucide-react";
 import { SendEmailDialog } from "@/components/email/SendEmailDialog";
 
@@ -38,52 +38,28 @@ interface UnitDetailDialogProps {
   isCollaboratorView?: boolean;
   onEdit?: (unit: Unit) => void;
   onUpdateUnit?: (unitId: string, updates: Partial<Unit>) => void;
+  /** Contexto heredado de la promoción · dirección, amenities, plan
+   *  de pagos, descripción, certificado, año entrega. */
+  promotionCtx?: PromotionContext;
 }
 
-type ExtraFields = {
-  description: string;
-  city: string;
-  region: string;
-  energyCert: string;
-  deliveryYear: string;
-  pois: { label: string; value: string }[];
-  contactName: string;
-  contactRole: string;
-  contactInitials: string;
-  features: { interior: string[]; exterior: string[]; community: string[] };
-};
-
-export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView = false, onEdit, onUpdateUnit }: UnitDetailDialogProps) {
+export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView = false, onEdit, onUpdateUnit, promotionCtx }: UnitDetailDialogProps) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [sendOpen, setSendOpen] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
-  const [extras, setExtras] = useState<ExtraFields>({
-    description: "",
-    city: "Marbella",
-    region: "Málaga · Costa del Sol",
-    energyCert: "A",
-    deliveryYear: "2026",
-    pois: [
-      { label: "Playa", value: "350 m" },
-      { label: "Centro", value: "2,5 km" },
-      { label: "Aeropuerto", value: "45 km" },
-      { label: "Golf", value: "800 m" },
-    ],
-    contactName: "María Rodríguez",
-    contactRole: "Asesora comercial",
-    contactInitials: "MR",
-    features: {
-      interior: ["Cocina equipada", "Aire acondicionado", "Calefacción central", "Suelo radiante", "Domótica integrada", "Armarios empotrados", "Doble acristalamiento", "Ventilación cruzada"],
-      exterior: ["Plaza de garaje", "Trastero incluido"],
-      community: ["Seguridad 24h", "Piscina comunitaria", "Gimnasio privado", "Zonas verdes", "Coworking", "Spa & Sauna"],
-    },
-  });
-
-  const updateExtra = <K extends keyof ExtraFields>(key: K, value: ExtraFields[K]) => {
-    setExtras(prev => ({ ...prev, [key]: value }));
-  };
+  /* ── Datos heredados de la promoción (con fallback a valores por
+        defecto si no se inyecta contexto) ─────────────────────────── */
+  const ctx: PromotionContext = promotionCtx ?? {};
+  const city = ctx.ciudad ?? "—";
+  const region = [ctx.provincia, ctx.pais].filter(Boolean).join(" · ") || "";
+  const heritedDescription = ctx.descripcion ?? "";
+  const heritedChars = ctx.caracteristicas ?? [];
+  const heritedHitos = ctx.hitosPago ?? [];
+  const heritedEnergyCert = ctx.energyCert ?? "";
+  const heritedDeliveryYear = ctx.deliveryYear ?? "";
+  const amenities = ctx.amenities ?? {};
 
   const update = (patch: Partial<Unit>) => {
     if (unit && onUpdateUnit) onUpdateUnit(unit.id, patch);
@@ -101,46 +77,61 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
   const displayId = getUnitDisplayId(unit);
   const isUni = ["Villa", "Chalet", "Unifamiliar", "Pareado", "Adosado"].includes(unit.type);
 
+  /* ── Valores finales · override > heredado ─────────────────────── */
+  const effectiveDescription = unit.descripcionOverride ?? heritedDescription;
+  const hasDescriptionOverride = unit.descripcionOverride !== undefined;
+  const effectiveChars = unit.caracteristicasOverride ?? heritedChars;
+  const hasCharsOverride = unit.caracteristicasOverride !== undefined;
+  const effectiveHitos = unit.hitosPagoOverride ?? heritedHitos;
+  const hasHitosOverride = unit.hitosPagoOverride !== undefined;
+  const effectiveEnergyCert = unit.energyCertOverride ?? heritedEnergyCert;
+  const effectiveDeliveryYear = unit.deliveryYearOverride ?? heritedDeliveryYear;
+
+  /* Jardín y parcela son lo mismo en este modelo: se muestra un único
+     campo "Parcela" para independientes / bajos. El campo `garden`
+     legacy se suma al `parcel` si ambos > 0 (compat datos antiguos). */
+  const parcelaTotal = (unit.parcel || 0) + (unit.garden || 0);
+
   const surfaces = [
     { label: "Construida", value: unit.builtArea, icon: Maximize },
     { label: "Útil", value: unit.usableArea, icon: Ruler },
     ...(unit.terrace > 0 ? [{ label: "Terraza", value: unit.terrace, icon: TreePine }] : []),
-    ...(unit.garden > 0 ? [{ label: "Jardín", value: unit.garden, icon: TreePine }] : []),
-    ...(unit.parcel > 0 ? [{ label: "Parcela", value: unit.parcel, icon: MapPin }] : []),
+    ...(parcelaTotal > 0 ? [{ label: "Parcela", value: parcelaTotal, icon: MapPin }] : []),
   ];
 
-  const interiorFeatures = [
-    { label: "Cocina equipada", icon: Package },
-    { label: "Aire acondicionado", icon: Snowflake },
-    { label: "Calefacción central", icon: Sun },
-    { label: "Suelo radiante", icon: Zap },
-    { label: "Domótica integrada", icon: Wifi },
-    { label: "Armarios empotrados", icon: Home },
-    { label: "Doble acristalamiento", icon: Layers },
-    { label: "Ventilación cruzada", icon: Wind },
-  ];
+  /* Plan de pagos · usa el heredado; si está vacío cae en el fallback
+     estándar 10/20/40/30. Cada hito se formatea contra el precio de la
+     unidad. */
+  const paymentPlanBase = effectiveHitos.length > 0
+    ? effectiveHitos.map((h, i) => ({
+        label: h.descripcion || `Hito ${i + 1}`,
+        percent: h.porcentaje,
+        amount: unit.price * (h.porcentaje / 100),
+        when: "",
+      }))
+    : [
+        { label: "Reserva", percent: 10, amount: unit.price * 0.10, when: "A la firma" },
+        { label: "Contrato", percent: 20, amount: unit.price * 0.20, when: "30 días" },
+        { label: "Durante obra", percent: 40, amount: unit.price * 0.40, when: "Hitos de obra" },
+        { label: "Entrega de llaves", percent: 30, amount: unit.price * 0.30, when: "Escritura" },
+      ];
+  const paymentPlan = paymentPlanBase;
 
+  /* Exteriores reales derivados de flags (no inventados). */
   const exteriorFeatures = [
     ...(unit.hasPool ? [{ label: "Piscina privada", icon: Waves }] : []),
-    ...(unit.floor >= 3 ? [{ label: "Vistas al mar", icon: Eye }] : []),
+    ...(parcelaTotal > 0 ? [{ label: `Parcela ${parcelaTotal} m²`, icon: MapPin }] : []),
     { label: "Plaza de garaje", icon: Car },
     { label: "Trastero incluido", icon: Package },
   ];
 
+  /* Comunes reales de la promoción. */
   const communityFeatures = [
-    { label: "Seguridad 24h", icon: Shield },
-    { label: "Piscina comunitaria", icon: Waves },
-    { label: "Gimnasio privado", icon: Dumbbell },
-    { label: "Zonas verdes", icon: TreePine },
-    { label: "Coworking", icon: Building2 },
-    { label: "Spa & Sauna", icon: Sparkles },
-  ];
-
-  const paymentPlan = [
-    { label: "Reserva", percent: 10, amount: unit.price * 0.10, when: "A la firma" },
-    { label: "Contrato", percent: 20, amount: unit.price * 0.20, when: "30 días" },
-    { label: "Durante obra", percent: 40, amount: unit.price * 0.40, when: "Hitos de obra" },
-    { label: "Entrega de llaves", percent: 30, amount: unit.price * 0.30, when: "Escritura" },
+    ...(amenities.piscinaComunitaria ? [{ label: "Piscina comunitaria", icon: Waves }] : []),
+    ...(amenities.piscinaInterna ? [{ label: "Piscina interna", icon: Waves }] : []),
+    ...(amenities.zonaSpa ? [{ label: "Zona SPA", icon: Sparkles }] : []),
+    ...(amenities.zonaInfantil ? [{ label: "Zona infantil", icon: TreePine }] : []),
+    ...(amenities.urbanizacionCerrada ? [{ label: "Urbanización cerrada", icon: Shield }] : []),
   ];
 
   const goPrev = () => setActiveIdx(i => (i - 1 + photos.length) % photos.length);
@@ -170,7 +161,10 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
               </div>
             </div>
             <div className="hidden sm:flex items-center gap-2 shrink-0 pr-8">
-              {!isCollaboratorView && (
+              {/* Edición · sólo para admin/promotor Y sólo si la unidad
+                  no está vendida o retirada (el precio y los datos son
+                  inmutables una vez cerrada la operación). */}
+              {!isCollaboratorView && unit.status !== "sold" && unit.status !== "withdrawn" && (
                 <Button
                   variant={editMode ? "default" : "outline"}
                   size="sm"
@@ -187,10 +181,12 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full">
                 <Share2 className="h-4 w-4" strokeWidth={1.5} />
               </Button>
-              <div className="text-right ml-2">
-                <p className="text-base font-bold text-foreground tabular-nums leading-none">{formatPrice(unit.price)}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{formatPrice(pricePerM2)}/m²</p>
-              </div>
+              {unit.status === "available" && (
+                <div className="text-right ml-2">
+                  <p className="text-base font-bold text-foreground tabular-nums leading-none">{formatPrice(unit.price)}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{formatPrice(pricePerM2)}/m²</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -232,7 +228,7 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
                     </div>
                     <h1 className="text-xl sm:text-2xl font-bold tracking-tight">{unit.type} {displayId}</h1>
                     <p className="text-[11px] sm:text-xs opacity-90 mt-0.5 flex items-center gap-1">
-                      <MapPin className="h-3 w-3" strokeWidth={1.5} /> {extras.city}, {extras.region.split(" · ")[0]}
+                      <MapPin className="h-3 w-3" strokeWidth={1.5} /> {city}{region && `, ${region.split(" · ")[0]}`}
                     </p>
                   </div>
                 </button>
@@ -292,13 +288,11 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
 
             {/* Quick highlights bar */}
             <div className="px-5 sm:px-6 py-4 border-b border-border/40 bg-card">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl">
+              <div className="grid grid-cols-3 gap-3 max-w-2xl">
                 <Highlight icon={Bed} value={String(unit.bedrooms)} label="Dormitorios"
                   editMode={editMode} type="number" onChange={(v) => update({ bedrooms: Number(v) || 0 })} />
                 <Highlight icon={Bath} value={String(unit.bathrooms)} label="Baños"
                   editMode={editMode} type="number" onChange={(v) => update({ bathrooms: Number(v) || 0 })} />
-                <Highlight icon={Maximize} value={String(unit.builtArea)} suffix="m²" label="Construida"
-                  editMode={editMode} type="number" onChange={(v) => update({ builtArea: Number(v) || 0 })} />
                 <Highlight
                   icon={isUni ? MapPin : Building2}
                   value={isUni ? String(unit.parcel) : String(unit.floor)}
@@ -315,40 +309,57 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
             <div className="px-5 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 lg:gap-8">
               {/* LEFT: details */}
               <div className="space-y-8 min-w-0">
-                {/* Description */}
-                <Section title="Sobre esta vivienda" subtitle="Descripción">
-                  {editMode ? (
+                {/* Description · heredada de la promoción con override por unidad */}
+                <Section
+                  title="Sobre esta vivienda"
+                  subtitle="Descripción"
+                  right={
+                    !isCollaboratorView && editMode ? (
+                      hasDescriptionOverride ? (
+                        <button
+                          type="button"
+                          onClick={() => update({ descripcionOverride: undefined })}
+                          className="text-[10px] text-primary font-medium hover:underline"
+                        >
+                          Restablecer a la de la promoción
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => update({ descripcionOverride: heritedDescription || "" })}
+                          className="text-[10px] text-primary font-medium hover:underline"
+                        >
+                          Personalizar para esta unidad
+                        </button>
+                      )
+                    ) : undefined
+                  }
+                >
+                  {editMode && hasDescriptionOverride ? (
                     <textarea
-                      value={extras.description}
-                      onChange={(e) => updateExtra("description", e.target.value)}
+                      value={unit.descripcionOverride ?? ""}
+                      onChange={(e) => update({ descripcionOverride: e.target.value })}
                       rows={6}
                       className="w-full text-sm text-foreground/85 leading-relaxed bg-muted/30 rounded-xl border border-border/40 px-4 py-3 outline-none focus:ring-2 focus:ring-primary/30 resize-none"
                       placeholder="Descripción personalizada de la vivienda..."
                     />
                   ) : (
                     <div className="space-y-3 text-sm text-foreground/85 leading-relaxed">
-                      {extras.description ? (
-                        <p className="whitespace-pre-line">{extras.description}</p>
+                      {effectiveDescription ? (
+                        <p className="whitespace-pre-line">{effectiveDescription}</p>
                       ) : (
-                        <>
-                          <p>
-                            Descubra esta excepcional {unit.type.toLowerCase()} de {unit.bedrooms} dormitorios situada en una de las urbanizaciones más prestigiosas de la Costa del Sol. Con {unit.builtArea} m² construidos, esta propiedad combina diseño contemporáneo, materiales de primera calidad y vistas privilegiadas.
-                          </p>
-                          <p>
-                            Distribuida en una planta diáfana, ofrece amplios espacios con luz natural durante todo el día gracias a su orientación {unit.orientation.toLowerCase()}. La cocina abierta al salón, los acabados artesanales y el ventanal de suelo a techo crean una atmósfera única de elegancia y confort.
-                          </p>
-                          {unit.terrace > 0 && (
-                            <p>
-                              Cuenta con una terraza privada de {unit.terrace} m², ideal para disfrutar del clima mediterráneo, comer al aire libre o relajarse contemplando el atardecer sobre el Mediterráneo.
-                            </p>
-                          )}
-                        </>
+                        <p className="text-muted-foreground/70 italic">
+                          Sin descripción todavía · añade una en el paso "Descripción" de la promoción o personalízala aquí.
+                        </p>
+                      )}
+                      {hasDescriptionOverride && !editMode && (
+                        <p className="text-[10px] text-primary">✓ Descripción personalizada para esta unidad</p>
                       )}
                     </div>
                   )}
                 </Section>
 
-                {/* Surfaces */}
+                {/* Surfaces · jardín y parcela unificados en un solo campo */}
                 <Section title="Superficies" subtitle="Distribución">
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     <SurfaceCard label="Construida" value={unit.builtArea} icon={Maximize}
@@ -357,52 +368,8 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
                       editMode={editMode} onChange={(v) => update({ usableArea: v })} />
                     <SurfaceCard label="Terraza" value={unit.terrace} icon={TreePine}
                       editMode={editMode} onChange={(v) => update({ terrace: v })} hideIfZero={!editMode} />
-                    <SurfaceCard label="Jardín" value={unit.garden} icon={TreePine}
-                      editMode={editMode} onChange={(v) => update({ garden: v })} hideIfZero={!editMode} />
-                    <SurfaceCard label="Parcela" value={unit.parcel} icon={MapPin}
-                      editMode={editMode} onChange={(v) => update({ parcel: v })} hideIfZero={!editMode} />
-                  </div>
-                </Section>
-
-                {/* Floor plan placeholder */}
-                <Section title="Plano de la vivienda" subtitle="Distribución">
-                  <div className="rounded-2xl border border-border/40 bg-muted/30 aspect-[16/10] overflow-hidden flex flex-col items-center justify-center text-muted-foreground">
-                    <FileText className="h-10 w-10 mb-2 opacity-40" strokeWidth={1.2} />
-                    <p className="text-sm font-medium">Plano de planta</p>
-                    <p className="text-xs mt-1">{unit.builtArea} m² · {unit.bedrooms} dormitorios · {unit.bathrooms} baños</p>
-                    {editMode ? (
-                      <Button variant="default" size="sm" className="mt-3 rounded-full text-xs gap-1.5 h-8">
-                        <ImageIcon className="h-3 w-3" strokeWidth={1.5} /> Subir plano
-                      </Button>
-                    ) : (
-                      <Button variant="outline" size="sm" className="mt-3 rounded-full text-xs gap-1.5 h-8 border-border/60">
-                        <Download className="h-3 w-3" strokeWidth={1.5} /> Descargar plano
-                      </Button>
-                    )}
-                  </div>
-                </Section>
-
-                {/* Features grouped */}
-                <Section title="Características" subtitle="Equipamiento">
-                  <div className="space-y-5">
-                    <FeatureGroup
-                      title="Interior"
-                      items={editMode ? extras.features.interior : interiorFeatures.map(f => f.label)}
-                      editMode={editMode}
-                      onChange={(items) => updateExtra("features", { ...extras.features, interior: items })}
-                    />
-                    <FeatureGroup
-                      title="Exterior y extras"
-                      items={editMode ? extras.features.exterior : exteriorFeatures.map(f => f.label)}
-                      editMode={editMode}
-                      onChange={(items) => updateExtra("features", { ...extras.features, exterior: items })}
-                    />
-                    <FeatureGroup
-                      title="Zonas comunes"
-                      items={editMode ? extras.features.community : communityFeatures.map(f => f.label)}
-                      editMode={editMode}
-                      onChange={(items) => updateExtra("features", { ...extras.features, community: items })}
-                    />
+                    <SurfaceCard label="Parcela / Jardín" value={parcelaTotal} icon={MapPin}
+                      editMode={editMode} onChange={(v) => update({ parcel: v, garden: 0 })} hideIfZero={!editMode} />
                   </div>
                 </Section>
 
@@ -428,27 +395,127 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
                     <DetailRow label="Estado" value={unit.status}
                       editMode={editMode} onChange={(v) => update({ status: v as UnitStatus })}
                       options={["available", "reserved", "sold", "withdrawn"]} />
-                    <DetailRow label="Certificación energética" value={extras.energyCert}
-                      editMode={editMode} onChange={(v) => updateExtra("energyCert", v)}
+                    <DetailRow label="Certificación energética"
+                      value={effectiveEnergyCert || "—"}
+                      editMode={editMode}
+                      onChange={(v) => update({ energyCertOverride: v })}
                       options={["A", "B", "C", "D", "E", "F", "G"]}
-                      badge={editMode ? undefined : "energy"} />
-                    <DetailRow label="Año de entrega" value={extras.deliveryYear}
-                      editMode={editMode} type="number" onChange={(v) => updateExtra("deliveryYear", v)} />
+                      badge={editMode ? undefined : "energy"}
+                      inherited={unit.energyCertOverride === undefined && !!heritedEnergyCert} />
+                    <DetailRow label="Año de entrega"
+                      value={effectiveDeliveryYear || "—"}
+                      editMode={editMode && isUni}
+                      onChange={(v) => update({ deliveryYearOverride: v })}
+                      inherited={unit.deliveryYearOverride === undefined && !!heritedDeliveryYear} />
                   </div>
                 </Section>
 
-                {/* Payment plan */}
-                {!isCollaboratorView && (
-                  <Section title="Plan de pagos" subtitle="Financiación">
+                {/* Floor plan placeholder */}
+                <Section title="Plano de la vivienda" subtitle="Distribución">
+                  <div className="rounded-2xl border border-border/40 bg-muted/30 aspect-[16/10] overflow-hidden flex flex-col items-center justify-center text-muted-foreground">
+                    <FileText className="h-10 w-10 mb-2 opacity-40" strokeWidth={1.2} />
+                    <p className="text-sm font-medium">Plano de planta</p>
+                    <p className="text-xs mt-1">{unit.builtArea} m² · {unit.bedrooms} dormitorios · {unit.bathrooms} baños</p>
+                    {editMode ? (
+                      <Button variant="default" size="sm" className="mt-3 rounded-full text-xs gap-1.5 h-8">
+                        <ImageIcon className="h-3 w-3" strokeWidth={1.5} /> Subir plano
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm" className="mt-3 rounded-full text-xs gap-1.5 h-8 border-border/60">
+                        <Download className="h-3 w-3" strokeWidth={1.5} /> Descargar plano
+                      </Button>
+                    )}
+                  </div>
+                </Section>
+
+                {/* Features · heredadas de la promoción con override opcional.
+                     Interior = caracteristicasVivienda (heredadas/override).
+                     Exterior = derivados reales de la unidad (piscina, parcela…).
+                     Comunes = amenidades reales de la promoción. */}
+                <Section
+                  title="Características"
+                  subtitle="Equipamiento"
+                  right={
+                    !isCollaboratorView && editMode ? (
+                      hasCharsOverride ? (
+                        <button
+                          type="button"
+                          onClick={() => update({ caracteristicasOverride: undefined })}
+                          className="text-[10px] text-primary font-medium hover:underline"
+                        >
+                          Restablecer a las de la promoción
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => update({ caracteristicasOverride: [...heritedChars] })}
+                          className="text-[10px] text-primary font-medium hover:underline"
+                        >
+                          Personalizar para esta unidad
+                        </button>
+                      )
+                    ) : undefined
+                  }
+                >
+                  <div className="space-y-5">
+                    <FeatureGroup
+                      title={hasCharsOverride ? "Interior (personalizado)" : "Interior"}
+                      items={effectiveChars}
+                      editMode={editMode && hasCharsOverride}
+                      onChange={(items) => update({ caracteristicasOverride: items })}
+                    />
+                    {exteriorFeatures.length > 0 && (
+                      <FeatureGroup
+                        title="Exterior y extras"
+                        items={exteriorFeatures.map(f => f.label)}
+                      />
+                    )}
+                    {communityFeatures.length > 0 && (
+                      <FeatureGroup
+                        title="Zonas comunes"
+                        items={communityFeatures.map(f => f.label)}
+                      />
+                    )}
+                  </div>
+                </Section>
+
+                {/* Payment plan · heredado de la promoción + override opcional
+                     (útil sobre todo para unifamiliar independiente). */}
+                {!isCollaboratorView && unit.status !== "sold" && unit.status !== "withdrawn" && (
+                  <Section
+                    title="Plan de pagos"
+                    subtitle="Financiación"
+                    right={
+                      !isCollaboratorView && editMode ? (
+                        hasHitosOverride ? (
+                          <button
+                            type="button"
+                            onClick={() => update({ hitosPagoOverride: undefined })}
+                            className="text-[10px] text-primary font-medium hover:underline"
+                          >
+                            Restablecer al de la promoción
+                          </button>
+                        ) : isUni ? (
+                          <button
+                            type="button"
+                            onClick={() => update({ hitosPagoOverride: heritedHitos.length > 0 ? [...heritedHitos] : paymentPlan.map(p => ({ porcentaje: p.percent, descripcion: p.label })) })}
+                            className="text-[10px] text-primary font-medium hover:underline"
+                          >
+                            Personalizar para esta villa
+                          </button>
+                        ) : undefined
+                      ) : undefined
+                    }
+                  >
                     <div className="rounded-2xl border border-border/40 bg-card p-5 space-y-3">
                       {paymentPlan.map((p, i) => (
-                        <div key={p.label} className="flex items-center gap-4">
+                        <div key={`${p.label}-${i}`} className="flex items-center gap-4">
                           <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
                             {i + 1}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-foreground">{p.label}</p>
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">{p.when}</p>
+                            {p.when && <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">{p.when}</p>}
                           </div>
                           <div className="text-right shrink-0">
                             <p className="text-sm font-semibold text-foreground tabular-nums">{formatPrice(p.amount)}</p>
@@ -460,49 +527,50 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
                         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total</span>
                         <span className="text-base font-bold text-foreground tabular-nums">{formatPrice(unit.price)}</span>
                       </div>
+                      {hasHitosOverride && (
+                        <p className="text-[10px] text-primary pt-1">✓ Plan personalizado para esta unidad</p>
+                      )}
                     </div>
                   </Section>
                 )}
 
-                {/* Location */}
+                {/* Ubicación · dirección real de la promoción (read-only en
+                     ficha de unidad; se edita en la ficha de promoción). */}
                 <Section title="Ubicación" subtitle="Entorno">
                   <div className="rounded-2xl border border-border/40 bg-muted/30 aspect-[16/9] overflow-hidden relative">
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
                       <MapPin className="h-10 w-10 mb-2 opacity-50" strokeWidth={1.2} />
-                      {editMode ? (
-                        <>
-                          <input
-                            value={extras.city}
-                            onChange={(e) => updateExtra("city", e.target.value)}
-                            placeholder="Ciudad"
-                            className="text-sm font-medium text-foreground bg-card/80 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-primary/30 text-center max-w-[240px]"
-                          />
-                          <input
-                            value={extras.region}
-                            onChange={(e) => updateExtra("region", e.target.value)}
-                            placeholder="Provincia · Región"
-                            className="text-xs mt-1 bg-card/80 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-primary/30 text-center max-w-[280px]"
-                          />
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-sm font-medium text-foreground">{extras.city}</p>
-                          <p className="text-xs mt-1">{extras.region}</p>
-                        </>
-                      )}
+                      <p className="text-sm font-medium text-foreground">{city}</p>
+                      {region && <p className="text-xs mt-1">{region}</p>}
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
-                    {extras.pois.map((poi, i) => (
-                      <NearbyTile
-                        key={i}
-                        label={poi.label}
-                        value={poi.value}
-                        editMode={editMode}
-                        onChangeLabel={(v) => updateExtra("pois", extras.pois.map((p, idx) => idx === i ? { ...p, label: v } : p))}
-                        onChangeValue={(v) => updateExtra("pois", extras.pois.map((p, idx) => idx === i ? { ...p, value: v } : p))}
-                      />
-                    ))}
+                  {/* Puntos de interés · placeholder Google Maps.
+                      TODO(backend): integrar Google Places API para obtener
+                      distancias a playa, centro, aeropuerto, golf, montaña y
+                      supermercado. El orden refleja la prioridad turística:
+                      si una categoría no existe cerca, se muestra con X. */}
+                  <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-4 mt-3">
+                    <p className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground mb-2">
+                      Puntos de interés cercanos
+                    </p>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                      {[
+                        { label: "Playa" },
+                        { label: "Centro" },
+                        { label: "Aeropuerto" },
+                        { label: "Golf" },
+                        { label: "Montaña" },
+                        { label: "Supermercado" },
+                      ].map((p) => (
+                        <div key={p.label} className="flex flex-col items-center gap-1 rounded-lg bg-card border border-border/40 px-2 py-2">
+                          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{p.label}</span>
+                          <span className="text-xs font-medium text-muted-foreground/60">—</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/70 mt-2 italic">
+                      Próximamente · distancias calculadas automáticamente con Google Maps
+                    </p>
                   </div>
                 </Section>
 
@@ -559,56 +627,46 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
                   </div>
                 )}
                 {unit.status === "sold" && !isCollaboratorView && (
-                  <div className="rounded-2xl bg-primary/5 border border-primary/20 px-4 py-3 text-xs space-y-1.5">
+                  <div className="rounded-2xl bg-destructive/5 border border-destructive/20 px-4 py-3 text-xs space-y-1.5">
                     {editMode ? (
                       <>
                         <div className="flex items-center gap-2">
-                          <span className="text-primary font-medium shrink-0">Cliente:</span>
+                          <span className="text-destructive font-medium shrink-0">Cliente:</span>
                           <input
                             defaultValue={unit.clientName || ""}
                             onBlur={(e) => update({ clientName: e.target.value })}
-                            className="flex-1 bg-white/60 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-blue-300"
+                            className="flex-1 bg-white/60 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-destructive/30"
                             placeholder="Nombre del cliente"
                           />
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-primary font-medium shrink-0">Agencia:</span>
+                          <span className="text-destructive font-medium shrink-0">Agencia:</span>
                           <input
                             defaultValue={unit.agencyName || ""}
                             onBlur={(e) => update({ agencyName: e.target.value })}
-                            className="flex-1 bg-white/60 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-blue-300"
+                            className="flex-1 bg-white/60 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-destructive/30"
                             placeholder="Agencia"
                           />
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-primary font-medium shrink-0">Fecha:</span>
+                          <span className="text-destructive font-medium shrink-0">Fecha:</span>
                           <input
                             type="date"
                             defaultValue={unit.soldAt || ""}
                             onBlur={(e) => update({ soldAt: e.target.value })}
-                            className="flex-1 bg-white/60 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-blue-300"
+                            className="flex-1 bg-white/60 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-destructive/30"
                           />
                         </div>
                       </>
                     ) : (
                       <>
-                        <p className="font-medium text-primary">Vendida a {unit.clientName}</p>
-                        {unit.agencyName && <p className="text-primary/80">vía {unit.agencyName}</p>}
-                        {unit.soldAt && <p className="text-primary/60 inline-flex items-center gap-1"><Calendar className="h-3 w-3" /> {unit.soldAt}</p>}
+                        <p className="font-medium text-destructive">Vendida a {unit.clientName}</p>
+                        {unit.agencyName && <p className="text-destructive/80">vía {unit.agencyName}</p>}
+                        {unit.soldAt && <p className="text-destructive/60 inline-flex items-center gap-1"><Calendar className="h-3 w-3" /> {unit.soldAt}</p>}
                       </>
                     )}
                   </div>
                 )}
-
-                {/* Resources */}
-                <Section title="Recursos descargables" subtitle="Documentación">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <ResourceTile icon={FileText} label="Brochure" />
-                    <ResourceTile icon={FileText} label="Plano" />
-                    <ResourceTile icon={ImageIcon} label="Fotos" count={photos.length} />
-                    <ResourceTile icon={Video} label="Vídeo tour" />
-                  </div>
-                </Section>
               </div>
 
 
@@ -635,10 +693,15 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
                       </div>
                       <p className="text-[10px] text-muted-foreground mt-1.5">Precio total · escribe el importe</p>
                     </div>
-                  ) : (
+                  ) : unit.status === "available" ? (
                     <>
                       <p className="text-3xl font-bold text-foreground tracking-tight tabular-nums">{formatPrice(unit.price)}</p>
                       <p className="text-xs text-muted-foreground mt-1">{formatPrice(pricePerM2)}/m² · {unit.builtArea} m²</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-3xl font-bold text-muted-foreground/60 tracking-tight tabular-nums">—</p>
+                      <p className="text-xs text-muted-foreground mt-1">{unit.builtArea} m² construidos</p>
                     </>
                   )}
 
@@ -650,13 +713,15 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <Button onClick={() => setSendOpen(true)} className="rounded-full h-10 text-xs gap-1.5">
-                    <Send className="h-3.5 w-3.5" strokeWidth={1.5} /> Enviar inmueble
-                  </Button>
+                  {unit.status !== "sold" && unit.status !== "withdrawn" && (
+                    <Button onClick={() => setSendOpen(true)} className="rounded-full h-10 text-xs gap-1.5">
+                      <Send className="h-3.5 w-3.5" strokeWidth={1.5} /> Enviar inmueble
+                    </Button>
+                  )}
                   <Button variant="outline" className="rounded-full h-10 text-xs gap-1.5 border-border/60">
                     <Download className="h-3.5 w-3.5" strokeWidth={1.5} /> Descargar ficha PDF
                   </Button>
-                  {!isCollaboratorView && (
+                  {!isCollaboratorView && unit.status !== "sold" && unit.status !== "withdrawn" && (
                     <>
                       <Button
                         variant="outline"
@@ -674,61 +739,25 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
                   )}
                 </div>
 
-                {/* Contact card */}
-                <div className="rounded-2xl border border-border/40 bg-card p-4">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-3">Contacto comercial</p>
-                  <div className="flex items-center gap-3">
-                    {editMode ? (
-                      <input
-                        value={extras.contactInitials}
-                        onChange={(e) => updateExtra("contactInitials", e.target.value.slice(0, 3).toUpperCase())}
-                        className="h-10 w-10 rounded-full bg-primary/10 text-primary text-center text-sm font-semibold shrink-0 outline-none focus:ring-2 focus:ring-primary/30"
-                      />
-                    ) : (
-                      <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
-                        {extras.contactInitials}
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1 space-y-1">
-                      {editMode ? (
-                        <>
-                          <input
-                            value={extras.contactName}
-                            onChange={(e) => updateExtra("contactName", e.target.value)}
-                            placeholder="Nombre"
-                            className="w-full text-sm font-medium text-foreground bg-muted/40 rounded-md px-2 py-0.5 outline-none focus:ring-2 focus:ring-primary/30"
-                          />
-                          <input
-                            value={extras.contactRole}
-                            onChange={(e) => updateExtra("contactRole", e.target.value)}
-                            placeholder="Cargo"
-                            className="w-full text-[10px] text-muted-foreground bg-muted/40 rounded-md px-2 py-0.5 outline-none focus:ring-2 focus:ring-primary/30"
-                          />
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-sm font-medium text-foreground truncate">{extras.contactName}</p>
-                          <p className="text-[10px] text-muted-foreground">{extras.contactRole}</p>
-                        </>
-                      )}
+                {/* Carpeta Drive de la unidad · placeholder hasta integración.
+                    TODO(backend): crear carpeta Drive con el `ref` de la
+                    unidad dentro de la carpeta de la promoción al persistir
+                    la unidad; sincronizar fotos/planos subidos aquí. */}
+                <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-2">Carpeta Drive</p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-card border border-border text-muted-foreground shrink-0">
+                      <FileText className="h-4 w-4" strokeWidth={1.5} />
                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 mt-3">
-                    <Button variant="outline" size="sm" className="rounded-full h-8 text-[10px] gap-1 border-border/60">
-                      <Phone className="h-3 w-3" strokeWidth={1.5} /> Llamar
-                    </Button>
-                    <Button variant="outline" size="sm" className="rounded-full h-8 text-[10px] gap-1 border-border/60">
-                      <Mail className="h-3 w-3" strokeWidth={1.5} /> Email
-                    </Button>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-foreground truncate">
+                        {ctx.nombrePromocion ?? "Promoción"} / {unit.ref}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">Fotos y planos sincronizados aquí</p>
+                    </div>
                   </div>
                 </div>
 
-                {/* Trust badges */}
-                <div className="rounded-2xl border border-border/40 bg-card p-4 space-y-2.5">
-                  <TrustItem icon={CheckCircle2} text="Promoción verificada" />
-                  <TrustItem icon={Shield} text="Pagos protegidos" />
-                  <TrustItem icon={Star} text="Promotor de confianza" />
-                </div>
               </aside>
             </div>
           </div>
@@ -814,12 +843,20 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
 }
 
 
-function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function Section({ title, subtitle, right, children }: {
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <div>
-      <div className="mb-3">
-        {subtitle && <p className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground mb-0.5">{subtitle}</p>}
-        <h3 className="text-base font-semibold text-foreground tracking-tight">{title}</h3>
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <div>
+          {subtitle && <p className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground mb-0.5">{subtitle}</p>}
+          <h3 className="text-base font-semibold text-foreground tracking-tight">{title}</h3>
+        </div>
+        {right}
       </div>
       {children}
     </div>
@@ -897,9 +934,11 @@ function FeatureGroup({ title, items, editMode, onChange }: {
   );
 }
 
-function DetailRow({ label, value, badge, editMode, type, onChange, options }: {
+function DetailRow({ label, value, badge, editMode, type, onChange, options, inherited }: {
   label: string; value: string; badge?: "energy";
   editMode?: boolean; type?: string; onChange?: (v: string) => void; options?: string[];
+  /** Si true, muestra un pequeño indicador "heredado" junto al valor. */
+  inherited?: boolean;
 }) {
   return (
     <div className="flex items-center justify-between px-4 py-2.5 text-xs gap-3">
@@ -922,11 +961,17 @@ function DetailRow({ label, value, badge, editMode, type, onChange, options }: {
           />
         )
       ) : badge === "energy" ? (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary text-primary-foreground">
-          {value}
-        </span>
+        <div className="flex items-center gap-1.5">
+          {inherited && <span className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">heredado</span>}
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary text-primary-foreground">
+            {value}
+          </span>
+        </div>
       ) : (
-        <span className="text-foreground font-medium truncate">{value}</span>
+        <div className="flex items-center gap-1.5 min-w-0">
+          {inherited && <span className="text-[9px] text-muted-foreground/60 uppercase tracking-wider shrink-0">heredado</span>}
+          <span className="text-foreground font-medium truncate">{value}</span>
+        </div>
       )}
     </div>
   );
@@ -962,34 +1007,6 @@ function SurfaceCard({ label, value, icon: Icon, editMode, onChange, hideIfZero 
   );
 }
 
-function NearbyTile({ label, value, editMode, onChangeLabel, onChangeValue }: {
-  label: string; value: string;
-  editMode?: boolean; onChangeLabel?: (v: string) => void; onChangeValue?: (v: string) => void;
-}) {
-  return (
-    <div className="rounded-xl border border-border/40 bg-card px-3 py-2 text-center">
-      {editMode && onChangeValue ? (
-        <input
-          defaultValue={value}
-          onBlur={(e) => onChangeValue(e.target.value)}
-          className="text-sm font-semibold text-foreground tabular-nums bg-muted/40 rounded-md px-1 py-0.5 w-full text-center outline-none focus:ring-2 focus:ring-primary/30"
-        />
-      ) : (
-        <p className="text-sm font-semibold text-foreground tabular-nums">{value}</p>
-      )}
-      {editMode && onChangeLabel ? (
-        <input
-          defaultValue={label}
-          onBlur={(e) => onChangeLabel(e.target.value)}
-          className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5 bg-muted/40 rounded-md px-1 py-0.5 w-full text-center outline-none focus:ring-2 focus:ring-primary/30"
-        />
-      ) : (
-        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">{label}</p>
-      )}
-    </div>
-  );
-}
-
 function ResourceTile({ icon: Icon, label, count, editMode }: {
   icon: typeof Bed; label: string; count?: number; editMode?: boolean;
 }) {
@@ -1015,11 +1032,3 @@ function MiniStat({ icon: Icon, value }: { icon: typeof Bed; value: string | num
   );
 }
 
-function TrustItem({ icon: Icon, text }: { icon: typeof Bed; text: string }) {
-  return (
-    <div className="flex items-center gap-2 text-xs text-foreground">
-      <Icon className="h-3.5 w-3.5 text-primary shrink-0" strokeWidth={1.5} />
-      <span>{text}</span>
-    </div>
-  );
-}

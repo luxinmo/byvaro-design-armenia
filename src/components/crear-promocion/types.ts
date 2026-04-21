@@ -19,7 +19,8 @@ export type FaseConstruccion =
   | "instalaciones"
   | "acabados"
   | "entrega_proxima"
-  | "llave_en_mano";
+  | "llave_en_mano"
+  | "definir_mas_tarde";
 
 export type EstadoComercializacion =
   | "nuevo_lanzamiento"
@@ -142,28 +143,54 @@ export interface DireccionPromocion {
 
 export type UnitFotosMode = "promocion" | "propias" | null;
 
+export type UnitStatus = "available" | "reserved" | "sold" | "withdrawn";
+
 export interface UnitData {
   id: string;
+  /** Referencia interna obligatoria (p. ej. "AHLL-0001").
+   *  Se usa para exportación a portales inmobiliarios. */
+  ref: string;
+  /** ID legible visible: "Villa 1", "Adosado 3", "1ºA"… */
   nombre: string;
   dormitorios: number;
   banos: number;
   superficieConstruida: number;
   superficieUtil: number;
   superficieTerraza: number;
+  /** m² de parcela / jardín privado. Aplica a independientes y bajos. */
+  parcela: number;
   precio: number;
   planta: number;
   orientacion: string;
   parking: boolean;
   trastero: boolean;
+  /** Piscina privada (solo aplicable a villas). */
+  piscinaPrivada: boolean;
+  status: UnitStatus;
   vistas: TipoVista[];
   fotosMode: UnitFotosMode;
+  /** Plano específico de la unidad (no plano de planta del edificio). */
   planos: boolean;
   subtipo: SubtipoUnidad | null;
+  /** @deprecated Usar `ref`. Se mantiene por compatibilidad hasta migrar. */
   idInterna: string;
   caracteristicas: string[];
   usarFotosPromocion: boolean;
   fotosUnidad: FotoItem[];
   videosUnidad: VideoItem[];
+  /* ── Overrides heredados de promoción (null = hereda) ── */
+  descripcionOverride?: string;
+  caracteristicasOverride?: string[];
+  hitosPagoOverride?: HitoPago[];
+  /** Solo aplicable a unifamiliar independiente — el resto toma el año global de promoción. */
+  deliveryYearOverride?: string;
+  /** Solo si el promotor quiere cambiar la certificación en una unidad concreta. */
+  energyCertOverride?: string;
+  /* ── Operación comercial (se rellenan al reservar/vender) ── */
+  clientName?: string;
+  agencyName?: string;
+  reservedAt?: string;
+  soldAt?: string;
 }
 
 export type CondicionRegistro = "nombre_completo" | "ultimas_4_cifras" | "nacionalidad" | "email_completo";
@@ -193,9 +220,29 @@ export interface WizardState {
   trasteros: number;
   trasterosIncluidosPrecio: boolean;
   trasterosIncluidosPorVivienda: number;
+  trasteroPrecio: number;           // precio por defecto al crear un trastero suelto
+  trasteroPrecios: number[];        // precio individualizado por Tn (índice 0 = T1)
   parkings: number;
   parkingsIncluidosPrecio: boolean;
   parkingsIncluidosPorVivienda: number;
+  parkingPrecio: number;            // precio por defecto al crear una plaza suelta
+  parkingPrecios: number[];         // precio individualizado por Pn (índice 0 = P1)
+  /* ── Zonas y amenidades (ampliado) ─────────────────────────────────
+     Booleanos explícitos para las amenidades clave que la ficha de
+     unidad necesita consultar de forma estructurada. El array genérico
+     `amenities` más abajo se mantiene para añadir cosas extra.
+     ─────────────────────────────────────────────────────────────── */
+  piscinaComunitaria: boolean;
+  piscinaInterna: boolean;         // piscina cubierta / climatizada
+  zonaSpa: boolean;
+  zonaInfantil: boolean;
+  urbanizacionCerrada: boolean;
+  /** Piscina privada asignada a cada villa por defecto al generar.
+   *  Aplicable solo a unifamiliar. Cada unidad puede luego marcar su
+   *  propio flag `piscinaPrivada`. */
+  piscinaPrivadaPorDefecto: boolean;
+  piscinaIncluidaPrecio: boolean;  // si la privada está incluida en el precio
+  piscinaPrecio: number;           // precio por piscina privada si no está incluida
   estado: EstadoPromocion | null;
   tieneLicencia: boolean | null;
   faseConstruccion: FaseConstruccion | null;
@@ -226,6 +273,13 @@ export interface WizardState {
   condicionesRegistro: CondicionRegistro[];
   validezRegistroDias: number; // 0 = no expira
   // Info basica
+  /** Referencia interna de la promoción (abreviatura usada como prefijo
+   *  en las referencias de unidades). Se autogenera desde el nombre
+   *  pero el usuario puede editarla. */
+  refPromocion: string;
+  /** Overrides de nombre por bloque. Clave = id del bloque (B1, B1-E1…),
+   *  valor = nombre custom ("Torre Norte"). */
+  blockNames: Record<string, string>;
   nombrePromocion: string;
   direccionPromocion: DireccionPromocion;
   amenities: string[];
@@ -270,9 +324,21 @@ export const defaultWizardState: WizardState = {
   trasteros: 0,
   trasterosIncluidosPrecio: true,
   trasterosIncluidosPorVivienda: 1,
+  trasteroPrecio: 5000,
+  trasteroPrecios: [],
   parkings: 0,
   parkingsIncluidosPrecio: true,
   parkingsIncluidosPorVivienda: 1,
+  parkingPrecio: 15000,
+  parkingPrecios: [],
+  piscinaComunitaria: false,
+  piscinaInterna: false,
+  zonaSpa: false,
+  zonaInfantil: false,
+  urbanizacionCerrada: false,
+  piscinaPrivadaPorDefecto: false,
+  piscinaIncluidaPrecio: true,
+  piscinaPrecio: 25000,
   estado: null,
   tieneLicencia: null,
   faseConstruccion: null,
@@ -296,9 +362,11 @@ export const defaultWizardState: WizardState = {
   clasificacionCliente: "residencia",
   formaPagoComision: null,
   hitosComision: [],
-  ivaIncluido: true,
+  ivaIncluido: false,
   condicionesRegistro: ["nombre_completo", "ultimas_4_cifras", "nacionalidad"],
-  validezRegistroDias: 0,
+  validezRegistroDias: 180, // 6 meses por defecto
+  refPromocion: "",
+  blockNames: {},
   nombrePromocion: "",
   direccionPromocion: { pais: "", provincia: "", ciudad: "", direccion: "" },
   amenities: [],

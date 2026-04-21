@@ -167,8 +167,9 @@ export function InfoBasicaStep({
         />
       </div>
 
-      {/* ═════ Estilo arquitectónico (solo si no viene ya) ═════ */}
-      {state.estiloVivienda == null && (
+      {/* ═════ Estilo arquitectónico · solo plurifamiliar/mixto
+             (unifamiliar ya lo elige en el paso sub_varias). ═════ */}
+      {!isUnifamiliar && state.estiloVivienda == null && (
         <div>
           <SectionLabel>Estilo arquitectónico</SectionLabel>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

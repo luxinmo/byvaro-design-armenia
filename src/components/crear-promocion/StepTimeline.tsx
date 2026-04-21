@@ -62,18 +62,21 @@ function getAllSteps(state: WizardState): TimelineStep[] {
         return parts.join(" · ");
       },
     });
-    steps.push({
-      id: "extras",
-      label: "Extras",
-      getSummary: (s) => {
-        const parts: string[] = [];
-        if ((s.locales ?? 0) > 0) parts.push(`${s.locales} loc.`);
-        if ((s.trasteros ?? 0) > 0) parts.push(`${s.trasteros} trast.`);
-        if ((s.parkings ?? 0) > 0) parts.push(`${s.parkings} park.`);
-        return parts.length > 0 ? parts.join(" · ") : null;
-      },
-    });
   }
+
+  // Extras (trasteros / parking / locales si aplica) para TODOS los tipos.
+  // En unifamiliar solo tiene sentido trastero y parking (no locales).
+  steps.push({
+    id: "extras",
+    label: "Extras",
+    getSummary: (s) => {
+      const parts: string[] = [];
+      if ((s.locales ?? 0) > 0) parts.push(`${s.locales} loc.`);
+      if ((s.trasteros ?? 0) > 0) parts.push(`${s.trasteros} trast.`);
+      if ((s.parkings ?? 0) > 0) parts.push(`${s.parkings} park.`);
+      return parts.length > 0 ? parts.join(" · ") : null;
+    },
+  });
 
   steps.push({
     id: "estado",
