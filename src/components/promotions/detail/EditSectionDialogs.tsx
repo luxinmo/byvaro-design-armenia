@@ -87,6 +87,7 @@ import {
   Plus, X, MapPin, FileText, Sparkles, Languages, PenLine,
   Phone, Mail, Globe, BookOpen, Eye, Layers, Store, Building2, Pencil, Search, Check, UserPlus,
 } from "lucide-react";
+import { MultimediaEditor, urlsToFotoItems, fotoItemsToUrls } from "@/components/shared/MultimediaEditor";
 
 // ═══ SHARED WRAPPER ═══
 function EditDialogShell({
@@ -124,119 +125,33 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 // ═══ MULTIMEDIA EDIT ═══
+// Usa el componente compartido MultimediaEditor (misma UI que el wizard).
+// La ficha sigue pasando `images: string[]` como entrada simple; lo
+// convertimos a FotoItem[] internamente y devolvemos string[] al guardar.
 export function EditMultimediaDialog({ open, onOpenChange, images, onSave }: {
   open: boolean; onOpenChange: (v: boolean) => void; images: string[]; onSave: (imgs: string[]) => void;
 }) {
-  const [photos, setPhotos] = useState(images);
-  const [coverIdx, setCoverIdx] = useState(0);
-  const [videoUrls, setVideoUrls] = useState<string[]>([]);
-  const [newVideo, setNewVideo] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    files.forEach(f => {
-      const url = URL.createObjectURL(f);
-      setPhotos(p => [...p, url]);
-    });
-  };
-
-  const movePhoto = (from: number, to: number) => {
-    if (to < 0 || to >= photos.length) return;
-    const arr = [...photos];
-    const [item] = arr.splice(from, 1);
-    arr.splice(to, 0, item);
-    setPhotos(arr);
-    if (coverIdx === from) setCoverIdx(to);
-    else if (coverIdx === to) setCoverIdx(from);
-  };
-
-  const addVideo = () => {
-    if (!newVideo.trim()) return;
-    setVideoUrls(v => [...v, newVideo.trim()]);
-    setNewVideo("");
-  };
+  const [fotos, setFotos] = useState<import("@/components/crear-promocion/types").FotoItem[]>(
+    () => urlsToFotoItems(images),
+  );
+  const [videos, setVideos] = useState<import("@/components/crear-promocion/types").VideoItem[]>([]);
 
   return (
     <EditDialogShell
       open={open}
       onOpenChange={onOpenChange}
       title="Editar multimedia"
-      description="Sube, reordena y gestiona fotografías y videos."
+      description="Sube, reordena y gestiona fotografías y vídeos."
       onCancel={() => onOpenChange(false)}
-      onSave={() => { onSave(photos); onOpenChange(false); }}
+      onSave={() => { onSave(fotoItemsToUrls(fotos)); onOpenChange(false); }}
       maxWidth="max-w-3xl"
     >
-      <div className="rounded-2xl bg-card border border-border/20 p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <SectionTitle>Fotografías · {photos.length}</SectionTitle>
-            <p className="text-xs text-muted-foreground mt-1">Pasa el cursor para reordenar. La foto con estrella es la portada.</p>
-          </div>
-          <Button size="sm" variant="outline" className="rounded-full h-9 gap-1.5 text-sm" onClick={() => fileRef.current?.click()}>
-            <Upload className="h-3.5 w-3.5" /> Subir fotos
-          </Button>
-          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
-        </div>
-
-        <div className="grid grid-cols-3 gap-3">
-          {photos.map((src, i) => (
-            <div key={i} className="group relative rounded-xl overflow-hidden aspect-[4/3] bg-muted border border-border/40">
-              <img src={src} alt="" className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                <button onClick={() => setCoverIdx(i)} className="h-8 w-8 rounded-full bg-background/90 flex items-center justify-center hover:bg-background" title="Establecer como principal">
-                  <Star className={`h-3.5 w-3.5 ${coverIdx === i ? "fill-amber-500 text-amber-500" : "text-foreground"}`} />
-                </button>
-                <button onClick={() => movePhoto(i, i - 1)} disabled={i === 0} className="h-8 w-8 rounded-full bg-background/90 flex items-center justify-center hover:bg-background disabled:opacity-30" title="Mover a la izquierda">
-                  <GripVertical className="h-3.5 w-3.5 text-foreground -rotate-90" />
-                </button>
-                <button onClick={() => setPhotos(p => p.filter((_, idx) => idx !== i))} className="h-8 w-8 rounded-full bg-destructive flex items-center justify-center hover:bg-destructive/90" title="Eliminar">
-                  <Trash2 className="h-3.5 w-3.5 text-destructive-foreground" />
-                </button>
-              </div>
-              {coverIdx === i && (
-                <div className="absolute top-2 left-2 bg-amber-500 text-background text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <Star className="h-2.5 w-2.5 fill-current" /> Portada
-                </div>
-              )}
-              <div className="absolute bottom-2 right-2 bg-foreground/60 text-background text-[10px] font-semibold px-1.5 py-0.5 rounded-lg">{i + 1}</div>
-            </div>
-          ))}
-          <button onClick={() => fileRef.current?.click()} className="aspect-[4/3] rounded-xl border-2 border-dashed border-border/60 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors">
-            <Plus className="h-5 w-5" />
-            <span className="text-xs font-medium">Añadir foto</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="rounded-2xl bg-card border border-border/20 p-5">
-        <SectionTitle>Videos · {videoUrls.length}</SectionTitle>
-        <p className="text-xs text-muted-foreground mt-1 mb-3">URL de YouTube o Vimeo.</p>
-        <div className="flex gap-2 mb-3">
-          <Input value={newVideo} onChange={e => setNewVideo(e.target.value)} placeholder="https://youtube.com/..." className="h-9 rounded-full text-sm flex-1" />
-          <Button size="sm" variant="outline" className="rounded-full h-9 gap-1.5 text-sm" onClick={addVideo}>
-            <Plus className="h-3.5 w-3.5" /> Añadir
-          </Button>
-        </div>
-        {videoUrls.length === 0 ? (
-          <div className="text-xs text-muted-foreground py-6 text-center border border-dashed border-border/40 rounded-xl">
-            <Video className="h-5 w-5 mx-auto mb-2 text-muted-foreground/40" />
-            Aún no hay videos
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {videoUrls.map((u, i) => (
-              <div key={i} className="flex items-center gap-2 p-2.5 rounded-xl border border-border/30 bg-muted/30">
-                <Video className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <span className="text-xs text-foreground flex-1 truncate">{u}</span>
-                <button onClick={() => setVideoUrls(v => v.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-destructive">
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <MultimediaEditor
+        fotos={fotos}
+        videos={videos}
+        onFotosChange={setFotos}
+        onVideosChange={setVideos}
+      />
     </EditDialogShell>
   );
 }

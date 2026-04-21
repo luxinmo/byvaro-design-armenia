@@ -1,12 +1,12 @@
 /**
  * Crear promoción · Wizard multi-paso — REDISEÑO v3
  *
- * Shell reconstruida (Commit 1 del rediseño):
+ * Shell reconstruida:
  *   - Sidebar izquierda: PhaseTimeline con 6 fases colapsables
  *   - Topbar: título del paso, AutoSaveIndicator, botón "Publicar rápido",
  *     cierre
- *   - Contenido central: el paso actual (transición framer-motion)
- *   - Panel derecho (xl+): WizardPreviewPanel con tarjeta mini + microsite
+ *   - Contenido central: el paso actual (transición framer-motion) · usa
+ *     todo el ancho disponible
  *   - Footer: Atrás · Omitir (condicional) · Siguiente/Publicar
  *   - Auto-save a localStorage con timestamp visible
  *
@@ -35,7 +35,6 @@ import { OptionCard, NumericStepper, InlineStepper, TotalSummary } from "@/compo
 import { getAllSteps } from "@/components/crear-promocion/StepTimeline";
 import { PhaseTimeline } from "@/components/crear-promocion/PhaseTimeline";
 import { AutoSaveIndicator } from "@/components/crear-promocion/AutoSaveIndicator";
-import { WizardPreviewPanel } from "@/components/crear-promocion/WizardPreviewPanel";
 import { InfoBasicaStep } from "@/components/crear-promocion/InfoBasicaStep";
 import { DetallesStep } from "@/components/crear-promocion/DetallesStep";
 import { DescripcionStep } from "@/components/crear-promocion/DescripcionStep";
@@ -49,7 +48,7 @@ import { Checkbox } from "@/components/ui/Checkbox";
 import { cn } from "@/lib/utils";
 import {
   FileCheck, FileX, Calendar as CalendarIconLucide, Home as HomeIcon, Store as StoreIcon,
-  Minus, Archive, Car,
+  Minus, Archive, Car, Waves,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -183,8 +182,14 @@ export default function CrearPromocion() {
     [state.escalerasPorBloque]
   );
   const multiplier = totalEscaleras;
-  const totalViviendas = state.plantas * state.aptosPorPlanta * multiplier;
-  const totalLocales = state.locales * multiplier;
+  const totalViviendas = useMemo(() => {
+    if (isSingleHome) return 1;
+    if (isVariasUni) {
+      return state.tipologiasSeleccionadas.reduce((s, t) => s + t.cantidad, 0) || 1;
+    }
+    return state.plantas * state.aptosPorPlanta * multiplier;
+  }, [isSingleHome, isVariasUni, state.tipologiasSeleccionadas, state.plantas, state.aptosPorPlanta, multiplier]);
+  const totalLocales = state.tipo === "unifamiliar" ? 0 : state.locales * multiplier;
   const summaryItems = [
     { label: "viviendas", count: totalViviendas },
     { label: "locales", count: totalLocales },
@@ -406,11 +411,16 @@ export default function CrearPromocion() {
           </div>
         </header>
 
-        {/* Content area */}
+        {/* Content area · panel lateral eliminado. Ancho del contenedor
+             depende del paso: el de "Crear unidades" necesita aire para
+             la tabla de Disponibilidad; el resto mantiene su ancho
+             cómodo de lectura. */}
         <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-10 py-8 sm:py-10">
           <div className={cn(
             "mx-auto w-full",
-            step === "crear_unidades" || step === "colaboradores" ? "max-w-[720px]" : "max-w-[580px]"
+            step === "crear_unidades" ? "max-w-[1200px]"
+              : step === "colaboradores" ? "max-w-[720px]"
+              : "max-w-[580px]"
           )}>
             <AnimatePresence mode="wait">
               <motion.div
@@ -605,6 +615,39 @@ export default function CrearPromocion() {
                       </div>
                     )}
 
+                    {/* Renombrado opcional de bloques · solo si hay >1. */}
+                    {state.numBloques > 1 && (
+                      <>
+                        <div className="h-px bg-border my-1" />
+                        <SectionLabel>
+                          Nombres de bloques <span className="font-normal normal-case text-muted-foreground">· opcional · "Bloque 1", "Torre Norte"…</span>
+                        </SectionLabel>
+                        <div className="flex flex-col gap-2">
+                          {Array.from({ length: state.numBloques }, (_, i) => {
+                            const key = `B${i + 1}`;
+                            return (
+                              <div key={key} className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground w-20 shrink-0">Bloque {i + 1}</span>
+                                <input
+                                  type="text"
+                                  value={state.blockNames[key] ?? ""}
+                                  onChange={(e) => {
+                                    const next = { ...state.blockNames };
+                                    const trimmed = e.target.value.trim();
+                                    if (!trimmed) delete next[key];
+                                    else next[key] = e.target.value;
+                                    update("blockNames", next);
+                                  }}
+                                  placeholder={`Bloque ${i + 1}`}
+                                  className="flex-1 h-9 px-3 rounded-lg border border-border bg-card text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+
                     <div className="h-px bg-border my-1" />
                     <SectionLabel>Distribución</SectionLabel>
                     <NumericStepper label="Plantas sobre rasante" value={state.plantas} min={1}
@@ -726,6 +769,71 @@ export default function CrearPromocion() {
                         min={0}
                         onChange={(extra) => update("parkings", totalViviendas * state.parkingsIncluidosPorVivienda + extra)} />
                     </ExtraBox>
+
+                    {/* Zonas y amenidades · booleanos explícitos de la promoción.
+                         La ficha de unidad los consulta para mostrar iconos reales
+                         (no inventados). La "piscina privada" por defecto solo
+                         aplica a unifamiliar. */}
+                    <div className="rounded-2xl border border-border bg-card p-4">
+                      <div className="flex items-center gap-2.5 mb-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                          <Waves className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Zonas y amenidades</p>
+                          <p className="text-xs text-muted-foreground">Qué incluye la promoción para todas las viviendas</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <AmenityToggle label="Piscina comunitaria"
+                          checked={state.piscinaComunitaria}
+                          onCheckedChange={(v) => update("piscinaComunitaria", v)} />
+                        <AmenityToggle label="Piscina interna / climatizada"
+                          checked={state.piscinaInterna}
+                          onCheckedChange={(v) => update("piscinaInterna", v)} />
+                        <AmenityToggle label="Zona SPA"
+                          checked={state.zonaSpa}
+                          onCheckedChange={(v) => update("zonaSpa", v)} />
+                        <AmenityToggle label="Zona infantil / parque"
+                          checked={state.zonaInfantil}
+                          onCheckedChange={(v) => update("zonaInfantil", v)} />
+                        <AmenityToggle label="Urbanización cerrada"
+                          checked={state.urbanizacionCerrada}
+                          onCheckedChange={(v) => update("urbanizacionCerrada", v)} />
+                        {state.tipo === "unifamiliar" && (
+                          <AmenityToggle label="Piscina privada por defecto"
+                            checked={state.piscinaPrivadaPorDefecto}
+                            onCheckedChange={(v) => update("piscinaPrivadaPorDefecto", v)} />
+                        )}
+                      </div>
+
+                      {state.tipo === "unifamiliar" && state.piscinaPrivadaPorDefecto && (
+                        <div className="mt-3 pt-3 border-t border-border flex flex-col gap-2.5">
+                          <Checkbox
+                            id="piscina-privada-precio"
+                            checked={state.piscinaIncluidaPrecio}
+                            onCheckedChange={(v) => update("piscinaIncluidaPrecio", v)}
+                            label="Piscina privada incluida en el precio de la villa"
+                          />
+                          {!state.piscinaIncluidaPrecio && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-muted-foreground">Precio por piscina privada</span>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={state.piscinaPrecio}
+                                  onChange={(e) => update("piscinaPrecio", Math.max(0, Number(e.target.value) || 0))}
+                                  className="h-8 w-28 rounded-lg border border-border bg-card text-sm tnum px-2 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                                />
+                                <span className="text-xs text-muted-foreground">€</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
 
                     <TotalSummary items={summaryItems} />
                   </div>
@@ -908,8 +1016,6 @@ export default function CrearPromocion() {
         </footer>
       </div>
 
-      {/* ═══════════ Preview lateral (desktop xl+) ═══════════ */}
-      <WizardPreviewPanel state={state} className="hidden xl:flex" />
     </div>
   );
 }
@@ -1013,6 +1119,24 @@ function PlantaBajaCard({
       <p className="text-[13px] font-medium text-foreground">{title}</p>
       <p className="text-[11px] text-muted-foreground leading-snug">{desc}</p>
     </button>
+  );
+}
+
+function AmenityToggle({
+  label, checked, onCheckedChange,
+}: {
+  label: string;
+  checked: boolean;
+  onCheckedChange: (v: boolean) => void;
+}) {
+  return (
+    <label className={cn(
+      "flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors",
+      checked ? "border-primary/40 bg-primary/5" : "border-border bg-card hover:border-primary/30",
+    )}>
+      <span className="text-sm text-foreground">{label}</span>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+    </label>
   );
 }
 

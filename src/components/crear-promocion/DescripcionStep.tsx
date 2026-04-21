@@ -1,23 +1,14 @@
 /**
- * DescripcionStep · Paso "Descripción" del wizard Crear Promoción.
+ * DescripcionStep · Paso "Descripción" del wizard.
  *
- * Dos modos seleccionables:
- *   1. IA: la descripción se genera automáticamente a partir de la
- *      ubicación, amenities, vistas y tipo de edificación configurados
- *      en pasos anteriores. Mock informativo en el prototipo.
- *   2. Manual: textarea libre, mínimo recomendado ~140 px.
- *
- * Bloque "Traducciones": pestañas de idioma (ES por defecto, más 7
- * idiomas adicionales) + textarea por idioma activo. Botón "Traducir
- * con IA" rellena los idiomas vacíos desde la versión española (mock).
- *
- * Port adaptado de figgy-friend-forge/src/components/create-promotion/
- * StepDescripcion.tsx — sin shadcn, con primitivas nativas + tokens
- * del sistema Byvaro.
+ * Un único textarea gobernado por tabs de idioma (ES + 7). El contenido
+ * cambia según el idioma activo. Acciones sobre la caja:
+ *   - "Generar con IA" (solo disponible en ES, es la versión base)
+ *   - "Traducir con IA" (rellena los idiomas vacíos desde ES)
  */
 
 import { useState } from "react";
-import { Sparkles, PenLine, Languages } from "lucide-react";
+import { Sparkles, Languages, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WizardState } from "./types";
 
@@ -43,150 +34,138 @@ export function DescripcionStep({
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
 }) {
   const [activeIdioma, setActiveIdioma] = useState<string>("es");
+  const [generating, setGenerating] = useState(false);
+  const [translating, setTranslating] = useState(false);
 
-  const updateIdioma = (code: string, text: string) => {
-    update("descripcionIdiomas", { ...state.descripcionIdiomas, [code]: text });
+  const isES = activeIdioma === "es";
+  const valueFor = (code: string) =>
+    code === "es" ? state.descripcion : state.descripcionIdiomas[code] || "";
+
+  const setValueFor = (code: string, text: string) => {
+    if (code === "es") {
+      update("descripcion", text);
+      if (state.descripcionMode !== "manual") update("descripcionMode", "manual");
+    } else {
+      update("descripcionIdiomas", { ...state.descripcionIdiomas, [code]: text });
+    }
+  };
+
+  const hasBase = !!(state.descripcion && state.descripcion.trim().length > 0);
+
+  const handleGenerate = () => {
+    setGenerating(true);
+    setTimeout(() => {
+      const mock = `Promoción ${state.nombrePromocion || "exclusiva"} situada en ${state.direccionPromocion.ciudad || "una ubicación privilegiada"}. Diseño contemporáneo, calidades premium y acabados cuidados. Una oportunidad única para disfrutar de un entorno incomparable.`;
+      update("descripcion", mock);
+      update("descripcionMode", "ai");
+      setGenerating(false);
+    }, 900);
   };
 
   const handleTranslateAll = () => {
-    const base = state.descripcion || state.descripcionIdiomas["es"] || "";
-    if (!base) return;
-    const next: Record<string, string> = { ...state.descripcionIdiomas };
-    idiomas.forEach((i) => {
-      if (i.code !== "es" && !next[i.code]) {
-        next[i.code] = `[${i.label}] ${base}`;
-      }
-    });
-    update("descripcionIdiomas", next);
+    if (!hasBase) return;
+    setTranslating(true);
+    setTimeout(() => {
+      const next: Record<string, string> = { ...state.descripcionIdiomas };
+      idiomas.forEach((i) => {
+        if (i.code !== "es") next[i.code] = `[${i.label}] ${state.descripcion}`;
+      });
+      update("descripcionIdiomas", next);
+      setTranslating(false);
+    }, 700);
   };
 
   const activeLabel = idiomas.find((i) => i.code === activeIdioma)?.label ?? activeIdioma;
+  const currentValue = valueFor(activeIdioma);
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* ─── Selector de modo ─── */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => update("descripcionMode", "ai")}
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
-            state.descripcionMode === "ai"
-              ? "border-primary bg-primary/10 text-primary"
-              : "border-border text-muted-foreground hover:text-foreground hover:border-primary/30",
-          )}
-        >
-          <Sparkles className="h-3.5 w-3.5" strokeWidth={1.5} />
-          Generar con IA
-        </button>
-        <button
-          type="button"
-          onClick={() => update("descripcionMode", "manual")}
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
-            state.descripcionMode === "manual"
-              ? "border-primary bg-primary/10 text-primary"
-              : "border-border text-muted-foreground hover:text-foreground hover:border-primary/30",
-          )}
-        >
-          <PenLine className="h-3.5 w-3.5" strokeWidth={1.5} />
-          Escribir manualmente
-        </button>
+    <div className="flex flex-col gap-3">
+      {/* ─── Tabs de idioma ─── */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="inline-flex items-center gap-2">
+          <Languages className="h-4 w-4 text-primary" strokeWidth={1.5} />
+          <p className="text-xs font-semibold text-foreground">Descripción</p>
+        </div>
+        {isES ? (
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={generating}
+            className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full border border-border bg-card text-xs font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-60"
+          >
+            {generating ? (
+              <Loader2 className="h-3 w-3 animate-spin" strokeWidth={1.5} />
+            ) : (
+              <Sparkles className="h-3 w-3 text-primary" strokeWidth={1.5} />
+            )}
+            {generating ? "Generando…" : hasBase ? "Regenerar con IA" : "Generar con IA"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleTranslateAll}
+            disabled={!hasBase || translating}
+            className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full border border-border bg-card text-xs font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-60"
+          >
+            {translating ? (
+              <Loader2 className="h-3 w-3 animate-spin" strokeWidth={1.5} />
+            ) : (
+              <Sparkles className="h-3 w-3 text-primary" strokeWidth={1.5} />
+            )}
+            {translating ? "Traduciendo…" : "Traducir todo desde ES"}
+          </button>
+        )}
       </div>
 
-      {/* ─── Modo manual: textarea principal ─── */}
-      {state.descripcionMode === "manual" && (
-        <textarea
-          value={state.descripcion}
-          onChange={(e) => update("descripcion", e.target.value)}
-          placeholder="Describe la promoción, su ubicación, vistas, calidades, entorno y lo que la hace única..."
-          className={cn(textareaClass, "min-h-[140px]")}
-        />
-      )}
-
-      {/* ─── Modo IA: bloque informativo ─── */}
-      {state.descripcionMode === "ai" && (
-        <div className="rounded-xl bg-muted/40 border border-border px-4 py-4 flex items-start gap-3">
-          <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" strokeWidth={1.5} />
-          <div className="text-xs text-muted-foreground leading-relaxed">
-            <p className="font-medium text-foreground mb-1">Generación automática</p>
-            <p>
-              La descripción se generará basándose en la ubicación, amenities, vistas y tipo de edificación
-              configurados en pasos anteriores. Podrás revisarla y editarla antes de publicar.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* ─── Traducciones ─── */}
-      {state.descripcionMode !== null && (
-        <div className="rounded-xl border border-border bg-card px-4 py-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="inline-flex items-center gap-2">
-              <Languages className="h-4 w-4 text-primary" strokeWidth={1.5} />
-              <p className="text-xs font-semibold text-foreground">Traducciones</p>
-            </div>
+      <div className="flex flex-wrap gap-1.5">
+        {idiomas.map((idioma) => {
+          const hasContent = !!valueFor(idioma.code);
+          const isActive = activeIdioma === idioma.code;
+          return (
             <button
+              key={idioma.code}
               type="button"
-              onClick={handleTranslateAll}
-              className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full border border-border bg-card text-xs font-medium text-foreground hover:bg-muted transition-colors"
+              onClick={() => setActiveIdioma(idioma.code)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                isActive
+                  ? "border-primary bg-primary/10 text-primary"
+                  : hasContent
+                    ? "border-primary/30 bg-primary/5 text-foreground"
+                    : "border-border text-muted-foreground hover:text-foreground hover:border-primary/30",
+              )}
             >
-              <Sparkles className="h-3 w-3" strokeWidth={1.5} />
-              Traducir con IA
+              <span aria-hidden="true">{idioma.flag}</span>
+              {idioma.label}
+              {hasContent && !isActive && (
+                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+              )}
             </button>
-          </div>
+          );
+        })}
+      </div>
 
-          {/* Tabs de idioma */}
-          <div className="flex flex-wrap gap-1.5">
-            {idiomas.map((idioma) => {
-              const hasContent =
-                idioma.code === "es"
-                  ? !!(state.descripcion || state.descripcionIdiomas["es"])
-                  : !!state.descripcionIdiomas[idioma.code];
-              const isActive = activeIdioma === idioma.code;
-              return (
-                <button
-                  key={idioma.code}
-                  type="button"
-                  onClick={() => setActiveIdioma(idioma.code)}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
-                    isActive
-                      ? "border-primary bg-primary/10 text-primary"
-                      : hasContent
-                        ? "border-primary/30 bg-primary/5 text-foreground"
-                        : "border-border text-muted-foreground hover:text-foreground hover:border-primary/30",
-                  )}
-                >
-                  <span aria-hidden="true">{idioma.flag}</span>
-                  {idioma.label}
-                  {hasContent && !isActive && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
+      {/* ─── Textarea único ─── */}
+      <textarea
+        key={activeIdioma}
+        value={currentValue}
+        onChange={(e) => setValueFor(activeIdioma, e.target.value)}
+        placeholder={
+          isES
+            ? "Escribe o genera con IA. Describe ubicación, vistas, calidades, entorno y lo que hace única la promoción…"
+            : hasBase
+              ? `Descripción en ${activeLabel}…`
+              : "Escribe primero la versión española o genera con IA."
+        }
+        disabled={!isES && !hasBase}
+        className={cn(textareaClass, "min-h-[180px] disabled:opacity-50")}
+      />
 
-          {/* Textarea del idioma activo */}
-          <textarea
-            value={
-              activeIdioma === "es"
-                ? state.descripcion || state.descripcionIdiomas["es"] || ""
-                : state.descripcionIdiomas[activeIdioma] || ""
-            }
-            onChange={(e) => {
-              if (activeIdioma === "es") {
-                update("descripcion", e.target.value);
-              } else {
-                updateIdioma(activeIdioma, e.target.value);
-              }
-            }}
-            placeholder={`Descripción en ${activeLabel}...`}
-            className={cn(textareaClass, "min-h-[100px] text-xs")}
-          />
-        </div>
-      )}
+      <p className="text-[10px] text-muted-foreground">
+        {isES
+          ? "La IA usará los datos de ubicación, amenities, vistas y tipo de edificación configurados en pasos previos."
+          : "Traduce desde la versión española o edita manualmente este idioma."}
+      </p>
     </div>
   );
 }

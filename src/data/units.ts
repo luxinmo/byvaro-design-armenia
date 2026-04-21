@@ -24,6 +24,37 @@ export type Unit = {
   agencyName?: string;
   reservedAt?: string;
   soldAt?: string;
+  // Overrides opcionales · si undefined, la ficha muestra el valor
+  // heredado de la promoción.
+  descripcionOverride?: string;
+  caracteristicasOverride?: string[];
+  hitosPagoOverride?: { porcentaje: number; descripcion: string }[];
+  deliveryYearOverride?: string;
+  energyCertOverride?: string;
+};
+
+/** Contexto de promoción inyectado en la ficha de unidad para mostrar
+ *  valores heredados (dirección, amenities, plan de pagos, descripción,
+ *  certificado, año entrega, características globales). */
+export type PromotionContext = {
+  ciudad?: string;
+  provincia?: string;
+  pais?: string;
+  nombrePromocion?: string;
+  /** Año de entrega global (p. ej. "2026" o "Q2 2026"). */
+  deliveryYear?: string;
+  energyCert?: string;
+  descripcion?: string;
+  caracteristicas?: string[];
+  hitosPago?: { porcentaje: number; descripcion: string }[];
+  importeReserva?: number;
+  amenities?: {
+    piscinaComunitaria?: boolean;
+    piscinaInterna?: boolean;
+    zonaSpa?: boolean;
+    zonaInfantil?: boolean;
+    urbanizacionCerrada?: boolean;
+  };
 };
 
 function generateUnits(promotionId: string, totalUnits: number, availableUnits: number, priceMin: number, priceMax: number): Unit[] {

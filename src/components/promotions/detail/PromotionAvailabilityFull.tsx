@@ -71,7 +71,7 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { unitsByPromotion, Unit, UnitStatus } from "@/data/units";
+import { unitsByPromotion, Unit, UnitStatus, PromotionContext } from "@/data/units";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge"; // Reservado para futuras chips custom (no usado directamente ahora).
 import { Checkbox } from "@/components/ui/Checkbox";
@@ -151,11 +151,37 @@ interface EditedFields {
 interface Props {
   promotionId: string;
   isCollaboratorView?: boolean;
+  /** Modo controlado: si se pasa `units`, el componente no lee
+   *  `unitsByPromotion` y delega los cambios en `onUnitsChange`.
+   *  Usado por el wizard (Crear unidades) para alimentar la misma
+   *  vista con datos aún no persistidos. */
+  units?: Unit[];
+  onUnitsChange?: (next: Unit[]) => void;
+  /** Callback opcional al pulsar "Editar" en una unidad. Si no se
+   *  pasa, usa el comportamiento por defecto (toast + eventualmente
+   *  abrir el UnitDetailDialog). El wizard lo usa para abrir su
+   *  propio modal ligero (fotos/planos/características). */
+  onEditUnit?: (unitId: string) => void;
+  /** Oculta acciones externas ("Descargar ficha", "Enviar a cliente")
+   *  — útil desde el wizard, donde la promoción aún no existe. */
+  hideExternalActions?: boolean;
+  /** Contexto heredado de la promoción para la ficha de unidad. */
+  promotionCtx?: PromotionContext;
 }
 
-export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = false }: Props) {
+export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = false, units, onUnitsChange, onEditUnit, hideExternalActions = false, promotionCtx }: Props) {
   const { toast } = useToast();
-  const [allUnits, setAllUnits] = useState<Unit[]>(() => unitsByPromotion[promotionId] || []);
+  const controlled = units !== undefined;
+  const [innerUnits, setInnerUnits] = useState<Unit[]>(() => units ?? unitsByPromotion[promotionId] ?? []);
+  const allUnits = controlled ? units! : innerUnits;
+  const setAllUnits: React.Dispatch<React.SetStateAction<Unit[]>> = (updater) => {
+    if (controlled) {
+      const next = typeof updater === "function" ? (updater as (p: Unit[]) => Unit[])(units!) : updater;
+      onUnitsChange?.(next);
+    } else {
+      setInnerUnits(updater);
+    }
+  };
 
   const [filterStatus, setFilterStatus] = useState<UnitStatus | "all">("all");
   const [filterBlock, setFilterBlock] = useState<string>("all");
@@ -252,13 +278,14 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
   const [colCustomizerOpen, setColCustomizerOpen] = useState(false);
 
   useEffect(() => {
-    setAllUnits(unitsByPromotion[promotionId] || []);
+    if (controlled) return; // En modo controlado la fuente externa manda.
+    setInnerUnits(unitsByPromotion[promotionId] || []);
     setSelectedUnits(new Set());
     setBulkEditing(false);
     setEditedData({});
     setActiveEditFields(new Set());
     setExpandedUnit(null);
-  }, [promotionId]);
+  }, [promotionId, controlled]);
 
   const blocks = [...new Set(allUnits.map(u => u.block))];
   const types = [...new Set(allUnits.map(u => u.type))];
@@ -702,12 +729,16 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
               </button>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast({ title: "Descargando fichas", description: `${selectedUnits.size} ficha(s) descargadas.` })}>
-                <Download className="h-3 w-3" strokeWidth={1.5} /> Descargar ficha
-              </Button>
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast({ title: "Enviar inmuebles", description: `${selectedUnits.size} inmueble(s) listos para enviar.` })}>
-                <Send className="h-3 w-3" strokeWidth={1.5} /> Enviar a cliente
-              </Button>
+              {!hideExternalActions && (
+                <>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast({ title: "Descargando fichas", description: `${selectedUnits.size} ficha(s) descargadas.` })}>
+                    <Download className="h-3 w-3" strokeWidth={1.5} /> Descargar ficha
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast({ title: "Enviar inmuebles", description: `${selectedUnits.size} inmueble(s) listos para enviar.` })}>
+                    <Send className="h-3 w-3" strokeWidth={1.5} /> Enviar a cliente
+                  </Button>
+                </>
+              )}
               {!isCollaboratorView && (
                 <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5 rounded-full" onClick={openFieldSelector}>
                   <Pencil className="h-3 w-3" strokeWidth={1.5} /> Edición masiva
@@ -818,9 +849,16 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
         const someBlockSelected = blockUnits.some(u => selectedUnits.has(u.id));
         if (blockUnits.length === 0 && filterBlock !== "all") return null;
 
+        // Si solo hay un bloque, ocultamos toda la cabecera de bloque
+        // (no hay necesidad de etiquetarlo · evita mostrar "Bloque 11A"
+        // cuando no hay bloques reales, p. ej. unifamiliar o una sola
+        // escalera).
+        const hideBlockHeader = blocks.length === 1;
+
         return (
           <div key={block} className="border border-border rounded-xl bg-card overflow-hidden shadow-soft">
             {/* Block header */}
+            {!hideBlockHeader && (
             <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30 border-b border-border transition-colors">
               <div className="flex items-center gap-3">
                 {/* Checkbox de bloque — oculto en móvil (sin edición masiva). */}
@@ -886,6 +924,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                 )}
               </div>
             </div>
+            )}
 
             {/* Table view */}
             {!isCollapsed && viewMode === "table" && (
@@ -1106,39 +1145,16 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                               )}
                             </td>
                             <td className="px-2 py-2 text-right" onClick={e => e.stopPropagation()}>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button className="h-7 w-7 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
-                                    <MoreVertical className="h-3.5 w-3.5" />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-44">
-                                  <DropdownMenuItem onClick={() => toggleExpandUnit(u.id)} className="gap-2 text-xs">
-                                    <Eye className="h-3.5 w-3.5" /> Ver
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    disabled={u.status !== "available"}
-                                    onClick={() => toast({ title: "Editar unidad", description: getUnitDisplayId(u) })}
-                                    className="gap-2 text-xs"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" /> Editar
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    disabled={u.status !== "available"}
-                                    onClick={() => setEmailUnitId(u.id)}
-                                    className="gap-2 text-xs"
-                                  >
-                                    <Send className="h-3.5 w-3.5" /> Enviar por email
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    disabled={u.status !== "available"}
-                                    onClick={() => toast({ title: "Iniciar compra", description: `Operación para ${getUnitDisplayId(u)}` })}
-                                    className="gap-2 text-xs"
-                                  >
-                                    <ShoppingCart className="h-3.5 w-3.5" /> Iniciar compra
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              <button
+                                disabled={u.status !== "available"}
+                                onClick={() => onEditUnit
+                                  ? onEditUnit(u.id)
+                                  : toast({ title: "Editar unidad", description: getUnitDisplayId(u) })}
+                                className="h-7 w-7 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                title="Editar"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
                             </td>
                           </tr>
                           {isExpanded && !bulkEditing && <UnitDetailPanel unit={u} onUpdateUnit={handleUnitUpdate} isCollaboratorView={isCollaboratorView} />}
@@ -1389,39 +1405,16 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                             </td>
                           )}
                           <td className="px-2 py-1.5 text-right" onClick={e => e.stopPropagation()}>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button className="h-7 w-7 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
-                                  <MoreVertical className="h-3.5 w-3.5" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-44">
-                                <DropdownMenuItem onClick={() => toggleExpandUnit(u.id)} className="gap-2 text-xs">
-                                  <Eye className="h-3.5 w-3.5" /> Ver
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  disabled={u.status !== "available"}
-                                  onClick={() => toast({ title: "Editar unidad", description: getUnitDisplayId(u) })}
-                                  className="gap-2 text-xs"
-                                >
-                                  <Pencil className="h-3.5 w-3.5" /> Editar
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  disabled={u.status !== "available"}
-                                  onClick={() => setEmailUnitId(u.id)}
-                                  className="gap-2 text-xs"
-                                >
-                                  <Send className="h-3.5 w-3.5" /> Enviar por email
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  disabled={u.status !== "available"}
-                                  onClick={() => toast({ title: "Iniciar compra", description: `Operación para ${getUnitDisplayId(u)}` })}
-                                  className="gap-2 text-xs"
-                                >
-                                  <ShoppingCart className="h-3.5 w-3.5" /> Iniciar compra
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            <button
+                              disabled={u.status !== "available"}
+                              onClick={() => onEditUnit
+                                ? onEditUnit(u.id)
+                                : toast({ title: "Editar unidad", description: getUnitDisplayId(u) })}
+                              className="h-7 w-7 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                              title="Editar"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
                           </td>
                         </tr>
                       );
@@ -1462,6 +1455,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
         unit={detailUnitId ? allUnits.find((u) => u.id === detailUnitId) ?? null : null}
         isCollaboratorView={isCollaboratorView}
         onUpdateUnit={handleUnitUpdate}
+        promotionCtx={promotionCtx}
       />
     </div>
   );

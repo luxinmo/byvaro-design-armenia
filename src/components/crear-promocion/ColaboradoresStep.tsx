@@ -19,7 +19,7 @@
 
 import {
   Globe, Home, Handshake, Info, Users, Shield, ClipboardList, Clock,
-  Plus, Trash2,
+  Plus, Trash2, AlertTriangle, Handshake as HandshakeIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/Switch";
@@ -290,6 +290,17 @@ export function ColaboradoresStep({
           </div>
         </div>
 
+        {/* Copy comercial · ciclo del registro */}
+        <div className="rounded-lg bg-primary/5 border border-primary/15 px-4 py-3 flex items-start gap-2.5">
+          <HandshakeIcon className="h-4 w-4 text-primary shrink-0 mt-0.5" strokeWidth={1.5} />
+          <div className="text-[11px] text-foreground leading-relaxed">
+            <p className="font-medium text-foreground mb-0.5">Así funciona el registro</p>
+            <p className="text-muted-foreground">
+              El cliente queda como <span className="text-foreground font-medium">preregistro</span> reservado a nombre del colaborador. La reserva se confirma <span className="text-foreground font-medium">definitivamente tras la primera visita</span>. Mientras tanto, ningún otro colaborador puede registrar al mismo cliente.
+            </p>
+          </div>
+        </div>
+
         <div className="flex flex-col gap-2">
           {condicionesOptions.map((cond) => {
             const checked = state.condicionesRegistro.includes(cond.value);
@@ -317,35 +328,67 @@ export function ColaboradoresStep({
           })}
         </div>
 
+        {/* Aviso si se exige email completo */}
+        {state.condicionesRegistro.includes("email_completo") && (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 flex items-start gap-2.5">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" strokeWidth={1.5} />
+            <div className="text-[11px] text-amber-900 leading-relaxed">
+              <p className="font-medium mb-0.5">Puedes perder registros</p>
+              <p className="text-amber-800/90">
+                No todas las agencias están dispuestas a facilitar el email de sus clientes. Actívalo solo si es imprescindible para tu operativa.
+              </p>
+            </div>
+          </div>
+        )}
+
         <p className="text-[10px] text-muted-foreground">
           Los campos obligatorios (nombre, 4 cifras y nacionalidad) no se pueden desactivar.
         </p>
 
+        {/* Validez del registro · toggle + desplegable */}
         <div className="pt-3 border-t border-border flex flex-col gap-3">
-          <div className="flex items-center gap-2.5">
-            <Clock className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-            <div>
-              <p className="text-xs font-medium text-foreground">Validez del registro</p>
-              <p className="text-[10px] text-muted-foreground">¿Cuántos días es válido el registro de un cliente?</p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Clock className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={1.5} />
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-foreground">Caducidad del registro</p>
+                <p className="text-[10px] text-muted-foreground">Tras ese plazo sin visita, el cliente queda libre para otro colaborador</p>
+              </div>
             </div>
+            <Switch
+              checked={state.validezRegistroDias > 0}
+              onCheckedChange={(on) => update("validezRegistroDias", on ? 180 : 0)}
+            />
           </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                value={state.validezRegistroDias}
-                onChange={(e) => update("validezRegistroDias", Math.max(0, Number(e.target.value)))}
-                min={0}
-                className={cn(inputBase, "w-20 h-9 text-center text-sm tnum")}
-              />
-              <span className="text-xs text-muted-foreground">días</span>
+
+          {state.validezRegistroDias > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {[
+                { days: 30,  label: "1 mes" },
+                { days: 60,  label: "2 meses" },
+                { days: 90,  label: "3 meses" },
+                { days: 180, label: "6 meses" },
+                { days: 360, label: "12 meses" },
+              ].map((opt) => {
+                const active = state.validezRegistroDias === opt.days;
+                return (
+                  <button
+                    key={opt.days}
+                    type="button"
+                    onClick={() => update("validezRegistroDias", opt.days)}
+                    className={cn(
+                      "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                      active
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
-            <span className="text-[10px] text-muted-foreground">
-              {state.validezRegistroDias === 0
-                ? "No expira"
-                : `${state.validezRegistroDias} días de validez`}
-            </span>
-          </div>
+          )}
         </div>
       </div>
 

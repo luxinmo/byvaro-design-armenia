@@ -2,7 +2,7 @@ import {
   Building2, Store, Home, Building, Layers,
   Landmark, Castle, House, Fence,
   PencilRuler, HardHat, CheckCircle2,
-  Hammer, Columns3, BrickWall, Plug, Paintbrush, PackageCheck, Key,
+  Hammer, Columns3, BrickWall, Plug, Paintbrush, PackageCheck, Key, Clock,
   Rocket, ShoppingBag, Ban,
   Waves, Dumbbell, Sparkles, UtensilsCrossed, Laptop, ShieldCheck,
   Car, TreePine, Baby, Umbrella, Bell,
@@ -62,6 +62,7 @@ export const faseConstruccionOptions: CardOption<FaseConstruccion>[] = [
   { value: "acabados", label: "Acabados", description: "Fase final de acabados interiores", icon: Paintbrush },
   { value: "entrega_proxima", label: "Entrega próxima", description: "La obra está a punto de finalizarse", icon: PackageCheck },
   { value: "llave_en_mano", label: "Llave en mano", description: "Terminada y disponible para entrega inmediata", icon: Key },
+  { value: "definir_mas_tarde", label: "Lo añadiré más tarde", description: "Completa este dato cuando lo tengas claro", icon: Clock },
 ];
 
 export const estadoComercializacionOptions: CardOption<EstadoComercializacion>[] = [
