@@ -1202,7 +1202,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                     >
                       {/* Checkbox individual oculto en cards móvil —
                           no hay edición masiva aquí. */}
-                      <div className="w-[64px] h-[48px] rounded-[1px] overflow-hidden bg-muted/30 shrink-0">
+                      <div className="w-[64px] h-[48px] rounded-none overflow-hidden bg-muted/30 shrink-0">
                         <img src={`https://picsum.photos/seed/${u.id}/160/108`} alt="" className="w-full h-full object-cover" loading="lazy" />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -1318,7 +1318,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                           </td>
                           {visibleCols.has("photo") && (
                             <td className="px-2 py-1.5">
-                              <div className="w-[80px] h-[54px] rounded-sm overflow-hidden bg-muted/30 shrink-0">
+                              <div className="w-[80px] h-[54px] rounded-none overflow-hidden bg-muted/30 shrink-0">
                                 <img src={`https://picsum.photos/seed/${u.id}/160/108`} alt={`${u.type} ${getUnitDisplayId(u)}`} className="w-full h-full object-cover" loading="lazy" />
                               </div>
                             </td>

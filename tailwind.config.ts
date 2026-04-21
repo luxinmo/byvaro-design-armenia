@@ -56,10 +56,17 @@ export default {
           border: "hsl(var(--sidebar-border))",
         },
       },
+      /* Escala de radios Byvaro · reducida (menos redondo en todo el
+         sistema). Los pills (rounded-full) se mantienen intactos. */
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        /* shadcn tokens · derivados de --radius (8px tras la reducción). */
+        lg: "var(--radius)",                  // 8px  (antes 16px)
+        md: "calc(var(--radius) - 2px)",      // 6px  (antes 14px)
+        sm: "calc(var(--radius) - 4px)",      // 4px  (antes 12px)
+        /* Override de los Tailwind grandes · panel/card usa 2xl, dialogs 2xl/3xl. */
+        xl: "10px",                            // antes 12px
+        "2xl": "12px",                         // antes 16px
+        "3xl": "16px",                         // antes 24px
       },
       boxShadow: {
         soft: '0 2px 16px -6px rgba(0,0,0,0.06)',

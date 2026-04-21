@@ -42,7 +42,10 @@
     --input: 220 13% 91%;
     --ring: 215 72% 55%;
 
-    --radius: 1rem;
+    /* Radio base del sistema · 0.5rem (8px) · rebajado desde 1rem
+       para un look menos redondo acorde a Byvaro. Drives rounded-lg/
+       md/sm y shadcn primitives. */
+    --radius: 0.5rem;
 
     /* Sidebar */
     --sidebar-background: 0 0% 100%;
