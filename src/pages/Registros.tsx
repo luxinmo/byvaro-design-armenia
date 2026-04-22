@@ -34,7 +34,7 @@ import {
   Search, X, Check, ChevronDown, Filter, AlertTriangle, Shield,
   User as UserIcon, Mail, Phone, IdCard, Flag, Building2, Users,
   ArrowLeft, Clock, CheckCircle2, XCircle, Copy, FileText,
-  ExternalLink, Sparkles,
+  ExternalLink, Sparkles, Eye,
 } from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
@@ -51,6 +51,9 @@ import { agencies } from "@/data/agencies";
 import { Switch } from "@/components/ui/Switch";
 import { Tag } from "@/components/ui/Tag";
 import { cn } from "@/lib/utils";
+import { RegistrosKpis } from "@/components/registros/RegistrosKpis";
+import { MatchRing } from "@/components/registros/MatchRing";
+import { DuplicateResult } from "@/components/registros/DuplicateResult";
 
 /* ═══════════════════════════════════════════════════════════════════
    Helpers visuales
@@ -240,14 +243,7 @@ export default function Registros() {
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground leading-none">
               Comercial
             </p>
-            <div className="flex items-baseline gap-3 mt-1">
-              <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight leading-tight">Registros</h1>
-              {pendientesCount > 0 && (
-                <span className="text-xs font-medium text-muted-foreground tnum">
-                  <span className="font-semibold text-foreground">{pendientesCount}</span> pendientes
-                </span>
-              )}
-            </div>
+            <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight leading-tight mt-1">Registros</h1>
           </div>
 
           {/* Buscador */}
@@ -272,6 +268,11 @@ export default function Registros() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* KPIs strip — visión rápida del estado del workspace. */}
+        <div className="max-w-[1400px] mx-auto mt-4">
+          <RegistrosKpis records={records} />
         </div>
       </div>
 
@@ -389,31 +390,27 @@ export default function Registros() {
                         {selected && <Check className="h-3 w-3" strokeWidth={3} />}
                       </button>
 
-                      {/* Avatar iniciales */}
-                      <div className="h-10 w-10 rounded-full bg-muted text-foreground grid place-items-center shrink-0 text-xs font-bold tracking-tight">
-                        {initials(r.cliente.nombre)}
-                      </div>
+                      {/* MatchRing si hay porcentaje · iniciales si no */}
+                      {r.matchPercentage > 0 ? (
+                        <MatchRing pct={r.matchPercentage} size={12} />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-muted text-foreground grid place-items-center shrink-0 text-xs font-bold tracking-tight">
+                          {initials(r.cliente.nombre)}
+                        </div>
+                      )}
 
                       {/* Contenido */}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-semibold text-foreground truncate">
-                            {r.cliente.flag && <span className="mr-1">{r.cliente.flag}</span>}
-                            {r.cliente.nombre}
+                          <p className="text-sm font-semibold text-foreground truncate inline-flex items-center gap-1.5">
+                            {r.cliente.flag && <span>{r.cliente.flag}</span>}
+                            <span className="truncate">{r.cliente.nombre}</span>
+                            {r.tipo === "registration_visit" && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary uppercase shrink-0">
+                                <Eye className="h-2.5 w-2.5" /> Visita
+                              </span>
+                            )}
                           </p>
-                          {/* Badge % match */}
-                          {r.matchPercentage > 0 && (
-                            <span
-                              className={cn(
-                                "shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10.5px] font-semibold tnum",
-                                matchBadgeClasses(r.matchPercentage),
-                              )}
-                              title={r.matchWith}
-                            >
-                              <AlertTriangle className="h-3 w-3" />
-                              {r.matchPercentage}%
-                            </span>
-                          )}
                         </div>
 
                         <p className="text-xs text-muted-foreground truncate mt-0.5">
@@ -423,8 +420,14 @@ export default function Registros() {
                         </p>
 
                         <div className="flex items-center justify-between gap-2 mt-2">
-                          <span className="text-[11px] text-muted-foreground/80">
+                          <span className="text-[11px] text-muted-foreground/80 inline-flex items-center gap-1">
+                            {r.estado === "pendiente" && <Clock className="h-3 w-3 text-amber-500" />}
                             {relativeDate(r.fecha)}
+                            {r.responseTime && r.estado !== "pendiente" && (
+                              <span className="text-muted-foreground/50 inline-flex items-center gap-0.5 ml-1">
+                                · <Clock className="h-2.5 w-2.5" /> {r.responseTime}
+                              </span>
+                            )}
                           </span>
                           <Tag variant={estadoTagVariant(r.estado)} size="sm" shape="pill">
                             {estadoLabel[r.estado]}
@@ -572,44 +575,30 @@ function RegistroDetail({
         </Tag>
       </div>
 
-      {/* Warning de duplicado probable */}
-      {level === "high" && (
-        <div className="mx-4 sm:mx-6 mt-4 flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-destructive/5 border border-destructive/20">
-          <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-destructive">
-              Duplicado muy probable · {record.matchPercentage}% match
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5 break-words">
-              {record.matchWith ?? "Coincide con un cliente previo."} Se recomienda rechazar.
-            </p>
-          </div>
+      {/* DuplicateResult — bloque rico con anillo + tabla side-by-side
+       *  + recomendación. Solo si la IA detectó una coincidencia. */}
+      {record.matchPercentage > 0 && (
+        <div className="px-4 sm:px-6 mt-4">
+          <DuplicateResult record={record} />
         </div>
       )}
-      {level === "medium" && (
-        <div className="mx-4 sm:mx-6 mt-4 flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-amber-50/60 border border-amber-200/60">
-          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-amber-700">
-              Posible duplicado · {record.matchPercentage}% match
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5 break-words">
-              {record.matchWith ?? "Revisa la comparación antes de decidir."}
+
+      {/* Visita propuesta — solo si tipo === registration_visit */}
+      {record.tipo === "registration_visit" && record.visitDate && (
+        <div className="mx-4 sm:mx-6 mt-3 rounded-xl border border-primary/25 bg-primary/[0.03] p-4 flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-primary/10 grid place-items-center text-primary shrink-0">
+            <Eye className="h-4 w-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-primary">Visita solicitada</p>
+            <p className="text-sm font-bold text-foreground mt-0.5">
+              {new Date(record.visitDate).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}
+              {record.visitTime && ` · ${record.visitTime}h`}
             </p>
           </div>
-        </div>
-      )}
-      {level === "low" && (
-        <div className="mx-4 sm:mx-6 mt-4 flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-emerald-50/60 border border-emerald-200/60">
-          <Sparkles className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-emerald-700">
-              Coincidencia baja · {record.matchPercentage}%
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              La IA no detecta duplicados relevantes. Apto para aprobación directa.
-            </p>
-          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold text-primary shrink-0">
+            <Clock className="h-3 w-3" /> Pendiente
+          </span>
         </div>
       )}
 

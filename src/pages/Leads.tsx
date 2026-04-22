@@ -13,6 +13,12 @@
  *
  * TODO(backend): `GET /api/leads` con paginación y filtros. Ver
  *   `docs/backend-integration.md §7.1`. Hoy data de `src/data/leads.ts`.
+ * TODO(backend): kebab → endpoints de §7.1:
+ *   - Llamar/email/whatsapp = telemetría + grabar `firstResponseAt`.
+ *   - Convertir → `POST /api/leads/:id/convert`.
+ *   - Descartar → `PATCH /api/leads/:id { status: "rejected" }`.
+ * TODO(ui): filtros avanzados (origen, nacionalidad, presupuesto, asignado).
+ * TODO(ui): ficha detalle `/leads/:id` con timeline + match duplicados.
  */
 
 import { useMemo, useState } from "react";

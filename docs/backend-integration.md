@@ -695,9 +695,69 @@ Consumidores: `Colaboradores.tsx`, `ColaboradoresV2.tsx`, `ColaboradoresV3.tsx`,
 
 ---
 
-## 7 · Registros, ventas, contactos
+## 7 · Leads, registros, ventas, contactos
 
-### Registros
+### 7.1 · Leads (bandeja de entrada · sin cualificar)
+
+**Tipo**: `src/data/leads.ts` → `Lead`. Consumidor: `src/pages/Leads.tsx`.
+
+**Origen**: webhooks de portales (Idealista, Fotocasa, Habitaclia),
+submits del microsite, WhatsApp Business, invitaciones de agencias,
+walk-ins manuales en oficina.
+
+| Endpoint | Propósito | Notas |
+|---|---|---|
+| `GET /api/leads?status=&source=&from=&to=` | lista paginada | `src/pages/Leads.tsx` |
+| `GET /api/leads/:id` | detalle de un lead | futuro `/leads/:id` |
+| `POST /api/leads` | alta (recibe webhook del portal o submit del microsite) | backend crea `status="new"` + lanza job de IA duplicados |
+| `PATCH /api/leads/:id { status }` | cambiar estado (cualificar, contactar, descartar) | idem |
+| `PATCH /api/leads/:id/assign { userId }` | asignar a comercial del equipo | actualiza `assignedTo` |
+| `POST /api/leads/:id/convert` | promover lead → `Registro` (ver §7.2) | crea Registro, marca lead `status="converted"`, retorna `{ registroId }` |
+| `POST /api/leads/:id/detect-duplicates` | re-ejecuta IA de duplicados (cron o on-demand) | actualiza `duplicateScore` y `duplicateOfContactId` |
+
+**Shape del Lead** (resumen — ver tipo TS completo):
+
+```ts
+interface Lead {
+  id, fullName, email, phone;
+  nationality?: string;        // ISO2
+  idioma?: string;             // ISO2
+  source: "idealista" | "fotocasa" | "habitaclia"
+        | "microsite" | "referral" | "agency"
+        | "whatsapp" | "walkin" | "call";
+  status: "new" | "qualified" | "contacted"
+        | "duplicate" | "rejected" | "converted";
+  interest: { promotionId?, promotionName?, tipologia?,
+              dormitorios?, presupuestoMax?, zona? };
+  createdAt: string;           // ISO
+  firstResponseAt?: string;    // ISO · se graba al primer contacto del equipo
+  assignedTo?: { name, email };
+  duplicateScore?: number;     // 0-100 · null si aún no evaluado
+  duplicateOfContactId?: string;
+  tags?: string[];
+  message?: string;
+}
+```
+
+**Reglas de negocio**:
+
+- Al crear un lead (`POST /api/leads`), el servidor encola un job de IA
+  que calcula `duplicateScore` y `duplicateOfContactId`. Si el score
+  ≥ 70, el lead pasa automáticamente a `status="duplicate"`.
+- `firstResponseAt` se graba en la primera acción que dispare el
+  equipo (email, llamada, WhatsApp). No se edita a mano.
+- La conversión lead → registro es **irreversible**: el lead queda
+  en `status="converted"` y el registro creado referencia al
+  `leadId` original (traza de origen).
+- SLA medio de respuesta = `AVG(firstResponseAt - createdAt)` por
+  agencia — alimenta la métrica `respuestaHoras` de §4.2
+  (estadísticas de colaboradores).
+
+**TODO(backend)**: actualmente todos los `Lead[]` viven en el mock
+`anejosByPromotion` alternativo (`src/data/leads.ts`). Al levantar
+backend, sustituir el import por `useQuery(["leads", filters], ...)`.
+
+### 7.2 · Registros (leads ya cualificados)
 
 | Endpoint | TODO |
 |---|---|
@@ -708,14 +768,19 @@ Consumidores: `Colaboradores.tsx`, `ColaboradoresV2.tsx`, `ColaboradoresV3.tsx`,
 | `POST /api/records/bulk-reject { ids:[] }` | idem:27 |
 | `GET /api/records` paginado server-side | `src/data/records.ts:25` |
 
-### Ventas
+**Diferencia con Lead**: un Registro es un lead **ya cualificado** y
+vinculado a un cliente + promoción concreta. Se crea desde el flujo
+`POST /api/leads/:id/convert` o directamente por una agencia al
+registrar un cliente sobre una promoción.
+
+### 7.3 · Ventas
 
 | Endpoint | TODO |
 |---|---|
 | `GET /api/sales?promotionId=&status=&from=&to=` | `src/pages/Ventas.tsx:13`, `src/data/sales.ts:15` |
 | `PATCH /api/sales/:id/transition { to, meta? }` | `Ventas.tsx:14`, `sales.ts:16` |
 
-### Contactos
+### 7.4 · Contactos
 
 | Endpoint | TODO |
 |---|---|
