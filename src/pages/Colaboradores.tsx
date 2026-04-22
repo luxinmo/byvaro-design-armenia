@@ -950,9 +950,9 @@ function IncidenciasChip({ inc, size = "xs" }: { inc?: Agency["incidencias"]; si
 }
 
 /* Card grande · destacados */
-function FeatureCardV3({
+export function FeatureCardV3({
   agency: a, onPause, onDelete, highlight = "",
-}: { agency: Agency; onPause: () => void; onDelete: () => void; highlight?: string }) {
+}: { agency: Agency; onPause?: () => void; onDelete?: () => void; highlight?: string }) {
   const navigate = useNavigate();
   const { isFavorite, toggleFavorite } = useFavoriteAgencies();
   const fav = isFavorite(a.id);
@@ -1055,7 +1055,13 @@ function FeatureCardV3({
             Ver ficha
             <ArrowUpRight className="h-3 w-3" strokeWidth={2} />
           </button>
-          <KebabMenu onPause={onPause} onDelete={onDelete} paused={getEstado(a) === "pausada"} />
+          {(onPause || onDelete) && (
+            <KebabMenu
+              onPause={onPause ?? (() => {})}
+              onDelete={onDelete ?? (() => {})}
+              paused={getEstado(a) === "pausada"}
+            />
+          )}
         </div>
       </div>
     </article>

@@ -57,7 +57,7 @@ scrollables horizontalmente.
 |---|---|---|
 | Vista general | inline en `PromocionDetalle.tsx` | resumen de estructura + info + unidades summary + docs + plan pagos + descripción + ubicación + equipo |
 | Disponibilidad | `PromotionAvailabilityFull` | tabla/grid de unidades con filtros, selección múltiple y `UnitDetailPanel` lateral |
-| Agencias | `PromotionAgenciesV2` (default) / `AgenciesTab` | toggle Red/Lista. V2 = cards + analítica por nacionalidad. Lista = tabla tradicional |
+| Agencias | grid inline de `FeatureCardV3` (importado de `Colaboradores.tsx`) | Mismo lenguaje visual que `/colaboradores` · grid 3-col con cover + logo + mercados + stats. Filtra por `promotionsCollaborating.includes(promotionId)`. Empty state con CTA "Invitar agencia". |
 | Comisiones | inline | desglose de comisiones nacional/internacional y hitos |
 | Registros | `PromotionRecords` | lista de registros de clientes con aprobar/rechazar + motivo |
 | Documentos | `PromotionMultimedia` + `EditSectionDialogs` | fotos, vídeos, planos, brochure, memoria |

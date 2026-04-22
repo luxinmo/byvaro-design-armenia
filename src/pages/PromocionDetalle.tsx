@@ -9,6 +9,7 @@ import type { Unit } from "@/data/units";
 import { promotions, getBuildingTypeLabel } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion, type Comercial, type ComercialPermissions } from "@/data/developerPromotions";
 import { agencies, type Agency } from "@/data/agencies";
+import { FeatureCardV3 } from "@/pages/Colaboradores";
 import {
   ArrowLeft, Pencil, Share2, Users, AlertTriangle, CheckCircle2,
   MapPin, Calendar, Euro, Home, Banknote, TrendingUp, Camera,
@@ -36,7 +37,6 @@ import { PromotionAvailabilityFull } from "@/components/promotions/detail/Promot
 import { unitsByPromotion } from "@/data/units";
 import { ClientRegistrationDialog } from "@/components/promotions/detail/ClientRegistrationDialog";
 import { PromotionRecords } from "@/components/promotions/detail/PromotionRecords";
-import { PromotionAgenciesV2 } from "@/components/promotions/detail/PromotionAgenciesV2"; // diseño alternativo del tab Agencias (cards + red por nacionalidad)
 import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
 import { ImageLightbox } from "@/components/promotions/detail/ImageLightbox";
 import { ActivateSharingDialog } from "@/components/promotions/ActivateSharingDialog";
@@ -128,10 +128,6 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const navigate = useNavigate();
   const confirm = useConfirm();
   const [activeTab, setActiveTab] = useState(0);
-  // Toggle entre dos diseños del tab Agencias:
-  //  · "v1-lista" = tabla tradicional (AgenciesTab interna en este mismo archivo)
-  //  · "v2-red"   = cards por agencia + chips por nacionalidad (PromotionAgenciesV2)
-  const [agenciesView, setAgenciesView] = useState<"v1-lista" | "v2-red">("v2-red");
   const [_availabilityVersion, _setAvailabilityVersion] = useState<"v1" | "v2">("v2");
   const [viewAsCollaborator, setViewAsCollaborator] = useState(agentMode);
   // FAB móvil — abre un menú con las acciones principales de la ficha.
@@ -1418,52 +1414,62 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           </div>
         )}
 
-        {activeTabKey === "Agencies" && !viewAsCollaborator && (
-          <div className="space-y-4">
-            {/* Switcher entre diseños v1 (lista) y v2 (red por nacionalidad).
-                No persistimos la elección: es un prototipo para comparar. */}
-            <div className="flex items-center justify-end gap-1.5">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mr-1">Vista</span>
-              <button
-                type="button"
-                onClick={() => setAgenciesView("v2-red")}
-                className={`inline-flex items-center h-7 px-3 rounded-full text-xs font-medium transition-colors ${
-                  agenciesView === "v2-red"
-                    ? "bg-foreground text-background shadow-soft"
-                    : "border border-border bg-card text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Red
-              </button>
-              <button
-                type="button"
-                onClick={() => setAgenciesView("v1-lista")}
-                className={`inline-flex items-center h-7 px-3 rounded-full text-xs font-medium transition-colors ${
-                  agenciesView === "v1-lista"
-                    ? "bg-foreground text-background shadow-soft"
-                    : "border border-border bg-card text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Lista
-              </button>
-            </div>
+        {activeTabKey === "Agencies" && !viewAsCollaborator && (() => {
+          /* Mismo lenguaje visual que `/colaboradores` (FeatureCardV3
+           *  en grid 3-col). Aquí filtramos a las agencias que están
+           *  colaborando en ESTA promoción. */
+          const agenciasEnPromo = agencies.filter(
+            (a) => a.promotionsCollaborating?.includes(p.id),
+          );
+          return (
+            <div className="space-y-4">
+              <header className="flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Red comercial de esta promoción
+                  </p>
+                  <h2 className="text-base font-semibold text-foreground leading-tight mt-0.5">
+                    {agenciasEnPromo.length} {agenciasEnPromo.length === 1 ? "agencia" : "agencias"} colaborando
+                  </h2>
+                </div>
+                {canShare && (
+                  <button
+                    onClick={() => setShareOpen(true)}
+                    className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-foreground text-background text-sm font-semibold hover:bg-foreground/90 shadow-soft transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                    Invitar agencia
+                  </button>
+                )}
+              </header>
 
-            {agenciesView === "v2-red" ? (
-              <PromotionAgenciesV2
-                promotionId={p.id}
-                onInviteAgency={() => setShareOpen(true)}
-              />
-            ) : (
-              <AgenciesTab
-                promotionId={p.id}
-                navigate={navigate}
-                onInvite={canShare ? () => setShareOpen(true) : undefined}
-                canShare={canShare}
-                onActivateSharing={() => setActivateSharingOpen(true)}
-              />
-            )}
-          </div>
-        )}
+              {agenciasEnPromo.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
+                  <Users className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+                  <p className="text-sm font-medium text-foreground mb-1">Ninguna agencia colabora aún</p>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Invita a tus colaboradores o favoritos desde "Invitar agencia".
+                  </p>
+                  {canShare && (
+                    <button
+                      onClick={() => setShareOpen(true)}
+                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-border bg-background text-xs font-semibold text-foreground hover:bg-muted transition-colors"
+                    >
+                      <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                      Invitar agencia
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {agenciasEnPromo.map((a) => (
+                    <FeatureCardV3 key={a.id} agency={a} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ═══ TAB: COMISIONES ═══ */}
         {activeTabKey === "Comisiones" && (
