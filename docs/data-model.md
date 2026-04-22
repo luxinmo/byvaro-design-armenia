@@ -489,6 +489,170 @@ Consumidores: `Colaboradores.tsx`, `ColaboradoresV2/V3.tsx`,
 `SharePromotionDialog` (step "Mis favoritos"), `SendEmailDialog`
 (filtro "Favoritos"), `PromotionAgenciesV2`.
 
+## Entidades de la ficha de contacto
+
+> Todos los tipos viven en `src/components/contacts/types.ts`. Esta
+> sección documenta los más relevantes para el backend y la spec en
+> `docs/screens/contactos-ficha.md`.
+
+### `ContactRecordEntry` (lead / registro)
+
+Solicitud entrante al contacto desde un origen (agencia, portal, microsite, manual).
+
+```ts
+type ContactRecordEntry = {
+  id: string;
+  promotionId: string;
+  promotionName: string;
+  unit?: string;
+  /** Imagen del inmueble para thumbnail. */
+  propertyImage?: string;
+  /** Referencia interna (ej. MN-4B). */
+  propertyRef?: string;
+  /** URL del landing del microsite o portal donde se captó. */
+  landingUrl?: string;
+  /** Agente asignado. */
+  agent: string;
+  /** De dónde vino: "Idealista", "Fotocasa", "Microsite Marina Bay",
+   *  "Agencia Costa Sur", "Manual"… */
+  source: string;
+  status: "pending" | "approved" | "cancelled" | "converted";
+  timestamp: string;          // ISO
+  /** Si converted, id de la venta generada. */
+  convertedSaleId?: string;
+  /** Si cancelled, motivo libre. */
+  cancelReason?: string;
+  blockchainHash?: string;
+  agentNote?: string;
+};
+```
+
+Ciclo: `pending` (esperando aprobación del promotor) → `approved` (en
+trabajo) → `converted` (genera Venta) o `cancelled` (no fructificó).
+
+### `ContactOpportunityEntry` (oportunidad)
+
+Oportunidad activa con intereses declarados/inferidos del cliente.
+
+```ts
+type ContactOpportunityEntry = {
+  id: string;
+  promotionId: string;
+  promotionName: string;
+  unit?: string;
+  propertyImage?: string;
+  agencyName?: string;        // null si la abre el promotor en directo
+  agentName: string;
+  status: "active" | "won" | "archived";
+  createdAt: string;          // ISO
+  clientInterests?: {
+    propertyType?: string;    // "Ático" | "Piso" | "Villa" | …
+    area?: string;            // "Playa" | "Centro" | "Golf" | …
+    budgetMin?: number;
+    budgetMax?: number;
+    bedrooms?: string;        // "2" | "3" | "3+" | "4+"
+  };
+  tags?: string[];            // ["Vistas al mar", "Inversión", …]
+};
+```
+
+Ver ADR-042 para el rationale del 3-zone layout en el tab Operaciones.
+
+### `ContactActiveOperation` (banner "Compra en curso")
+
+Resumen de la operación activa (compra firmada) para el banner verde
+del tab Operaciones. Derivado del primer lead `converted` del contacto.
+
+```ts
+type ContactActiveOperation = {
+  id: string;
+  title: string;              // "Compra en curso"
+  promotionName: string;
+  unit?: string;
+  price: number;              // EUR
+  deposit: number;            // EUR
+  startDate: string;          // ISO
+  state: "in-progress";       // futuro: "signed" | "delivered" | …
+};
+```
+
+### `ContactRelation` (vínculo entre contactos)
+
+```ts
+type ContactRelation = {
+  contactId: string;
+  contactName: string;
+  /** Id del catálogo `relationTypesStorage`. NO es un union literal:
+   *  acepta tipos custom creados por el admin. */
+  relationType: string;
+};
+```
+
+Ver ADR-044 (catálogo dinámico).
+
+### `RelationType` (catálogo de tipos de relación)
+
+Vive en `src/components/contacts/relationTypesStorage.ts`. Editable
+por admin en `/ajustes/contactos/relaciones`.
+
+```ts
+type RelationType = {
+  id: string;          // slug inmutable (e.g. "spouse", "inversor-conjunto")
+  label: string;       // visible, editable
+  enabled?: boolean;   // false = no aparece al crear nuevos vínculos
+};
+
+const DEFAULT_RELATION_TYPES = [
+  { id: "spouse",    label: "Cónyuge",  enabled: true },
+  { id: "partner",   label: "Pareja",   enabled: true },
+  { id: "family",    label: "Familiar", enabled: true },
+  { id: "colleague", label: "Colega",   enabled: true },
+  { id: "other",     label: "Otro",     enabled: true },
+];
+```
+
+### `ContactTimelineEvent` (audit log)
+
+Append-only log de toda actividad relacionada con un contacto. Ver
+ADR-040 + regla de oro 🥇 Historial en CLAUDE.md.
+
+```ts
+type ContactTimelineEvent = {
+  id: string;
+  type: ContactTimelineEventType;
+  timestamp: string;          // ISO
+  title: string;
+  description?: string;
+  actor?: string;             // "Sistema" si es bot/automatización
+  actorEmail?: string;
+  meta?: Record<string, string | number>;
+};
+
+type ContactTimelineEventType =
+  // Identidad
+  | "lead_entry" | "contact_created" | "contact_edited" | "contact_deleted"
+  // Asignación / vinculación
+  | "assignee_added" | "assignee_removed"
+  | "relation_linked" | "relation_unlinked"
+  // Etiquetas / status
+  | "tag_added" | "tag_removed" | "status_changed"
+  // Visitas
+  | "visit_scheduled" | "visit_done" | "visit_cancelled" | "visit_evaluated"
+  // Email (ciclo completo · ADR-045)
+  | "email_sent" | "email_received" | "email_delivered" | "email_opened"
+  // WhatsApp
+  | "whatsapp_sent" | "whatsapp_received"
+  // Otros
+  | "call" | "comment" | "registration" | "web_activity"
+  | "document_uploaded" | "document_deleted"
+  | "system_change";
+
+type TimelineCategory = "all" | "comments" | "emails" | "whatsapp" | "web" | "system";
+```
+
+Helpers tipados (azúcar para no construir el evento a mano) en
+`contactEventsStorage.ts` — ver `docs/ui-helpers.md`.
+
 ## Reglas de negocio clave
 
 ### Detector de duplicados de registro

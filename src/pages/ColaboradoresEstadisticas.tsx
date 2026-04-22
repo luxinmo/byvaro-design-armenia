@@ -171,13 +171,30 @@ type DataMap = Record<AgencyId, Record<string, number>>;
    PANTALLA
    ═══════════════════════════════════════════════════════════════════ */
 
-export default function ColaboradoresEstadisticas() {
+export default function ColaboradoresEstadisticas({
+  lockedPromotionId, lockedPromotionName, embedded = false,
+}: {
+  /** Si viene, la pantalla se bloquea a esa promoción: fija `fPromos` y
+   *  oculta el filtro Promoción en la toolbar. Usado en la tab
+   *  "Estadísticas" de la ficha de promoción. */
+  lockedPromotionId?: string;
+  /** Nombre de la promoción bloqueada · se muestra en el banner
+   *  contextual para que el usuario sepa que está viendo datos
+   *  filtrados a esa promo. */
+  lockedPromotionName?: string;
+  /** Modo embebido · oculta el back y el header propio (el contenedor
+   *  ya aporta contexto). Por defecto la pantalla renderiza header
+   *  completo como página independiente. */
+  embedded?: boolean;
+} = {}) {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("registros");
 
   /* ─── Filtros ─── */
   const [fNations, setFNations] = useState<NationId[]>([]);
-  const [fPromos, setFPromos] = useState<PromoId[]>([]);
+  const [fPromos, setFPromos] = useState<PromoId[]>(
+    lockedPromotionId ? [lockedPromotionId as PromoId] : [],
+  );
   const [fAgencies, setFAgencies] = useState<AgencyId[]>([]);
 
   const visibleAgencies = useMemo(
@@ -198,42 +215,78 @@ export default function ColaboradoresEstadisticas() {
     return { regs, vis, ventas, conv };
   }, [visibleAgencies, fNations]);
 
-  const activeFilters = fNations.length + fPromos.length + fAgencies.length;
-  const clearAll = () => { setFNations([]); setFPromos([]); setFAgencies([]); };
+  /* Cuando hay una promoción bloqueada, fPromos siempre contiene ese ID
+   *  y no cuenta como filtro activo para el usuario (no puede quitarlo). */
+  const activeFilters =
+    fNations.length +
+    (lockedPromotionId ? 0 : fPromos.length) +
+    fAgencies.length;
+  const clearAll = () => {
+    setFNations([]);
+    setFPromos(lockedPromotionId ? [lockedPromotionId as PromoId] : []);
+    setFAgencies([]);
+  };
 
   return (
     <div className="flex flex-col min-h-full bg-background">
 
       {/* ─── Back + header ─── */}
-      <div className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8">
+      <div className={cn("px-4 sm:px-6 lg:px-8", embedded ? "pt-5" : "pt-6 sm:pt-8")}>
         <div className="max-w-[1400px] mx-auto">
-          <button
-            onClick={() => navigate("/colaboradores")}
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.5} />
-            Colaboradores
-          </button>
+          {!embedded && (
+            <button
+              onClick={() => navigate("/colaboradores")}
+              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.5} />
+              Colaboradores
+            </button>
+          )}
 
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Red comercial · Estadísticas
-              </p>
-              <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight text-foreground mt-1 leading-tight">
-                Análisis de colaboradores
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1.5 max-w-[640px] leading-relaxed">
-                Qué agencia trae mejores leads, dónde cerramos más y en qué mercados hay huecos por cubrir.
-              </p>
+          {!embedded && (
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Red comercial · Estadísticas
+                </p>
+                <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight text-foreground mt-1 leading-tight">
+                  Análisis de colaboradores
+                </h1>
+                <p className="text-sm text-muted-foreground mt-1.5 max-w-[640px] leading-relaxed">
+                  Qué agencia trae mejores leads, dónde cerramos más y en qué mercados hay huecos por cubrir.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:bg-muted transition-colors">
+                  <Download className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  Exportar
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:bg-muted transition-colors">
-                <Download className="h-3.5 w-3.5" strokeWidth={1.75} />
-                Exportar
-              </button>
+          )}
+
+          {/* Banner de contexto cuando la pantalla está bloqueada a una
+              promoción concreta. Siempre visible para que el usuario vea
+              qué subconjunto está analizando. */}
+          {lockedPromotionId && (
+            <div className="mb-5 flex items-start gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+              <div className="h-8 w-8 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                <Target className="h-4 w-4" strokeWidth={1.75} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
+                  Estadísticas filtradas
+                </p>
+                <p className="text-sm font-semibold text-foreground mt-0.5 leading-snug">
+                  Solo datos de {lockedPromotionName ?? "esta promoción"}
+                </p>
+                <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-relaxed">
+                  Todos los KPIs, heatmaps e insights se limitan a los registros y ventas
+                  de esta promoción · cierra con la X para volver a la ficha.
+                </p>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Filter bar */}
           <div className="rounded-2xl border border-border bg-card p-3 flex flex-wrap gap-2 items-center mb-5">
@@ -244,13 +297,15 @@ export default function ColaboradoresEstadisticas() {
               selected={fNations}
               onChange={(v) => setFNations(v as NationId[])}
             />
-            <FilterSelect
-              label="Promoción"
-              placeholder="Todas"
-              options={PROMOTIONS.map((p) => ({ value: p.id, label: p.name }))}
-              selected={fPromos}
-              onChange={(v) => setFPromos(v as PromoId[])}
-            />
+            {!lockedPromotionId && (
+              <FilterSelect
+                label="Promoción"
+                placeholder="Todas"
+                options={PROMOTIONS.map((p) => ({ value: p.id, label: p.name }))}
+                selected={fPromos}
+                onChange={(v) => setFPromos(v as PromoId[])}
+              />
+            )}
             <FilterSelect
               label="Colaborador"
               placeholder="Todos"

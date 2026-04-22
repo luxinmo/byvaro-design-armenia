@@ -863,3 +863,312 @@ score para que valga la pena despertar al promotor.
 Ver spec completa en `docs/screens/colaboradores-estadisticas.md`
 (sección "Recomendaciones Byvaro") y contrato backend en
 `docs/backend-integration.md §4.1`.
+
+---
+
+## 2026-04-22 · ADR-039 · Permisos en dos ejes: rol del workspace + ownership
+
+**Contexto:** Byvaro empezó con un sistema de permisos basado solo en
+roles (`admin` / `member`) con 5 keys hardcoded en
+`src/lib/permissions.ts`. Funciona para WhatsApp pero todo el resto
+de la app ignora permisos: cualquier miembro ve TODOS los contactos,
+registros, oportunidades, ventas, visitas, documentos y emails del
+workspace.
+
+**Decisión:** Modelo en dos ejes ortogonales:
+
+1. **Rol del workspace** (`admin` | `member` | custom) decide qué
+   FEATURES puede usar el usuario.
+2. **Ownership** (campo `assignedTo: string[]` en cada entidad)
+   decide qué REGISTROS concretos puede ver dentro de cada feature.
+
+`*.viewAll` implica `*.viewOwn`. Admin tiene todos los permisos por
+defecto vía `isAdmin(user)` shortcut en `useHasPermission()`.
+
+Catálogo completo de ~50 keys por dominio en `docs/permissions.md` §2.
+Defaults por rol en §3. Contrato backend (esquema SQL + JWT + RLS)
+en §4.
+
+**Alternativas consideradas:**
+
+- **Solo roles** (sin ownership) — los miembros verían siempre todo
+  o nada. Para promotores con 5+ comerciales esto rompe la
+  privacidad operativa entre agentes.
+- **Solo ownership** (sin roles) — todos serían iguales, no habría
+  forma de dar permisos administrativos como conectar canales o
+  editar la matriz.
+- **ABAC genérico** (atributos arbitrarios, motor de políticas) —
+  sobre-ingeniería para el tamaño de Byvaro. Los dos ejes cubren
+  100% de los casos sin complejidad operativa.
+
+**Razón:** Refleja exactamente el modelo mental del cliente
+("eres comercial junior → ves solo TUS leads; eres coordinador → los
+ves todos pero no puedes facturar"). Admite roles custom en
+`/ajustes/usuarios/roles` para casos como `coordinador`, `finanzas`,
+`marketing` sin tocar código.
+
+**Estado actual:** documentado completo, **NO implementado** salvo
+WhatsApp. Listados (`/contactos`, `/registros`, ficha tabs) muestran
+todo. Migración paso a paso descrita en `docs/permissions.md` §6.
+Backend lo implementa antes de quitar el modo mock.
+
+Ver: `docs/permissions.md` (canónico), `CLAUDE.md` (regla de oro
+🛡️ Permisos), `src/lib/permissions.ts`.
+
+---
+
+## 2026-04-22 · ADR-040 · Historial es la única fuente de verdad de la actividad del contacto
+
+**Contexto:** Acciones sobre contactos quedaban dispersas: el
+comentario tiene su tab, el envío de email no se anotaba en ningún
+sitio, el registro de un cambio de asignado se perdía al refrescar.
+Imposible reconstruir "qué pasó con este cliente" en producción.
+
+**Decisión:** Tab Historial (`/contactos/:id?tab=historial`) es la
+única fuente de verdad. Toda acción que cree, modifique o comunique
+algo sobre un contacto **DEBE** llamar a `recordEvent()` (o helper
+tipado) de `src/components/contacts/contactEventsStorage.ts` en el
+mismo handler que ejecuta la acción.
+
+Helpers tipados disponibles: `recordContactCreated`, `recordContactEdited`
+(con diff de campos), `recordAssigneeAdded/Removed`,
+`recordRelationLinked/Unlinked` (bidireccional → registra en ambos
+contactos), `recordVisitEvaluated`, `recordDocumentUploaded/Deleted`,
+`recordCommentAdded`, `recordEmailSent/Delivered/Opened/Received`,
+`recordWhatsAppSent`, `recordTypeAny` (escape hatch).
+
+Cada evento lleva `{ id, type, timestamp, title, description?, actor,
+actorEmail?, meta? }`. Se almacena append-only en
+`byvaro.contact.<id>.events.v1` (cap 500 eventos) y se mergea con el
+mock en `loadMergedEvents()`.
+
+**Alternativas:**
+
+- Audit log centralizado por workspace (no por contacto): mejor para
+  reporting global pero peor UX en la ficha (filtros pesados).
+- Sin audit log explícito (derivar de tablas): pierde semántica
+  ("se cambió el nombre" vs "se editó el contacto").
+
+**Razón:** Garantiza historia completa del cliente sin mantener
+estructuras paralelas. Permite vista cronológica unificada con
+sub-pills (Todo · Comentarios · Emails · WhatsApp · Web · Sistema).
+Backend genera el evento server-side en cada PATCH/POST relevante.
+
+Ver: `CLAUDE.md` (regla de oro 🥇 Historial),
+`src/components/contacts/contactEventsStorage.ts`,
+`docs/permissions.md` (`audit.viewOwn` / `audit.viewAll`).
+
+---
+
+## 2026-04-22 · ADR-041 · Comentarios fusionados en Historial (sin tab separado)
+
+**Contexto:** La ficha de contacto tenía un tab "Comentarios" aparte
+del "Historial". Los comentarios YA se registraban en Historial vía
+`recordCommentAdded()`, así que el tab era redundante (los mismos
+datos en dos sitios).
+
+**Decisión:** Eliminar el tab "Comentarios". Mover el editor inline
+de comentarios DENTRO del tab Historial: aparece arriba cuando el
+sub-pill activo es "Todo" o "Comentarios". Misma lógica
+(`addComment` + `recordCommentAdded`), misma vista cronológica.
+
+**Alternativas:**
+
+- Mantener ambos tabs (status quo) → ruido visual + confusión sobre
+  cuál es la fuente de verdad.
+- Eliminar Historial y dejar solo Comentarios → comentarios son uno
+  de los ~25 tipos de evento. No se puede subordinar lo más amplio
+  a lo más concreto.
+
+**Razón:** Coherencia con ADR-040. Si Historial es source of truth,
+los comentarios viven ahí. El sub-pill "Comentarios" filtra el
+timeline a solo eventos de tipo `comment` y muestra el editor
+arriba para que añadir uno no implique salir del flujo.
+
+Ver: `src/components/contacts/detail/ContactHistoryTab.tsx`
+(componente `CommentComposer` interno).
+
+---
+
+## 2026-04-22 · ADR-042 · Operaciones tab estilo Lovable (Banner + Leads + Oportunidades)
+
+**Contexto:** El tab "Operaciones" de la ficha del contacto se
+intentó montar como filtro de `Venta[]` por email. Empty state para
+casi todos porque los emails de mock contactos no coinciden con los
+de mock sales. Lovable original tiene un layout más rico con tres
+zonas en el mismo tab.
+
+**Decisión:** Replicar el layout Lovable adaptado a tokens Byvaro:
+
+1. **Botón "+ Añadir oportunidad"** arriba derecha (CTA primario,
+   stub hasta cablear `AddOpportunityDialog`).
+2. **Banner verde "Compra en curso"** cuando hay un lead convertido
+   con `convertedSaleId`. Muestra unidad/promoción + 3 KPIs (Precio,
+   Señal, Fecha de inicio) + CTA "Ver venta →" a `/ventas/:id`.
+3. **Card "Oportunidades (N)"** — `ContactOpportunityEntry[]` con
+   thumbnail, agencia · agente, pill estado (Activa/Ganada/Archivada),
+   intereses del cliente (Tipo, Zona, Presupuesto, Dormitorios) y
+   tags libres ("Vistas al mar", "Inversión"…).
+4. **Card "Leads (N)"** — `ContactRecordEntry[]` con thumbnail, "Desde
+   [origen] · [fecha]", ref + landing y pill estado
+   (Convertido/Abierto/Pendiente/Cancelado).
+
+Cada card tiene CTA "Ver oportunidad →" / "Ver venta →" que apunta a
+`/oportunidades/:id` o `/ventas/:id` (pantallas a crear).
+
+Tab "Registros" se mantiene aparte (decisión del usuario "no quites
+registros, eso es otra cosa") — es la bandeja de ENTRADA cronológica
+del contacto, distinta de la vista de pipeline operacional.
+
+**Alternativas:**
+
+- Filtrar `sales[]` por email → empty state casi siempre. Descartado.
+- Sintetizar operaciones desde leads convertidos a partir de
+  `convertedSaleId` → era lo que hacía `contactOperacionesMock.ts`
+  (borrado al pivotar).
+- Fusionar Registros + Operaciones en un solo tab → el usuario lo
+  rechazó explícitamente.
+
+**Razón:** El layout Lovable es el más fiel a cómo el agente piensa
+el contacto: "qué compra está cerrando ya · qué oportunidades sigue
+trabajando · qué leads brutos le entraron". El tab Registros
+complementa con la vista cronológica del log.
+
+Ver: `src/components/contacts/detail/ContactOperacionesTab.tsx`,
+`docs/screens/contactos-ficha.md`.
+
+---
+
+## 2026-04-22 · ADR-043 · WhatsApp como modal lateral (no tab)
+
+**Contexto:** WhatsApp era un tab más en la ficha del contacto. Al
+hacer click se cambiaba de pantalla y se perdía el contexto del
+resumen, registros, oportunidades…
+
+**Decisión:** WhatsApp pasa a ser un **modal lateral** (`Dialog`
+de Radix custom):
+
+- **Backdrop con `backdrop-blur-md`** sobre la ficha de fondo
+  (desenfocada, no oscurecida).
+- **Panel anclado a la derecha**, slide-in desde la derecha.
+- **`h-[100dvh]` (todo el alto)**, ancho **920px** en md+ (chat
+  ~620px + sidebar de agentes 300px) · fullscreen en mobile.
+- Botón cerrar (X) arriba derecha.
+- Contenido reutiliza `ContactWhatsAppTab` con un nuevo prop
+  `mode: "page" | "modal"`. En modal: oculta sidebar de agentes en
+  mobile (md:flex), elimina chrome extra, usa `h-full` en lugar de
+  `h-[calc(100vh-260px)] min-h-[560px]`.
+- El tab "WhatsApp" sigue en la barra de tabs pero su click intercepta
+  → abre el modal sin cambiar `activeTab`.
+
+Otros entry points (icono WhatsApp del bloque "Teléfonos" del Resumen,
+envío de documentos por WhatsApp al propio contacto) también abren el
+modal.
+
+**Alternativas:**
+
+- Quitar WhatsApp de tabs y poner un FAB → rompe consistencia con el
+  resto de tabs.
+- Modal centrado pequeño → no escalaría con el sidebar de agentes
+  necesario para multi-agente.
+- Sheet/drawer desde abajo → menos cómodo en desktop para chat largo.
+
+**Razón:** El agente quiere responder rápido sin perder contexto.
+Modal lateral con blur preserva la lectura del cliente al lado y
+no obliga a navegar fuera. Wide enough para ver chat + lista de
+otros agentes que han hablado con el cliente.
+
+Ver: `src/components/contacts/detail/ContactWhatsAppDialog.tsx`,
+`src/components/contacts/detail/ContactWhatsAppTab.tsx` (prop `mode`).
+
+---
+
+## 2026-04-22 · ADR-044 · Catálogo dinámico de tipos de relación entre contactos
+
+**Contexto:** El dialog "Vincular contacto" usaba 5 opciones
+hardcoded (`spouse`, `partner`, `family`, `colleague`, `other`). Casos
+reales del cliente piden tipos custom: "Inversor conjunto", "Heredero",
+"Asesor financiero", "Tutor legal".
+
+**Decisión:** Crear catálogo gestionable por admin en
+`/ajustes/contactos/relaciones` (página `relaciones.tsx`):
+
+- 5 tipos predeterminados (no se pueden eliminar pero sí desactivar).
+- Admin puede añadir tipos custom, renombrar, activar/desactivar,
+  eliminar custom.
+- Tipos desactivados siguen mostrándose en vínculos existentes pero no
+  aparecen al crear nuevos.
+- Storage: `byvaro.contacts.relationTypes.v1` (`relationTypesStorage.ts`).
+
+Cambios en código:
+- `ContactRelation.relationType` ampliado de union literal a `string`
+  (acepta cualquier id del catálogo).
+- `LinkContactDialog` carga el catálogo con `loadRelationTypes()` y
+  filtra `enabled !== false`.
+- `ContactSummaryTab` resuelve la etiqueta con `getRelationLabel(id)`
+  (gracefully cae al id como fallback si el tipo desaparece).
+- Vínculo es bidireccional: `recordRelationLinked` se llama en
+  AMBOS contactos.
+
+**Alternativas:**
+
+- Mantener union literal con keys nuevas en código → cada cliente
+  forzaría release.
+- Tipos solo custom (sin predeterminados) → onboarding pesado.
+- Free-text en lugar de catálogo → fragmentación ("Conyuge" vs
+  "Cónyuge" vs "Esposa").
+
+**Razón:** Estándar SaaS B2B (catálogo editable + valores
+predeterminados sensatos). Permite extensión sin release. Wired al
+sidebar Settings con `live: true` (ver ADR-006 para el flag).
+
+Ver: `src/pages/ajustes/contactos/relaciones.tsx`,
+`src/components/contacts/relationTypesStorage.ts`,
+`src/components/contacts/detail/LinkContactDialog.tsx`.
+
+---
+
+## 2026-04-22 · ADR-045 · Tab Emails de la ficha es vista de RESUMEN, nunca cliente de email
+
+**Contexto:** Tentación de mostrar los emails completos dentro del
+tab Emails de la ficha (replicar GmailInterface filtrado). Llevaría a
+mantener dos clientes de email + lógica duplicada de etiquetas,
+firmas, plantillas, drafts…
+
+**Decisión:** El tab Emails es **solo vista de resumen** y siempre
+deep-linkea a `/emails?contact=<id>` (filtro server-side cuando
+exista) para leer/responder. Componentes:
+
+- **Banner azul "N emails nuevos sin leer"** si hay `email_received`
+  en últimas 48h sin `email_sent` posterior.
+- **Card stats globales**: Enviados / Recibidos / Entregados / Abiertos.
+- **Card desglose por usuario**: lista de agentes que han enviado
+  emails al contacto con su count y último envío.
+- **CTA grande final** "Ver todos los emails con este contacto".
+
+Cada elemento es clickeable y lleva a `/emails?contact=<id>`. **Nunca**
+mostramos el contenido de un email aquí.
+
+En el Historial, los eventos de tipo `email_*` también son clickeables
+y navegan a `/emails?contact=<id>`. **Nunca** al `?tab=emails` de la
+ficha — esa pestaña es solo summary.
+
+Nuevos tipos de evento añadidos: `email_delivered` (callback SMTP,
+icono `MailCheck` verde) y `email_opened` (pixel tracking, icono
+`MailOpen` violeta). Ambos los emite el sistema (`actor: "Sistema"`).
+
+**Alternativas:**
+
+- Cliente de email completo dentro del tab → duplicación masiva.
+- Nada en el tab (eliminarlo) → pierde el resumen de actividad y la
+  visibilidad por usuario.
+
+**Razón:** Single source of truth para leer correos = `/emails`. El
+tab de la ficha responde la pregunta "¿qué actividad de email tiene
+este cliente y con qué agentes?" sin convertirse en un cliente
+secundario.
+
+Ver: `src/components/contacts/detail/ContactEmailsTab.tsx`,
+`src/components/contacts/contactEventsStorage.ts`
+(`recordEmailDelivered/Opened/Received`),
+`docs/screens/contactos-ficha.md` §Tabs · Emails.

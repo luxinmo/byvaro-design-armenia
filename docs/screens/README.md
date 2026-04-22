@@ -21,7 +21,9 @@ contract, permisos, estados, enlaces salientes.
 | Agencia · detalle | `/colaboradores/:id` | [`agencia-detalle.md`](agencia-detalle.md) | ✅ diseñada |
 | Estadísticas de colaboradores | `/colaboradores/estadisticas` | [`colaboradores-estadisticas.md`](colaboradores-estadisticas.md) | ✅ diseñada |
 | Compartir promoción (flujo) | modal desde `/promociones` y ficha | [`compartir-promocion.md`](compartir-promocion.md) | ✅ diseñada |
-| Contactos | `/contactos` | (pendiente) | 🎨 placeholder |
+| Contactos | `/contactos` | (pendiente · listado) | 🎨 placeholder |
+| Contacto · ficha | `/contactos/:id` | [`contactos-ficha.md`](contactos-ficha.md) | ✅ diseñada (8 tabs) |
+| Ajustes · Tipos de relación | `/ajustes/contactos/relaciones` | [`ajustes-contactos-relaciones.md`](ajustes-contactos-relaciones.md) | ✅ diseñada |
 | Microsites | `/microsites` | (pendiente) | 🎨 placeholder |
 | Emails | `/emails` | [`emails.md`](emails.md) | 🟡 doc + tipos (falta UI) |
 | Ajustes | `/ajustes` | (pendiente) | 🎨 placeholder |

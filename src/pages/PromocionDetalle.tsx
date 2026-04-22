@@ -10,6 +10,7 @@ import { promotions, getBuildingTypeLabel } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion, type Comercial, type ComercialPermissions } from "@/data/developerPromotions";
 import { agencies, type Agency } from "@/data/agencies";
 import { FeatureCardV3 } from "@/pages/Colaboradores";
+import ColaboradoresEstadisticas from "@/pages/ColaboradoresEstadisticas";
 import {
   ArrowLeft, Pencil, Share2, Users, AlertTriangle, CheckCircle2,
   MapPin, Calendar, Euro, Home, Banknote, TrendingUp, Camera,
@@ -19,7 +20,7 @@ import {
   Plus, Phone, Mail, MessageCircle, Store, UserPlus,
   Check, X, ExternalLink, Zap, Star, Search, ChevronDown, Info,
   Lock, Unlock, FolderOpen, Folder, Download, BookOpen, Upload, MoreHorizontal, FilePlus, ArrowRight,
-  Trophy, Sparkles, ArrowUpRight, FileCheck2, Rocket,
+  Trophy, Sparkles, ArrowUpRight, FileCheck2, Rocket, BarChart3,
 } from "lucide-react";
 import { getMissingForPromotion } from "@/lib/publicationRequirements"; // fuente única de verdad de requisitos para publicar
 import { Button } from "@/components/ui/button";
@@ -176,6 +177,10 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   /** El brochure puede eliminarse desde su card. Al eliminarlo, la sección
    *  se oculta y la acción rápida "Brochure" queda deshabilitada. */
   const [brochureRemoved, setBrochureRemoved] = useState(false);
+  /** Overlay fullscreen con las estadísticas de agencias de esta promoción
+   *  (ColaboradoresEstadisticas con `lockedPromotionId`). Se abre desde
+   *  el tab Agencias y se cierra con X. */
+  const [statsOverlayOpen, setStatsOverlayOpen] = useState(false);
   /** Override local de canShareWithAgencies cuando el promotor activa
    *  compartir desde la tab Comisiones. null = usar el valor del dataset. */
   const [canShareOverride, setCanShareOverride] = useState<boolean | null>(null);
@@ -1423,7 +1428,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           );
           return (
             <div className="space-y-4">
-              <header className="flex items-end justify-between gap-3">
+              <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     Red comercial de esta promoción
@@ -1432,15 +1437,33 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     {agenciasEnPromo.length} {agenciasEnPromo.length === 1 ? "agencia" : "agencias"} colaborando
                   </h2>
                 </div>
-                {canShare && (
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
-                    onClick={() => setShareOpen(true)}
-                    className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-foreground text-background text-sm font-semibold hover:bg-foreground/90 shadow-soft transition-colors"
+                    onClick={() => setStatsOverlayOpen(true)}
+                    className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                    title="Ver estadísticas de esta promoción"
                   >
-                    <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                    Invitar agencia
+                    <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    Estadísticas
                   </button>
-                )}
+                  <button
+                    onClick={() => navigate("/colaboradores/estadisticas")}
+                    className="group inline-flex items-center gap-1.5 h-10 px-4 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                    title="Ver estadísticas globales de tu red"
+                  >
+                    Estadísticas generales
+                    <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" strokeWidth={1.75} />
+                  </button>
+                  {canShare && (
+                    <button
+                      onClick={() => setShareOpen(true)}
+                      className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-foreground text-background text-sm font-semibold hover:bg-foreground/90 shadow-soft transition-colors"
+                    >
+                      <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                      Invitar agencia
+                    </button>
+                  )}
+                </div>
               </header>
 
               {agenciasEnPromo.length === 0 ? (
@@ -1677,6 +1700,43 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         title={p.name}
         subtitle={p.location}
       />
+
+      {/* Overlay fullscreen · Estadísticas de agencias de esta promoción.
+          Monta `ColaboradoresEstadisticas` en modo embedded + lockedPromotionId.
+          Se cierra con la X del top bar (o tecla Escape vía overlay). */}
+      {statsOverlayOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-background overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Estadísticas de esta promoción"
+        >
+          <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border">
+            <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Estadísticas · {p.name}
+                </p>
+                <p className="text-[11px] text-muted-foreground truncate">
+                  Limitado a las agencias colaborando en esta promoción
+                </p>
+              </div>
+              <button
+                onClick={() => setStatsOverlayOpen(false)}
+                className="h-10 w-10 rounded-full border border-border bg-card hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors shadow-soft"
+                aria-label="Cerrar"
+              >
+                <X className="h-4 w-4" strokeWidth={1.75} />
+              </button>
+            </div>
+          </header>
+          <ColaboradoresEstadisticas
+            lockedPromotionId={p.id}
+            lockedPromotionName={p.name}
+            embedded
+          />
+        </div>
+      )}
 
       {/* Compartir promoción con agencias */}
       <SharePromotionDialog

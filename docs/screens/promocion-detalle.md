@@ -57,7 +57,7 @@ scrollables horizontalmente.
 |---|---|---|
 | Vista general | inline en `PromocionDetalle.tsx` | resumen de estructura + info + unidades summary + docs + plan pagos + descripción + ubicación + equipo |
 | Disponibilidad | `PromotionAvailabilityFull` | tabla/grid de unidades con filtros, selección múltiple y `UnitDetailPanel` lateral |
-| Agencias | grid inline de `FeatureCardV3` (importado de `Colaboradores.tsx`) | Mismo lenguaje visual que `/colaboradores` · grid 3-col con cover + logo + mercados + stats. Filtra por `promotionsCollaborating.includes(promotionId)`. Empty state con CTA "Invitar agencia". |
+| Agencias | grid inline de `FeatureCardV3` (importado de `Colaboradores.tsx`) | Mismo lenguaje visual que `/colaboradores` · grid 3-col con cover + logo + mercados + stats. Filtra por `promotionsCollaborating.includes(promotionId)`. Empty state con CTA "Invitar agencia". Header con 3 CTAs: **Estadísticas** (abre overlay fullscreen · ver más abajo) · **Estadísticas generales ↗** (navega a `/colaboradores/estadisticas`) · **Invitar agencia**. |
 | Comisiones | inline | desglose de comisiones nacional/internacional y hitos |
 | Registros | `PromotionRecords` | lista de registros de clientes con aprobar/rechazar + motivo |
 | Documentos | `PromotionMultimedia` + `EditSectionDialogs` | fotos, vídeos, planos, brochure, memoria |
@@ -92,6 +92,28 @@ scrollables horizontalmente.
 - `ImageLightbox` · visor fullscreen reutilizable (top bar · nav arrows ·
   strip de thumbnails · teclado ← → y Escape). Reutilizado también por
   la ficha de unidad.
+
+### Overlay · Estadísticas de esta promoción
+
+Desde el tab Agencias, el CTA **"Estadísticas"** abre un overlay
+fullscreen (`fixed inset-0 z-50`) con la pantalla
+`ColaboradoresEstadisticas` en modo embebido y bloqueada a la promoción
+actual (`lockedPromotionId={p.id}`).
+
+- **Top bar sticky** con eyebrow "Estadísticas · {nombre}" + subtítulo
+  aclarativo + botón X (top-right, `h-10 w-10 rounded-full`) para
+  cerrar.
+- **Banner de contexto** dentro del contenido (pill primary/10 con
+  icono `Target`): "Estadísticas filtradas · Solo datos de {nombre}".
+  Siempre visible para que no se pierda la referencia de qué subset
+  se está analizando.
+- **Filtro Promoción oculto** en la toolbar — la promoción está
+  bloqueada y no se puede cambiar desde este overlay.
+- `Limpiar filtros` respeta el lock: al limpiar, `fPromos` vuelve a
+  contener solo el `lockedPromotionId`.
+
+El CTA paralelo **"Estadísticas generales ↗"** navega a
+`/colaboradores/estadisticas` para la vista global de la red.
 - `EditSectionDialogs` · 11 diálogos de edición inline (multimedia, info,
   estructura, descripción, ubicación, plan de pagos, piso piloto, doc,
   contactos, inventario, oficinas de venta).

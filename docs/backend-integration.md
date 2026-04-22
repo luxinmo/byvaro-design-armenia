@@ -119,6 +119,174 @@ hace el filtro de `viewOwn`. Migration en `docs/permissions.md` §4.1.
 
 ---
 
+## 1.6 · Contactos (ficha completa)
+
+> Spec UI canónica: `docs/screens/contactos-ficha.md`. Tipos en
+> `src/components/contacts/types.ts`.
+
+**Endpoints CRUD principales**:
+```
+GET    /api/contacts                       → Contact[] (paginado)
+GET    /api/contacts/:id                   → ContactDetail
+POST   /api/contacts                       → ContactDetail
+PATCH  /api/contacts/:id                   → ContactDetail
+DELETE /api/contacts/:id                   (contacts.delete)
+```
+
+**Sub-recursos** (toda mutación sobre un sub-recurso emite evento en
+el audit log — ver §1.7):
+
+```
+GET    /api/contacts/:id/records           → ContactRecordEntry[]
+GET    /api/contacts/:id/opportunities     → ContactOpportunityEntry[]
+POST   /api/contacts/:id/opportunities     (opportunities.create)
+PATCH  /api/contacts/:id/opportunities/:oid
+GET    /api/contacts/:id/operations        → { activeOperation, recentSales[] }
+
+GET    /api/contacts/:id/visits            → ContactVisitEntry[]
+POST   /api/contacts/:id/visits            (visits.schedule)
+POST   /api/contacts/:id/visits/:vid/evaluate    (visits.evaluate)
+
+GET    /api/contacts/:id/documents         → ContactDocumentEntry[]
+POST   /api/contacts/:id/documents         (documents.upload, S3 presigned)
+DELETE /api/contacts/:id/documents/:did    (documents.delete)
+
+GET    /api/contacts/:id/comments          → ContactCommentEntry[]
+POST   /api/contacts/:id/comments          (cualquier viewOwn del contacto)
+PATCH  /api/contacts/:id/comments/:cid     (solo autor)
+DELETE /api/contacts/:id/comments/:cid     (solo autor)
+
+GET    /api/contacts/:id/assigned          → ContactAssignedUser[]
+PUT    /api/contacts/:id/assigned          { userIds: [...] }   (contacts.assign)
+
+GET    /api/contacts/:id/related           → ContactRelation[]
+POST   /api/contacts/:id/related           { contactId, relationType }
+                                           (bidireccional · escribe en ambos)
+DELETE /api/contacts/:id/related/:cid      (también borra el inverso)
+
+GET    /api/contacts/:id/email-stats       → { sent, received, delivered,
+                                                opened, byUser[],
+                                                unreadCount }
+```
+
+**Catálogo de tipos de relación** (ver `docs/screens/ajustes-contactos-relaciones.md`):
+
+```
+GET  /api/contacts/relation-types          → { types: RelationType[] }
+PUT  /api/contacts/relation-types          { types: [...] }
+                                           (settings.manageRoles o
+                                            contacts.manageRelationTypes)
+```
+
+**Filtros del listado `/api/contacts`** (parámetros de query):
+- `status`, `tags[]`, `assignedTo[]`, `source`, `nationality`,
+  `cursor`, `limit`, `q` (busca en nombre, email, ref, NIF, teléfono
+  por últimos 8 dígitos).
+- Server respeta visibilidad: si el usuario solo tiene
+  `contacts.viewOwn`, fuerza `assignedTo CONTAINS user.id`.
+
+**Deduplicación al ingreso** (regla del producto):
+- Email match exacto case-insensitive → mismo contacto.
+- Teléfono: comparar **últimos 8 dígitos** (`+34 600123456` ≡
+  `600123456` ≡ `0034600123456`).
+- Si match → MERGE en lugar de crear nuevo (registra
+  `contact_edited` con campos cambiados).
+
+**Sanitización de inputs**:
+- Email: strip espacios, lowercase server-side.
+- Teléfono: strip espacios + caracteres no-dígito (excepto `+` inicial)
+  antes de persistir; mantener formato display separado.
+
+---
+
+## 1.7 · Audit log de contactos
+
+> Regla de oro: ver `CLAUDE.md` §🥇 Historial + ADR-040.
+> Spec frontend: `src/components/contacts/contactEventsStorage.ts`.
+
+El backend genera el evento server-side en cada mutación
+(POST/PATCH/DELETE) sobre cualquier sub-recurso de un contacto. El
+frontend NO debería poder llamar directamente a `POST /events` salvo
+para `comment` (acción explícita del usuario).
+
+**Endpoints**:
+```
+GET  /api/contacts/:id/events              → ContactTimelineEvent[] (paginado, desc)
+                                             Query: ?type=&category=&from=&to=
+                                             Permiso: audit.viewOwn (en assigned)
+                                                      o audit.viewAll
+POST /api/contacts/:id/events              → ContactTimelineEvent
+                                             Body: { type, title, description?, meta? }
+                                             Solo para `type === "comment"` desde el
+                                             cliente (resto los emite el sistema).
+```
+
+**Tipos de evento que el backend debe emitir** (catálogo completo en
+`data-model.md`):
+- En `PATCH /api/contacts/:id` con campos cambiados → `contact_edited`
+  con `description: "Cambios en: nombre, email, ..."`.
+- En `DELETE /api/contacts/:id` → `contact_deleted` (antes del delete
+  para que persista).
+- En `PUT /api/contacts/:id/assigned` → diff → emitir
+  `assignee_added` / `assignee_removed` por miembro afectado.
+- En `POST /api/contacts/:id/related` → `relation_linked`
+  **bidireccional** (en ambos contactos).
+- En `POST /api/contacts/:id/visits/:vid/evaluate` → `visit_evaluated`
+  + el outcome correspondiente (`visit_done` / `visit_cancelled`).
+- En `POST /documents` / `DELETE /documents/:did` → `document_uploaded`
+  / `document_deleted`.
+- Webhook SMTP delivered → `email_delivered` (system actor).
+- Webhook pixel opened → `email_opened` (system actor).
+- IMAP / Gmail entrante matcheado → `email_received` (system actor).
+- Envío saliente desde GmailInterface → `email_sent` (con actor =
+  usuario que envía).
+- WhatsApp saliente → `whatsapp_sent`.
+- WhatsApp entrante → `whatsapp_received`.
+- Pixel de microsite o brochure → `web_activity`.
+
+**Storage backend**: tabla `contact_events` con `(contact_id,
+created_at DESC)` index. Append-only. Retención mínima 2 años. Cap
+opcional 10k eventos por contacto (paginar más allá vía cursor).
+
+**RLS**: solo usuarios con `audit.viewAll` ven eventos donde no son
+actor o el contacto no está asignado a ellos.
+
+---
+
+## 1.8 · Webhooks de email (delivered / opened / received)
+
+Para que el ciclo de email del Historial funcione (ADR-045) el backend
+necesita 3 fuentes de eventos:
+
+1. **Delivered** — callback del proveedor SMTP (Resend, Postmark,
+   SendGrid). Cada vez que un email sale entregado:
+   ```
+   POST /webhooks/email/delivered  (firmado)
+   { messageId, to, subject, deliveredAt }
+   ```
+   Lookup del `contactId` por email destinatario → emitir
+   `email_delivered`.
+
+2. **Opened** — pixel de tracking 1x1 inline en el email saliente.
+   Endpoint público:
+   ```
+   GET /api/email-pixel/:trackingId.gif
+   ```
+   El backend resuelve `trackingId → messageId → contactId`, registra
+   `email_opened` (si no estaba ya), responde el GIF.
+
+3. **Received** — IMAP poll o webhook Gmail/Microsoft Graph. Cuando
+   llega un email entrante:
+   - Match `from` con tabla de contactos (case-insensitive).
+   - Si match → `email_received`.
+   - Si no match → opcional: crear contacto fantasma o ignorar.
+
+**Plantillas (envío saliente)**:
+- Inline pixel: `<img src="https://api.byvaro.com/api/email-pixel/{trackingId}.gif" width="1" height="1" />`.
+- Headers: `X-Byvaro-MessageId: <uuid>` para correlacionar con webhooks.
+
+---
+
 ## 2 · Empresa (perfil del tenant)
 
 **Tipo completo**: `src/lib/empresa.ts:32` (interface `Empresa`).
