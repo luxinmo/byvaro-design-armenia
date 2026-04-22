@@ -136,7 +136,25 @@ Tabs Overview / Availability / Comisiones / Documents / Agencies.
 ### ⬜ Fase 8 — Vista Agencia completa (adaptación de pantallas)
 - Inicio agencia · Promociones colaborables · Mis registros · Agenda · Mis contactos
 
-### ⬜ Fase 9 — Contactos (CRM)
+### 🟢 Fase 9 — Contactos (CRM)
+
+Ficha de contacto completa con 8 tabs operativos. Spec en
+[`docs/screens/contactos-ficha.md`](docs/screens/contactos-ficha.md).
+
+- ✅ Resumen (info personal · datos de contacto · idiomas · tags · sidebar)
+- ✅ Historial (audit log con sub-pills + editor de comentarios inline · ADR-040 + ADR-041)
+- ✅ Registros (bandeja cronológica con KPIs)
+- ✅ Operaciones (banner activa + Oportunidades + Leads · estilo Lovable · ADR-042)
+- ✅ Visitas (con evaluación y tareas pendientes)
+- ✅ Documentos (subir, preview, share por email/WhatsApp)
+- ✅ Emails (vista resumen · siempre deep-link a /emails · ADR-045)
+- ✅ WhatsApp (modal lateral · backdrop blur · 920px · ADR-043)
+- ✅ Catálogo dinámico de tipos de relación (`/ajustes/contactos/relaciones` · ADR-044)
+- ✅ Documentación canónica de permisos ([`docs/permissions.md`](docs/permissions.md))
+- ⬜ Listado `/contactos` con filtros + visibilidad por ownership
+- ⬜ Vista de detalle de Oportunidad (`/oportunidades/:id`)
+- ⬜ `AddOpportunityDialog` (CTA stub en Operaciones)
+- ⬜ Implementar gating de permisos por ownership en todos los listados (deuda en `docs/permissions.md` §6)
 
 ### ⬜ Fase 10 — Calendario
 

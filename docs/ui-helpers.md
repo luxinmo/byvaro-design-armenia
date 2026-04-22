@@ -153,8 +153,62 @@ listener en `useEffect` al `storage` event.
 | `useFavoriteAgencies()` | `src/lib/favoriteAgencies.ts` | `byvaro-favoritos-agencias` | data-model §Favoritos |
 | `listDrafts()` (promos) | `src/lib/promotionDrafts.ts` | `byvaro-promotion-drafts` | — |
 | `useConfirm()` | `src/components/ui/ConfirmDialog.tsx` | — (sin storage) | este archivo |
+| `loadEvents()` / `recordEvent()` | `src/components/contacts/contactEventsStorage.ts` | `byvaro.contact.<id>.events.v1` | data-model §ContactTimelineEvent |
+| `loadAddedComments()` / `addComment()` | `src/components/contacts/contactCommentsStorage.ts` | `byvaro.contact.<id>.comments.v1` | data-model §ContactCommentEntry |
+| `loadAddedDocuments()` / `addDocument()` | `src/components/contacts/contactDocumentsStorage.ts` | `byvaro.contact.<id>.documents.v1` | data-model §ContactDocumentEntry |
+| `loadAssignedOverride()` / `loadRelationsOverride()` | `src/components/contacts/contactRelationsStorage.ts` | `byvaro.contact.<id>.assigned.v1`, `…related.v1` | data-model §Contact |
+| `loadRelationTypes()` / `getRelationLabel()` | `src/components/contacts/relationTypesStorage.ts` | `byvaro.contacts.relationTypes.v1` | screens/ajustes-contactos-relaciones |
+| `loadRolePermissions()` / `useHasPermission()` | `src/lib/permissions.ts` | `byvaro.workspace.rolePermissions.v1` | permissions.md |
 
 Todos tienen `TODO(backend)` apuntando a `docs/backend-integration.md`.
+
+### Helpers tipados del audit log de contactos
+
+`src/components/contacts/contactEventsStorage.ts` expone azúcar para
+no construir el evento a mano. **Toda acción sobre un contacto
+DEBE llamar a uno de estos** (regla de oro 🥇 Historial · CLAUDE.md
++ ADR-040):
+
+```ts
+recordContactCreated(id, by)
+recordContactEdited(id, by, changedFields[])
+recordContactDeleted(id, by)               // vía recordTypeAny
+recordAssigneeAdded(id, by, memberName)
+recordAssigneeRemoved(id, by, memberName)
+recordRelationLinked(id, by, otherName, relationLabel)   // bidireccional
+recordRelationUnlinked(id, by, otherName)
+recordVisitEvaluated(id, by, { promotionName, unit?, outcome, rating? })
+recordDocumentUploaded(id, by, docName)
+recordDocumentDeleted(id, by, docName)
+recordCommentAdded(id, by, content, "user" | "system")
+recordEmailSent(id, by, to, subject, attachmentsCount?)
+recordEmailDelivered(id, to, subject)      // emit del sistema (webhook SMTP)
+recordEmailOpened(id, to, subject)         // emit del sistema (pixel tracking)
+recordEmailReceived(id, from, subject)     // emit del sistema (IMAP/Gmail)
+recordWhatsAppSent(id, by, summary)
+recordTypeAny(id, type, title, description?, by?)        // escape hatch
+```
+
+`by` siempre es `{ name, email }` del usuario actual
+(`useCurrentUser()`). Si el cambio lo dispara el sistema, pasa
+`{ name: "Sistema" }`.
+
+### Visibility (TODO · pendiente de implementación)
+
+Helper a crear en `src/lib/visibility.ts` cuando se cablee la
+migración de permisos por ownership (ver `docs/permissions.md` §6):
+
+```ts
+// PENDIENTE
+export function useVisibilityFilter<T extends { assignedTo: string[] }>(
+  scope: "contacts" | "records" | "opportunities" | "sales"
+       | "visits" | "documents" | "emails",
+): (item: T) => boolean;
+```
+
+Devuelve un predicado que admite todo si el usuario tiene `*.viewAll`
+o filtra por `item.assignedTo.includes(user.id)` si solo tiene
+`*.viewOwn`.
 
 ---
 
