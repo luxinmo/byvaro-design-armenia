@@ -30,7 +30,14 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { consumePendingAttachments, type PendingAttachment } from "@/lib/pendingAttachments";
+import { MOCK_CONTACTS } from "@/components/contacts/data";
+import { loadImportedContacts } from "@/components/contacts/importedStorage";
+import { loadCreatedContacts } from "@/components/contacts/createdContactsStorage";
+import { EditContactDialog } from "@/components/contacts/detail/EditContactDialog";
+import { recordEmailSent } from "@/components/contacts/contactEventsStorage";
+import { useCurrentUser } from "@/lib/currentUser";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -498,6 +505,7 @@ export default function GmailInterface({
   onUpdateAccounts,
   onUpdateDelegates,
 }: Props) {
+  const currentUser = useCurrentUser();
   const [selectedFolder, setSelectedFolder] = useState<FolderDef["id"]>("inbox");
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
   /* Firma actual del Compose flotante. Se inicializa al abrir un draft. */
@@ -546,6 +554,27 @@ export default function GmailInterface({
   const [openEmail, setOpenEmail] = useState<EmailItem | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeDraft, setComposeDraft] = useState<ComposeDraft>({ to: "", subject: "", body: "" });
+  /** Adjuntos precargados (vienen como dataURLs desde otras pantallas
+   *  como Documentos del contacto). Se muestran como chips junto a los
+   *  files normales del file picker. */
+  const [composeAttachments, setComposeAttachments] = useState<PendingAttachment[]>([]);
+
+  /** Dialog "Crear contacto" abierto desde el autocomplete del campo
+   *  destinatario cuando el email/nombre escrito no existe. */
+  const [createContactOpen, setCreateContactOpen] = useState(false);
+  const [createContactInitial, setCreateContactInitial] = useState<{ email?: string; name?: string }>({});
+  /** Tick para refrescar el catálogo de sugerencias tras crear. */
+  const [contactsVersion, setContactsVersion] = useState(0);
+
+  /** Catálogo de sugerencias para el autocomplete del destinatario.
+   *  Mezcla seed + importados + creados con su email primario. */
+  const contactSuggestions = useMemo(() => {
+    const all = [...loadCreatedContacts(), ...loadImportedContacts(), ...MOCK_CONTACTS];
+    return all
+      .filter((c) => c.email)
+      .map((c) => ({ id: c.id, name: c.name, email: c.email, flag: c.flag }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contactsVersion]);
   const [composeMode, setComposeMode] = useState<ComposeMode>("new");
   const [emails, setEmails] = useState<EmailItem[]>(MOCK_EMAILS);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -562,6 +591,43 @@ export default function GmailInterface({
   useEffect(() => {
     if (!signatureManagerOpen) setSignatures(loadSignatures());
   }, [signatureManagerOpen]);
+
+  /* Apertura externa del composer con destinatario pre-rellenado.
+   * Otras pantallas (ej. ficha de contacto) navegan a:
+   *   /emails?compose=1&to=<email>&subject=<asunto opcional>
+   * y aquí lo detectamos para abrir el composer y limpiamos el param. */
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get("compose") !== "1") return;
+    const to = searchParams.get("to") ?? "";
+    const subject = searchParams.get("subject") ?? "";
+    const defaultSig = getDefaultSignature(signatures, isAll ? undefined : account?.id);
+    const sigHtml = defaultSig?.html ?? null;
+    const initialBody = sigHtml ? applySignature("", sigHtml) : "";
+    setComposeDraft({ to, subject, body: initialBody });
+    setComposeSignatureId(defaultSig?.id ?? null);
+    setComposeMode("new");
+    setComposeOpen(true);
+
+    /* Adjuntos pendientes desde otra pantalla (ej. Documentos del
+     * contacto). Los guardamos en state para mostrarlos como chips
+     * en el composer. */
+    const pending = consumePendingAttachments();
+    if (pending.length > 0) {
+      setComposeAttachments(pending);
+      toast.success(
+        `${pending.length} ${pending.length === 1 ? "adjunto cargado" : "adjuntos cargados"}`,
+      );
+    }
+
+    /* Limpia los params para que un refresh no reabra el composer. */
+    const next = new URLSearchParams(searchParams);
+    next.delete("compose");
+    next.delete("to");
+    next.delete("subject");
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const accountIdForCurrentScope = isAll ? undefined : account?.id;
 
@@ -671,6 +737,16 @@ export default function GmailInterface({
       tracking: { sent: true, delivered: false },
     };
     setEmails((prev) => [newEmail, ...prev]);
+
+    /* Audit log en cada destinatario que sea contacto del workspace.
+     * Si el email no matchea ningún contacto, no se registra evento. */
+    const allContacts = [...loadCreatedContacts(), ...loadImportedContacts(), ...MOCK_CONTACTS];
+    const recipients = args.to.split(/[,;]/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const by = { name: currentUser.name, email: currentUser.email };
+    recipients.forEach((email) => {
+      const matched = allContacts.find((c) => c.email?.toLowerCase() === email);
+      if (matched) recordEmailSent(matched.id, by, email, args.subject, 0);
+    });
 
     // Simulamos que el webhook de delivery llega 1.2s después.
     window.setTimeout(() => {
@@ -861,18 +937,44 @@ export default function GmailInterface({
     clearSelection();
   };
 
-  /** Asigna una etiqueta a todos los emails seleccionados. */
+  /** Toggle de una etiqueta sobre los emails seleccionados: si TODOS
+   * los seleccionados ya tienen la etiqueta → la quita; si no → la
+   * añade a todos. Es el patrón de Gmail (el popover marca los que
+   * ya la tienen con un check). */
   const assignLabelToSelection = (labelName: string) => {
+    const selected = emails.filter((e) => selectedIds.has(e.id));
+    const allHaveIt = selected.length > 0 && selected.every((e) => e.labels?.includes(labelName));
     setEmails((prev) =>
       prev.map((e) => {
         if (!selectedIds.has(e.id)) return e;
         const existing = e.labels ?? [];
+        if (allHaveIt) {
+          return { ...e, labels: existing.filter((l) => l !== labelName) };
+        }
         if (existing.includes(labelName)) return e;
         return { ...e, labels: [...existing, labelName] };
       }),
     );
-    toast.success(`Etiqueta "${labelName}" asignada a ${selectedIds.size} mensaje${selectedIds.size > 1 ? "s" : ""}`);
+    toast.success(
+      allHaveIt
+        ? `Etiqueta "${labelName}" quitada de ${selectedIds.size} mensaje${selectedIds.size > 1 ? "s" : ""}`
+        : `Etiqueta "${labelName}" asignada a ${selectedIds.size} mensaje${selectedIds.size > 1 ? "s" : ""}`,
+    );
     clearSelection();
+  };
+
+  /** Toggle de etiqueta sobre el email abierto actualmente (detalle). */
+  const toggleLabelOnOpen = (labelName: string) => {
+    if (!openEmail) return;
+    const existing = openEmail.labels ?? [];
+    const has = existing.includes(labelName);
+    const nextLabels = has
+      ? existing.filter((l) => l !== labelName)
+      : [...existing, labelName];
+    const nextEmail = { ...openEmail, labels: nextLabels };
+    setOpenEmail(nextEmail);
+    setEmails((prev) => prev.map((e) => (e.id === openEmail.id ? nextEmail : e)));
+    toast.success(has ? `Etiqueta "${labelName}" quitada` : `Etiqueta "${labelName}" añadida`);
   };
 
   /* Acciones sobre el email abierto actualmente (3 puntos del detalle). */
@@ -1358,7 +1460,7 @@ export default function GmailInterface({
                     <Popover>
                       <PopoverTrigger asChild>
                         <button
-                          title="Asignar etiqueta"
+                          title="Etiquetar selección"
                           className="h-10 w-10 rounded-full hover:bg-muted flex items-center justify-center"
                         >
                           <TagIcon className="h-4 w-4 text-muted-foreground" />
@@ -1369,23 +1471,36 @@ export default function GmailInterface({
                         className="w-60 p-1 rounded-2xl border-border shadow-soft-lg"
                       >
                         <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                          Asignar etiqueta
+                          Etiquetar {selectedIds.size} mensaje{selectedIds.size > 1 ? "s" : ""}
                         </div>
                         {labels.length === 0 && (
                           <p className="px-3 py-2 text-xs text-muted-foreground">
                             Aún no hay etiquetas. Crea una desde el sidebar.
                           </p>
                         )}
-                        {labels.map((l) => (
-                          <button
-                            key={l.name}
-                            onClick={() => assignLabelToSelection(l.name)}
-                            className="w-full text-left px-3 py-2 rounded-md text-sm hover:bg-muted flex items-center gap-2"
-                          >
-                            <span className={cn("h-2 w-2 rounded-full", l.color)} />
-                            <span className="flex-1 truncate">{l.name}</span>
-                          </button>
-                        ))}
+                        {labels.map((l) => {
+                          const selected = emails.filter((e) => selectedIds.has(e.id));
+                          const allHave =
+                            selected.length > 0 && selected.every((e) => e.labels?.includes(l.name));
+                          const someHave = selected.some((e) => e.labels?.includes(l.name));
+                          return (
+                            <button
+                              key={l.name}
+                              onClick={() => assignLabelToSelection(l.name)}
+                              className="w-full text-left px-3 py-2 rounded-md text-sm hover:bg-muted flex items-center gap-2"
+                            >
+                              <span className={cn("h-2 w-2 rounded-full shrink-0", l.color)} />
+                              <span className="flex-1 truncate">{l.name}</span>
+                              {allHave ? (
+                                <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                              ) : someHave ? (
+                                <span className="h-3.5 w-3.5 shrink-0 flex items-center justify-center">
+                                  <span className="h-0.5 w-2 bg-muted-foreground rounded-full" />
+                                </span>
+                              ) : null}
+                            </button>
+                          );
+                        })}
                       </PopoverContent>
                     </Popover>
                     <div className="ml-auto flex items-center gap-2 text-xs">
@@ -1767,6 +1882,8 @@ export default function GmailInterface({
               onToggleStar={toggleStarOpen}
               onToggleImportant={toggleImportantOpen}
               onPrint={printOpen}
+              allLabels={labels}
+              onToggleLabel={toggleLabelOnOpen}
               inlineReply={
                 inlineMode ? (
                   <InlineReply
@@ -1821,6 +1938,25 @@ export default function GmailInterface({
         </button>
       )}
 
+      {/* Dialog "Crear contacto" abierto desde el autocomplete del
+       *  destinatario cuando el email/nombre escrito no existe. */}
+      <EditContactDialog
+        open={createContactOpen}
+        onOpenChange={setCreateContactOpen}
+        detail={null}
+        initialPrefill={createContactInitial}
+        onSaved={() => setContactsVersion((v) => v + 1)}
+        onCreated={(contact) => {
+          setContactsVersion((v) => v + 1);
+          /* Añade el email del contacto creado al campo destinatario. */
+          if (contact.email) {
+            const current = composeDraft.to.trim();
+            const next = current ? `${current}, ${contact.email}` : contact.email;
+            setComposeDraft({ ...composeDraft, to: next });
+          }
+        }}
+      />
+
       {/* Compose flotante */}
       {composeOpen && (
         <Compose
@@ -1831,6 +1967,15 @@ export default function GmailInterface({
           /* Si estamos en bandeja unificada, `account` es null → el
            * usuario tendrá que elegir una cuenta de envío. */
           defaultAccountId={account?.id ?? null}
+          prefilledAttachments={composeAttachments}
+          onRemovePrefilledAttachment={(idx) => {
+            setComposeAttachments((prev) => prev.filter((_, i) => i !== idx));
+          }}
+          contactSuggestions={contactSuggestions}
+          onCreateContact={(initial) => {
+            setCreateContactInitial(initial);
+            setCreateContactOpen(true);
+          }}
           onClose={() => {
             /* Al cerrar sin enviar: si hay contenido real, guardamos
              * como borrador para recuperar en la próxima sesión. */
@@ -1842,6 +1987,7 @@ export default function GmailInterface({
             }
             refreshPersistedDraft();
             setComposeOpen(false);
+            setComposeAttachments([]);
           }}
           onSend={(fromAccountId) => {
             if (!composeDraft.to.trim()) {
@@ -1862,12 +2008,14 @@ export default function GmailInterface({
             refreshPersistedDraft();
             toast.success("Mensaje enviado");
             setComposeOpen(false);
+            setComposeAttachments([]);
           }}
           onDiscard={() => {
             /* Botón Trash del footer: descarta definitivamente. */
             clearComposeDraft();
             refreshPersistedDraft();
             setComposeOpen(false);
+            setComposeAttachments([]);
             toast.info("Borrador descartado");
           }}
           signatures={signatures}
@@ -1896,6 +2044,8 @@ function EmailDetail({
   onToggleStar,
   onToggleImportant,
   onPrint,
+  allLabels,
+  onToggleLabel,
   inlineReply,
 }: {
   email: EmailItem;
@@ -1911,6 +2061,8 @@ function EmailDetail({
   onToggleStar: () => void;
   onToggleImportant: () => void;
   onPrint: () => void;
+  allLabels: Label[];
+  onToggleLabel: (labelName: string) => void;
   inlineReply?: React.ReactNode;
 }) {
   const inTrash = email.folder === "trash";
@@ -2032,16 +2184,64 @@ function EmailDetail({
 
       <div className="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-12 py-4 sm:py-6">
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-start gap-3 sm:gap-4 mb-4 sm:mb-6">
-            <h1 className="text-base sm:text-xl text-foreground flex-1 font-semibold">{email.subject}</h1>
-            {email.labels?.map((l) => (
-              <span
-                key={l}
-                className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20"
-              >
-                {l}
-              </span>
-            ))}
+          <div className="flex items-start gap-3 sm:gap-4 mb-4 sm:mb-6 flex-wrap">
+            <h1 className="text-base sm:text-xl text-foreground flex-1 min-w-0 font-semibold">
+              {email.subject}
+            </h1>
+            {email.labels?.map((labelName) => {
+              const meta = allLabels.find((l) => l.name === labelName);
+              return (
+                <span
+                  key={labelName}
+                  className="inline-flex items-center gap-1 h-6 pl-2 pr-1 rounded-full bg-primary/10 text-primary text-xs border border-primary/20"
+                >
+                  {meta && <span className={cn("h-1.5 w-1.5 rounded-full", meta.color)} />}
+                  <span>{labelName}</span>
+                  <button
+                    onClick={() => onToggleLabel(labelName)}
+                    title={`Quitar etiqueta "${labelName}"`}
+                    className="h-4 w-4 rounded-full hover:bg-primary/20 flex items-center justify-center"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              );
+            })}
+            {/* Añadir etiqueta desde el detalle */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  title="Etiquetar este email"
+                  className="h-6 w-6 rounded-full hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <TagIcon className="h-3.5 w-3.5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-60 p-1 rounded-2xl border-border shadow-soft-lg">
+                <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                  Etiquetas
+                </div>
+                {allLabels.length === 0 && (
+                  <p className="px-3 py-2 text-xs text-muted-foreground">
+                    Crea etiquetas desde el sidebar.
+                  </p>
+                )}
+                {allLabels.map((l) => {
+                  const active = email.labels?.includes(l.name);
+                  return (
+                    <button
+                      key={l.name}
+                      onClick={() => onToggleLabel(l.name)}
+                      className="w-full text-left px-3 py-2 rounded-md text-sm hover:bg-muted flex items-center gap-2"
+                    >
+                      <span className={cn("h-2 w-2 rounded-full shrink-0", l.color)} />
+                      <span className="flex-1 truncate">{l.name}</span>
+                      {active && <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="flex items-start gap-3 sm:gap-4 mb-4 sm:mb-6">
@@ -2158,6 +2358,10 @@ function Compose({
   activeSignatureId,
   onChangeSignature,
   onOpenSignatureManager,
+  prefilledAttachments,
+  onRemovePrefilledAttachment,
+  contactSuggestions,
+  onCreateContact,
 }: {
   mode: ComposeMode;
   draft: ComposeDraft;
@@ -2176,6 +2380,18 @@ function Compose({
   activeSignatureId: string | null;
   onChangeSignature: (id: string | null) => void;
   onOpenSignatureManager: () => void;
+  /** Adjuntos pre-cargados desde otra pantalla (ej. Documentos del
+   *  contacto). Vienen como dataURLs ya leídos, no como `File`. */
+  prefilledAttachments?: { name: string; size: number; dataUrl: string }[];
+  onRemovePrefilledAttachment?: (idx: number) => void;
+  /** Catálogo de contactos del workspace para el autocomplete del
+   *  campo "Para". */
+  contactSuggestions?: { id: string; name: string; email?: string; flag?: string }[];
+  /** Callback cuando el usuario escribe un email/nombre que NO existe
+   *  en `contactSuggestions` y pulsa "Crear contacto". El padre debe
+   *  abrir el dialog de crear contacto pre-rellenado y, al guardar,
+   *  añadir el email del nuevo contacto al draft. */
+  onCreateContact?: (initial: { email?: string; name?: string }) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -2453,21 +2669,21 @@ function Compose({
             </span>
           );
         })}
-        <input
+        <RecipientAutocomplete
           value={recipientDraft}
-          onChange={(e) => setRecipientDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === "," || e.key === "Tab") {
-              e.preventDefault();
-              addRecipient();
+          onChange={setRecipientDraft}
+          recipientList={recipientList}
+          onAdd={addRecipient}
+          onRemoveLast={() => removeRecipient(recipientList[recipientList.length - 1])}
+          onPickContact={(email) => {
+            if (!recipientList.includes(email)) {
+              const next = [...recipientList, email].join(", ");
+              onChange({ ...draft, to: next });
             }
-            if (e.key === "Backspace" && !recipientDraft && recipientList.length > 0) {
-              removeRecipient(recipientList[recipientList.length - 1]);
-            }
+            setRecipientDraft("");
           }}
-          onBlur={() => recipientDraft && addRecipient()}
-          placeholder={recipientList.length === 0 ? "Añadir destinatarios" : ""}
-          className="flex-1 min-w-[120px] bg-transparent outline-none text-xs h-6 placeholder:text-muted-foreground"
+          contactSuggestions={contactSuggestions ?? []}
+          onCreateContact={onCreateContact}
         />
       </div>
 
@@ -2564,11 +2780,33 @@ function Compose({
         </div>
       </div>
 
-      {files.length > 0 && (
+      {(files.length > 0 || (prefilledAttachments?.length ?? 0) > 0) && (
         <div className="px-4 py-2 border-t border-border flex flex-wrap gap-2 max-h-28 overflow-y-auto">
+          {/* Adjuntos precargados (desde Documentos del contacto) — chip
+           *  con borde verde sutil para diferenciar del file picker normal. */}
+          {prefilledAttachments?.map((a, i) => (
+            <div
+              key={`pre-${i}`}
+              className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 rounded-full pl-3 pr-1 py-1 text-xs"
+              title="Adjunto cargado desde Documentos"
+            >
+              <Paperclip className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
+              <span className="truncate max-w-[180px] text-foreground">{a.name}</span>
+              <span className="text-muted-foreground tnum">{formatSize(a.size)}</span>
+              {onRemovePrefilledAttachment && (
+                <button
+                  onClick={() => onRemovePrefilledAttachment(i)}
+                  className="h-5 w-5 rounded-full hover:bg-background flex items-center justify-center"
+                  aria-label="Quitar adjunto"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          ))}
           {files.map((f, i) => (
             <div
-              key={i}
+              key={`file-${i}`}
               className="flex items-center gap-2 bg-muted rounded-full pl-3 pr-1 py-1 text-xs"
             >
               <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
@@ -2748,6 +2986,173 @@ function Compose({
         </Button>
       </div>
         </>
+      )}
+    </div>
+  );
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   RecipientAutocomplete · input + dropdown de contactos del workspace
+   ══════════════════════════════════════════════════════════════════ */
+
+function RecipientAutocomplete({
+  value, onChange, recipientList, onAdd, onRemoveLast, onPickContact,
+  contactSuggestions, onCreateContact,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  recipientList: string[];
+  onAdd: () => void;
+  onRemoveLast: () => void;
+  onPickContact: (email: string) => void;
+  contactSuggestions: { id: string; name: string; email?: string; flag?: string }[];
+  onCreateContact?: (initial: { email?: string; name?: string }) => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  /* Cerrar dropdown si se hace click fuera. */
+  useEffect(() => {
+    if (!focused) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) setFocused(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [focused]);
+
+  const query = value.trim().toLowerCase();
+  const isEmailFormat = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(query);
+
+  const matches = useMemo(() => {
+    if (!query) return [];
+    return contactSuggestions
+      .filter((c) =>
+        c.name.toLowerCase().includes(query) ||
+        (c.email?.toLowerCase().includes(query) ?? false),
+      )
+      .filter((c) => !!c.email && !recipientList.includes(c.email))
+      .slice(0, 8);
+  }, [query, contactSuggestions, recipientList]);
+
+  /* ¿Hay match exacto por email? Si no y el query parece email, ofrecer
+   * "Crear contacto". */
+  const exactByEmail = query && contactSuggestions.some((c) => c.email?.toLowerCase() === query);
+  const showCreate = !!onCreateContact && query.length > 0 && !exactByEmail && matches.length === 0;
+
+  const dropdownOpen = focused && query.length > 0 && (matches.length > 0 || showCreate);
+
+  /* Total de items navegables (matches + create). */
+  const totalItems = matches.length + (showCreate ? 1 : 0);
+
+  useEffect(() => {
+    if (highlight >= totalItems) setHighlight(0);
+  }, [totalItems, highlight]);
+
+  const pickItem = (idx: number) => {
+    if (idx < matches.length) {
+      const c = matches[idx];
+      if (c.email) onPickContact(c.email);
+    } else if (showCreate && onCreateContact) {
+      onCreateContact(isEmailFormat ? { email: query } : { name: query });
+      onChange("");
+      setFocused(false);
+    }
+  };
+
+  return (
+    <div ref={containerRef} className="relative flex-1 min-w-[120px]">
+      <input
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setFocused(true); setHighlight(0); }}
+        onFocus={() => setFocused(true)}
+        onKeyDown={(e) => {
+          if (dropdownOpen) {
+            if (e.key === "ArrowDown") { e.preventDefault(); setHighlight((h) => (h + 1) % totalItems); return; }
+            if (e.key === "ArrowUp") { e.preventDefault(); setHighlight((h) => (h - 1 + totalItems) % totalItems); return; }
+            if (e.key === "Enter" || e.key === "Tab") {
+              e.preventDefault();
+              pickItem(highlight);
+              return;
+            }
+            if (e.key === "Escape") { setFocused(false); return; }
+          } else {
+            if (e.key === "Enter" || e.key === "," || e.key === "Tab") {
+              e.preventDefault();
+              onAdd();
+            }
+          }
+          if (e.key === "Backspace" && !value && recipientList.length > 0) {
+            onRemoveLast();
+          }
+        }}
+        onBlur={() => {
+          /* Pequeño delay para permitir click en el dropdown. */
+          setTimeout(() => setFocused(false), 150);
+          if (value && !dropdownOpen) onAdd();
+        }}
+        placeholder={recipientList.length === 0 ? "Buscar contacto o escribir email…" : ""}
+        className="w-full bg-transparent outline-none text-xs h-6 placeholder:text-muted-foreground"
+      />
+
+      {dropdownOpen && (
+        <div className="absolute left-0 top-full mt-1.5 w-[320px] max-w-[90vw] bg-card border border-border rounded-xl shadow-soft-lg overflow-hidden z-50">
+          {matches.length > 0 && (
+            <div className="py-1 max-h-[260px] overflow-y-auto">
+              {matches.map((c, i) => {
+                const initials = c.name.split(" ").filter(Boolean).slice(0, 2)
+                  .map((w) => w[0]).join("").toUpperCase();
+                const active = i === highlight;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => pickItem(i)}
+                    onMouseEnter={() => setHighlight(i)}
+                    className={cn(
+                      "w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors",
+                      active ? "bg-muted" : "hover:bg-muted/40",
+                    )}
+                  >
+                    <div className="h-7 w-7 rounded-full bg-foreground/10 grid place-items-center text-foreground font-semibold text-[10px] shrink-0">
+                      {c.flag ? <span className="text-base leading-none">{c.flag}</span> : initials}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground truncate">{c.name}</p>
+                      <p className="text-[10.5px] text-muted-foreground truncate">{c.email}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {showCreate && (
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => pickItem(matches.length)}
+              onMouseEnter={() => setHighlight(matches.length)}
+              className={cn(
+                "w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors border-t border-border/60",
+                highlight === matches.length ? "bg-foreground/5" : "hover:bg-muted/40",
+              )}
+            >
+              <div className="h-7 w-7 rounded-full bg-foreground text-background grid place-items-center shrink-0">
+                <Pencil className="h-3 w-3" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-foreground">
+                  Crear contacto {isEmailFormat ? "con este email" : "nuevo"}
+                </p>
+                <p className="text-[10.5px] text-muted-foreground truncate">{value}</p>
+              </div>
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

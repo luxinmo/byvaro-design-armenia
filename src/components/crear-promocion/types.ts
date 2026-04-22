@@ -186,6 +186,10 @@ export interface UnitData {
   deliveryYearOverride?: string;
   /** Solo si el promotor quiere cambiar la certificación en una unidad concreta. */
   energyCertOverride?: string;
+  /** Fase de obra por unidad · solo tiene sentido en unifamiliar. */
+  faseConstruccionOverride?: FaseConstruccion;
+  /** URLs de planos subidos específicos de la unidad (múltiples docs). */
+  planoUrls?: string[];
   /* ── Operación comercial (se rellenan al reservar/vender) ── */
   clientName?: string;
   agencyName?: string;
@@ -308,6 +312,16 @@ export interface WizardState {
   // Aval bancario (Ley 38/1999) — garantía sobre cantidades anticipadas.
   avalBancario: boolean;
   avalEntidad: string; // nombre del banco emisor (opcional)
+  // Contactos públicos (aparecen en microsite y en ficha pública).
+  contactoWeb: string;
+  contactoTelefono: string;
+  contactoEmail: string;
+  // Documentos subidos (URLs · sustituir por objetos al tener backend).
+  documentosMemoria: string[];
+  documentosPlanos: string[];
+  documentosBrochure: string[];
+  // Override manual del % de obra (si el promotor lo ajusta en la ficha).
+  constructionProgressOverride?: number;
 }
 
 export const defaultWizardState: WizardState = {
@@ -390,4 +404,10 @@ export const defaultWizardState: WizardState = {
   validezReserva: 30,
   avalBancario: false,
   avalEntidad: "",
+  contactoWeb: "",
+  contactoTelefono: "",
+  contactoEmail: "",
+  documentosMemoria: [],
+  documentosPlanos: [],
+  documentosBrochure: [],
 };

@@ -80,17 +80,18 @@ export function DescripcionStep({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* ─── Tabs de idioma ─── */}
+      {/* ─── Cabecera con ambos botones siempre visibles ─── */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="inline-flex items-center gap-2">
           <Languages className="h-4 w-4 text-primary" strokeWidth={1.5} />
           <p className="text-xs font-semibold text-foreground">Descripción</p>
         </div>
-        {isES ? (
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={handleGenerate}
             disabled={generating}
+            title="Genera la descripción en español a partir de ubicación, amenities y tipología"
             className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full border border-border bg-card text-xs font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-60"
           >
             {generating ? (
@@ -98,23 +99,23 @@ export function DescripcionStep({
             ) : (
               <Sparkles className="h-3 w-3 text-primary" strokeWidth={1.5} />
             )}
-            {generating ? "Generando…" : hasBase ? "Regenerar con IA" : "Generar con IA"}
+            {generating ? "Generando…" : hasBase ? "Regenerar" : "Generar con IA"}
           </button>
-        ) : (
           <button
             type="button"
             onClick={handleTranslateAll}
             disabled={!hasBase || translating}
+            title={hasBase ? "Traduce el texto español a los 7 idiomas disponibles" : "Escribe primero la descripción en español"}
             className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full border border-border bg-card text-xs font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-60"
           >
             {translating ? (
               <Loader2 className="h-3 w-3 animate-spin" strokeWidth={1.5} />
             ) : (
-              <Sparkles className="h-3 w-3 text-primary" strokeWidth={1.5} />
+              <Languages className="h-3 w-3 text-primary" strokeWidth={1.5} />
             )}
-            {translating ? "Traduciendo…" : "Traducir todo desde ES"}
+            {translating ? "Traduciendo…" : "Traducir todo"}
           </button>
-        )}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-1.5">

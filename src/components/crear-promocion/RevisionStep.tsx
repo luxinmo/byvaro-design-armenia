@@ -19,7 +19,7 @@
 
 import {
   CheckCircle2, AlertCircle, Pencil, Home, Building2, Users, Banknote,
-  Image as ImageIcon, FileText, MapPin, Globe, AlertTriangle, ArrowRight,
+  Image as ImageIcon, FileText, MapPin, Globe, AlertTriangle, ArrowRight, Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -151,7 +151,9 @@ export function RevisionStep({ state, onEditStep }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ═════ Banner de requisitos (bloquea publicación) ═════ */}
+      {/* ═════ Banner de requisitos (bloquea publicación) ═════
+            La checklist completa de publicación vive en la sidebar
+            (PhaseTimeline) — aquí sólo mostramos aviso compacto. */}
       {missing.length > 0 ? (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-5 py-4">
           <div className="flex items-start gap-3">
@@ -161,27 +163,8 @@ export function RevisionStep({ state, onEditStep }: Props) {
                 Faltan {missing.length} requisito{missing.length > 1 ? "s" : ""} para publicar
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                No podrás pulsar "Publicar" hasta completarlos. Haz clic en cada uno para ir al paso correspondiente.
+                Revisa la checklist lateral para completarlos. El botón "Publicar" se habilitará cuando estén todos resueltos.
               </p>
-              <ul className="mt-3 flex flex-col gap-1.5">
-                {missing.map((m) => (
-                  <li key={m.key}>
-                    <button
-                      type="button"
-                      onClick={() => m.jumpTo && onEditStep(m.jumpTo)}
-                      className="w-full inline-flex items-center justify-between gap-2 rounded-lg bg-card border border-amber-500/20 hover:border-amber-500/40 px-3 py-2 text-left transition-colors group"
-                    >
-                      <span className="inline-flex items-center gap-2 text-xs text-foreground">
-                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
-                        {m.label}
-                      </span>
-                      {m.jumpTo && (
-                        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
             </div>
           </div>
         </div>
@@ -191,7 +174,7 @@ export function RevisionStep({ state, onEditStep }: Props) {
           <div>
             <p className="text-sm font-semibold text-foreground">Todo listo para publicar</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Cumples los 7 requisitos. Pulsa <span className="font-medium text-foreground">Publicar</span> abajo a la derecha para lanzar la promoción.
+              Cumples los requisitos. Pulsa <span className="font-medium text-foreground">Publicar</span> abajo a la derecha para lanzar la promoción.
             </p>
           </div>
         </div>

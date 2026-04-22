@@ -1,7 +1,30 @@
+/**
+ * Agency · vista del promotor sobre una agencia colaboradora.
+ *
+ * ⚠️ TODO(backend): en producción este tipo NO debe ser una tabla plana.
+ * Es el resultado de un JOIN entre:
+ *   - `Empresa` (tenant de la agencia) → name, logo, cover, location, type,
+ *     teamSize, mercados, googleRating, offices[], etc.
+ *   - `Collaboration` (relación promotor↔agencia) → estadoColaboracion,
+ *     origen, contractSignedAt, contractExpiresAt, comisionMedia,
+ *     ventasCerradas, registrosAportados, salesVolume, visitsCount,
+ *     solicitudPendiente, incidencias, ratingPromotor.
+ *
+ * Ver `docs/backend-integration.md` §0 y §4 para el contrato completo.
+ * Cuando se conecte backend: los campos públicos (logo, cover, name, …)
+ * deben venir del Empresa del tenant de la agencia — no duplicados aquí.
+ */
 export type Agency = {
   id: string;
   name: string;
+  /** Logo cuadrado/circular (iconmark · avatar). Usado en listados,
+   *  chips, avatar-stacks. Recomendado ≥256×256 cuadrado.
+   *  TODO(backend): debe venir de `Empresa.logoUrl` del tenant agencia. */
   logo?: string;
+  /** Logo rectangular tipo wordmark. Usado en headers de ficha, firma
+   *  de email, portadas. Recomendado ~250×100 o 125×60 (2:1). Mapea al
+   *  `empresa.logoRect` cuando la agencia sincroniza su perfil. */
+  logoRect?: string;
   cover?: string;
   location: string;
   type: "Agency" | "Broker" | "Network";
@@ -39,13 +62,74 @@ export type Agency = {
   solicitudPendiente?: boolean;
   /** Mensaje opcional que la agencia envió al solicitar colaboración. */
   mensajeSolicitud?: string;
+
+  /* ─── Contrato firmado con el promotor ─── */
+  /** Fecha de firma del contrato (ISO yyyy-mm-dd). */
+  contractSignedAt?: string;
+  /** Fecha de caducidad del contrato (ISO yyyy-mm-dd). Null/undefined =
+   *  sin caducidad. Para renderizar indicadores "vigente / a punto
+   *  de expirar / expirado" usar `getContractStatus()`. */
+  contractExpiresAt?: string;
+  /** URL al PDF del contrato (opcional · GET /api/contratos/:id). */
+  contractDocUrl?: string;
+
+  /* ─── Señales comerciales avanzadas (V3) ─── */
+  /** Códigos ISO de los mercados/nacionalidades que atiende la agencia.
+   *  Ej. ["GB", "NL", "SE"]. Usado para filtrar qué promos encajan. */
+  mercados?: string[];
+  /** Tasa de conversión registros → ventas, 0-100. Calculado en backend. */
+  conversionRate?: number;
+  /** Ticket medio de venta en EUR (salesVolume / ventasCerradas). */
+  ticketMedio?: number;
+  /** Última fecha con registro/venta/login (ISO yyyy-mm-dd). Usado para
+   *  mostrar "activa hoy" / "sin actividad hace 45 días" (freshness). */
+  lastActivityAt?: string;
+  /** Nº de agentes que tiene la agencia. */
+  teamSize?: number;
+  /** Especialidad comercial. */
+  especialidad?: "luxury" | "residential" | "commercial" | "tourist" | "second-home";
+  /** Rating subjetivo del promotor sobre esta agencia (1-5). */
+  ratingPromotor?: number;
+  /** Persona de contacto principal en la agencia. */
+  contactoPrincipal?: { nombre: string; rol?: string; email: string; telefono?: string };
+  /** Incidencias acumuladas — banderas de alerta. */
+  incidencias?: { duplicados: number; cancelaciones: number; reclamaciones: number };
+
+  /* ─── Rating público de Google Business (Places API) ─── */
+  /** place_id de Google Places API (backend lo resuelve en alta). */
+  googlePlaceId?: string;
+  /** Rating público 0-5 (cacheado, refrescado semanalmente por backend). */
+  googleRating?: number;
+  /** Nº de reseñas en Google Business. */
+  googleRatingsTotal?: number;
+  /** ISO date del último refresco (ToS: ≤30 días). */
+  googleFetchedAt?: string;
+  /** URL pública de la ficha de Maps. */
+  googleMapsUrl?: string;
 };
+
+/** Calcula el estado del contrato respecto a una fecha de referencia (hoy
+ *  por defecto). Se considera "por-expirar" si quedan ≤30 días.  */
+export function getContractStatus(
+  a: Agency,
+  refDate: Date = new Date(),
+): { state: "vigente" | "por-expirar" | "expirado" | "sin-contrato"; daysLeft?: number } {
+  if (!a.contractExpiresAt) {
+    return a.contractSignedAt ? { state: "vigente" } : { state: "sin-contrato" };
+  }
+  const expires = new Date(a.contractExpiresAt);
+  const diffMs = expires.getTime() - refDate.getTime();
+  const daysLeft = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+  if (daysLeft < 0) return { state: "expirado", daysLeft };
+  if (daysLeft <= 30) return { state: "por-expirar", daysLeft };
+  return { state: "vigente", daysLeft };
+}
 
 export const agencies: Agency[] = [
   {
     id: "ag-1",
     name: "Prime Properties Costa del Sol",
-    logo: "https://ui-avatars.com/api/?name=PP&background=3b82f6&color=fff&size=120&font-size=0.4&bold=true",
+    logo: "https://api.dicebear.com/9.x/shapes/svg?seed=prime-properties&backgroundColor=3b82f6&size=120",
     cover: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=600&h=200&fit=crop",
     location: "Marbella, Spain",
     type: "Agency",
@@ -66,11 +150,31 @@ export const agencies: Agency[] = [
     registrosAportados: 38,
     ventasCerradas: 6,
     comisionMedia: 4,
+    logoRect: "https://placehold.co/250x100/3b82f6/ffffff?text=Prime+Properties&font=inter",
+    contractSignedAt: "2025-03-01",
+    contractExpiresAt: "2027-03-01",
+    mercados: ["GB", "IE", "NL", "SE", "FI"],
+    conversionRate: 16,
+    ticketMedio: 392000,
+    lastActivityAt: "2026-04-20",
+    teamSize: 12,
+    especialidad: "luxury",
+    ratingPromotor: 5,
+    contactoPrincipal: {
+      nombre: "Laura Sánchez", rol: "Sales Manager",
+      email: "laura@primeproperties.com", telefono: "+34 612 345 678",
+    },
+    incidencias: { duplicados: 0, cancelaciones: 0, reclamaciones: 0 },
+    googlePlaceId: "ChIJDEMO_PrimeProperties",
+    googleRating: 4.8,
+    googleRatingsTotal: 247,
+    googleFetchedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    googleMapsUrl: "https://maps.app.goo.gl/DEMO_Prime",
   },
   {
     id: "ag-2",
     name: "Nordic Home Finders",
-    logo: "https://ui-avatars.com/api/?name=NH&background=10b981&color=fff&size=120&font-size=0.4&bold=true",
+    logo: "https://api.dicebear.com/9.x/shapes/svg?seed=nordic-home&backgroundColor=10b981&size=120",
     cover: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&h=200&fit=crop",
     location: "Stockholm, Sweden",
     type: "Broker",
@@ -90,11 +194,31 @@ export const agencies: Agency[] = [
     registrosAportados: 62,
     ventasCerradas: 11,
     comisionMedia: 5,
+    logoRect: "https://placehold.co/250x100/10b981/ffffff?text=Nordic+Home+Finders&font=inter",
+    contractSignedAt: "2025-01-15",
+    contractExpiresAt: "2026-05-15",
+    mercados: ["SE", "NO", "DK", "FI", "IS"],
+    conversionRate: 18,
+    ticketMedio: 375000,
+    lastActivityAt: "2026-04-22",
+    teamSize: 8,
+    especialidad: "second-home",
+    ratingPromotor: 5,
+    contactoPrincipal: {
+      nombre: "Erik Lindqvist", rol: "Partner",
+      email: "erik@nordichomefinders.com", telefono: "+46 70 123 4567",
+    },
+    incidencias: { duplicados: 1, cancelaciones: 0, reclamaciones: 0 },
+    googlePlaceId: "ChIJDEMO_Nordic",
+    googleRating: 4.6,
+    googleRatingsTotal: 183,
+    googleFetchedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    googleMapsUrl: "https://maps.app.goo.gl/DEMO_Nordic",
   },
   {
     id: "ag-3",
     name: "Dutch & Belgian Realty",
-    logo: "https://ui-avatars.com/api/?name=DB&background=f59e0b&color=fff&size=120&font-size=0.4&bold=true",
+    logo: "https://api.dicebear.com/9.x/shapes/svg?seed=dutch-belgian&backgroundColor=f59e0b&size=120",
     cover: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600&h=200&fit=crop",
     location: "Amsterdam, Netherlands",
     type: "Network",
@@ -116,11 +240,31 @@ export const agencies: Agency[] = [
     registrosAportados: 21,
     ventasCerradas: 3,
     comisionMedia: 4.5,
+    logoRect: "https://placehold.co/250x100/f59e0b/ffffff?text=Dutch+%26+Belgian+Realty&font=inter",
+    contractSignedAt: "2026-02-01",
+    contractExpiresAt: "2027-02-01",
+    mercados: ["NL", "BE", "LU"],
+    conversionRate: 14,
+    ticketMedio: 297000,
+    lastActivityAt: "2026-04-10",
+    teamSize: 15,
+    especialidad: "second-home",
+    ratingPromotor: 4,
+    contactoPrincipal: {
+      nombre: "Pieter De Vries", rol: "Director",
+      email: "pieter@dutchbelgianrealty.com", telefono: "+31 20 555 1234",
+    },
+    incidencias: { duplicados: 0, cancelaciones: 0, reclamaciones: 0 },
+    googlePlaceId: "ChIJDEMO_DutchBelgian",
+    googleRating: 4.3,
+    googleRatingsTotal: 92,
+    googleFetchedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+    googleMapsUrl: "https://maps.app.goo.gl/DEMO_Dutch",
   },
   {
     id: "ag-4",
     name: "Meridian Real Estate Group",
-    logo: "https://ui-avatars.com/api/?name=MR&background=ef4444&color=fff&size=120&font-size=0.4&bold=true",
+    logo: "https://api.dicebear.com/9.x/shapes/svg?seed=meridian-group&backgroundColor=ef4444&size=120",
     cover: "https://images.unsplash.com/photo-1464938050520-ef2571e0d6d2?w=600&h=200&fit=crop",
     location: "London, UK",
     type: "Agency",
@@ -140,11 +284,31 @@ export const agencies: Agency[] = [
     registrosAportados: 12,
     ventasCerradas: 1,
     comisionMedia: 3,
+    logoRect: "https://placehold.co/250x100/ef4444/ffffff?text=Meridian+Real+Estate&font=inter",
+    contractSignedAt: "2024-06-10",
+    contractExpiresAt: "2026-02-10",
+    mercados: ["GB", "IE"],
+    conversionRate: 8,
+    ticketMedio: 620000,
+    lastActivityAt: "2026-02-05",
+    teamSize: 5,
+    especialidad: "residential",
+    ratingPromotor: 2,
+    contactoPrincipal: {
+      nombre: "James Whitfield", rol: "Broker",
+      email: "james@meridianrealestate.co.uk", telefono: "+44 20 7946 0018",
+    },
+    incidencias: { duplicados: 2, cancelaciones: 1, reclamaciones: 1 },
+    googlePlaceId: "ChIJDEMO_Meridian",
+    googleRating: 3.4,
+    googleRatingsTotal: 56,
+    googleFetchedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    googleMapsUrl: "https://maps.app.goo.gl/DEMO_Meridian",
   },
   {
     id: "ag-5",
     name: "Iberia Luxury Homes",
-    logo: "https://ui-avatars.com/api/?name=IL&background=8b5cf6&color=fff&size=120&font-size=0.4&bold=true",
+    logo: "https://api.dicebear.com/9.x/shapes/svg?seed=iberia-luxury&backgroundColor=8b5cf6&size=120",
     cover: "https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?w=600&h=200&fit=crop",
     location: "Lisbon, Portugal",
     type: "Agency",

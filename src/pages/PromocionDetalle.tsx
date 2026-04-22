@@ -1,8 +1,16 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { getDraft, saveDraft as persistDraft, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
+import type { WizardState, FotoItem, FotoCategoria } from "@/components/crear-promocion/types";
+import { faseConstruccionOptions } from "@/components/crear-promocion/options";
+import { unitDataToUnit, mergeUnitIntoUnitData } from "@/lib/unitDataAdapter";
+import type { Unit } from "@/data/units";
 import { promotions, getBuildingTypeLabel } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion, type Comercial, type ComercialPermissions } from "@/data/developerPromotions";
 import { agencies, type Agency } from "@/data/agencies";
+import { FeatureCardV3 } from "@/pages/Colaboradores";
+import ColaboradoresEstadisticas from "@/pages/ColaboradoresEstadisticas";
 import {
   ArrowLeft, Pencil, Share2, Users, AlertTriangle, CheckCircle2,
   MapPin, Calendar, Euro, Home, Banknote, TrendingUp, Camera,
@@ -12,7 +20,7 @@ import {
   Plus, Phone, Mail, MessageCircle, Store, UserPlus,
   Check, X, ExternalLink, Zap, Star, Search, ChevronDown, Info,
   Lock, Unlock, FolderOpen, Folder, Download, BookOpen, Upload, MoreHorizontal, FilePlus, ArrowRight,
-  Trophy, Sparkles, ArrowUpRight, FileCheck2, Rocket,
+  Trophy, Sparkles, ArrowUpRight, FileCheck2, Rocket, BarChart3,
 } from "lucide-react";
 import { getMissingForPromotion } from "@/lib/publicationRequirements"; // fuente única de verdad de requisitos para publicar
 import { Button } from "@/components/ui/button";
@@ -22,7 +30,7 @@ import { Tag } from "@/components/ui/Tag";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { PromotionAvailabilitySummary } from "@/components/promotions/detail/PromotionAvailabilitySummary";
@@ -30,7 +38,9 @@ import { PromotionAvailabilityFull } from "@/components/promotions/detail/Promot
 import { unitsByPromotion } from "@/data/units";
 import { ClientRegistrationDialog } from "@/components/promotions/detail/ClientRegistrationDialog";
 import { PromotionRecords } from "@/components/promotions/detail/PromotionRecords";
-import { PromotionAgenciesV2 } from "@/components/promotions/detail/PromotionAgenciesV2"; // diseño alternativo del tab Agencias (cards + red por nacionalidad)
+import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
+import { ImageLightbox } from "@/components/promotions/detail/ImageLightbox";
+import { ActivateSharingDialog } from "@/components/promotions/ActivateSharingDialog";
 import {
   EditMultimediaDialog, EditBasicInfoDialog, EditStructureDialog,
   EditDescriptionDialog, EditLocationDialog, EditPaymentPlanDialog,
@@ -62,10 +72,19 @@ const stepConfig: Record<string, { icon: typeof Camera; label: string; descripti
   "Payment plan": { icon: CreditCard, label: "Plan de pagos", description: "Estructura de pagos del comprador", wizardStep: "plan_pagos" },
 };
 
-function getWizardUrl(step?: string, returnTo?: string) {
-  const ws = step ? stepConfig[step]?.wizardStep : undefined;
-  const base = ws ? `/create-promotion?step=${ws}` : "/create-promotion";
-  return returnTo ? `${base}&returnTo=${encodeURIComponent(returnTo)}` : base;
+/** Construye la URL al wizard. Acepta tanto stepName ("Basic info")
+ *  como wizardStep id directo ("info_basica"). Para borradores añade
+ *  ?draft=<id> para que el wizard cargue ese borrador concreto. */
+function getWizardUrl(step?: string, returnTo?: string, draftId?: string | null) {
+  const ws = step
+    ? (stepConfig[step]?.wizardStep ?? step) // acepta ambos
+    : undefined;
+  const params = new URLSearchParams();
+  if (ws) params.set("step", ws);
+  if (draftId) params.set("draft", draftId);
+  if (returnTo) params.set("returnTo", returnTo);
+  const qs = params.toString();
+  return qs ? `/crear-promocion?${qs}` : "/crear-promocion";
 }
 
 function statusConfig(status: string) {
@@ -108,11 +127,8 @@ const contacts = [
 export default function DeveloperPromotionDetail({ agentMode = false }: { agentMode?: boolean } = {}) {
   const { id } = useParams();
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [activeTab, setActiveTab] = useState(0);
-  // Toggle entre dos diseños del tab Agencias:
-  //  · "v1-lista" = tabla tradicional (AgenciesTab interna en este mismo archivo)
-  //  · "v2-red"   = cards por agencia + chips por nacionalidad (PromotionAgenciesV2)
-  const [agenciesView, setAgenciesView] = useState<"v1-lista" | "v2-red">("v2-red");
   const [_availabilityVersion, _setAvailabilityVersion] = useState<"v1" | "v2">("v2");
   const [viewAsCollaborator, setViewAsCollaborator] = useState(agentMode);
   // FAB móvil — abre un menú con las acciones principales de la ficha.
@@ -156,11 +172,104 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const [registerClientOpen, setRegisterClientOpen] = useState(false);
   const [sendEmailOpen, setSendEmailOpen] = useState(false);
   const [priceListOpen, setPriceListOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [activateSharingOpen, setActivateSharingOpen] = useState(false);
+  /** El brochure puede eliminarse desde su card. Al eliminarlo, la sección
+   *  se oculta y la acción rápida "Brochure" queda deshabilitada. */
+  const [brochureRemoved, setBrochureRemoved] = useState(false);
+  /** Overlay fullscreen con las estadísticas de agencias de esta promoción
+   *  (ColaboradoresEstadisticas con `lockedPromotionId`). Se abre desde
+   *  el tab Agencias y se cierra con X. */
+  const [statsOverlayOpen, setStatsOverlayOpen] = useState(false);
+  /** Override local de canShareWithAgencies cuando el promotor activa
+   *  compartir desde la tab Comisiones. null = usar el valor del dataset. */
+  const [canShareOverride, setCanShareOverride] = useState<boolean | null>(null);
   // Edit dialogs
   const [editOpen, setEditOpen] = useState<null | "multimedia" | "basicInfo" | "structure" | "description" | "location" | "paymentPlan" | "showHouse" | "memoria" | "planos" | "brochure" | "contacts" | "inventory" | "salesOffices">(null);
   const [salesOffices, setSalesOffices] = useState<SalesOffice[]>([]);
 
+  // Si el id pertenece a un borrador (localStorage), lo gestionamos en
+  // modo reactivo: mantenemos el WizardState en estado local y cada
+  // vez que cambia persistimos + recomputamos el shape DevPromotion.
+  const isDraft = !!id && id.startsWith(DRAFT_ID_PREFIX);
+  const rawDraftId = isDraft && id ? id.slice(DRAFT_ID_PREFIX.length) : null;
+
+  const [draftState, setDraftState] = useState<WizardState | null>(() => {
+    if (!rawDraftId) return null;
+    return getDraft(rawDraftId)?.state ?? null;
+  });
+
+  // Timestamp de la última edición local · permite ignorar eventos
+  // `storage` antiguos (si otra pestaña tiene una versión anterior).
+  const lastLocalEditRef = useRef<number>(0);
+
+  // Sync entre pestañas · si otra ventana edita el mismo borrador o lo
+  // borra, recargamos — excepto si nuestra versión local es más nueva
+  // (race: otra pestaña guardó antes que nosotros pero con cambios más
+  // viejos). En ese caso re-persistimos para imponer el estado local.
+  useEffect(() => {
+    if (!rawDraftId) return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== "byvaro-promotion-drafts") return;
+      const latest = getDraft(rawDraftId);
+      if (!latest) {
+        setDraftState(null);
+        return;
+      }
+      // Si nuestra última edición local es posterior al updatedAt del
+      // storage, volvemos a guardar para no perder cambios.
+      if (lastLocalEditRef.current > latest.updatedAt) {
+        if (draftState) persistDraft(draftState, rawDraftId);
+        return;
+      }
+      setDraftState(latest.state);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [rawDraftId, draftState]);
+
+  // Autosave al localStorage · debounced a 400ms para no escribir en cada
+  // tecleo de textareas/inputs.
+  const saveTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!rawDraftId || !draftState) return;
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = window.setTimeout(() => {
+      persistDraft(draftState, rawDraftId);
+    }, 400);
+    return () => {
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    };
+  }, [draftState, rawDraftId]);
+
+  const draftData = useMemo((): DevPromotion | null => {
+    if (!rawDraftId || !draftState) return null;
+    const d: PromotionDraft = {
+      id: rawDraftId,
+      name: draftState.nombrePromocion?.trim() || "Promoción sin nombre",
+      updatedAt: Date.now(),
+      progress: 0,
+      state: draftState,
+    };
+    return draftToPromotionData(d) as DevPromotion;
+  }, [rawDraftId, draftState]);
+
+  /** Aplica un patch al WizardState del borrador. Todos los Edit*Dialog
+   *  lo usan para persistir cambios desde la ficha. */
+  const patchDraft = (patch: Partial<WizardState>) => {
+    lastLocalEditRef.current = Date.now();
+    setDraftState((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
+
+  /* Units para la Disponibilidad en modo controlado · memoizado para
+     no recalcular el array completo en cada render de la ficha. */
+  const draftUnitsForView = useMemo<Unit[] | null>(() => {
+    if (!isDraft || !draftState) return null;
+    return draftState.unidades.map((u) => unitDataToUnit(u, id ?? ""));
+  }, [isDraft, draftState, id]);
+
   const allPromotions: DevPromotion[] = [
+    ...(draftData ? [draftData] : []),
     ...developerOnlyPromotions,
     ...promotions.map(p => ({ ...p } as DevPromotion)),
   ];
@@ -173,11 +282,21 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   }
 
   if (!p) {
+    // Mensaje contextual: si el id era un borrador, probablemente se
+    // descartó desde otra pestaña o se publicó mientras tanto.
+    const wasDraft = isDraft;
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-center space-y-3">
-          <p className="text-lg font-semibold text-foreground">Promoción no encontrada</p>
-          <Button variant="outline" onClick={() => navigate("/developer-promotions")}>
+        <div className="text-center space-y-3 max-w-md px-4">
+          <p className="text-lg font-semibold text-foreground">
+            {wasDraft ? "Borrador no encontrado" : "Promoción no encontrada"}
+          </p>
+          {wasDraft && (
+            <p className="text-sm text-muted-foreground">
+              Este borrador ya no existe. Puede que se haya descartado, publicado o eliminado desde otra pestaña.
+            </p>
+          )}
+          <Button variant="outline" onClick={() => navigate("/promociones")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Volver a promociones
           </Button>
@@ -189,9 +308,160 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   // Requisitos mínimos para publicar (fotos, unidades, plan pagos, ubicación,
   // entrega, estado construcción, comisiones si colabora). Fuente única de
   // verdad en src/lib/publicationRequirements.ts.
-  const publishMissing = getMissingForPromotion(p);
-  const isIncomplete = publishMissing.length > 0;
+  const publishMissing = useMemo(() => {
+    const validator = getMissingForPromotion(p);
+    // Mock data puede declarar `missingSteps` con stepNames que el
+    // validador no detecta (p. ej. "Payment plan" aunque reservationCost>0).
+    // Fusionamos ambas fuentes y de-duplicamos por label.
+    const metaSteps = (p.missingSteps ?? []).map((stepName) => {
+      const wizardStep = stepConfig[stepName]?.wizardStep;
+      const fichaMap: Record<string, "multimedia" | "units" | "collaborators" | "paymentPlan" | "location" | "delivery" | "estado"> = {
+        multimedia: "multimedia",
+        crear_unidades: "units",
+        colaboradores: "collaborators",
+        plan_pagos: "paymentPlan",
+        info_basica: "location",
+        detalles: "delivery",
+        estado: "estado",
+      };
+      return {
+        key: `meta-${stepName}`,
+        label: stepName,
+        ficha: wizardStep ? fichaMap[wizardStep] : undefined,
+      };
+    });
+    // De-dup: si el validador ya flaggeó el mismo ficha, preferimos su label descriptivo.
+    const existingFichas = new Set(validator.map((m) => m.ficha));
+    const extras = metaSteps.filter((m) => !m.ficha || !existingFichas.has(m.ficha));
+    return [...validator, ...extras];
+  }, [p]);
+  const isIncomplete = publishMissing.length > 0 || p.status === "incomplete";
+  /** Si la promo tiene explícitamente canShareWithAgencies=false, está
+   *  desactivada. undefined cuenta como activada (legacy). El override local
+   *  gana cuando el promotor la activa desde el popup. */
+  const sharingEnabledForPromo = canShareOverride ?? (p.canShareWithAgencies !== false);
+  /** Condición global para permitir compartir: publicada + activada. */
+  const canShare = !isIncomplete && p.status === "active" && sharingEnabledForPromo;
   const canPublish = !isIncomplete && p.status !== "active";
+
+  /**
+   * Dock de "Acciones rápidas" · compartido entre la tab Vista general
+   * y la tab Disponibilidad. Mismos items, misma estética (compact md/lg
+   * con tooltips + labeled card en 2xl). Los items reflejan el estado
+   * actual (promoción publicada, brochure eliminado, permisos de share).
+   */
+  const renderQuickActionsRail = () => {
+    const isPublished = p.status === "active" && !isIncomplete;
+    const items: { icon: typeof Users; label: string; hint?: string; onClick?: () => void; danger?: boolean; info?: boolean; disabled?: boolean }[] = [
+      ...(!viewAsCollaborator && isPublished ? [
+        {
+          icon: Users,
+          label: "Invitar agencias",
+          hint: canShare ? "Invitar colaboradores" : "Activa compartir en la tab Comisiones",
+          onClick: canShare ? () => setShareOpen(true) : undefined,
+          disabled: !canShare,
+        },
+      ] : []),
+      ...(isPublished ? [
+        {
+          icon: FileText,
+          label: "Brochure",
+          hint: brochureRemoved ? "No hay brochure subido" : "Descargar brochure",
+          onClick: brochureRemoved ? undefined : () => toast.success("Descarga iniciada"),
+          disabled: brochureRemoved,
+        },
+        { icon: Download, label: "Listado de precios", hint: "Descargar en PDF", onClick: () => setPriceListOpen(true) },
+      ] : []),
+      { icon: Info, label: "Datos en vivo", hint: "Precios y disponibilidad se actualizan en tiempo real. Confirma antes de cerrar.", info: true },
+    ];
+    return (
+      <TooltipProvider delayDuration={150}>
+        <aside className="hidden lg:block w-full lg:w-12 2xl:w-[260px] lg:shrink-0 order-1 lg:order-2 lg:self-start lg:sticky lg:top-4">
+          <div className="lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto no-scrollbar">
+            {/* Compact dock — visible md/lg, hidden on 2xl */}
+            <div className="2xl:hidden flex lg:flex-col gap-1.5 rounded-2xl bg-card border border-border shadow-soft p-1.5">
+              {items.map((item, i) => (
+                <Tooltip key={i}>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={item.onClick}
+                      disabled={item.disabled}
+                      className={`h-9 w-9 rounded-xl flex items-center justify-center transition-colors ${item.disabled ? "text-muted-foreground/40 cursor-not-allowed" : item.danger ? "text-destructive hover:bg-destructive/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/60"}`}
+                    >
+                      <item.icon className="h-4 w-4" strokeWidth={1.5} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="left" className="max-w-[260px] text-xs">
+                    {item.hint || item.label}
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+            </div>
+
+            {/* Labeled side card — visible only on 2xl (≥1536px) */}
+            <div className="hidden 2xl:flex flex-col rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
+              <div className="px-4 pt-4 pb-2">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Acciones rápidas</p>
+              </div>
+              <div className="px-2 pb-2 flex flex-col gap-0.5">
+                {items.filter(i => !i.info && !i.danger).map((item, i) => (
+                  <button
+                    key={i}
+                    onClick={item.onClick}
+                    disabled={item.disabled}
+                    className={`group flex items-center gap-3 px-2.5 py-2 rounded-xl text-left transition-colors ${item.disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-muted/50"}`}
+                  >
+                    <span className="h-8 w-8 rounded-lg bg-muted/40 group-hover:bg-muted/70 flex items-center justify-center shrink-0 transition-colors">
+                      <item.icon className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground" strokeWidth={1.75} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-medium text-foreground truncate">{item.label}</span>
+                      {item.hint && <span className="block text-[10px] text-muted-foreground truncate">{item.hint}</span>}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {items.some(i => i.danger) && (
+                <>
+                  <div className="h-px bg-border/40 mx-4" />
+                  <div className="px-2 py-2">
+                    {items.filter(i => i.danger).map((item, i) => (
+                      <button
+                        key={i}
+                        onClick={item.onClick}
+                        className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-left transition-colors hover:bg-destructive/5"
+                      >
+                        <span className="h-8 w-8 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
+                          <item.icon className="h-3.5 w-3.5 text-destructive" strokeWidth={1.75} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-medium text-destructive truncate">{item.label}</span>
+                          {item.hint && <span className="block text-[10px] text-destructive/70 truncate">{item.hint}</span>}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {items.some(i => i.info) && (
+                <>
+                  <div className="h-px bg-border/40 mx-4" />
+                  <div className="px-4 py-3 flex items-start gap-2">
+                    <Info className="h-3 w-3 text-muted-foreground/60 mt-0.5 shrink-0" strokeWidth={1.75} />
+                    <p className="text-[10px] leading-relaxed text-muted-foreground">
+                      {items.find(i => i.info)?.hint}
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </aside>
+      </TooltipProvider>
+    );
+  };
   // Set de secciones de la ficha que deben renderizarse con tratamiento
   // rojizo (SectionCard con border-dashed destructive). Se usa en cada
   // SectionCard prop `missing` via OR con el legacy missingSet.
@@ -217,21 +487,40 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     : "Fase de proyecto";
 
   const galleryImages = [
-    p.image || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&h=500&fit=crop",
-    "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=300&fit=crop",
-    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400&h=300&fit=crop",
-    "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400&h=300&fit=crop",
+    p.image || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=1600&h=1000&fit=crop",
+    "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=1200&h=800&fit=crop",
+    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1200&h=800&fit=crop",
+    "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1200&h=800&fit=crop",
+    "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=1200&h=800&fit=crop",
+    "https://images.unsplash.com/photo-1600607688969-a5bfcd646154?w=1200&h=800&fit=crop",
+    "https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=1200&h=800&fit=crop",
+    "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=1200&h=800&fit=crop",
   ];
 
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIdx, setLightboxIdx] = useState(0);
+  const openLightbox = (i: number) => { setLightboxIdx(i); setLightboxOpen(true); };
 
-  // KPI data with optional click handler to switch tabs
+
+  // KPI data with optional click handler to switch tabs.
+  // Para borradores (priceMin=0) y otros estados incompletos, mostramos
+  // "Sin configurar" en lugar de valores engañosos.
+  const priceRangeValue = p.priceMin > 0
+    ? `${formatPrice(p.priceMin)}${p.priceMax > p.priceMin ? ` – ${formatPrice(p.priceMax)}` : ""}`
+    : "Sin configurar";
+  const priceRangeDetail = p.reservationCost > 0
+    ? `${formatPrice(p.reservationCost)} de reserva`
+    : "Añade precios en las unidades";
+  const availabilityValue = p.totalUnits > 0 ? `${p.availableUnits} / ${p.totalUnits}` : "Sin configurar";
+  const availabilityDetail = p.totalUnits > 0 ? `${occupancy}% vendido` : "Añade unidades";
+
   const allKpis = [
-    { icon: Euro, label: "Rango de precios", value: `${formatPrice(p.priceMin)}${p.priceMax > p.priceMin ? ` – ${formatPrice(p.priceMax)}` : ""}`, detail: `${formatPrice(p.reservationCost)} de reserva`, color: "text-primary bg-primary/10", empty: false },
-    { icon: Home, label: "Disponibilidad", value: `${p.availableUnits} / ${p.totalUnits}`, detail: `${occupancy}% vendido`, color: "text-primary bg-primary/10", progress: occupancy, empty: false },
-    { icon: TrendingUp, label: "Comisión", value: p.commission > 0 ? `${p.commission}%` : "—", detail: p.commission > 0 ? `~${formatPrice(p.priceMin * p.commission / 100)}` : "Sin configurar", color: "text-amber-600 bg-amber-500/10", onClick: () => setActiveTab(visibleTabs.indexOf("Comisiones")), empty: p.commission === 0 },
-    { icon: Calendar, label: "Entrega", value: p.delivery || "Por definir", detail: "Estimada", color: "text-accent-foreground bg-accent/10", empty: !p.delivery },
-    { icon: HardHat, label: "Construcción", value: p.constructionProgress !== undefined ? `${p.constructionProgress}%` : "—", detail: constructionPhaseLabel, color: "text-destructive bg-destructive/10", empty: p.constructionProgress === undefined },
-    ...(!viewAsCollaborator ? [{ icon: Users, label: "Agencias", value: `${p.agencies}`, detail: p.agencies > 0 ? "Colaborando" : "Ninguna aún", color: "text-primary bg-primary/10", onClick: () => setActiveTab(2), empty: false }] : []),
+    { icon: Euro, label: "Rango de precios", value: priceRangeValue, detail: priceRangeDetail, color: "text-primary bg-primary/10", empty: p.priceMin === 0 },
+    { icon: Home, label: "Disponibilidad", value: availabilityValue, detail: availabilityDetail, color: "text-primary bg-primary/10", progress: p.totalUnits > 0 ? occupancy : 0, empty: p.totalUnits === 0 },
+    { icon: TrendingUp, label: "Comisión", value: p.commission > 0 ? `${p.commission}%` : "—", detail: p.commission > 0 ? (p.priceMin > 0 ? `~${formatPrice(p.priceMin * p.commission / 100)}` : "—") : "Sin configurar", color: "text-amber-600 bg-amber-500/10", onClick: () => setActiveTab(visibleTabs.indexOf("Comisiones")), empty: p.commission === 0 },
+    { icon: Calendar, label: "Entrega", value: p.delivery || "Por definir", detail: p.delivery ? "Estimada" : "Añádela en Información básica", color: "text-accent-foreground bg-accent/10", empty: !p.delivery },
+    { icon: HardHat, label: "Construcción", value: p.constructionProgress !== undefined ? `${p.constructionProgress}%` : "—", detail: constructionPhaseLabel || "Sin configurar", color: "text-destructive bg-destructive/10", empty: p.constructionProgress === undefined },
+    ...(!viewAsCollaborator ? [{ icon: Users, label: "Agencias", value: `${p.agencies}`, detail: p.agencies > 0 ? "Colaborando" : "Ninguna aún", color: "text-primary bg-primary/10", onClick: () => setShareOpen(true), empty: false }] : []),
   ];
   const kpis = viewAsCollaborator ? allKpis.filter(k => !k.empty) : allKpis;
 
@@ -328,6 +617,32 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
           {!agentMode && !viewAsCollaborator && activeTabKey !== "Agencies" && (
             <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              {/* Descartar borrador · solo visible si es draft.
+                   En mobile solo el icono para ahorrar ancho. */}
+              {isDraft && rawDraftId && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: "¿Descartar borrador?",
+                      description: `"${p.name}" se eliminará permanentemente. No podrás recuperarlo.`,
+                      confirmLabel: "Descartar",
+                      variant: "destructive",
+                    });
+                    if (!ok) return;
+                    deleteDraft(rawDraftId);
+                    toast.success("Borrador descartado");
+                    navigate("/promociones");
+                  }}
+                  className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/5 px-2 sm:px-3"
+                  aria-label="Descartar borrador"
+                  title="Descartar borrador"
+                >
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  <span className="hidden sm:inline">Descartar borrador</span>
+                </Button>
+              )}
               {/* Vista colaborador (desktop) · en móvil va en la esquina
                   superior derecha del header, no aquí. */}
               <Button
@@ -338,10 +653,14 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               >
                 <Eye className="h-3.5 w-3.5" strokeWidth={1.5} /> Vista colaborador
               </Button>
-              {/* Enviar · oculto en móvil, accesible desde el FAB. */}
-              <Button size="sm" variant="outline" onClick={() => setSendEmailOpen(true)} className="gap-1.5 hidden sm:inline-flex">
-                <Mail className="h-3.5 w-3.5" strokeWidth={1.5} /> Enviar
-              </Button>
+              {/* Enviar · sólo si la promoción está publicada (active +
+                  sin requisitos pendientes). No tiene sentido enviar a
+                  un cliente un borrador sin datos. */}
+              {p.status === "active" && !isIncomplete && (
+                <Button size="sm" variant="outline" onClick={() => setSendEmailOpen(true)} className="gap-1.5 hidden sm:inline-flex">
+                  <Mail className="h-3.5 w-3.5" strokeWidth={1.5} /> Enviar
+                </Button>
+              )}
 
               {/* Botón Publicar · aparece si la promoción aún no está activa
                   O si está activa pero le faltan requisitos (estado real de
@@ -359,6 +678,17 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                           disabled={!canPublish}
                           onClick={() => {
                             if (!canPublish) return;
+                            // Si estamos publicando un borrador, lo sacamos
+                            // de la lista de incompletas y volvemos al
+                            // listado (la URL draft:xxx deja de existir).
+                            if (isDraft && rawDraftId) {
+                              deleteDraft(rawDraftId);
+                              toast.success("Promoción publicada", {
+                                description: `${p.name} ya es visible en el catálogo.`,
+                              });
+                              navigate("/promociones");
+                              return;
+                            }
                             toast.success("Promoción publicada", {
                               description: `${p.name} ya es visible en el catálogo.`,
                             });
@@ -382,13 +712,15 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 </TooltipProvider>
               )}
 
-              {/* Registrar cliente · oculto en móvil, accesible desde el FAB. */}
-              <Button size="sm" onClick={() => setRegisterClientOpen(true)} className="gap-1.5 hidden sm:inline-flex">
-                <Users className="h-3.5 w-3.5" strokeWidth={1.5} /> Registrar cliente
-              </Button>
+              {/* Registrar cliente · también requiere promoción publicada. */}
+              {p.status === "active" && !isIncomplete && (
+                <Button size="sm" onClick={() => setRegisterClientOpen(true)} className="gap-1.5 hidden sm:inline-flex">
+                  <Users className="h-3.5 w-3.5" strokeWidth={1.5} /> Registrar cliente
+                </Button>
+              )}
             </div>
           )}
-          {viewAsCollaborator && (
+          {viewAsCollaborator && p.status === "active" && !isIncomplete && (
             <div className="flex items-center gap-2 shrink-0">
               <Button size="sm" variant="outline" onClick={() => setSendEmailOpen(true)} className="gap-1.5 hidden sm:inline-flex">
                 <Mail className="h-3.5 w-3.5" /> Enviar
@@ -438,62 +770,67 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
         {activeTabKey === "Overview" && (
           <>
-            {/* Banner de requisitos pendientes · visible si la promoción
-                aún no cumple alguno de los 7 requisitos para publicar.
-                Cada línea ofrece un CTA "Completar" que abre el dialog
-                correspondiente in situ — el usuario NO tiene que volver
-                al wizard para arreglarlos. */}
-            {!viewAsCollaborator && isIncomplete && (
-              <div className="mb-5 rounded-2xl border border-destructive/30 bg-destructive/5 p-5">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" strokeWidth={1.5} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground">
-                      Faltan {publishMissing.length} requisito{publishMissing.length > 1 ? "s" : ""} para publicar
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Completa cada uno sin salir de esta pantalla · al terminar podrás pulsar "Publicar" arriba a la derecha.
-                    </p>
-                    <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                      {publishMissing.map((m) => {
-                        // Mapeo de ficha → dialog edit in-place. "delivery" y
-                        // "estado" comparten diálogo structure; "collaborators"
-                        // salta al tab dedicado (no hay dialog inline).
-                        const openInline = () => {
-                          switch (m.ficha) {
-                            case "multimedia":   return setEditOpen("multimedia");
-                            case "units":        return setEditOpen("inventory");
-                            case "paymentPlan":  return setEditOpen("paymentPlan");
-                            case "location":     return setEditOpen("location");
-                            case "estado":
-                            case "delivery":     return setEditOpen("structure");
-                            case "collaborators": return setActiveTab(visibleTabs.indexOf("Comisiones"));
-                            default:             return;
-                          }
-                        };
-                        return (
-                          <li key={m.key}>
-                            <button
-                              type="button"
-                              onClick={openInline}
-                              className="w-full inline-flex items-center justify-between gap-2 rounded-lg bg-card border border-destructive/20 hover:border-destructive/40 px-3 py-2 text-left transition-colors group"
-                            >
-                              <span className="inline-flex items-center gap-2 text-xs text-foreground">
-                                <span className="h-1.5 w-1.5 rounded-full bg-destructive shrink-0" />
+            {/* Banner de pendientes · SOLO los requisitos que faltan.
+                Cada chip lleva al paso exacto del wizard. Botón único
+                "Completar todo" recorre pasos faltantes en onlyMissing
+                y al terminar vuelve a la ficha. La checklist completa
+                (hechos + pendientes) vive en el paso Revisión del
+                wizard, no aquí. */}
+            {!viewAsCollaborator && isIncomplete && (() => {
+              const fichaToWizardStep: Record<string, string> = {
+                multimedia: "multimedia",
+                units: "crear_unidades",
+                paymentPlan: "plan_pagos",
+                location: "info_basica",
+                delivery: "detalles",
+                estado: "estado",
+                collaborators: "colaboradores",
+              };
+              return (
+                <div className="mb-5 rounded-2xl border border-destructive/30 bg-destructive/5 p-5">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" strokeWidth={1.5} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-foreground">
+                          No puedes publicar todavía
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Faltan {publishMissing.length} campo{publishMissing.length > 1 ? "s" : ""}. Toca para completar:
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {publishMissing.map((m) => {
+                            const wizardStep = m.ficha && fichaToWizardStep[m.ficha];
+                            return (
+                              <button
+                                key={m.key}
+                                type="button"
+                                onClick={() => {
+                                  if (wizardStep) navigate(getWizardUrl(wizardStep, returnPath, rawDraftId));
+                                }}
+                                disabled={!wizardStep}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-destructive/30 bg-background hover:bg-destructive/10 hover:border-destructive/60 px-2.5 py-0.5 text-[11px] font-medium text-destructive transition-colors disabled:cursor-default group"
+                              >
+                                <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
                                 {m.label}
-                              </span>
-                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground group-hover:text-foreground transition-colors shrink-0">
-                                Completar <ArrowRight className="h-3 w-3" />
-                              </span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
+                                {wizardStep && <ArrowRight className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 transition-opacity" strokeWidth={2} />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => navigate(getWizardUrl(undefined, returnPath, rawDraftId) + "&onlyMissing=1")}
+                      className="rounded-full text-xs h-9 px-4 shrink-0 w-full sm:w-auto"
+                    >
+                      Completar todo
+                      <ArrowRight className="h-3 w-3 ml-1" />
+                    </Button>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Two-column layout: main content left, narrow icon rail right */}
             <div className={`flex gap-4 ${!viewAsCollaborator ? "lg:flex-row" : ""} flex-col w-full min-w-0`} style={{ maxWidth: !viewAsCollaborator ? "1570px" : "1250px" }}>
@@ -503,29 +840,67 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             {/* ── 1. GALLERY ── */}
             <SectionCard title="Multimedia" stepName="Multimedia" missing={missingSet.has("Multimedia") || realMissing.has("multimedia")} onEdit={() => setEditOpen("multimedia")} hideEdit={viewAsCollaborator} flush>
               {/* Móvil: sólo la foto principal. Tablet/desktop: mosaico
-                  4×2 con foto hero + 3 thumbs + celda de vídeos. */}
-              <div className="sm:hidden relative cursor-pointer group h-[280px] rounded-lg overflow-hidden">
-                <img src={galleryImages[0]} alt={p.name} className="w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-black/0 group-active:bg-black/10 transition-colors" />
-                <Tag variant="overlay" size="sm" className="absolute bottom-3 left-3"><Image className="h-3 w-3" /> 12 fotos</Tag>
+                  4×2 con foto hero + 3 thumbs + celda de vídeos.
+                  Todas las imágenes abren `ImageLightbox` al índice clicado. */}
+              <div className="sm:hidden relative h-[280px] rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => openLightbox(0)}
+                  className="w-full h-full relative group"
+                >
+                  <img src={galleryImages[0]} alt={p.name} className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/0 group-active:bg-black/10 transition-colors" />
+                </button>
+                <Tag variant="overlay" size="sm" className="absolute bottom-3 left-3 pointer-events-none"><Image className="h-3 w-3" /> {galleryImages.length} fotos</Tag>
               </div>
-              <div className="hidden sm:grid grid-cols-4 grid-rows-2 gap-1.5 h-[320px]">
-                <div className="col-span-2 row-span-2 relative group cursor-pointer">
+              <div className="hidden sm:grid grid-cols-4 grid-rows-2 gap-1.5 h-[320px] relative">
+                <button
+                  type="button"
+                  onClick={() => openLightbox(0)}
+                  className="col-span-2 row-span-2 relative group cursor-pointer overflow-hidden"
+                >
                   <img src={galleryImages[0]} alt={p.name} className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                  <Tag variant="overlay" size="sm" className="absolute bottom-3 left-3"><Image className="h-3 w-3" /> 12 fotos</Tag>
-                </div>
+                </button>
                 {galleryImages.slice(1, 4).map((src, i) => (
-                  <div key={i} className="overflow-hidden cursor-pointer group">
+                  <button
+                    type="button"
+                    key={i}
+                    onClick={() => openLightbox(i + 1)}
+                    className="overflow-hidden cursor-pointer group"
+                  >
                     <img src={src} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                  </div>
+                  </button>
                 ))}
-                <div className="relative overflow-hidden cursor-pointer group bg-muted/30 flex items-center justify-center">
-                  <div className="text-center">
-                    <Video className="h-5 w-5 text-muted-foreground/40 mx-auto mb-1" />
-                    <span className="text-xs text-muted-foreground">2 vídeos</span>
+                {galleryImages[4] ? (
+                  <button
+                    type="button"
+                    onClick={() => openLightbox(4)}
+                    className="relative overflow-hidden cursor-pointer group"
+                  >
+                    <img src={galleryImages[4]} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    {galleryImages.length > 5 && (
+                      <div className="absolute inset-0 bg-foreground/55 flex items-center justify-center">
+                        <span className="text-background text-xs font-semibold">+{galleryImages.length - 5} fotos</span>
+                      </div>
+                    )}
+                  </button>
+                ) : (
+                  <div className="relative overflow-hidden cursor-pointer group bg-muted/30 flex items-center justify-center">
+                    <div className="text-center">
+                      <Video className="h-5 w-5 text-muted-foreground/40 mx-auto mb-1" />
+                      <span className="text-xs text-muted-foreground">2 vídeos</span>
+                    </div>
                   </div>
-                </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => openLightbox(0)}
+                  className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-background/95 backdrop-blur border border-border text-xs font-semibold text-foreground hover:bg-background shadow-soft-lg transition-colors"
+                >
+                  <Image className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  Ver todas las fotos ({galleryImages.length})
+                </button>
               </div>
             </SectionCard>
 
@@ -541,7 +916,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                       <kpi.icon className="h-3.5 w-3.5 2xl:h-4 2xl:w-4" />
                     </div>
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">{kpi.label}</p>
-                    <p className={`text-sm 2xl:text-base font-semibold leading-tight tabular-nums ${kpi.empty ? "text-destructive" : "text-foreground"}`}>{kpi.value}</p>
+                    <p
+                      className={`text-sm 2xl:text-base font-semibold leading-tight tabular-nums truncate ${kpi.empty ? "text-destructive" : "text-foreground"}`}
+                      title={kpi.value}
+                    >
+                      {kpi.value}
+                    </p>
                     {kpi.progress !== undefined && <Progress value={kpi.progress} className="h-1 mt-1.5" />}
                     {kpi.empty ? (
                       <p className="text-[10px] mt-1 flex items-center gap-1 text-destructive font-medium">
@@ -606,7 +986,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             {/* ── 2. PAGO Y DISPONIBILIDAD (Unidades + Plan de pagos) ── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <SectionCard title="Unidades y disponibilidad" stepName="Units" missing={missingSet.has("Units") || realMissing.has("units")} onEdit={() => setEditOpen("inventory")} hideEdit={viewAsCollaborator}>
-                <PromotionAvailabilitySummary promotionId={p.id} onViewAll={() => setActiveTab(1)} />
+                <PromotionAvailabilitySummary promotionId={p.id} onViewAll={() => setActiveTab(visibleTabs.indexOf("Availability"))} />
               </SectionCard>
 
               <SectionCard title="Plan de pagos" stepName="Payment plan" missing={missingSet.has("Payment plan") || realMissing.has("paymentPlan")} onEdit={() => setEditOpen("paymentPlan")} hideEdit={viewAsCollaborator}>
@@ -794,7 +1174,8 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 </div>
               )}
 
-              {/* Brochure */}
+              {/* Brochure · oculto si se eliminó */}
+              {!brochureRemoved && (
               <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden group/section relative">
                 <div className="px-5 pt-4 pb-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -822,7 +1203,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
-                          onClick={() => toast.success("Brochure eliminado")}
+                          onClick={() => { setBrochureRemoved(true); toast.success("Brochure eliminado"); }}
                         >
                           <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
                         </DropdownMenuItem>
@@ -843,6 +1224,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   </div>
                 </div>
               </div>
+              )}
             </div>
 
 
@@ -978,112 +1360,9 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               </div>
               {/* ── END LEFT COLUMN ── */}
 
-              {/* ── RIGHT RAIL: icon dock (md/lg) → labeled card (2xl).
-                   Visible tanto para promotor como para agencia. En modo
-                   agencia se ocultan las acciones reservadas al promotor
-                   (invitar colaboradores, compartir con más agencias,
-                   badge "Incompleta" de publicación). */}
-              {(() => {
-                const items: { icon: typeof Users; label: string; hint?: string; onClick?: () => void; danger?: boolean; info?: boolean }[] = [
-                  // Invitar/Compartir son acciones del promotor — en agencia no aplica.
-                  ...(!viewAsCollaborator ? [
-                    { icon: Users, label: "Invitar agencias", hint: "Invitar colaboradores", onClick: () => setActiveTab(visibleTabs.indexOf("Agencies")) },
-                    { icon: Share2, label: "Compartir", hint: "Compartir con colaboradores", onClick: () => setActiveTab(visibleTabs.indexOf("Agencies")) },
-                  ] : []),
-                  { icon: FileText, label: "Brochure", hint: "Descargar brochure", onClick: () => {} },
-                  { icon: Download, label: "Listado de precios", hint: "Descargar en PDF", onClick: () => setPriceListOpen(true) },
-                  // "Incompleta" sólo para promotor (agencia no publica).
-                  ...(!viewAsCollaborator && hasMissing ? [{ icon: AlertTriangle, label: "Incompleta", hint: `${completedSteps.length}/${allSteps.length} pasos · Click para completar`, onClick: () => navigate(getWizardUrl(p.missingSteps?.[0], returnPath)), danger: true }] : []),
-                  { icon: Info, label: "Datos en vivo", hint: "Precios y disponibilidad se actualizan en tiempo real. Confirma antes de cerrar.", info: true },
-                ];
-                return (
-                  <TooltipProvider delayDuration={150}>
-                    {/* Acciones rápidas · sólo desktop (lg+). En móvil
-                        las mismas acciones viven en el FAB "+". */}
-                    <aside className="hidden lg:block w-full lg:w-12 2xl:w-[260px] lg:shrink-0 order-1 lg:order-2 lg:self-start lg:sticky lg:top-4">
-                      <div className="lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto no-scrollbar">
-                        {/* Compact dock — visible md/lg, hidden on 2xl */}
-                        <div className="2xl:hidden flex lg:flex-col gap-1.5 rounded-2xl bg-card border border-border shadow-soft p-1.5">
-                          {items.map((item, i) => (
-                            <Tooltip key={i}>
-                              <TooltipTrigger asChild>
-                                <button
-                                  onClick={item.onClick}
-                                  className={`h-9 w-9 rounded-xl flex items-center justify-center transition-colors ${item.danger ? "text-destructive hover:bg-destructive/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/60"}`}
-                                >
-                                  <item.icon className="h-4 w-4" strokeWidth={1.5} />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="left" className="max-w-[260px] text-xs">
-                                {item.hint || item.label}
-                              </TooltipContent>
-                            </Tooltip>
-                          ))}
-                        </div>
-
-                        {/* Labeled side card — visible only on 2xl (≥1536px, MacBook 16") */}
-                        <div className="hidden 2xl:flex flex-col rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
-                          <div className="px-4 pt-4 pb-2">
-                            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Acciones rápidas</p>
-                          </div>
-                          <div className="px-2 pb-2 flex flex-col gap-0.5">
-                            {items.filter(i => !i.info && !i.danger).map((item, i) => (
-                              <button
-                                key={i}
-                                onClick={item.onClick}
-                                className="group flex items-center gap-3 px-2.5 py-2 rounded-xl text-left transition-colors hover:bg-muted/50"
-                              >
-                                <span className="h-8 w-8 rounded-lg bg-muted/40 group-hover:bg-muted/70 flex items-center justify-center shrink-0 transition-colors">
-                                  <item.icon className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground" strokeWidth={1.75} />
-                                </span>
-                                <span className="min-w-0 flex-1">
-                                  <span className="block text-xs font-medium text-foreground truncate">{item.label}</span>
-                                  {item.hint && <span className="block text-[10px] text-muted-foreground truncate">{item.hint}</span>}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-
-                          {items.some(i => i.danger) && (
-                            <>
-                              <div className="h-px bg-border/40 mx-4" />
-                              <div className="px-2 py-2">
-                                {items.filter(i => i.danger).map((item, i) => (
-                                  <button
-                                    key={i}
-                                    onClick={item.onClick}
-                                    className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-left transition-colors hover:bg-destructive/5"
-                                  >
-                                    <span className="h-8 w-8 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
-                                      <item.icon className="h-3.5 w-3.5 text-destructive" strokeWidth={1.75} />
-                                    </span>
-                                    <span className="min-w-0 flex-1">
-                                      <span className="block text-xs font-medium text-destructive truncate">{item.label}</span>
-                                      {item.hint && <span className="block text-[10px] text-destructive/70 truncate">{item.hint}</span>}
-                                    </span>
-                                  </button>
-                                ))}
-                              </div>
-                            </>
-                          )}
-
-                          {items.some(i => i.info) && (
-                            <>
-                              <div className="h-px bg-border/40 mx-4" />
-                              <div className="px-4 py-3 flex items-start gap-2">
-                                <Info className="h-3 w-3 text-muted-foreground/60 mt-0.5 shrink-0" strokeWidth={1.75} />
-                                <p className="text-[10px] leading-relaxed text-muted-foreground">
-                                  {items.find(i => i.info)?.hint}
-                                </p>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </aside>
-                  </TooltipProvider>
-                );
-              })()}
+              {/* ── RIGHT RAIL: dock de acciones rápidas (compartido con
+                   la tab Disponibilidad para UX consistente). */}
+              {renderQuickActionsRail()}
             </div>
 
           </>
@@ -1094,88 +1373,160 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           <div className="flex gap-4 lg:flex-row flex-col w-full max-w-[1570px] min-w-0">
             {/* Main content */}
             <div className="flex-1 min-w-0 order-2 lg:order-1">
-              <PromotionAvailabilityFull promotionId={p.id} isCollaboratorView={viewAsCollaborator} />
+              <PromotionAvailabilityFull
+                promotionId={p.id}
+                isCollaboratorView={viewAsCollaborator}
+                {...(isDraft && draftState && draftUnitsForView
+                  ? {
+                      units: draftUnitsForView,
+                      onUnitsChange: (nextUnits: Unit[]) => {
+                        const byId = new Map(nextUnits.map((u) => [u.id, u]));
+                        const nextData = draftState.unidades
+                          .filter((u) => byId.has(u.id))
+                          .map((u) => mergeUnitIntoUnitData(u, byId.get(u.id)!));
+                        patchDraft({ unidades: nextData });
+                      },
+                      hideExternalActions: true,
+                    }
+                  : {})}
+                promotionCtx={{
+                  nombrePromocion: p.name,
+                  ciudad: p.location?.split(",")[0]?.trim(),
+                  provincia: p.location?.split(",")[1]?.trim(),
+                  ...(isDraft && draftState
+                    ? {
+                        deliveryYear: draftState.fechaEntrega ?? draftState.trimestreEntrega ?? undefined,
+                        energyCert: draftState.certificadoEnergetico,
+                        descripcion: draftState.descripcion,
+                        caracteristicas: draftState.caracteristicasVivienda,
+                        hitosPago: draftState.hitosPago,
+                        importeReserva: draftState.importeReserva,
+                        amenities: {
+                          piscinaComunitaria: draftState.piscinaComunitaria,
+                          piscinaInterna: draftState.piscinaInterna,
+                          zonaSpa: draftState.zonaSpa,
+                          zonaInfantil: draftState.zonaInfantil,
+                          urbanizacionCerrada: draftState.urbanizacionCerrada,
+                        },
+                      }
+                    : {}),
+                }}
+              />
             </div>
 
-            {/* Right rail — minimalist icon dock. Oculto en móvil: las
-                acciones viven en el FAB "+". */}
-            <TooltipProvider delayDuration={150}>
-              <aside className="hidden lg:block w-full lg:w-12 lg:shrink-0 order-1 lg:order-2">
-                <div className="lg:sticky lg:top-6 flex lg:flex-col gap-1.5 rounded-2xl bg-card border border-border shadow-soft p-1.5">
-                  {[
-                    { icon: FileText, label: "Descargar brochure" },
-                    { icon: Download, label: "Descargar listado de precios" },
-                    { icon: Share2, label: "Avisar a colaboradores" },
-                    { icon: MessageCircle, label: "Contactar equipo comercial" },
-                    { icon: Info, label: "Los precios y disponibilidad se actualizan en tiempo real. Consulta con el equipo comercial antes de confirmar." },
-                  ].map((item, i) => (
-                    <Tooltip key={i}>
-                      <TooltipTrigger asChild>
-                        <button className="h-9 w-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
-                          <item.icon className="h-4 w-4" strokeWidth={1.5} />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="left" className="max-w-[220px] text-xs">
-                        {item.label}
-                      </TooltipContent>
-                    </Tooltip>
+            {/* Right rail · mismo dock de acciones rápidas que en Vista general */}
+            {renderQuickActionsRail()}
+          </div>
+        )}
+
+        {activeTabKey === "Agencies" && !viewAsCollaborator && (() => {
+          /* Mismo lenguaje visual que `/colaboradores` (FeatureCardV3
+           *  en grid 3-col). Aquí filtramos a las agencias que están
+           *  colaborando en ESTA promoción. */
+          const agenciasEnPromo = agencies.filter(
+            (a) => a.promotionsCollaborating?.includes(p.id),
+          );
+          return (
+            <div className="space-y-4">
+              <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Red comercial de esta promoción
+                  </p>
+                  <h2 className="text-base font-semibold text-foreground leading-tight mt-0.5">
+                    {agenciasEnPromo.length} {agenciasEnPromo.length === 1 ? "agencia" : "agencias"} colaborando
+                  </h2>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => setStatsOverlayOpen(true)}
+                    className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                    title="Ver estadísticas de esta promoción"
+                  >
+                    <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    Estadísticas
+                  </button>
+                  <button
+                    onClick={() => navigate("/colaboradores/estadisticas")}
+                    className="group inline-flex items-center gap-1.5 h-10 px-4 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                    title="Ver estadísticas globales de tu red"
+                  >
+                    Estadísticas generales
+                    <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" strokeWidth={1.75} />
+                  </button>
+                  {canShare && (
+                    <button
+                      onClick={() => setShareOpen(true)}
+                      className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-foreground text-background text-sm font-semibold hover:bg-foreground/90 shadow-soft transition-colors"
+                    >
+                      <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                      Invitar agencia
+                    </button>
+                  )}
+                </div>
+              </header>
+
+              {agenciasEnPromo.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
+                  <Users className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+                  <p className="text-sm font-medium text-foreground mb-1">Ninguna agencia colabora aún</p>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Invita a tus colaboradores o favoritos desde "Invitar agencia".
+                  </p>
+                  {canShare && (
+                    <button
+                      onClick={() => setShareOpen(true)}
+                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-border bg-background text-xs font-semibold text-foreground hover:bg-muted transition-colors"
+                    >
+                      <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                      Invitar agencia
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {agenciasEnPromo.map((a) => (
+                    <FeatureCardV3 key={a.id} agency={a} />
                   ))}
                 </div>
-              </aside>
-            </TooltipProvider>
-          </div>
-        )}
-
-        {activeTabKey === "Agencies" && !viewAsCollaborator && (
-          <div className="space-y-4">
-            {/* Switcher entre diseños v1 (lista) y v2 (red por nacionalidad).
-                No persistimos la elección: es un prototipo para comparar. */}
-            <div className="flex items-center justify-end gap-1.5">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mr-1">Vista</span>
-              <button
-                type="button"
-                onClick={() => setAgenciesView("v2-red")}
-                className={`inline-flex items-center h-7 px-3 rounded-full text-xs font-medium transition-colors ${
-                  agenciesView === "v2-red"
-                    ? "bg-foreground text-background shadow-soft"
-                    : "border border-border bg-card text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Red
-              </button>
-              <button
-                type="button"
-                onClick={() => setAgenciesView("v1-lista")}
-                className={`inline-flex items-center h-7 px-3 rounded-full text-xs font-medium transition-colors ${
-                  agenciesView === "v1-lista"
-                    ? "bg-foreground text-background shadow-soft"
-                    : "border border-border bg-card text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Lista
-              </button>
+              )}
             </div>
-
-            {agenciesView === "v2-red" ? (
-              <PromotionAgenciesV2
-                promotionId={p.id}
-                onInviteAgency={() => navigate("/colaboradores")}
-              />
-            ) : (
-              <AgenciesTab promotionId={p.id} navigate={navigate} />
-            )}
-          </div>
-        )}
+          );
+        })()}
 
         {/* ═══ TAB: COMISIONES ═══ */}
         {activeTabKey === "Comisiones" && (
           <div className="space-y-5">
+            {/* Aviso · compartir desactivado */}
+            {!viewAsCollaborator && !sharingEnabledForPromo && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 flex items-start gap-3">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" strokeWidth={1.5} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-amber-900 mb-0.5">
+                    Compartir con agencias está desactivado
+                  </p>
+                  <p className="text-xs text-amber-900/80 leading-relaxed">
+                    Mientras esté desactivado, no puedes invitar ni compartir esta
+                    promoción con colaboradores. Actívalo para empezar a invitar —
+                    podrás ajustar condiciones en cada envío.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActivateSharingOpen(true)}
+                  className="shrink-0 inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-primary text-primary-foreground text-xs font-semibold shadow-soft hover:bg-primary/90 transition-colors"
+                >
+                  <Handshake className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  Activar compartir
+                </button>
+              </div>
+            )}
+
             {/* Commission structure card */}
             <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
               <div className="px-5 pt-4 pb-3 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-foreground">Estructura de comisiones</h2>
                 {!viewAsCollaborator && (
-                  <button onClick={() => navigate(getWizardUrl("Collaborators", returnPath))}
+                  <button onClick={() => navigate(getWizardUrl("Collaborators", returnPath, rawDraftId))}
                     className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-soft transition-colors">
                     <Pencil className="h-3 w-3" /> Editar
                   </button>
@@ -1261,7 +1612,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               <div className="px-5 pt-4 pb-3 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-foreground">Condiciones de registro de clientes</h2>
                 {!viewAsCollaborator && (
-                  <button onClick={() => navigate(getWizardUrl("Collaborators", returnPath))}
+                  <button onClick={() => navigate(getWizardUrl("Collaborators", returnPath, rawDraftId))}
                     className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-soft transition-colors">
                     <Pencil className="h-3 w-3" /> Editar
                   </button>
@@ -1332,7 +1683,84 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       </div>
 
       {/* Client Registration dialog */}
-      <ClientRegistrationDialog open={registerClientOpen} onOpenChange={setRegisterClientOpen} promotionName={p.name} validezDias={p.collaboration?.validezRegistroDias} />
+      <ClientRegistrationDialog
+        open={registerClientOpen}
+        onOpenChange={setRegisterClientOpen}
+        promotionName={p.name}
+        promotionId={p.id}
+        validezDias={p.collaboration?.validezRegistroDias}
+      />
+
+      {/* Visor fullscreen de la galería multimedia */}
+      <ImageLightbox
+        open={lightboxOpen}
+        onOpenChange={setLightboxOpen}
+        photos={galleryImages}
+        initialIndex={lightboxIdx}
+        title={p.name}
+        subtitle={p.location}
+      />
+
+      {/* Overlay fullscreen · Estadísticas de agencias de esta promoción.
+          Monta `ColaboradoresEstadisticas` en modo embedded + lockedPromotionId.
+          Se cierra con la X del top bar (o tecla Escape vía overlay). */}
+      {statsOverlayOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-background overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Estadísticas de esta promoción"
+        >
+          <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border">
+            <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Estadísticas · {p.name}
+                </p>
+                <p className="text-[11px] text-muted-foreground truncate">
+                  Limitado a las agencias colaborando en esta promoción
+                </p>
+              </div>
+              <button
+                onClick={() => setStatsOverlayOpen(false)}
+                className="h-10 w-10 rounded-full border border-border bg-card hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors shadow-soft"
+                aria-label="Cerrar"
+              >
+                <X className="h-4 w-4" strokeWidth={1.75} />
+              </button>
+            </div>
+          </header>
+          <ColaboradoresEstadisticas
+            lockedPromotionId={p.id}
+            lockedPromotionName={p.name}
+            embedded
+          />
+        </div>
+      )}
+
+      {/* Compartir promoción con agencias */}
+      <SharePromotionDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        promotionId={p.id}
+        promotionName={p.name}
+      />
+
+      {/* Activar compartir · se abre desde la tab Comisiones */}
+      <ActivateSharingDialog
+        open={activateSharingOpen}
+        onOpenChange={setActivateSharingOpen}
+        promotionName={p.name}
+        initialCommission={p.collaboration?.comisionInternacional ?? p.commission ?? 5}
+        initialDuration={12}
+        onActivate={({ comision, duracionMeses }) => {
+          setCanShareOverride(true);
+          toast.success("Compartir activado", {
+            description: `Ya puedes invitar agencias a ${p.name} · ${comision}% · ${duracionMeses} ${duracionMeses === 1 ? "mes" : "meses"} por defecto.`,
+          });
+          // TODO(backend): POST /api/promociones/:id/compartir/activar { comision, duracionMeses }
+        }}
+      />
 
       {/* FAB móvil — acciones rápidas de la ficha. En desktop (sm+)
           estas acciones ya están como botones en la barra superior; en
@@ -1357,16 +1785,21 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   onClick={() => { setMobileFabOpen(false); setActiveTab(visibleTabs.indexOf("Agencies")); }}
                 />
               )}
-              <FabAction
-                icon={Users}
-                label="Registrar cliente"
-                onClick={() => { setMobileFabOpen(false); setRegisterClientOpen(true); }}
-              />
-              <FabAction
-                icon={Mail}
-                label="Enviar email"
-                onClick={() => { setMobileFabOpen(false); setSendEmailOpen(true); }}
-              />
+              {/* Registrar/Enviar sólo si la promoción está publicada. */}
+              {p.status === "active" && !isIncomplete && (
+                <>
+                  <FabAction
+                    icon={Users}
+                    label="Registrar cliente"
+                    onClick={() => { setMobileFabOpen(false); setRegisterClientOpen(true); }}
+                  />
+                  <FabAction
+                    icon={Mail}
+                    label="Enviar email"
+                    onClick={() => { setMobileFabOpen(false); setSendEmailOpen(true); }}
+                  />
+                </>
+              )}
               <FabAction
                 icon={Download}
                 label="Listado de precios"
@@ -1394,20 +1827,166 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       {/* Listado de precios descargable (PDF vía window.print). */}
       <PriceListDialog open={priceListOpen} onOpenChange={setPriceListOpen} promotion={p} agencyMode={viewAsCollaborator || agentMode} />
 
-      {/* ═══ EDIT SECTION DIALOGS ═══ */}
-      <EditMultimediaDialog open={editOpen === "multimedia"} onOpenChange={(v) => setEditOpen(v ? "multimedia" : null)} images={galleryImages} onSave={() => {}} />
-      <EditBasicInfoDialog open={editOpen === "basicInfo"} onOpenChange={(v) => setEditOpen(v ? "basicInfo" : null)} propertyTypes={p.propertyTypes || []} onSave={() => {}} />
-      <EditStructureDialog open={editOpen === "structure"} onOpenChange={(v) => setEditOpen(v ? "structure" : null)} type={typeLabel || ""} structure={p.totalUnits > 10 ? "Multibloque" : "Bloque único"} phase={constructionPhaseLabel} progress={p.constructionProgress || 0} onSave={() => {}} onOpenWizard={() => navigate(getWizardUrl("Basic info", returnPath))} />
-      <EditDescriptionDialog open={editOpen === "description"} onOpenChange={(v) => setEditOpen(v ? "description" : null)} description={(p as any).description || ""} onSave={() => {}} />
-      <EditLocationDialog open={editOpen === "location"} onOpenChange={(v) => setEditOpen(v ? "location" : null)} location={p.location || ""} onSave={() => {}} />
-      <EditPaymentPlanDialog open={editOpen === "paymentPlan"} onOpenChange={(v) => setEditOpen(v ? "paymentPlan" : null)} onSave={() => {}} />
-      <EditShowHouseDialog open={editOpen === "showHouse"} onOpenChange={(v) => setEditOpen(v ? "showHouse" : null)} onSave={() => {}} />
-      <EditDocumentDialog open={editOpen === "memoria"} onOpenChange={(v) => setEditOpen(v ? "memoria" : null)} title="Subir memoria de calidades" description="Sube el PDF de la memoria de calidades de esta promoción." icon={FileText} onSave={() => {}} />
-      <EditDocumentDialog open={editOpen === "planos"} onOpenChange={(v) => setEditOpen(v ? "planos" : null)} title="Subir planos generales" description="Sube planos generales (PDF o imágenes)." icon={Layers} accept=".pdf,.jpg,.png" multiple onSave={() => {}} />
-      <EditDocumentDialog open={editOpen === "brochure"} onOpenChange={(v) => setEditOpen(v ? "brochure" : null)} title="Subir brochure" description="Sube el PDF oficial del brochure para compradores y agencias." icon={BookOpen} onSave={() => {}} />
-      <EditContactsDialog open={editOpen === "contacts"} onOpenChange={(v) => setEditOpen(v ? "contacts" : null)} website={website} onSave={() => {}} />
+      {/* ═══ EDIT SECTION DIALOGS ═══
+          En modo borrador cada onSave escribe sobre el WizardState del
+          draft y autosave persiste al localStorage. En modo publicada
+          los callbacks quedan no-op (pendiente backend). */}
+      <EditMultimediaDialog
+        open={editOpen === "multimedia"}
+        onOpenChange={(v) => setEditOpen(v ? "multimedia" : null)}
+        images={galleryImages}
+        onSave={(imgs) => {
+          if (!isDraft || !draftState) return;
+          const prev = draftState.fotos ?? [];
+          const next: FotoItem[] = imgs.map((url, i) => ({
+            id: prev[i]?.id ?? `foto-${Date.now()}-${i}`,
+            url,
+            nombre: prev[i]?.nombre ?? `Imagen ${i + 1}`,
+            categoria: prev[i]?.categoria ?? ("otra" as FotoCategoria),
+            esPrincipal: prev[i]?.esPrincipal ?? i === 0,
+            bloqueada: prev[i]?.bloqueada ?? false,
+            orden: i,
+          }));
+          patchDraft({ fotos: next });
+          toast.success("Multimedia actualizada");
+        }}
+      />
+      <EditBasicInfoDialog
+        open={editOpen === "basicInfo"}
+        onOpenChange={(v) => setEditOpen(v ? "basicInfo" : null)}
+        propertyTypes={p.propertyTypes || []}
+        onSave={(data) => {
+          if (!isDraft) return;
+          patchDraft({
+            amenities: data.amenities,
+            caracteristicasVivienda: data.features,
+          });
+          toast.success("Información básica actualizada");
+        }}
+      />
+      <EditStructureDialog
+        open={editOpen === "structure"}
+        onOpenChange={(v) => setEditOpen(v ? "structure" : null)}
+        type={typeLabel || ""}
+        structure={p.totalUnits > 10 ? "Multibloque" : "Bloque único"}
+        phase={constructionPhaseLabel}
+        progress={p.constructionProgress || 0}
+        onSave={(data) => {
+          if (!isDraft) return;
+          // Mapeo label → key de FaseConstruccion (case-insensitive + trim)
+          // + persistimos el % ajustado manualmente.
+          const normalize = (s: string) => s.trim().toLowerCase();
+          const target = normalize(data.phase);
+          const opt = faseConstruccionOptions.find((o) => normalize(o.label) === target)
+                   ?? faseConstruccionOptions.find((o) => normalize(o.label).includes(target));
+          patchDraft({
+            ...(opt ? { faseConstruccion: opt.value } : {}),
+            constructionProgressOverride: data.progress,
+          });
+          toast.success("Estructura actualizada");
+        }}
+        onOpenWizard={() => navigate(getWizardUrl("Basic info", returnPath, rawDraftId))}
+      />
+      <EditDescriptionDialog
+        open={editOpen === "description"}
+        onOpenChange={(v) => setEditOpen(v ? "description" : null)}
+        description={draftState?.descripcion ?? (p as any).description ?? ""}
+        onSave={(data) => {
+          if (!isDraft) return;
+          patchDraft({
+            descripcion: data.description,
+            descripcionIdiomas: data.descriptions,
+          });
+          toast.success("Descripción guardada");
+        }}
+      />
+      <EditLocationDialog
+        open={editOpen === "location"}
+        onOpenChange={(v) => setEditOpen(v ? "location" : null)}
+        location={p.location || ""}
+        onSave={(loc) => {
+          if (!isDraft || !draftState) return;
+          const parts = loc.split(",").map((s) => s.trim());
+          patchDraft({
+            direccionPromocion: {
+              ...draftState.direccionPromocion,
+              ciudad: parts[0] || "",
+              provincia: parts[1] || draftState.direccionPromocion.provincia || "",
+            },
+          });
+          toast.success("Ubicación actualizada");
+        }}
+      />
+      <EditPaymentPlanDialog
+        open={editOpen === "paymentPlan"}
+        onOpenChange={(v) => setEditOpen(v ? "paymentPlan" : null)}
+        onSave={() => {}}
+      />
+      <EditShowHouseDialog
+        open={editOpen === "showHouse"}
+        onOpenChange={(v) => setEditOpen(v ? "showHouse" : null)}
+        onSave={() => {
+          if (!isDraft) return;
+          patchDraft({ pisoPiloto: true });
+          toast.success("Piso piloto activado");
+        }}
+      />
+      <EditDocumentDialog
+        open={editOpen === "memoria"}
+        onOpenChange={(v) => setEditOpen(v ? "memoria" : null)}
+        title="Subir memoria de calidades"
+        description="Sube el PDF de la memoria de calidades de esta promoción."
+        icon={FileText}
+        onSave={(files) => {
+          if (!isDraft) return;
+          patchDraft({ documentosMemoria: files.map((f) => f.name) });
+          toast.success(`${files.length} documento${files.length === 1 ? "" : "s"} de memoria guardados`);
+        }}
+      />
+      <EditDocumentDialog
+        open={editOpen === "planos"}
+        onOpenChange={(v) => setEditOpen(v ? "planos" : null)}
+        title="Subir planos generales"
+        description="Sube planos generales (PDF o imágenes)."
+        icon={Layers}
+        accept=".pdf,.jpg,.png"
+        multiple
+        onSave={(files) => {
+          if (!isDraft) return;
+          patchDraft({ documentosPlanos: files.map((f) => f.name) });
+          toast.success(`${files.length} plano${files.length === 1 ? "" : "s"} guardados`);
+        }}
+      />
+      <EditDocumentDialog
+        open={editOpen === "brochure"}
+        onOpenChange={(v) => setEditOpen(v ? "brochure" : null)}
+        title="Subir brochure"
+        description="Sube el PDF oficial del brochure para compradores y agencias."
+        icon={BookOpen}
+        onSave={(files) => {
+          setBrochureRemoved(false);  // al subir uno nuevo, reactiva la acción rápida
+          if (!isDraft) { toast.success("Brochure guardado"); return; }
+          patchDraft({ documentosBrochure: files.map((f) => f.name) });
+          toast.success("Brochure guardado");
+        }}
+      />
+      <EditContactsDialog
+        open={editOpen === "contacts"}
+        onOpenChange={(v) => setEditOpen(v ? "contacts" : null)}
+        website={draftState?.contactoWeb || website}
+        onSave={(data) => {
+          if (!isDraft) return;
+          patchDraft({
+            contactoWeb: data.website,
+            contactoTelefono: data.phone,
+            contactoEmail: data.email,
+          });
+          toast.success("Contactos públicos actualizados");
+        }}
+      />
       <EditInventoryDialog open={editOpen === "inventory"} onOpenChange={(v) => setEditOpen(v ? "inventory" : null)} onGoAvailability={() => setActiveTab(visibleTabs.indexOf("Availability"))} />
       <EditSalesOfficesDialog open={editOpen === "salesOffices"} onOpenChange={(v) => setEditOpen(v ? "salesOffices" : null)} offices={salesOffices} onSave={setSalesOffices} />
+
 
       {/* Pick team members (visual multi-select) */}
       <PickTeamMembersDialog
@@ -1663,7 +2242,7 @@ function AgencyActionRail() {
   );
 }
 
-function AgenciesTab({ promotionId, navigate }: { promotionId: string; navigate: (path: string) => void }) {
+function AgenciesTab({ promotionId, navigate, onInvite, canShare = true, onActivateSharing }: { promotionId: string; navigate: (path: string) => void; onInvite?: () => void; canShare?: boolean; onActivateSharing?: () => void }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
@@ -1762,7 +2341,7 @@ function AgenciesTab({ promotionId, navigate }: { promotionId: string; navigate:
             </button>
             <div className="hidden sm:block h-4 w-px bg-border/60" />
             <span className="hidden sm:inline text-xs text-muted-foreground"><span className="font-semibold text-foreground">{filtered.length}</span> agencias</span>
-            <Button size="sm" className="rounded-full text-xs h-8 gap-1.5 px-3.5"><Plus className="h-3 w-3" /> Invitar agencia</Button>
+            <Button size="sm" onClick={onInvite} disabled={!canShare} className="rounded-full text-xs h-8 gap-1.5 px-3.5 disabled:opacity-50"><Plus className="h-3 w-3" /> Invitar agencia</Button>
           </div>
         </div>
       )}
@@ -1793,7 +2372,7 @@ function AgenciesTab({ promotionId, navigate }: { promotionId: string; navigate:
               <p className="text-sm text-muted-foreground leading-relaxed mb-5">
                 Invita agencias para que puedan registrar clientes y vender las unidades de esta promoción.
               </p>
-              <Button size="sm" className="gap-1.5 text-sm h-9 rounded-full"><Plus className="h-3.5 w-3.5" /> Invitar agencia</Button>
+              <Button size="sm" onClick={onInvite} disabled={!canShare} className="gap-1.5 text-sm h-9 rounded-full disabled:opacity-50"><Plus className="h-3.5 w-3.5" /> Invitar agencia</Button>
             </div>
           )}
         </div>
@@ -1822,7 +2401,13 @@ function AgenciesTab({ promotionId, navigate }: { promotionId: string; navigate:
                           <p className="text-[10px] text-muted-foreground">{a.promotionsCollaborating.length} de {a.totalPromotionsAvailable} promos</p>
                         </div>
                       </div>
-                      <button className="text-[10px] text-primary font-medium hover:underline shrink-0">Invitar</button>
+                      <button
+                        onClick={onInvite}
+                        disabled={!canShare}
+                        className="text-[10px] text-primary font-medium hover:underline shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:no-underline"
+                      >
+                        Invitar
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -2481,19 +3066,17 @@ function SectionCard({ title, stepName, missing, onEdit, children, hideEdit, flu
 }) {
   if (missing && hideEdit) return null;
   if (missing) {
+    // Vacío pero sin énfasis rojizo · la ficha lo muestra "sin configurar"
+    // con tono neutro; el aviso de publicación vive arriba en el banner.
     return (
-      <div className="rounded-2xl border border-dashed border-destructive/30 bg-destructive/5 p-5">
+      <div className="rounded-2xl border border-border bg-card shadow-soft p-5">
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
-            <h2 className="text-base font-semibold text-foreground">{title}</h2>
-            <Tag variant="danger" size="sm">Falta</Tag>
-          </div>
+          <h2 className="text-base font-semibold text-foreground">{title}</h2>
           <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7" onClick={onEdit}>
-            <Pencil className="h-3 w-3" /> Completar
+            <Pencil className="h-3 w-3" /> Editar
           </Button>
         </div>
-        <EmptyState icon={stepConfig[stepName]?.icon || Settings} message={`${title} sin configurar`} sub={`Pulsa "Completar" para configurar ${title.toLowerCase()}`} />
+        <EmptyState icon={stepConfig[stepName]?.icon || Settings} message={`${title} sin configurar`} sub={`Pulsa "Editar" para añadir ${title.toLowerCase()}.`} />
       </div>
     );
   }

@@ -66,6 +66,7 @@ import {
   ChevronRight, Search, ChevronDown, X, Star, UserPlus, Building2, Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useFavoriteAgencies } from "@/lib/favoriteAgencies";
 // Catálogo de plantillas + tipado de audiencia/idioma/bloques editables
 import {
   EMAIL_TEMPLATES, getTemplate, getTemplatesByAudience,
@@ -105,8 +106,7 @@ const FAKE_CLIENTS = [
   { id: "c4", name: "Lucía García", email: "lucia.garcia@email.com", favorite: false },
 ];
 
-/** Favorite collaborators (subset of agencies) */
-const FAVORITE_AGENCY_IDS = new Set(["ag-1", "ag-2"]);
+/* Favoritos ahora vienen de `useFavoriteAgencies()` — store central. */
 
 type RecipientKind = "agency" | "client" | "external";
 interface Recipient {
@@ -137,6 +137,7 @@ export function SendEmailDialog({
   unitId,
 }: SendEmailDialogProps) {
   const { toast } = useToast();
+  const { ids: FAVORITE_AGENCY_IDS } = useFavoriteAgencies();
 
   // ── Derive forced template based on mode ──
   // unit / promotion → "new-availability" by default (most common case).

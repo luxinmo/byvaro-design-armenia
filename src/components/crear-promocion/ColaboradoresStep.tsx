@@ -34,7 +34,7 @@ const inputBase =
   "rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-colors";
 
 const condicionesOptions: { value: CondicionRegistro; label: string; required: boolean }[] = [
-  { value: "nombre_completo", label: "Nombre y apellido completo", required: true },
+  { value: "nombre_completo", label: "Nombre completo", required: true },
   { value: "ultimas_4_cifras", label: "4 últimas cifras del teléfono", required: true },
   { value: "nacionalidad", label: "Nacionalidad", required: true },
   { value: "email_completo", label: "Email completo", required: false },
@@ -500,31 +500,6 @@ export function ColaboradoresStep({
         )}
       </div>
 
-      {/* ═════ Preview block ═════ */}
-      <div className="rounded-xl border border-border bg-muted/30 px-5 py-4 flex flex-col gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-          Vista previa
-        </p>
-        <div className="flex items-center gap-5">
-          <div className="flex flex-col items-center gap-1">
-            <Globe className="h-4 w-4 text-primary" strokeWidth={1.5} />
-            <span className="text-[10px] text-muted-foreground">
-              {state.diferenciarNacionalInternacional ? "Internacional" : "Comisión"}
-            </span>
-            <span className="text-sm font-bold text-foreground tnum">{state.comisionInternacional}%</span>
-          </div>
-          {state.diferenciarNacionalInternacional && (
-            <>
-              <div className="h-10 w-px bg-border" />
-              <div className="flex flex-col items-center gap-1">
-                <Home className="h-4 w-4 text-primary" strokeWidth={1.5} />
-                <span className="text-[10px] text-muted-foreground">Nacional</span>
-                <span className="text-sm font-bold text-foreground tnum">{state.comisionNacional}%</span>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

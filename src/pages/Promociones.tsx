@@ -22,6 +22,10 @@ import { Tag } from "@/components/ui/Tag";
 import { PromocionesMap } from "@/components/promociones/PromocionesMap";
 import { cn } from "@/lib/utils";
 import { MinimalSort } from "@/components/ui/MinimalSort";
+import { listDrafts, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
+import { Trash2 } from "lucide-react";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
 
 /* ═══════════════════════════════════════════════════════════════════
    Opciones estáticas (las dinámicas se derivan de los datos en el componente)
@@ -327,6 +331,7 @@ const TRENDING_THRESHOLD = 50;
    ═══════════════════════════════════════════════════════════════════ */
 export default function Promociones() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [search, setSearch] = useState("");
 
   // Filtros de gestión (específicos del promotor)
@@ -364,6 +369,7 @@ export default function Promociones() {
 
   // Drawer de filtros
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sharingPromotion, setSharingPromotion] = useState<{ id: string; name: string } | null>(null);
 
   // Contador de filtros activos (para badge)
   const activeFilterCount =
@@ -375,10 +381,25 @@ export default function Promociones() {
     (minBedrooms !== null ? 1 : 0) +
     (agencyFilter !== null ? 1 : 0);
 
-  /* ─── Dataset combinado (developer-only + legacy) ─── */
-  const allPromotions: DevPromotion[] = useMemo(() => {
-    return [...developerOnlyPromotions, ...promotions.map(p => ({ ...p } as DevPromotion))];
+  /* ─── Borradores (aparecen en el listado con status="incomplete") ── */
+  const [drafts, setDrafts] = useState<PromotionDraft[]>(() => listDrafts());
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "byvaro-promotion-drafts") setDrafts(listDrafts());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
+
+  /* ─── Dataset combinado (developer-only + legacy + borradores) ─── */
+  const draftPromotions: DevPromotion[] = useMemo(
+    () => drafts.map((d) => draftToPromotionData(d) as DevPromotion),
+    [drafts],
+  );
+
+  const allPromotions: DevPromotion[] = useMemo(() => {
+    return [...draftPromotions, ...developerOnlyPromotions, ...promotions.map(p => ({ ...p } as DevPromotion))];
+  }, [draftPromotions]);
 
   /* ─── Opciones de filtros de GESTIÓN (fijas) ─── */
   const activityOptions = [
@@ -717,13 +738,22 @@ export default function Promociones() {
               const trending = isTrending(p);
               const hasMissing = p.missingSteps && p.missingSteps.length > 0;
 
+              const isDraft = p.id.startsWith(DRAFT_ID_PREFIX);
+              // Tanto incompletas (draft) como publicadas abren la ficha de
+              // promoción. En incompletas los bloques se pintan con borde
+              // rojo (status="incomplete" + missingSteps) · el usuario
+              // puede completar cada campo desde ahí.
+              const navigateTarget = () => navigate(`/promociones/${encodeURIComponent(p.id)}`);
+
               return (
                 <article
                   key={p.id}
-                  onClick={() => navigate(`/promociones/${p.id}`)}
+                  onClick={navigateTarget}
                   className={cn(
                     "group flex flex-col xl:flex-row bg-card border rounded-2xl overflow-hidden shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer",
-                    hasMissing
+                    isDraft
+                      ? "border-dashed border-primary/40"
+                      : hasMissing
                       ? "border-destructive/30 ring-1 ring-destructive/10"
                       : trending
                       ? "border-border ring-1 ring-amber-300/50"
@@ -755,6 +785,29 @@ export default function Promociones() {
                       <div className="flex items-center justify-center h-full">
                         <Building2 className="h-10 w-10 text-muted-foreground/15" />
                       </div>
+                    )}
+                    {isDraft && (
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const ok = await confirm({
+                            title: "¿Descartar borrador?",
+                            description: `"${p.name}" se eliminará permanentemente.`,
+                            confirmLabel: "Descartar",
+                            variant: "destructive",
+                          });
+                          if (!ok) return;
+                          const rawId = p.id.slice(DRAFT_ID_PREFIX.length);
+                          deleteDraft(rawId);
+                          setDrafts(listDrafts());
+                        }}
+                        className="absolute top-3 right-3 h-8 w-8 inline-flex items-center justify-center rounded-full bg-background/85 backdrop-blur-sm text-muted-foreground hover:text-destructive hover:bg-background opacity-0 group-hover:opacity-100 transition-all shadow-soft"
+                        aria-label="Descartar borrador"
+                        title="Descartar borrador"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      </button>
                     )}
                   </div>
 
@@ -911,14 +964,39 @@ export default function Promociones() {
                         )}
                         {p.hasShowFlat && <span className="hidden sm:inline">Piso piloto</span>}
                       </div>
-                      <button
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-sm xl:text-xs font-medium text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-1 shrink-0"
-                      >
-                        <Share2 className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Compartir con agencias</span>
-                        <span className="sm:hidden">Compartir</span>
-                      </button>
+                      {(() => {
+                        const sharingEnabled = p.canShareWithAgencies !== false;
+                        const shareEnabled = p.status === "active" && !hasMissing && sharingEnabled;
+                        return (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!shareEnabled) return;
+                              setSharingPromotion({ id: p.id, name: p.name });
+                            }}
+                            disabled={!shareEnabled}
+                            title={
+                              !shareEnabled
+                                ? (p.status !== "active"
+                                    ? "Publica la promoción para compartirla"
+                                    : !sharingEnabled
+                                      ? "Activa compartir en Comisiones"
+                                      : "Completa los pasos pendientes")
+                                : undefined
+                            }
+                            className={cn(
+                              "text-sm xl:text-xs font-medium transition-colors inline-flex items-center gap-1 shrink-0",
+                              shareEnabled
+                                ? "text-primary hover:text-primary/80"
+                                : "text-muted-foreground/50 cursor-not-allowed",
+                            )}
+                          >
+                            <Share2 className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Compartir con agencias</span>
+                            <span className="sm:hidden">Compartir</span>
+                          </button>
+                        );
+                      })()}
                     </div>
                   </div>
                 </article>
@@ -1043,6 +1121,16 @@ export default function Promociones() {
           </>
         )}
       </AnimatePresence>
+
+      {/* Compartir promoción con agencia */}
+      {sharingPromotion && (
+        <SharePromotionDialog
+          open={!!sharingPromotion}
+          onOpenChange={(v) => { if (!v) setSharingPromotion(null); }}
+          promotionId={sharingPromotion.id}
+          promotionName={sharingPromotion.name}
+        />
+      )}
     </div>
   );
 }

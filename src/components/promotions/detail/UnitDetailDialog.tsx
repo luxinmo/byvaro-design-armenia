@@ -72,7 +72,7 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
 
   if (!unit) return null;
 
-  const sc = statusConfig[unit.status];
+  const sc = statusConfig[unit.status] ?? statusConfig.available;
   const pricePerM2 = Math.round(unit.price / unit.builtArea);
   const displayId = getUnitDisplayId(unit);
   const isUni = ["Villa", "Chalet", "Unifamiliar", "Pareado", "Adosado"].includes(unit.type);

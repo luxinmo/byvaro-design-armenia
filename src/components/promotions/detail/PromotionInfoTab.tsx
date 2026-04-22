@@ -202,7 +202,7 @@ function PaymentContent({ reservationCost }: { reservationCost: number }) {
 /* ─── Registro ─── */
 function RegistroContent() {
   const conditions = [
-    "Nombre y apellidos",
+    "Nombre completo",
     "Nacionalidad",
     "Últimas 4 cifras del teléfono",
   ];

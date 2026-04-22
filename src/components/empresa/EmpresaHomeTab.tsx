@@ -14,6 +14,7 @@ import { HeroStatsStrip } from "./HeroStatsStrip";
 import { ZonasEspecialidadesCard } from "./ZonasEspecialidadesCard";
 import { TestimoniosCard } from "./TestimoniosCard";
 import { PortfolioShowcase } from "./PortfolioShowcase";
+import { GoogleRatingCard } from "./GoogleRatingCard";
 import { cn } from "@/lib/utils";
 
 /* ─── Datos mock (agents + collab) ────────────────────────────────── */
@@ -69,6 +70,9 @@ export function EmpresaHomeTab({
     <div className="flex flex-col gap-5">
       {/* ═════ Stats de credibilidad ═════ */}
       <HeroStatsStrip empresa={empresa} />
+
+      {/* ═════ Rating Google Business ═════ */}
+      <GoogleRatingCard empresa={empresa} viewMode={viewMode} update={update} />
 
       {/* ═════ Overview ═════ */}
       <EditableSection

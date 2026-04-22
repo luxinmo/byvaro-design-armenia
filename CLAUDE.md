@@ -164,6 +164,132 @@ hex ni colores literales en componentes. Usa siempre los tokens semánticos:
 
 ---
 
+## 🥇 REGLA DE ORO · Historial del contacto
+
+> **Todo lo que pasa con un contacto se registra en su Historial.** Sin
+> excepciones. El tab Historial (`/contactos/:id?tab=historial`) es la
+> única fuente de verdad de la actividad del contacto y debe contar la
+> historia completa de qué se hizo, quién lo hizo y cuándo.
+
+**Cómo se aplica.** Toda acción que cree, modifique o comunique algo
+sobre un contacto **DEBE** llamar a `recordEvent()` (o uno de sus
+helpers tipados) de `src/components/contacts/contactEventsStorage.ts` en
+el mismo handler que ejecuta la acción. Si añades una acción nueva en
+una ficha de contacto y olvidas registrarla, el Historial pierde
+fidelidad y es un bug.
+
+**Qué se registra.** Sin pretender ser exhaustivo: creación, edición
+(con diff de campos cambiados), borrado, asignación/desasignación,
+vínculo/desvínculo entre contactos, cambio de status, alta/borrado de
+documentos, evaluación de visita, comentario interno, email enviado,
+WhatsApp enviado, llamada, alta de registro/oferta, actividad web
+detectada, cambios de sistema (bot).
+
+**Helpers disponibles** (azúcar para no construir el evento a mano):
+
+```ts
+recordContactCreated(id, by)
+recordContactEdited(id, by, changedFields[])
+recordAssigneeAdded(id, by, memberName)
+recordAssigneeRemoved(id, by, memberName)
+recordRelationLinked(id, by, otherName, relationLabel)  // bidireccional: registra en ambos contactos
+recordRelationUnlinked(id, by, otherName)
+recordVisitEvaluated(id, by, { promotionName, unit?, outcome, rating? })
+recordDocumentUploaded(id, by, docName)
+recordDocumentDeleted(id, by, docName)
+recordCommentAdded(id, by, content, "user" | "system")
+recordEmailSent(id, by, to, subject, attachmentsCount?)
+recordWhatsAppSent(id, by, summary)
+recordTypeAny(id, type, title, description?, by?)        // escape hatch para tipos no cubiertos
+```
+
+`by` siempre es `{ name, email }` del usuario actual (`useCurrentUser()`).
+Si el cambio lo dispara el sistema (bot, automatización, integración),
+pasa `{ name: "Sistema" }` y se renderiza con avatar bot + estilo
+discontinuo.
+
+**Vínculos bidireccionales.** Cuando una acción afecta a dos contactos
+(ej. vincular A↔B), registra el evento en **ambos** contactos para que
+cada ficha cuente su versión.
+
+**Comentarios = parte del Historial.** No hay tab separado de
+"Comentarios". El editor inline para añadir notas vive dentro del
+Historial cuando el sub-pill activo es "Comentarios". Llama a
+`addComment()` (storage) **y** `recordCommentAdded()` (audit) — los dos.
+
+**No te olvides.** Antes de hacer commit de una acción nueva en
+contactos, verifica: ¿se ve reflejada en `/contactos/:id?tab=historial`?
+Si no, falta el `recordEvent()`.
+
+---
+
+## 🛡️ REGLA DE ORO · Permisos y visibilidad
+
+> **El catálogo canónico de permisos vive en `docs/permissions.md`.**
+> Antes de añadir una key nueva, ocultar/mostrar un botón por rol o
+> filtrar un listado por ownership, lee ese documento. Si te falta un
+> caso, anótalo allí como Open Question — NO inventes claves nuevas.
+
+**Modelo en dos ejes**:
+1. **Rol del workspace** (`admin` | `member` | custom): qué FEATURES.
+2. **Ownership** (own / all): qué REGISTROS dentro de cada feature.
+
+`*.viewAll` implica `*.viewOwn`. El admin tiene **todo** por defecto
+(escudo en `useHasPermission()` que devuelve true sin consultar la matriz).
+
+**Hooks principales**:
+```ts
+useHasPermission(key)   // src/lib/permissions.ts
+isAdmin(user)           // src/lib/currentUser.ts
+useCurrentUser()        // src/lib/currentUser.ts
+// TODO(visibility): useVisibilityFilter(scope) → predicado para listas
+```
+
+**Cómo aplicar**:
+- **Acciones** (botones, mutaciones): `if (!useHasPermission("dom.action")) return null;`
+- **Vistas enteras**: `if (!viewOwn) return <NoAccessView />;` (ver patrón en `ContactWhatsAppTab.tsx`).
+- **Listados**: filtrar por `assignedTo.includes(user.id)` cuando solo hay `viewOwn`. **Ahora mismo nadie filtra** — la mayoría de pantallas asumen `viewAll`. Es una **deuda conocida** documentada en `docs/permissions.md` §6.
+
+**Estado del código (abril 2026)**:
+- ✅ Solo WhatsApp respeta permisos.
+- ❌ Contactos / Registros / Operaciones / Visitas / Documentos / Emails muestran TODO sin filtrar.
+- ❌ Faltan ~50 keys por declarar (catálogo completo en `docs/permissions.md` §2).
+
+**Para el agente que monte el backend**: el contrato (esquema SQL, JWT
+claims, RLS policies, endpoints) está en `docs/permissions.md` §4.
+Implementar **antes** de quitar el modo mock de `permissions.ts`.
+
+---
+
+## ⚙️ Settings: marcar `live` al activar
+
+Las sub-páginas de `/ajustes/*` se declaran en
+`src/components/settings/registry.ts` con `SettingsLink`. Cada link tiene
+un flag opcional `live: boolean`:
+
+- `live: true` → la sub-página tiene contenido funcional (formulario,
+  CRUD, etc.). Se renderiza con color normal en el directorio (`AjustesHome`)
+  y en el sidebar nav (`SettingsShell`).
+- `live: false` (o ausente, por defecto) → la sub-página es un
+  **placeholder** ("En diseño"). Se renderiza con `text-muted-foreground/45 italic`
+  para que el usuario distinga de un vistazo qué está activo y qué no.
+
+**REGLA**: cuando crees una sub-página real para un placeholder, marca su
+link como `live: true` en el registry **en el mismo commit**. El
+indicador visual desaparece automáticamente. No te olvides — un
+placeholder marcado como `live` engaña al usuario; un real sin marcar
+parece roto.
+
+Ejemplo:
+
+```ts
+// Antes de implementar la página real
+{ label: "Idioma", to: "/ajustes/idioma-region/idioma" }
+
+// Cuando creas la página real (en el mismo commit)
+{ label: "Idioma", to: "/ajustes/idioma-region/idioma", live: true }
+```
+
 ## 🛠️ Stack y convenciones de código
 
 - **Build**: Vite 5 + React 18 + TypeScript 5.
@@ -203,11 +329,108 @@ Carpeta `docs/` — cada archivo cubre un área:
 | `docs/ia-menu.md` | Estructura del menú nuevo vs original |
 | `docs/design-system.md` | Tokens, componentes, patrones visuales |
 | `docs/data-model.md` | Entidades, tipos, relaciones, reglas de negocio |
-| `docs/services.md` | **Servicios externos a instalar** para producción |
-| `docs/api-contract.md` | Endpoints API esperados (contract-first) |
-| `docs/screens/*.md` | Spec funcional por pantalla |
+| **`docs/backend-integration.md`** | 📌 **Canónico · todo el contrato UI↔API**, endpoints por dominio, crons, integraciones externas, referencias cruzadas a cada `TODO(backend)` del código |
+| **`docs/permissions.md`** | 🛡️ **Canónico · permisos y visibilidad** · catálogo completo de keys, defaults por rol, contrato backend (RLS, JWT), contrato frontend, deuda técnica actual |
+| `docs/ui-helpers.md` | Catálogo de helpers puros y componentes transversales |
+| `docs/services.md` | Servicios externos a instalar para producción |
+| `docs/api-contract.md` | Endpoints API esperados (histórico por pantalla) |
+| `docs/screens/*.md` | Spec funcional por pantalla (+ `README.md` índice) |
+| `docs/open-questions.md` | Preguntas abiertas · consultar antes de inventar |
 | `DECISIONS.md` (raíz) | Log de decisiones de diseño/arquitectura |
 | `ROADMAP.md` (raíz) | Qué está hecho, qué falta |
+
+---
+
+## 🔌 Handoff al backend · por dónde empezar
+
+Si eres el agente que levanta el backend real:
+
+1. **Empieza por `docs/backend-integration.md`** — es la **fuente única
+   de verdad** del contrato UI↔API. Cada dominio (Promociones, Anejos,
+   Colaboradores, Compartir, Estadísticas, etc.) tiene su sección con
+   endpoints, shapes, reglas de negocio y referencias cruzadas al
+   código (`archivo:línea` donde hay un `TODO(backend)`).
+2. **Completa con `docs/data-model.md`** — entidades con su shape TS y
+   las reglas de negocio clave (detector de duplicados, validez de
+   registros, multi-tenancy, etc.).
+3. **Cada pantalla tiene spec en `docs/screens/<nombre>.md`** — ahí
+   está el detalle de UX, estados visuales y qué endpoints consume.
+4. **`grep -r "TODO(backend)"` sobre `src/`** te da el mapa exacto de
+   los puntos donde el frontend espera un endpoint. Cada TODO apunta a
+   la sección de `docs/backend-integration.md` donde se especifica.
+5. **`DECISIONS.md` (ADRs)** explica *por qué* están las cosas como
+   están — léelo antes de proponer cambios estructurales.
+
+**Dominios clave (con su sección en `docs/backend-integration.md`):**
+
+- §3 · Promociones · `GET/PATCH /api/promociones/:id`, galería, brochure.
+- §3.1 · **Anejos sueltos** · parkings/trasteros con modelo, origen
+  desde wizard y endpoints CRUD + reservations/email.
+- §4 · Colaboradores (agencias) · join `Empresa` + `Collaboration`.
+- §4.1 · Recomendaciones de agencias (**aparcado** · ver ADR-038).
+- §4.2 · Estadísticas de colaboradores · matrices + señales diferenciales.
+- §5 · Compartir promoción · invitaciones multi-agencia, crosssell.
+- §6 · Favoritos · store central cross-pantalla.
+- §7 · Registros / ventas / contactos.
+- §8 · Integraciones externas (Google Places, SMTP, WhatsApp).
+
+**Regla de oro al integrar**: preserva todas las invariantes marcadas
+en el contrato (filtros que excluyen agencias ya colaboradoras, cambios
+de estado que desactivan acciones — ej. `brochureRemoved` → acción
+"Brochure" deshabilitada, reglas de privacidad cross-tenant en
+recomendaciones). Si algo no queda claro, `docs/open-questions.md` o
+detente y pregunta — no inventes.
+
+---
+
+## 📜 REGLA DE ORO · Documentación obligatoria
+
+**Es obligatorio para todo agente/colaborador que trabaje en este repo.**
+
+### ⚠️ Al finalizar cualquier cambio no trivial · checklist antes de cerrar
+
+Antes de responder "listo/hecho" al usuario **tienes que pasar esta check
+explícita**, tocando cada punto y marcando:
+
+- [ ] **Código** · ¿hay `TODO(backend)` junto a todo mock/localStorage nuevo?
+- [ ] **`docs/backend-integration.md`** · ¿los endpoints nuevos están en la
+      sección de dominio correspondiente, con referencia `archivo:línea`?
+- [ ] **`docs/data-model.md`** · ¿el tipo nuevo/ampliado está documentado?
+- [ ] **`docs/screens/*.md`** · ¿la pantalla afectada refleja el cambio?
+      Si es pantalla nueva, ¿añadido al `docs/screens/README.md`?
+- [ ] **`docs/ui-helpers.md`** · ¿helper transversal nuevo registrado?
+- [ ] **`DECISIONS.md`** · ¿decisión no trivial con ADR nuevo?
+- [ ] **`CLAUDE.md`** · ¿alguna regla nueva del sistema que anotar?
+
+### 🙋 Pregunta obligatoria al terminar
+
+Cuando cierres una tarea, **antes de devolver el control al usuario**, haz
+explícitamente esta pregunta (o confirma que no aplica):
+
+> _"¿Queda algo por documentar o actualizar de este cambio? Propongo
+> actualizar: [lista concreta de archivos]. Si no hace falta, confirma y
+> cierro."_
+
+No es retórica — la respuesta del usuario puede añadir cosas (notas
+legales, excepciones, ADR). **Si te saltas la pregunta, asumes riesgo
+de dejar documentación obsoleta.** El coste de preguntar es 5 segundos;
+el coste de no preguntar puede ser que el backend agent no entienda
+qué conectar.
+
+### ¿Por qué esta regla existe?
+
+Byvaro es un proyecto frontend-first con mocks en localStorage. El agente
+que levante el backend **nunca habrá vivido esta conversación**. Lo único
+que tiene son los docs + los `TODO(backend)` del código. Si la documentación
+está incompleta u obsoleta:
+
+- Endpoints mal diseñados (porque no entendió la intención).
+- Tipos duplicados (porque no vio que ya existía el modelo).
+- Integraciones duplicadas (porque no vio el ADR).
+- Reglas de negocio perdidas (porque estaban solo en un chat).
+
+La documentación **es más importante que cualquier refactor**. Si tienes
+5 minutos antes de cerrar una tarea, úsalos en docs, no en cosmética.
 
 Cada vez que se diseña una pantalla nueva:
 1. Se crea `docs/screens/<nombre>.md` con la spec funcional

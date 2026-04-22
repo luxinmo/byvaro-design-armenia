@@ -6,6 +6,24 @@ Entidades del dominio + tipos TypeScript + reglas de negocio.
 > `src/components/crear-promocion/types.ts`. Este documento los **explica**
 > pero no los **define** — para el contrato de datos, leer el código.
 
+## 🛡️ Ownership y visibilidad
+
+Las entidades transaccionales del workspace llevan un array
+`assignedTo: string[]` (userIds) que el sistema de permisos usa para
+filtrar `viewOwn` vs `viewAll`. Aplica a:
+
+- `Contact` — agentes asignados al contacto.
+- `Registro` — agente que captó el lead.
+- `Oportunidad` — agente que la trabaja.
+- `Venta` — agente que la cerró.
+- `Visit` — agente que la realizó.
+- `Document` — heredado del `assignedTo` del contacto dueño.
+- `Email` — usuario propietario de la cuenta + delegados.
+
+**En BD**: columna `assigned_to UUID[] NOT NULL DEFAULT '{}'` con
+índice GIN. Catálogo completo de keys, defaults por rol, RLS policies
+y JWT claims en `docs/permissions.md`.
+
 ## Entidades principales
 
 ### Empresa (Company / Tenant)
@@ -134,37 +152,124 @@ Datos: `src/data/units.ts` → `unitsByPromotion[promotionId]`.
 - Para unifamiliar, el campo "planta" se muestra como "parcela"
 - Una unidad con `status === "sold"` no puede volver a reservarse
 
+### Anejo suelto (Anejo)
+
+Parking o trastero que se vende **por separado** de la vivienda. Se
+crea cuando la config de la promoción declara que NO va incluido en el
+precio, o cuando hay más plazas/trasteros que viviendas (excedente).
+
+```ts
+interface Anejo {
+  id: string;
+  promotionId: string;
+  publicId: string;              // "P1", "P2", "T1", "T2"
+  tipo: "parking" | "trastero";
+  precio: number;                // EUR
+  status: "available" | "reserved" | "sold" | "withdrawn";
+  clientName?: string;           // si reservado / vendido
+  agencyName?: string;
+  reservedAt?: string;           // ISO
+  soldAt?: string;               // ISO
+}
+```
+
+Datos: `src/data/anejos.ts` → `anejosByPromotion[promotionId]`.
+
+**Reglas:**
+- Paralelo a `Unit`: mismo modelo de estados, misma UX de tabla (kebab
+  con Ver · Editar · Enviar · Iniciar compra), misma paleta de status.
+- El segmento "Parkings" o "Trasteros" solo se muestra en
+  `/promociones/:id` (tab Disponibilidad) si hay al menos un anejo de
+  ese tipo. Si no hay, el segmento queda oculto — no se muestra
+  contador a cero.
+- Origen de los datos: al publicar promoción, backend genera N filas
+  desde `WizardState.parkings` / `WizardState.trasteros` y los arrays
+  `parkingPrecios` / `trasteroPrecios`. Todos arrancan `available`.
+- `publicId` lo genera el backend (`P1..Pn`, `T1..Tn`).
+- Contrato API: ver `docs/backend-integration.md §3.1`.
+
 ### Agencia (Agency / Collaborator)
 
 Organización externa que colabora trayendo clientes.
 
+⚠️ En backend, `Agency` es un **join** entre `Empresa` (tenant agencia) y
+`Collaboration` (relación con el promotor). Los campos identidad (logo,
+cover, name, mercados, teamSize, googleRating…) pertenecen al `Empresa`
+público de la agencia; los operativos (estado, comisión, ventas, contrato)
+a la `Collaboration`. Ver `docs/backend-integration.md` §0 y §4.
+
 ```ts
 interface Agency {
+  /* ─── Identidad pública (de Empresa del tenant agencia) ─── */
   id: string;
   name: string;
+  /** Logo circular/cuadrado · avatar en listados, chips. ≥256×256. */
   logo?: string;
+  /** Logo rectangular tipo wordmark · cabeceras, emails. ~250×100 (2:1). */
+  logoRect?: string;
   cover?: string;
   location: string;          // "Marbella, Spain"
   type: "Agency" | "Broker" | "Network";
   description: string;
-  visitsCount: number;
-  registrations: number;
-  salesVolume: number;       // € facturado
-  collaboratingSince?: string;
-  status: "active" | "pending" | "inactive" | "expired";
   offices: { city: string; address: string }[];
-  promotionsCollaborating: string[];  // IDs de promociones activas
+
+  /* ─── Relación (Collaboration con el promotor) ─── */
+  status: "active" | "pending" | "inactive" | "expired";  // legacy
+  estadoColaboracion?: "activa" | "contrato-pendiente" | "pausada";
+  origen?: "invited" | "marketplace";
+  collaboratingSince?: string;
+  promotionsCollaborating: string[];          // IDs de promociones activas
   totalPromotionsAvailable: number;
-  isNewRequest?: boolean;     // solicitud nueva de colaboración
+  solicitudPendiente?: boolean;
+  mensajeSolicitud?: string;
+  isNewRequest?: boolean;
+
+  /* ─── Contrato firmado ─── */
+  contractSignedAt?: string;                  // ISO yyyy-mm-dd
+  contractExpiresAt?: string;                 // ISO; null = sin caducidad
+  contractDocUrl?: string;                    // PDF
+
+  /* ─── Métricas operativas (calculadas por backend) ─── */
+  visitsCount: number;
+  registrations: number;                      // histórico
+  registrosAportados?: number;                // para vista v2 en Colaboradores
+  ventasCerradas?: number;
+  salesVolume: number;                        // EUR acumulado
+  comisionMedia?: number;                     // %
+  conversionRate?: number;                    // % ventasCerradas / registrosAportados
+  ticketMedio?: number;                       // EUR salesVolume / ventasCerradas
+  lastActivityAt?: string;                    // ISO · último registro/venta/login
+  teamSize?: number;                          // nº agentes (COUNT users tenant)
+
+  /* ─── Especialización comercial ─── */
+  especialidad?: "luxury" | "residential" | "commercial" | "tourist" | "second-home";
+  mercados?: string[];                        // ISO2 nacionalidades cubiertas, ej ["GB","NL"]
+
+  /* ─── Rating público Google (Places API, cron semanal) ─── */
+  googlePlaceId?: string;
+  googleRating?: number;                      // 0-5
+  googleRatingsTotal?: number;
+  googleFetchedAt?: string;                   // ISO · ToS: ≤30 días
+  googleMapsUrl?: string;
+
+  /* ─── Evaluación interna del promotor ─── */
+  ratingPromotor?: number;                    // 1-5 subjetivo (privado)
+  incidencias?: { duplicados: number; cancelaciones: number; reclamaciones: number };
 }
 ```
 
-Datos: `src/data/agencies.ts`.
+Datos mock: `src/data/agencies.ts`. Helper `getContractStatus(a)` computa
+`"vigente" | "por-expirar" (≤30d) | "expirado" | "sin-contrato"`.
 
 **Reglas:**
-- Una agencia solo ve promociones listadas en `promotionsCollaborating`
-- Nuevas solicitudes (`isNewRequest`) aparecen en banner arriba de la lista
-- `status === "expired"` → no puede crear registros nuevos
+- Una agencia solo ve promociones listadas en `promotionsCollaborating`.
+- Nuevas solicitudes (`isNewRequest`) aparecen en banner arriba de la lista.
+- `status === "expired"` → no puede crear registros nuevos.
+- `canShareWithAgencies === false` en la promoción → el promotor no puede
+  invitar nuevas agencias ni compartir esa promo (gate en ADR-033).
+- `ratingPromotor` e `incidencias` NO se envían a la agencia (privados).
+- Atribución "Basado en reseñas de Google" obligatoria al mostrar
+  `googleRating` (Places API ToS).
 
 ### Registro (Record / Client Registration)
 
@@ -308,6 +413,245 @@ interface CollaborationConfig {
 ```
 
 Tipos: `src/data/developerPromotions.ts` + `src/types/promotion-config.ts`.
+
+### Invitación (Invitacion)
+
+Representa una invitación del promotor a una agencia (nueva o existente)
+para colaborar en una promoción concreta o en la cartera entera.
+
+```ts
+type EstadoInvitacion = "pendiente" | "aceptada" | "rechazada" | "caducada";
+
+interface PagoTramo {
+  tramo: number;
+  completado: number;   // % del cobro del cliente
+  colaborador: number;  // % de la comisión al colaborador en ese tramo
+}
+
+interface Invitacion {
+  id: string;
+  token: string;                         // token magic-link único
+  emailAgencia: string;
+  nombreAgencia: string;                 // puede ir vacío si no se rellenó
+  mensajePersonalizado: string;
+  comisionOfrecida: number;              // %
+  idiomaEmail: "es"|"en"|"fr"|"de"|"pt"|"it";
+  estado: EstadoInvitacion;
+  createdAt: number;                     // timestamp ms
+  expiraEn: number;                      // timestamp ms (30 días default)
+  respondidoEn?: number;
+
+  /* Opcionales · flujo SharePromotionDialog */
+  promocionId?: string;
+  promocionNombre?: string;
+  duracionMeses?: number;
+  formaPago?: PagoTramo[];
+  datosRequeridos?: string[];            // ["Nombre completo", "Teléfono", "Nacionalidad"]
+}
+```
+
+Tipos: `src/lib/invitaciones.ts`. Storage actual: localStorage bajo clave
+`byvaro-invitaciones`. Sincronización cross-tab por storage event +
+CustomEvent.
+
+**Helper:** `invitacionToSyntheticAgency(inv)` convierte una invitación
+pendiente en una fila sintética `Agency` con `estadoColaboracion:
+"contrato-pendiente"` para mostrarla en `/colaboradores` mientras no
+responda.
+
+**Template HTML:** `getInvitacionHtml(data)` devuelve `{ asunto, html }`
+email-safe (tablas + inline + media queries) con hero de promoción,
+precio desde-hasta, entrega, pill de unidades disponibles, comisión,
+tabla de tramos de pago, checklist de datos, CTA "Ver invitación".
+Preview estático: `email-previews/invitacion-agencia.html`.
+
+**Reglas:**
+- El token expira a los 30 días (`VALIDEZ_DIAS`).
+- La suma de `formaPago[].colaborador` debe ser 100%.
+- Dominios públicos (gmail, hotmail, …) se rechazan inline en el input.
+- Match por dominio contra `Empresa.domain` de otro tenant.
+- En `/colaboradores`, las pendientes se inyectan como filas sintéticas.
+
+### Favoritos (de agencias)
+
+Marcador booleano del promotor sobre sus colaboradores (para acceso rápido
+al compartir, filtrar, enviar email).
+
+```
+Set<Agency["id"]>    // localStorage: "byvaro-favoritos-agencias"
+```
+
+Hook: `useFavoriteAgencies()` en `src/lib/favoriteAgencies.ts` → expone
+`{ ids, isFavorite, toggleFavorite, add, remove }`. Persistencia + sync
+cross-tab idéntica al store de invitaciones.
+
+Consumidores: `Colaboradores.tsx`, `ColaboradoresV2/V3.tsx`,
+`SharePromotionDialog` (step "Mis favoritos"), `SendEmailDialog`
+(filtro "Favoritos"), `PromotionAgenciesV2`.
+
+## Entidades de la ficha de contacto
+
+> Todos los tipos viven en `src/components/contacts/types.ts`. Esta
+> sección documenta los más relevantes para el backend y la spec en
+> `docs/screens/contactos-ficha.md`.
+
+### `ContactRecordEntry` (lead / registro)
+
+Solicitud entrante al contacto desde un origen (agencia, portal, microsite, manual).
+
+```ts
+type ContactRecordEntry = {
+  id: string;
+  promotionId: string;
+  promotionName: string;
+  unit?: string;
+  /** Imagen del inmueble para thumbnail. */
+  propertyImage?: string;
+  /** Referencia interna (ej. MN-4B). */
+  propertyRef?: string;
+  /** URL del landing del microsite o portal donde se captó. */
+  landingUrl?: string;
+  /** Agente asignado. */
+  agent: string;
+  /** De dónde vino: "Idealista", "Fotocasa", "Microsite Marina Bay",
+   *  "Agencia Costa Sur", "Manual"… */
+  source: string;
+  status: "pending" | "approved" | "cancelled" | "converted";
+  timestamp: string;          // ISO
+  /** Si converted, id de la venta generada. */
+  convertedSaleId?: string;
+  /** Si cancelled, motivo libre. */
+  cancelReason?: string;
+  blockchainHash?: string;
+  agentNote?: string;
+};
+```
+
+Ciclo: `pending` (esperando aprobación del promotor) → `approved` (en
+trabajo) → `converted` (genera Venta) o `cancelled` (no fructificó).
+
+### `ContactOpportunityEntry` (oportunidad)
+
+Oportunidad activa con intereses declarados/inferidos del cliente.
+
+```ts
+type ContactOpportunityEntry = {
+  id: string;
+  promotionId: string;
+  promotionName: string;
+  unit?: string;
+  propertyImage?: string;
+  agencyName?: string;        // null si la abre el promotor en directo
+  agentName: string;
+  status: "active" | "won" | "archived";
+  createdAt: string;          // ISO
+  clientInterests?: {
+    propertyType?: string;    // "Ático" | "Piso" | "Villa" | …
+    area?: string;            // "Playa" | "Centro" | "Golf" | …
+    budgetMin?: number;
+    budgetMax?: number;
+    bedrooms?: string;        // "2" | "3" | "3+" | "4+"
+  };
+  tags?: string[];            // ["Vistas al mar", "Inversión", …]
+};
+```
+
+Ver ADR-042 para el rationale del 3-zone layout en el tab Operaciones.
+
+### `ContactActiveOperation` (banner "Compra en curso")
+
+Resumen de la operación activa (compra firmada) para el banner verde
+del tab Operaciones. Derivado del primer lead `converted` del contacto.
+
+```ts
+type ContactActiveOperation = {
+  id: string;
+  title: string;              // "Compra en curso"
+  promotionName: string;
+  unit?: string;
+  price: number;              // EUR
+  deposit: number;            // EUR
+  startDate: string;          // ISO
+  state: "in-progress";       // futuro: "signed" | "delivered" | …
+};
+```
+
+### `ContactRelation` (vínculo entre contactos)
+
+```ts
+type ContactRelation = {
+  contactId: string;
+  contactName: string;
+  /** Id del catálogo `relationTypesStorage`. NO es un union literal:
+   *  acepta tipos custom creados por el admin. */
+  relationType: string;
+};
+```
+
+Ver ADR-044 (catálogo dinámico).
+
+### `RelationType` (catálogo de tipos de relación)
+
+Vive en `src/components/contacts/relationTypesStorage.ts`. Editable
+por admin en `/ajustes/contactos/relaciones`.
+
+```ts
+type RelationType = {
+  id: string;          // slug inmutable (e.g. "spouse", "inversor-conjunto")
+  label: string;       // visible, editable
+  enabled?: boolean;   // false = no aparece al crear nuevos vínculos
+};
+
+const DEFAULT_RELATION_TYPES = [
+  { id: "spouse",    label: "Cónyuge",  enabled: true },
+  { id: "partner",   label: "Pareja",   enabled: true },
+  { id: "family",    label: "Familiar", enabled: true },
+  { id: "colleague", label: "Colega",   enabled: true },
+  { id: "other",     label: "Otro",     enabled: true },
+];
+```
+
+### `ContactTimelineEvent` (audit log)
+
+Append-only log de toda actividad relacionada con un contacto. Ver
+ADR-040 + regla de oro 🥇 Historial en CLAUDE.md.
+
+```ts
+type ContactTimelineEvent = {
+  id: string;
+  type: ContactTimelineEventType;
+  timestamp: string;          // ISO
+  title: string;
+  description?: string;
+  actor?: string;             // "Sistema" si es bot/automatización
+  actorEmail?: string;
+  meta?: Record<string, string | number>;
+};
+
+type ContactTimelineEventType =
+  // Identidad
+  | "lead_entry" | "contact_created" | "contact_edited" | "contact_deleted"
+  // Asignación / vinculación
+  | "assignee_added" | "assignee_removed"
+  | "relation_linked" | "relation_unlinked"
+  // Etiquetas / status
+  | "tag_added" | "tag_removed" | "status_changed"
+  // Visitas
+  | "visit_scheduled" | "visit_done" | "visit_cancelled" | "visit_evaluated"
+  // Email (ciclo completo · ADR-045)
+  | "email_sent" | "email_received" | "email_delivered" | "email_opened"
+  // WhatsApp
+  | "whatsapp_sent" | "whatsapp_received"
+  // Otros
+  | "call" | "comment" | "registration" | "web_activity"
+  | "document_uploaded" | "document_deleted"
+  | "system_change";
+
+type TimelineCategory = "all" | "comments" | "emails" | "whatsapp" | "web" | "system";
+```
+
+Helpers tipados (azúcar para no construir el evento a mano) en
+`contactEventsStorage.ts` — ver `docs/ui-helpers.md`.
 
 ## Reglas de negocio clave
 

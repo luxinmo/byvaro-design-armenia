@@ -31,11 +31,29 @@ import { Toaster } from "sonner";
 
 type Tab = "home" | "about" | "agents" | "statistics";
 
-export default function Empresa() {
-  const { empresa, update } = useEmpresa();
+/**
+ * Props opcionales:
+ *   - tenantId   · si viene, renderizamos el perfil PÚBLICO de OTRO tenant
+ *                  (modo "visitor"). Usado por `/colaboradores/:id`.
+ *   - visitorSlot · contenido propio del que visita (p.ej. overlay
+ *                  promotor-specific con contrato + acciones). Se renderiza
+ *                  antes del hero.
+ *   - visitorFooter · barra sticky inferior con acciones (aprobar, pausar,
+ *                    eliminar, compartir). Solo en modo visitor.
+ */
+export default function Empresa({
+  tenantId,
+  visitorSlot,
+  visitorFooter,
+}: {
+  tenantId?: string;
+  visitorSlot?: React.ReactNode;
+  visitorFooter?: React.ReactNode;
+} = {}) {
+  const { empresa, update, isVisitor } = useEmpresa(tenantId);
   const { oficinas } = useOficinas();
   const [tab, setTab] = useState<Tab>("home");
-  const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
+  const [viewMode, setViewMode] = useState<"edit" | "preview">(isVisitor ? "preview" : "edit");
   const [editingImage, setEditingImage] = useState<"logo" | "cover" | null>(null);
 
   /* ─── % de completitud ─── */
@@ -86,8 +104,8 @@ export default function Empresa() {
     <div className="flex flex-col min-h-full bg-background">
       <Toaster position="top-center" richColors />
 
-      {/* ═════ Banner onboarding ═════ */}
-      {isIncomplete && viewMode === "edit" && (
+      {/* ═════ Banner onboarding (solo dueño, no visitor) ═════ */}
+      {!isVisitor && isIncomplete && viewMode === "edit" && (
         <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 sm:px-6 lg:px-10 py-3 flex items-center gap-3 flex-wrap">
           <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0" />
           <p className="text-[11.5px] text-foreground flex-1 min-w-0">
@@ -104,33 +122,57 @@ export default function Empresa() {
       )}
 
       <div className="px-4 sm:px-6 lg:px-10 pt-4 pb-10 max-w-[1250px] mx-auto w-full">
-        {/* ═════ Cabecera Mi empresa ═════ */}
+        {/* ═════ Cabecera ═════ */}
         <div className="flex items-end justify-between gap-3 flex-wrap mb-4">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Administración
-            </p>
-            <h1 className="text-[22px] sm:text-[24px] font-bold tracking-tight leading-tight mt-1">
-              Mi empresa
-              {empresa.nombreComercial && (
-                <span className="text-muted-foreground font-normal ml-2">· {empresa.nombreComercial}</span>
-              )}
-            </h1>
-          </div>
-          <button
-            type="button"
-            onClick={() => setViewMode(viewMode === "edit" ? "preview" : "edit")}
-            className={cn(
-              "inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-[12.5px] font-semibold transition-colors",
-              viewMode === "preview"
-                ? "bg-foreground text-background hover:bg-foreground/90"
-                : "border border-border text-foreground hover:bg-muted",
+            {isVisitor ? (
+              <>
+                <a
+                  href="/colaboradores"
+                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-1"
+                >
+                  ← Colaboradores
+                </a>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Ficha de agencia
+                </p>
+                <h1 className="text-[22px] sm:text-[24px] font-bold tracking-tight leading-tight mt-1">
+                  {empresa.nombreComercial}
+                </h1>
+              </>
+            ) : (
+              <>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Administración
+                </p>
+                <h1 className="text-[22px] sm:text-[24px] font-bold tracking-tight leading-tight mt-1">
+                  Mi empresa
+                  {empresa.nombreComercial && (
+                    <span className="text-muted-foreground font-normal ml-2">· {empresa.nombreComercial}</span>
+                  )}
+                </h1>
+              </>
             )}
-          >
-            <Eye className="h-3.5 w-3.5" />
-            {viewMode === "preview" ? "Volver a editar" : "Previsualizar como agencia"}
-          </button>
+          </div>
+          {!isVisitor && (
+            <button
+              type="button"
+              onClick={() => setViewMode(viewMode === "edit" ? "preview" : "edit")}
+              className={cn(
+                "inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-[12.5px] font-semibold transition-colors",
+                viewMode === "preview"
+                  ? "bg-foreground text-background hover:bg-foreground/90"
+                  : "border border-border text-foreground hover:bg-muted",
+              )}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              {viewMode === "preview" ? "Volver a editar" : "Previsualizar como agencia"}
+            </button>
+          )}
         </div>
+
+        {/* ═════ Slot del visitante (overlay promotor: contrato + acciones) ═════ */}
+        {isVisitor && visitorSlot}
 
         {/* ═════ Profile hero ═════ */}
         <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-soft">
@@ -253,36 +295,43 @@ export default function Empresa() {
             {tab === "agents" && <EmpresaAgentsTab />}
           </div>
 
-          {viewMode === "edit" && tab === "home" && (
+          {!isVisitor && viewMode === "edit" && tab === "home" && (
             <EmpresaSidebar empresa={empresa} oficinasCount={oficinas.length} />
           )}
         </div>
       </div>
 
-      {/* ═════ Modal de edición de imagen ═════ */}
-      <ImageCropModal
-        open={editingImage === "logo"}
-        onClose={() => setEditingImage(null)}
-        onApply={handleApplyImage}
-        onRemove={handleRemoveImage}
-        initialImage={empresa.logoUrl || undefined}
-        shape={empresa.logoShape === "square" ? "square" : "circle"}
-        allowShapeSwitch
-        onShapeChange={(s) => update("logoShape", s)}
-        title="Editar logo"
-        outputSize={{ width: 512, height: 512 }}
-      />
-      <ImageCropModal
-        open={editingImage === "cover"}
-        onClose={() => setEditingImage(null)}
-        onApply={handleApplyImage}
-        onRemove={handleRemoveImage}
-        initialImage={empresa.coverUrl || undefined}
-        shape="rectangle"
-        aspectRatio={24 / 10}
-        title="Editar portada"
-        outputSize={{ width: 1200, height: 500 }}
-      />
+      {/* ═════ Modales de edición (solo dueño) ═════ */}
+      {!isVisitor && (
+        <>
+          <ImageCropModal
+            open={editingImage === "logo"}
+            onClose={() => setEditingImage(null)}
+            onApply={handleApplyImage}
+            onRemove={handleRemoveImage}
+            initialImage={empresa.logoUrl || undefined}
+            shape={empresa.logoShape === "square" ? "square" : "circle"}
+            allowShapeSwitch
+            onShapeChange={(s) => update("logoShape", s)}
+            title="Editar logo"
+            outputSize={{ width: 512, height: 512 }}
+          />
+          <ImageCropModal
+            open={editingImage === "cover"}
+            onClose={() => setEditingImage(null)}
+            onApply={handleApplyImage}
+            onRemove={handleRemoveImage}
+            initialImage={empresa.coverUrl || undefined}
+            shape="rectangle"
+            aspectRatio={24 / 10}
+            title="Editar portada"
+            outputSize={{ width: 1200, height: 500 }}
+          />
+        </>
+      )}
+
+      {/* ═════ Footer sticky del visitante (acciones promotor) ═════ */}
+      {isVisitor && visitorFooter}
     </div>
   );
 }
