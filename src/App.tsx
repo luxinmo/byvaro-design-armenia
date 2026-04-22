@@ -5,6 +5,7 @@ import { ConfirmDialogHost } from "@/components/ui/ConfirmDialog";
 import Inicio from "@/pages/Inicio";
 import Promociones from "@/pages/Promociones";
 import Registros from "@/pages/Registros";
+import Leads from "@/pages/Leads";
 import Ventas from "@/pages/Ventas";
 import Calendario from "@/pages/Calendario";
 import Colaboradores from "@/pages/Colaboradores";
@@ -165,6 +166,7 @@ export default function App() {
                 <Route path="/inicio" element={<Inicio />} />
                 <Route path="/promociones" element={<Promociones />} />
                 <Route path="/promociones/:id" element={<PromocionDetalle />} />
+                <Route path="/leads" element={<Leads />} />
                 <Route path="/registros" element={<Registros />} />
                 <Route path="/ventas" element={<Ventas />} />
                 <Route path="/calendario" element={<Calendario />} />

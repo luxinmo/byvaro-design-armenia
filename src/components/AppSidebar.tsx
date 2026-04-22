@@ -15,7 +15,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   Home, Tag, FileText, CircleDollarSign, CalendarDays,
   Handshake, Contact, Globe, Mail, Settings, ChevronsUpDown,
-  Building2,
+  Building2, Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEmpresa } from "@/lib/empresa";
@@ -36,7 +36,8 @@ const groups: NavGroup[] = [
     label: "Comercial",
     items: [
       { title: "Promociones", url: "/promociones", icon: Tag, badge: 12 },
-      { title: "Registros", url: "/registros", icon: FileText, badge: 8, accent: true },
+      { title: "Leads", url: "/leads", icon: Inbox, badge: 24, accent: true },
+      { title: "Registros", url: "/registros", icon: FileText, badge: 8 },
       { title: "Ventas", url: "/ventas", icon: CircleDollarSign },
       { title: "Calendario", url: "/calendario", icon: CalendarDays },
     ],
