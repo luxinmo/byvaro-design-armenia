@@ -231,30 +231,38 @@ function extractDoor(nombre: string): string {
 }
 
 function unitDataToUnit(u: UnitData): Unit {
+  // Normaliza campos nuevos que pueden faltar en drafts antiguos del
+  // localStorage (migrados al vuelo — evita crashes en statusConfig,
+  // precio sin unidades, etc.).
   return {
     id: u.id,
     ref: u.ref || u.idInterna || u.id,
     promotionId: WIZARD_PROMO_ID,
     block: extractBlock(u.nombre),
-    floor: u.planta,
+    floor: u.planta ?? 0,
     door: extractDoor(u.nombre),
     publicId: u.nombre,
     type: subtipoToType[u.subtipo ?? "apartamento"] ?? "Apartamento",
-    bedrooms: u.dormitorios,
-    bathrooms: u.banos,
-    builtArea: u.superficieConstruida,
-    usableArea: u.superficieUtil,
-    terrace: u.superficieTerraza,
+    bedrooms: u.dormitorios ?? 0,
+    bathrooms: u.banos ?? 0,
+    builtArea: u.superficieConstruida ?? 0,
+    usableArea: u.superficieUtil ?? 0,
+    terrace: u.superficieTerraza ?? 0,
     garden: 0,
-    parcel: u.parcela,
-    hasPool: u.piscinaPrivada,
-    orientation: u.orientacion,
-    price: u.precio,
-    status: u.status,
+    parcel: u.parcela ?? 0,
+    hasPool: u.piscinaPrivada ?? false,
+    orientation: u.orientacion ?? "Sur",
+    price: u.precio ?? 0,
+    status: u.status ?? "available",
     clientName: u.clientName,
     agencyName: u.agencyName,
     reservedAt: u.reservedAt,
     soldAt: u.soldAt,
+    descripcionOverride: u.descripcionOverride,
+    caracteristicasOverride: u.caracteristicasOverride,
+    hitosPagoOverride: u.hitosPagoOverride,
+    deliveryYearOverride: u.deliveryYearOverride,
+    energyCertOverride: u.energyCertOverride,
   };
 }
 
@@ -347,12 +355,34 @@ export function CrearUnidadesStep({
   const [addAnejosOpen, setAddAnejosOpen] = useState(false);
   const [editUnitId, setEditUnitId] = useState<string | null>(null);
 
-  // Auto-generar al entrar si aún no hay unidades
+  // Auto-generar al entrar si aún no hay unidades + migrar drafts
+  // antiguos que no tengan los campos nuevos (ref, parcela, status,
+  // piscinaPrivada). Evita crashes al renderizar la tabla.
   useEffect(() => {
-    if (state.unidades.length > 0) return;
-    if (isSingleHome) update("unidades", generateSingleUnit(state));
-    else if (isMultipleUnifamiliar) update("unidades", generateMultipleUnifamiliar(state));
-    else if (isEdificio) update("unidades", generateEdificio(state));
+    if (state.unidades.length === 0) {
+      if (isSingleHome) update("unidades", generateSingleUnit(state));
+      else if (isMultipleUnifamiliar) update("unidades", generateMultipleUnifamiliar(state));
+      else if (isEdificio) update("unidades", generateEdificio(state));
+      return;
+    }
+    // Chequeo de migración: si alguna unidad no tiene los campos nuevos
+    // obligatorios, los rellenamos con los defaults.
+    const needsMigration = state.unidades.some(
+      (u) => !u.ref || u.parcela === undefined || u.piscinaPrivada === undefined || !u.status,
+    );
+    if (needsMigration) {
+      const prefix = promoRefPrefix(state);
+      update(
+        "unidades",
+        state.unidades.map((u, i) => ({
+          ...u,
+          ref: u.ref || u.idInterna || `${prefix}-${String(i + 1).padStart(4, "0")}`,
+          parcela: u.parcela ?? 0,
+          piscinaPrivada: u.piscinaPrivada ?? false,
+          status: u.status ?? "available",
+        })),
+      );
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -518,27 +548,41 @@ export function CrearUnidadesStep({
       {/* ═════ Barra superior ═════ */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-xs text-muted-foreground">
-          {isSingleHome
-            ? "Configura los datos de tu vivienda"
-            : `${totalViviendas} unidad${totalViviendas === 1 ? "" : "es"}`}
+          {totalViviendas} unidad{totalViviendas === 1 ? "" : "es"}
         </p>
-        {!isSingleHome && (
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-foreground text-background text-xs font-medium hover:opacity-90 transition-opacity"
-          >
-            <Plus className="h-3 w-3" strokeWidth={2} />
-            Añadir más unidades
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => {
+            // Si empezó como "una sola vivienda", lo convertimos a
+            // "varias viviendas" transparentemente al querer añadir
+            // más. Sembramos la tipología actual (si existe) en
+            // tipologiasSeleccionadas para no perder la cuenta.
+            if (isSingleHome) {
+              const seedTipo = state.subVarias ?? "independiente";
+              const seed = state.tipologiasSeleccionadas.length > 0
+                ? state.tipologiasSeleccionadas
+                : [{ tipo: seedTipo, cantidad: state.unidades.length || 1 }];
+              update("subUni", "varias");
+              update("tipologiasSeleccionadas", seed);
+            }
+            setAddOpen(true);
+          }}
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-foreground text-background text-xs font-medium hover:opacity-90 transition-opacity"
+        >
+          <Plus className="h-3 w-3" strokeWidth={2} />
+          Añadir más unidades
+        </button>
       </div>
 
-      <CharacteristicsSummary state={state} />
 
-      <div className="rounded-lg bg-muted/40 border border-border px-3 py-2 flex items-center gap-2 text-xs text-muted-foreground leading-relaxed">
-        <Info className="h-3.5 w-3.5 text-primary shrink-0" strokeWidth={1.5} />
-        <span>Vista de disponibilidad completa · filtros, orden, selección múltiple y edición masiva como en la ficha de la promoción.</span>
+      <div className="rounded-lg bg-primary/5 border border-primary/20 px-3 py-2.5 flex items-start gap-2 text-xs text-foreground leading-relaxed">
+        <Info className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" strokeWidth={1.5} />
+        <div>
+          <p className="font-medium text-foreground">¿Imágenes y descripción iguales para todas las unidades?</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Selecciona varias con el checkbox y usa <span className="font-medium text-foreground">Edición masiva</span> para cambiar los campos necesarios en todas a la vez.
+          </p>
+        </div>
       </div>
 
       {/* ═════ Disponibilidad (componente compartido con la ficha) ═════ */}

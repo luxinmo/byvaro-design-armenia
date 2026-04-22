@@ -72,6 +72,8 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { unitsByPromotion, Unit, UnitStatus, PromotionContext } from "@/data/units";
+import { anejosByPromotion, type Anejo } from "@/data/anejos";
+import { PromotionAnejosTable } from "./PromotionAnejosTable";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge"; // Reservado para futuras chips custom (no usado directamente ahora).
 import { Checkbox } from "@/components/ui/Checkbox";
@@ -117,7 +119,7 @@ const orientationOptions = ["Norte", "Sur", "Este", "Oeste", "NE", "NO", "SE", "
 
 type SortField = "block" | "floor" | "type" | "bedrooms" | "builtArea" | "price" | "status";
 
-type EditableFieldKey = "price" | "bedrooms" | "bathrooms" | "floor" | "door" | "type" | "builtArea" | "orientation" | "status" | "publicId" | "parcel";
+type EditableFieldKey = "price" | "bedrooms" | "bathrooms" | "floor" | "terrace" | "type" | "builtArea" | "orientation" | "status" | "publicId" | "parcel";
 
 const getEditableFieldOptions = (hasUnifamiliar: boolean): { key: EditableFieldKey; label: string }[] => [
   { key: "publicId", label: "ID visible" },
@@ -126,12 +128,12 @@ const getEditableFieldOptions = (hasUnifamiliar: boolean): { key: EditableFieldK
   { key: "bedrooms", label: "Habitaciones" },
   { key: "bathrooms", label: "Baños" },
   { key: "builtArea", label: "Superficie (m²)" },
+  { key: "terrace", label: "Terraza (m²)" },
   { key: "type", label: "Tipología" },
   { key: "orientation", label: "Orientación" },
   ...(hasUnifamiliar
     ? [{ key: "parcel" as EditableFieldKey, label: "Parcela (m²)" }]
     : [{ key: "floor" as EditableFieldKey, label: "Planta" }]),
-  { key: "door", label: "Puerta" },
 ];
 
 interface EditedFields {
@@ -140,7 +142,7 @@ interface EditedFields {
   bedrooms?: number;
   bathrooms?: number;
   floor?: number;
-  door?: string;
+  terrace?: number;
   type?: string;
   builtArea?: number;
   orientation?: string;
@@ -182,6 +184,14 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
       setInnerUnits(updater);
     }
   };
+
+  /** Anejos sueltos · parkings/trasteros que se venden separados.
+   *  Cada tipo tiene su propio segmento en la toolbar; solo aparece si
+   *  existe al menos uno de ese tipo. */
+  const anejos: Anejo[] = useMemo(() => anejosByPromotion[promotionId] ?? [], [promotionId]);
+  const parkings = useMemo(() => anejos.filter((a) => a.tipo === "parking"), [anejos]);
+  const trasteros = useMemo(() => anejos.filter((a) => a.tipo === "trastero"), [anejos]);
+  const [segment, setSegment] = useState<"viviendas" | "parkings" | "trasteros">("viviendas");
 
   const [filterStatus, setFilterStatus] = useState<UnitStatus | "all">("all");
   const [filterBlock, setFilterBlock] = useState<string>("all");
@@ -352,9 +362,13 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
 
   const toggleExpandUnit = (id: string) => {
     if (bulkEditing) return;
-    // Nueva UX: click en unidad abre el UnitDetailDialog en vez de la
-    // expansión en fila. Se mantiene expandedUnit state por los sitios
-    // que aún referencian el panel antiguo (edit / reserve dialogs).
+    // Si el consumidor inyecta onEditUnit (wizard), delegamos el click
+    // en su modal de edición propio. En la ficha de detalle, abre el
+    // UnitDetailDialog estándar.
+    if (onEditUnit) {
+      onEditUnit(id);
+      return;
+    }
     setDetailUnitId(id);
   };
 
@@ -533,8 +547,38 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
     cancelBulkEdit();
   };
 
+  if (segment === "parkings" || segment === "trasteros") {
+    const subset = segment === "parkings" ? parkings : trasteros;
+    return (
+      <div className="space-y-5">
+        <SegmentSwitcher
+          segment={segment}
+          setSegment={setSegment}
+          viviendasCount={allUnits.length}
+          parkingsCount={parkings.length}
+          trasterosCount={trasteros.length}
+        />
+        <PromotionAnejosTable
+          anejos={subset}
+          tipo={segment === "parkings" ? "parking" : "trastero"}
+          isCollaboratorView={isCollaboratorView}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
+
+      {(parkings.length > 0 || trasteros.length > 0) && (
+        <SegmentSwitcher
+          segment={segment}
+          setSegment={setSegment}
+          viviendasCount={allUnits.length}
+          parkingsCount={parkings.length}
+          trasterosCount={trasteros.length}
+        />
+      )}
 
       {/* Bulk editing bar · sticky para que las acciones Guardar / Cancelar
           estén siempre visibles mientras el usuario edita en medio de una
@@ -763,13 +807,16 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
             />
           </div>
 
-          {/* En móvil los 3 selects caben en una fila con grid-cols-3. */}
-          <div className="grid grid-cols-3 sm:flex gap-2">
-            <select value={filterBlock} onChange={e => setFilterBlock(e.target.value)}
-              className="min-w-0 h-9 px-2.5 rounded-lg border border-border bg-background text-sm">
-              <option value="all">Bloques</option>
-              {blocks.map(b => <option key={b} value={b}>{getBlockName(b)}</option>)}
-            </select>
+          {/* Filtros · el de bloques se oculta si solo hay un bloque
+               (no aporta nada filtrar por el único que hay). */}
+          <div className={cn("grid gap-2", blocks.length > 1 ? "grid-cols-3 sm:flex" : "grid-cols-2 sm:flex")}>
+            {blocks.length > 1 && (
+              <select value={filterBlock} onChange={e => setFilterBlock(e.target.value)}
+                className="min-w-0 h-9 px-2.5 rounded-lg border border-border bg-background text-sm">
+                <option value="all">Bloques</option>
+                {blocks.map(b => <option key={b} value={b}>{getBlockName(b)}</option>)}
+              </select>
+            )}
 
             <select value={filterType} onChange={e => setFilterType(e.target.value)}
               className="min-w-0 h-9 px-2.5 rounded-lg border border-border bg-background text-sm">
@@ -978,7 +1025,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                   </thead>
                   <tbody>
                     {blockUnits.map(u => {
-                      const sc = statusConfig[u.status];
+                      const sc = statusConfig[u.status] ?? statusConfig.available;
                       const isExpanded = expandedUnit === u.id;
                       const isSelected = selectedUnits.has(u.id);
                       const editing = isEditable(u.id);
@@ -1006,8 +1053,8 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                               </td>
                             )}
 
-                            {/* ID (publicId editable, door as fallback) */}
-                            <td className="px-3 py-2" onClick={e => editing && (isFieldEditable("publicId") || isFieldEditable("door")) && e.stopPropagation()}>
+                            {/* ID (publicId editable) */}
+                            <td className="px-3 py-2" onClick={e => editing && isFieldEditable("publicId") && e.stopPropagation()}>
                               {renderEditableCell(u, "publicId",
                                 <span className="text-xs font-bold text-foreground">{getUnitDisplayId(u)}</span>,
                                 <input
@@ -1145,16 +1192,41 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                               )}
                             </td>
                             <td className="px-2 py-2 text-right" onClick={e => e.stopPropagation()}>
-                              <button
-                                disabled={u.status !== "available"}
-                                onClick={() => onEditUnit
-                                  ? onEditUnit(u.id)
-                                  : toast({ title: "Editar unidad", description: getUnitDisplayId(u) })}
-                                className="h-7 w-7 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                                title="Editar"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
+                                    <MoreVertical className="h-3.5 w-3.5" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-44">
+                                  <DropdownMenuItem onClick={() => toggleExpandUnit(u.id)} className="gap-2 text-xs">
+                                    <Eye className="h-3.5 w-3.5" /> Ver
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={u.status !== "available"}
+                                    onClick={() => onEditUnit
+                                      ? onEditUnit(u.id)
+                                      : toast({ title: "Editar unidad", description: getUnitDisplayId(u) })}
+                                    className="gap-2 text-xs"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" /> Editar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={u.status !== "available"}
+                                    onClick={() => setEmailUnitId(u.id)}
+                                    className="gap-2 text-xs"
+                                  >
+                                    <Send className="h-3.5 w-3.5" /> Enviar por email
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={u.status !== "available"}
+                                    onClick={() => toast({ title: "Iniciar compra", description: `Operación para ${getUnitDisplayId(u)}` })}
+                                    className="gap-2 text-xs"
+                                  >
+                                    <ShoppingCart className="h-3.5 w-3.5" /> Iniciar compra
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </td>
                           </tr>
                           {isExpanded && !bulkEditing && <UnitDetailPanel unit={u} onUpdateUnit={handleUnitUpdate} isCollaboratorView={isCollaboratorView} />}
@@ -1170,7 +1242,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
             {!isCollapsed && viewMode === "grid" && (
               <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
                 {blockUnits.map(u => {
-                  const sc = statusConfig[u.status];
+                  const sc = statusConfig[u.status] ?? statusConfig.available;
                   const isSelected = selectedUnits.has(u.id);
                   return (
                     <div
@@ -1204,7 +1276,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
             {!isCollapsed && viewMode === "catalog" && (
               <div className="sm:hidden divide-y divide-border/60">
                 {blockUnits.map(u => {
-                  const sc = statusConfig[u.status];
+                  const sc = statusConfig[u.status] ?? statusConfig.available;
                   const isSelected = selectedUnits.has(u.id);
                   const sold = u.status === "reserved" || u.status === "sold";
                   return (
@@ -1317,7 +1389,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                   </thead>
                   <tbody>
                     {blockUnits.map((u) => {
-                      const sc = statusConfig[u.status];
+                      const sc = statusConfig[u.status] ?? statusConfig.available;
                       const isSelected = selectedUnits.has(u.id);
                       const isUni = ["Villa", "Chalet", "Unifamiliar", "Pareado", "Adosado"].includes(u.type);
                       return (
@@ -1405,16 +1477,41 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                             </td>
                           )}
                           <td className="px-2 py-1.5 text-right" onClick={e => e.stopPropagation()}>
-                            <button
-                              disabled={u.status !== "available"}
-                              onClick={() => onEditUnit
-                                ? onEditUnit(u.id)
-                                : toast({ title: "Editar unidad", description: getUnitDisplayId(u) })}
-                              className="h-7 w-7 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                              title="Editar"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
+                                  <MoreVertical className="h-3.5 w-3.5" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-44">
+                                <DropdownMenuItem onClick={() => toggleExpandUnit(u.id)} className="gap-2 text-xs">
+                                  <Eye className="h-3.5 w-3.5" /> Ver
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={u.status !== "available"}
+                                  onClick={() => onEditUnit
+                                    ? onEditUnit(u.id)
+                                    : toast({ title: "Editar unidad", description: getUnitDisplayId(u) })}
+                                  className="gap-2 text-xs"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" /> Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={u.status !== "available"}
+                                  onClick={() => setEmailUnitId(u.id)}
+                                  className="gap-2 text-xs"
+                                >
+                                  <Send className="h-3.5 w-3.5" /> Enviar por email
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={u.status !== "available"}
+                                  onClick={() => toast({ title: "Iniciar compra", description: `Operación para ${getUnitDisplayId(u)}` })}
+                                  className="gap-2 text-xs"
+                                >
+                                  <ShoppingCart className="h-3.5 w-3.5" /> Iniciar compra
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </td>
                         </tr>
                       );
@@ -1457,6 +1554,57 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
         onUpdateUnit={handleUnitUpdate}
         promotionCtx={promotionCtx}
       />
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   SegmentSwitcher · toggle entre Viviendas / Parkings / Trasteros.
+   Cada segmento solo aparece si hay elementos de ese tipo · si la promo
+   solo tiene parkings (sin trasteros), el segmento Trasteros se oculta.
+   ══════════════════════════════════════════════════════════════════════ */
+function SegmentSwitcher({
+  segment, setSegment, viviendasCount, parkingsCount, trasterosCount,
+}: {
+  segment: "viviendas" | "parkings" | "trasteros";
+  setSegment: (s: "viviendas" | "parkings" | "trasteros") => void;
+  viviendasCount: number;
+  parkingsCount: number;
+  trasterosCount: number;
+}) {
+  const segments: { key: "viviendas" | "parkings" | "trasteros"; label: string; count: number }[] = [
+    { key: "viviendas", label: "Viviendas", count: viviendasCount },
+  ];
+  if (parkingsCount > 0) segments.push({ key: "parkings", label: "Parkings", count: parkingsCount });
+  if (trasterosCount > 0) segments.push({ key: "trasteros", label: "Trasteros", count: trasterosCount });
+
+  return (
+    <div className="inline-flex items-center bg-muted rounded-full p-1 gap-0.5">
+      {segments.map((opt) => {
+        const selected = segment === opt.key;
+        return (
+          <button
+            key={opt.key}
+            onClick={() => setSegment(opt.key)}
+            className={cn(
+              "inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full text-xs font-medium transition-colors",
+              selected
+                ? "bg-card text-foreground shadow-soft"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {opt.label}
+            <span
+              className={cn(
+                "inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full text-[10px] font-bold tabular-nums",
+                selected ? "bg-foreground text-background" : "bg-background text-muted-foreground",
+              )}
+            >
+              {opt.count}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

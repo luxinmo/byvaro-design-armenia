@@ -134,37 +134,124 @@ Datos: `src/data/units.ts` → `unitsByPromotion[promotionId]`.
 - Para unifamiliar, el campo "planta" se muestra como "parcela"
 - Una unidad con `status === "sold"` no puede volver a reservarse
 
+### Anejo suelto (Anejo)
+
+Parking o trastero que se vende **por separado** de la vivienda. Se
+crea cuando la config de la promoción declara que NO va incluido en el
+precio, o cuando hay más plazas/trasteros que viviendas (excedente).
+
+```ts
+interface Anejo {
+  id: string;
+  promotionId: string;
+  publicId: string;              // "P1", "P2", "T1", "T2"
+  tipo: "parking" | "trastero";
+  precio: number;                // EUR
+  status: "available" | "reserved" | "sold" | "withdrawn";
+  clientName?: string;           // si reservado / vendido
+  agencyName?: string;
+  reservedAt?: string;           // ISO
+  soldAt?: string;               // ISO
+}
+```
+
+Datos: `src/data/anejos.ts` → `anejosByPromotion[promotionId]`.
+
+**Reglas:**
+- Paralelo a `Unit`: mismo modelo de estados, misma UX de tabla (kebab
+  con Ver · Editar · Enviar · Iniciar compra), misma paleta de status.
+- El segmento "Parkings" o "Trasteros" solo se muestra en
+  `/promociones/:id` (tab Disponibilidad) si hay al menos un anejo de
+  ese tipo. Si no hay, el segmento queda oculto — no se muestra
+  contador a cero.
+- Origen de los datos: al publicar promoción, backend genera N filas
+  desde `WizardState.parkings` / `WizardState.trasteros` y los arrays
+  `parkingPrecios` / `trasteroPrecios`. Todos arrancan `available`.
+- `publicId` lo genera el backend (`P1..Pn`, `T1..Tn`).
+- Contrato API: ver `docs/backend-integration.md §3.1`.
+
 ### Agencia (Agency / Collaborator)
 
 Organización externa que colabora trayendo clientes.
 
+⚠️ En backend, `Agency` es un **join** entre `Empresa` (tenant agencia) y
+`Collaboration` (relación con el promotor). Los campos identidad (logo,
+cover, name, mercados, teamSize, googleRating…) pertenecen al `Empresa`
+público de la agencia; los operativos (estado, comisión, ventas, contrato)
+a la `Collaboration`. Ver `docs/backend-integration.md` §0 y §4.
+
 ```ts
 interface Agency {
+  /* ─── Identidad pública (de Empresa del tenant agencia) ─── */
   id: string;
   name: string;
+  /** Logo circular/cuadrado · avatar en listados, chips. ≥256×256. */
   logo?: string;
+  /** Logo rectangular tipo wordmark · cabeceras, emails. ~250×100 (2:1). */
+  logoRect?: string;
   cover?: string;
   location: string;          // "Marbella, Spain"
   type: "Agency" | "Broker" | "Network";
   description: string;
-  visitsCount: number;
-  registrations: number;
-  salesVolume: number;       // € facturado
-  collaboratingSince?: string;
-  status: "active" | "pending" | "inactive" | "expired";
   offices: { city: string; address: string }[];
-  promotionsCollaborating: string[];  // IDs de promociones activas
+
+  /* ─── Relación (Collaboration con el promotor) ─── */
+  status: "active" | "pending" | "inactive" | "expired";  // legacy
+  estadoColaboracion?: "activa" | "contrato-pendiente" | "pausada";
+  origen?: "invited" | "marketplace";
+  collaboratingSince?: string;
+  promotionsCollaborating: string[];          // IDs de promociones activas
   totalPromotionsAvailable: number;
-  isNewRequest?: boolean;     // solicitud nueva de colaboración
+  solicitudPendiente?: boolean;
+  mensajeSolicitud?: string;
+  isNewRequest?: boolean;
+
+  /* ─── Contrato firmado ─── */
+  contractSignedAt?: string;                  // ISO yyyy-mm-dd
+  contractExpiresAt?: string;                 // ISO; null = sin caducidad
+  contractDocUrl?: string;                    // PDF
+
+  /* ─── Métricas operativas (calculadas por backend) ─── */
+  visitsCount: number;
+  registrations: number;                      // histórico
+  registrosAportados?: number;                // para vista v2 en Colaboradores
+  ventasCerradas?: number;
+  salesVolume: number;                        // EUR acumulado
+  comisionMedia?: number;                     // %
+  conversionRate?: number;                    // % ventasCerradas / registrosAportados
+  ticketMedio?: number;                       // EUR salesVolume / ventasCerradas
+  lastActivityAt?: string;                    // ISO · último registro/venta/login
+  teamSize?: number;                          // nº agentes (COUNT users tenant)
+
+  /* ─── Especialización comercial ─── */
+  especialidad?: "luxury" | "residential" | "commercial" | "tourist" | "second-home";
+  mercados?: string[];                        // ISO2 nacionalidades cubiertas, ej ["GB","NL"]
+
+  /* ─── Rating público Google (Places API, cron semanal) ─── */
+  googlePlaceId?: string;
+  googleRating?: number;                      // 0-5
+  googleRatingsTotal?: number;
+  googleFetchedAt?: string;                   // ISO · ToS: ≤30 días
+  googleMapsUrl?: string;
+
+  /* ─── Evaluación interna del promotor ─── */
+  ratingPromotor?: number;                    // 1-5 subjetivo (privado)
+  incidencias?: { duplicados: number; cancelaciones: number; reclamaciones: number };
 }
 ```
 
-Datos: `src/data/agencies.ts`.
+Datos mock: `src/data/agencies.ts`. Helper `getContractStatus(a)` computa
+`"vigente" | "por-expirar" (≤30d) | "expirado" | "sin-contrato"`.
 
 **Reglas:**
-- Una agencia solo ve promociones listadas en `promotionsCollaborating`
-- Nuevas solicitudes (`isNewRequest`) aparecen en banner arriba de la lista
-- `status === "expired"` → no puede crear registros nuevos
+- Una agencia solo ve promociones listadas en `promotionsCollaborating`.
+- Nuevas solicitudes (`isNewRequest`) aparecen en banner arriba de la lista.
+- `status === "expired"` → no puede crear registros nuevos.
+- `canShareWithAgencies === false` en la promoción → el promotor no puede
+  invitar nuevas agencias ni compartir esa promo (gate en ADR-033).
+- `ratingPromotor` e `incidencias` NO se envían a la agencia (privados).
+- Atribución "Basado en reseñas de Google" obligatoria al mostrar
+  `googleRating` (Places API ToS).
 
 ### Registro (Record / Client Registration)
 
@@ -308,6 +395,81 @@ interface CollaborationConfig {
 ```
 
 Tipos: `src/data/developerPromotions.ts` + `src/types/promotion-config.ts`.
+
+### Invitación (Invitacion)
+
+Representa una invitación del promotor a una agencia (nueva o existente)
+para colaborar en una promoción concreta o en la cartera entera.
+
+```ts
+type EstadoInvitacion = "pendiente" | "aceptada" | "rechazada" | "caducada";
+
+interface PagoTramo {
+  tramo: number;
+  completado: number;   // % del cobro del cliente
+  colaborador: number;  // % de la comisión al colaborador en ese tramo
+}
+
+interface Invitacion {
+  id: string;
+  token: string;                         // token magic-link único
+  emailAgencia: string;
+  nombreAgencia: string;                 // puede ir vacío si no se rellenó
+  mensajePersonalizado: string;
+  comisionOfrecida: number;              // %
+  idiomaEmail: "es"|"en"|"fr"|"de"|"pt"|"it";
+  estado: EstadoInvitacion;
+  createdAt: number;                     // timestamp ms
+  expiraEn: number;                      // timestamp ms (30 días default)
+  respondidoEn?: number;
+
+  /* Opcionales · flujo SharePromotionDialog */
+  promocionId?: string;
+  promocionNombre?: string;
+  duracionMeses?: number;
+  formaPago?: PagoTramo[];
+  datosRequeridos?: string[];            // ["Nombre completo", "Teléfono", "Nacionalidad"]
+}
+```
+
+Tipos: `src/lib/invitaciones.ts`. Storage actual: localStorage bajo clave
+`byvaro-invitaciones`. Sincronización cross-tab por storage event +
+CustomEvent.
+
+**Helper:** `invitacionToSyntheticAgency(inv)` convierte una invitación
+pendiente en una fila sintética `Agency` con `estadoColaboracion:
+"contrato-pendiente"` para mostrarla en `/colaboradores` mientras no
+responda.
+
+**Template HTML:** `getInvitacionHtml(data)` devuelve `{ asunto, html }`
+email-safe (tablas + inline + media queries) con hero de promoción,
+precio desde-hasta, entrega, pill de unidades disponibles, comisión,
+tabla de tramos de pago, checklist de datos, CTA "Ver invitación".
+Preview estático: `email-previews/invitacion-agencia.html`.
+
+**Reglas:**
+- El token expira a los 30 días (`VALIDEZ_DIAS`).
+- La suma de `formaPago[].colaborador` debe ser 100%.
+- Dominios públicos (gmail, hotmail, …) se rechazan inline en el input.
+- Match por dominio contra `Empresa.domain` de otro tenant.
+- En `/colaboradores`, las pendientes se inyectan como filas sintéticas.
+
+### Favoritos (de agencias)
+
+Marcador booleano del promotor sobre sus colaboradores (para acceso rápido
+al compartir, filtrar, enviar email).
+
+```
+Set<Agency["id"]>    // localStorage: "byvaro-favoritos-agencias"
+```
+
+Hook: `useFavoriteAgencies()` en `src/lib/favoriteAgencies.ts` → expone
+`{ ids, isFavorite, toggleFavorite, add, remove }`. Persistencia + sync
+cross-tab idéntica al store de invitaciones.
+
+Consumidores: `Colaboradores.tsx`, `ColaboradoresV2/V3.tsx`,
+`SharePromotionDialog` (step "Mis favoritos"), `SendEmailDialog`
+(filtro "Favoritos"), `PromotionAgenciesV2`.
 
 ## Reglas de negocio clave
 

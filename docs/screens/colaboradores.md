@@ -2,243 +2,208 @@
 
 ## Propósito
 
-Vista del **promotor** sobre su red de agencias colaboradoras. Sustituye
-al módulo legacy "Agencies". Cubre dos necesidades:
+Vista del **promotor** sobre su red de agencias colaboradoras. Cubre:
 
-1. **Operativa diaria** — saber qué agencias están activas, qué KPIs traen
-   (registros, ventas, comisión), aprobar/rechazar solicitudes del
-   marketplace y pausar colaboraciones problemáticas.
-2. **Analítica de red** — entender el rendimiento agregado (top
-   performers, heatmap de actividad, conversión global).
+1. **Operativa diaria** — saber qué agencias están activas, qué señales
+   comerciales traen, revisar solicitudes pendientes y compartir nuevas
+   promociones.
+2. **Evaluación** — poder entrar a la ficha de cada agencia para decidir
+   (aprobar, pausar, eliminar, compartir).
 
-**Audiencia**: **solo Promotor**. La vista Agencia no tiene acceso a
-este menú (ver `docs/ia-menu.md` → sección "Vista Agencia").
+**Audiencia**: solo Promotor. La vista Agencia no tiene acceso a este menú.
 
 ---
 
 ## Layout
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│ RED (eyebrow)                                              │
-│ Colaboradores    N agencias · X activas · Y pendientes     │
-│                                          [+ Invitar agencia]│
-├────────────────────────────────────────────────────────────┤
-│ Red | Analítica                         (tabs subrayado)   │
-├────────────────────────────────────────────────────────────┤
-│ [Buscar…]        [Estado ▼] [Origen ▼]  [● Solo pendientes]│
-│                                                            │
-│ ┌─ N solicitudes pendientes ─────────────────────────────┐ │
-│ │  [logo] Iberia Luxury Homes · Lisboa · Marketplace    │ │
-│ │  "Nos especializamos en portugueses y brasileños..."  │ │
-│ │  [Aprobar]  [Rechazar]                                │ │
-│ └────────────────────────────────────────────────────────┘ │
-│                                                            │
-│ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐            │
-│ │  Agency A   │ │  Agency B   │ │  Agency C   │            │
-│ │ Activa·Invit│ │ Activa·Mkt  │ │ Pausada·Inv │            │
-│ │ 2·38·6·4%   │ │ 4·62·11·5%  │ │ 0·12·1·3%   │            │
-│ └─────────────┘ └─────────────┘ └─────────────┘            │
-└────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│ Red comercial (eyebrow)                                        │
+│ Tus colaboradores                [Estadísticas ↗] [+ Invitar]  │
+│ subtítulo                                                      │
+│                                                                │
+│ [🔍 Buscar agencia o ciudad...........................] [☰ Filtros] │
+├────────────────────────────────────────────────────────────────┤
+│ ● N solicitudes pendientes · agencias esperando ...  Ver ↗     │
+├────────────────────────────────────────────────────────────────┤
+│ Tu red                                          Ordenar por …│
+│ N agencias                                                     │
+│                                                                │
+│ ┌────────┐ ┌────────┐ ┌────────┐                               │
+│ │  Card  │ │  Card  │ │  Card  │  (1 col → sm:2 → lg:3)        │
+│ └────────┘ └────────┘ └────────┘                               │
+└────────────────────────────────────────────────────────────────┘
 ```
 
-Tab **Analítica**:
-
-```
-┌ Agencias | Reg(mes) | Ventas(mes) | Comisión media ┐
-├────────────────────────────────────────────────────┤
-│  Top 5 agencias (list)      │  Conversión % (bar)  │
-├─────────────────────────────┴──────────────────────┤
-│  Heatmap 12 meses × N agencias (grid CSS opacity)  │
-└────────────────────────────────────────────────────┘
-```
+> **Nota:** las recomendaciones Byvaro (strip "agencias que no
+> colaboran contigo") viven en `/colaboradores/estadisticas` — ver
+> `docs/screens/colaboradores-estadisticas.md`. Son el cierre natural
+> del análisis de red, no del listado operativo.
 
 ---
 
-## Elementos de diseño
+## Header
 
-- **Tabs** estilo **subrayado** bajo el activo (color `text-primary` + línea
-  `after:h-[2px] after:bg-primary`), patrón tomado de `PromocionDetalle.tsx`.
-  NO se usan pills para estos tabs.
-- **Cards de agencia**: `rounded-2xl border-border shadow-soft` con hover
-  `-translate-y-0.5` y `shadow-soft-lg`. Grid responsive
-  `grid-cols-1 md:grid-cols-2 xl:grid-cols-3`.
-- **Filter pills**: dropdowns multi-select que cambian a `bg-foreground text-background`
-  cuando tienen selección. Mismo patrón que en `Promociones`.
-- **Switch** "Solo pendientes" reutiliza `components/ui/Switch`.
-- **Modal invitar**: reutiliza `components/empresa/InvitarAgenciaModal.tsx`
-  (wizard de 3 pasos: datos → condiciones → preview).
-- **Toaster**: `sonner`, `position="top-center" richColors closeButton`
-  (siguiendo el patrón del resto de pages).
+- Eyebrow `RED COMERCIAL` + H1 "Tus colaboradores" (`text-[22px]
+  sm:text-[28px] font-bold`) + subtítulo.
+- CTAs a la derecha:
+  - **Estadísticas ↗** · placeholder que toast "próximamente" hasta que
+    se construya la sección de analítica agregada.
+  - **+ Invitar agencia** (pill negro) · abre `InvitarAgenciaModal`.
+
+Debajo · row 2:
+
+- **Buscador** full-width (`h-10 rounded-full`).
+- **Filtros** (icono deslizadores + "Filtros" + badge contador).
 
 ---
 
-## Estados de una agencia (`estadoColaboracion`)
+## Banner de solicitudes pendientes
 
-| Estado | Tag variant | Significado |
-|---|---|---|
-| `activa` | `success` | Colaboración en marcha, registros/ventas activos |
-| `contrato-pendiente` | `warning` | Ha solicitado colaborar, falta aprobación/firma |
-| `pausada` | `muted` | Colaboración temporal o definitivamente detenida |
+Si hay agencias con `solicitudPendiente || isNewRequest`, pill
+horizontal clickable:
 
-**Origen** (`origen`):
+```
+● N solicitudes pendientes · agencias esperando tu respuesta   Ver solicitudes ↗
+```
 
-| Origen | Tag icon | Significado |
-|---|---|---|
-| `invited` | `UserPlus` | El promotor invitó a la agencia (plan 0€) |
-| `marketplace` | `Store` | La agencia pagó 99€/mes y solicitó colaborar |
+Al clicar abre el **drawer lateral** con las solicitudes.
+
+---
+
+## Drawer · Solicitudes pendientes
+
+Tarjeta por solicitud con info suficiente para identificar quién es,
+sin botones destructivos (aprobar/descartar viven solo en la ficha):
+
+- Cover (80px, con gradiente) + chip `Marketplace` / `Invitada`.
+- Logo circular + nombre + ubicación · tipo.
+- `GoogleRatingBadge` al lado del nombre si tiene rating.
+- Descripción (3 líneas clamp).
+- Señales: banderas de mercados + agentes + oficinas.
+- Mensaje de solicitud en blockquote ámbar (si hay).
+- CTA único **"Ver ficha y decidir ↗"** → navega a `/colaboradores/:id`.
+
+---
+
+## Grid principal · "Tu red"
+
+Header:
+
+- Eyebrow `RED COMPLETA` + H2 "N agencias".
+- `MinimalSort` a la derecha con opciones:
+  - Volumen de ventas (mayor) · default
+  - Ventas cerradas (más)
+  - Registros (más)
+  - Rating Google (mejor)
+  - Actividad reciente (`lastActivityAt`)
+  - Más antiguas (`collaboratingSince`)
+  - Nombre A-Z / Z-A
+
+Grid `1 → sm:2 → lg:3` de **FeatureCard** por agencia. Cada card:
+
+- **Cover** (con fallback `DEFAULT_COVER`).
+- **Logo circular** overlapping (con fallback `DEFAULT_LOGO`).
+- **Nombre** con `<Highlight>` amarillo si coincide con la búsqueda.
+- **`GoogleRatingBadge`** inline junto al nombre (si `googleRating`).
+- **Ubicación** con highlight.
+- **Banderas de mercados**.
+- **Chips estado**: `N/M compartidos` + `ContractChip` + `IncidenciasChip`.
+- **Stats grid** (3 cols): Visitas · Registros · Ventas.
+- **Meta row**: `Desde {collaboratingSince}` · `{teamSize} agentes`.
+- **CTA** "Ver ficha" (navega a `/colaboradores/:id`) + kebab (pausar,
+  email, eliminar).
+
+---
+
+## Drawer · Filtros
+
+Abre con el botón "Filtros". Secciones:
+
+- **Estado** (single) — Activas / Contrato pendiente / Pausadas
+- **Origen** (multi) — Invitada / Marketplace
+- **Tipo** (multi) — Agencia / Broker / Network
+- **Contrato** (multi) — Vigente / Por expirar / Expirado / Sin contrato
+- **Mercados que atiende** (multi, banderas dinámicas)
+- **Rating de Google mínimo** (single) — ≥4★ / ≥3★
+- **Otros** — Solo favoritos (toggle)
+
+Footer con "Limpiar todo" + pill "Ver N resultados".
+
+---
+
+## Subcomponentes internos (card-internal)
+
+| Componente | Propósito |
+|---|---|
+| `ContractChip` | Estado contrato (vigente/por-expirar/expirado) |
+| `GoogleRatingBadge` | Pill con "G" Google + rating + estrella + reseñas |
+| `MercadosFlags` | Stack de banderas con `+N` overflow |
+| `IncidenciasChip` | Rojo si `duplicados + cancelaciones + reclamaciones > 0` |
+| `Highlight` | Resalta query en texto con `<mark class="bg-amber-200">` |
+| `ChipGroup` | Chips multiselect en el drawer de filtros |
+| `MetricBlock` | Stat block dentro del card |
+| `KebabMenu` | Menu contextual pausar/email/eliminar |
+
+Documentados en `docs/ui-helpers.md`.
 
 ---
 
 ## Flujos
 
-### Flujo 1 · Invitar agencia nueva
+### Flujo 1 · Invitar agencia nueva (desde header)
 
-1. Promotor hace click en **"Invitar agencia"** (header).
-2. Se abre `InvitarAgenciaModal` (wizard 3 pasos).
-3. Paso 1: email + nombre opcional + mensaje.
-4. Paso 2: % comisión + idioma del email.
-5. Paso 3: preview del email + opción de copiar link o enviar.
-6. Al enviar, toast de éxito y cierra. Se crea una `Invitacion` via
-   `lib/invitaciones.ts` (en mock = localStorage, en prod = POST API).
+1. Botón "+ Invitar agencia" → abre `InvitarAgenciaModal` (wizard 3 pasos).
+2. Paso 1: email + nombre opcional + mensaje.
+3. Paso 2: comisión + idioma.
+4. Paso 3: preview del email + copiar link / enviar.
+5. Se crea una `Invitacion` en `useInvitaciones()` (localStorage mock).
 
-### Flujo 2 · Aprobar / rechazar solicitud marketplace
+### Flujo 1-bis · Invitar desde una promoción
 
-1. La agencia desde el marketplace solicita colaborar → entra como
-   `solicitudPendiente: true, origen: "marketplace"`.
-2. Aparece en la bandeja destacada superior (fondo ámbar) con mensaje
-   opcional.
-3. **Aprobar**: pasa a `estadoColaboracion: "activa"`, deja de ser
-   pendiente. Toast éxito.
-4. **Rechazar**: se elimina del dataset (en mock se marca `"deleted"`
-   en el overlay local).
+Ver `docs/screens/compartir-promocion.md`. La invitación creada se
+inyecta en este listado como fila sintética
+`invitacionToSyntheticAgency()`.
 
-### Flujo 3 · Pausar / reanudar
+### Flujo 2 · Revisar y aprobar solicitud entrante
 
-1. En el kebab menu de una card → "Pausar".
-2. Estado cambia a `pausada`, la agencia no recibe invitaciones nuevas
-   a promociones y sus registros quedan congelados.
-3. "Reanudar" vuelve a `activa`.
+1. Banner pill "N solicitudes pendientes" → Ver solicitudes.
+2. Drawer lateral con tarjetas informativas.
+3. CTA "Ver ficha y decidir ↗" por cada → navega a `/colaboradores/:id`.
+4. En la ficha, el promotor revisa toda la info (ver `agencia-detalle.md`).
+5. Footer sticky con Aprobar / Descartar.
 
-### Flujo 4 · Abrir ficha de agencia
+### Flujo 3 · Pausar / reanudar / eliminar colaboración
 
-TODO. La ficha detallada se diseñará en una próxima iteración
-(`/colaboradores/:id`). Por ahora muestra un toast informativo.
+1. Se accede a la ficha desde "Ver ficha" en cualquier card.
+2. Footer sticky con Pausar / Reanudar / Eliminar (con `useConfirm`).
 
----
+### Flujo 4 · Marcar favorita
 
-## Filtros
-
-| Filtro | Tipo | Valores |
-|---|---|---|
-| Búsqueda | texto | Por `name` o `location` |
-| Estado | multi-select pill | `activa` · `contrato-pendiente` · `pausada` |
-| Origen | multi-select pill | `invited` · `marketplace` |
-| Solo pendientes | switch | On/Off (muestra solo con `solicitudPendiente`) |
+Toggle estrella en la cabecera del card (o en la ficha, en el hero).
+Integrado con `useFavoriteAgencies()` (store central, sincronización
+cross-tab).
 
 ---
 
-## API endpoints esperados
+## Endpoints esperados
 
-```
-GET /api/collaborators
-  ?search=texto
-  &estado=activa,pausada
-  &origen=invited,marketplace
-  &soloPendientes=true
-
-→ {
-    data: Agency[],
-    aggregates: { total, activas, pausadas, pendientes, marketplaceCount }
-  }
-```
-
-```
-POST /api/collaborators/invite
-  body: { email, nombreAgencia?, mensaje?, comisionOfrecida, idiomaEmail }
-→ { invitacion: Invitacion, urlToken: string }
-```
-
-```
-POST /api/collaborators/:id/approve   →  { agency: Agency }
-POST /api/collaborators/:id/reject    →  { ok: true }
-POST /api/collaborators/:id/pause     →  { agency: Agency }
-POST /api/collaborators/:id/resume    →  { agency: Agency }
-DELETE /api/collaborators/:id         →  { ok: true }
-```
-
-```
-GET /api/collaborators/activity?range=12m
-→ { months: string[], agencies: [{ id, name, values: number[] }] }
-```
-
-```
-GET /api/collaborators/analytics
-→ {
-    totals: { agencies, registrosMes, ventasMes, comisionMedia },
-    top5: Agency[],  // sorted by ventasCerradas desc
-    conversion: { registros: number, ventas: number, pct: number }
-  }
-```
+Ver `docs/backend-integration.md` §4 (Colaboradores), §5 (Invitaciones)
+y §6 (Favoritos). Todas las mutations llevan `TODO(backend)` en el código.
 
 ---
 
-## Diferencias invited vs marketplace
+## Decisiones de producto
 
-| Aspecto | `invited` | `marketplace` |
-|---|---|---|
-| Quién inicia | Promotor desde Colaboradores | Agencia con plan 99€ desde marketplace |
-| Coste para agencia | 0€ (plan gratis) | 99€/mes |
-| Visibilidad inicial | Solo la promoción invitada | Catálogo completo |
-| Revisión previa | No (el promotor la trajo) | **Sí** → entra como `contrato-pendiente` y requiere aprobación del promotor |
-| Tag en card | `Invitada` (icon UserPlus) | `Marketplace` (icon Store) |
-
----
-
-## Responsive
-
-- **Mobile (≤ sm)**: grid `grid-cols-1`. Filter bar sticky arriba con
-  `backdrop-blur`. El kebab menu se despliega bajo la card.
-- **Tablet (md)**: grid `grid-cols-2`.
-- **Desktop (xl)**: grid `grid-cols-3`.
-
-El heatmap de Analítica fuerza `min-w-[640px]` y permite scroll horizontal
-en móvil (mantiene legibilidad mínima de las celdas).
-
----
-
-## Permisos
-
-| Elemento | Promotor | Agencia |
-|---|---|---|
-| Acceso a `/colaboradores` | ✅ | ❌ oculto del menú |
-| Invitar agencia | ✅ | — |
-| Aprobar / rechazar solicitud marketplace | ✅ | — |
-| Pausar / reanudar | ✅ | — |
-| Ver KPIs agregados de otras agencias | ✅ | — |
-
----
-
-## Estados especiales
-
-- **Loading** — TODO: skeleton de 6 cards en grid (implementar al conectar
-  backend).
-- **Empty (sin agencias + sin pendientes)** — EmptyState con icono
-  Handshake + CTA "Invitar agencia".
-- **Empty (filtros sin resultados)** — mismo EmptyState.
-
----
-
-## TODOs al conectar backend
-
-- [ ] `TODO(backend)`: endpoints `GET/POST /api/collaborators/*`
-- [ ] `TODO(backend)`: endpoint de analítica y heatmap precalculado
-- [ ] `TODO(ui)`: ficha detallada de agencia en `/colaboradores/:id`
-- [ ] `TODO(ui)`: selección múltiple de cards con barra flotante
-      (`bottom-[72px]` en móvil) — no implementada en v1 al ser
-      solo-mock
-- [ ] `TODO(ui)`: skeletons durante load
-- [ ] `TODO(ui)`: envío real del email vía Resend (ya soportado por
-      `lib/invitaciones.ts` → POST al backend)
-- [ ] `TODO(realtime)`: refresco automático al recibir nueva solicitud
-      marketplace (Supabase Realtime o WebSocket)
+- **Solo una versión** (la V3 comercial). Las variantes V1 y V2 se
+  eliminaron el 2026-04-22 tras iteración.
+- **Top performers fuera** — todas las agencias en una sola rejilla con
+  cards grandes. Destacar top-3 separadamente era ruido.
+- **Google rating inline con el nombre** — solo aparece si existe; no
+  crea hueco fantasma en agencias sin rating.
+- **Logos en círculo completo** (`rounded-full`) para diferenciar
+  claramente de las cards de promoción.
+- **Terminología "Compartidos"** en vez de "Promos" (más profesional).
+- **Aprobar/descartar/pausar/eliminar viven solo en la ficha**
+  (`/colaboradores/:id`) — forzar evaluación completa antes de decidir.
+  Los listados y drawers no tienen acciones destructivas.

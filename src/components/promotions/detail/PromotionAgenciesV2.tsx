@@ -34,6 +34,10 @@ import {
   Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useInvitaciones } from "@/lib/invitaciones";
+import { useFavoriteAgencies } from "@/lib/favoriteAgencies";
+import { toast } from "sonner";
+import { Star } from "lucide-react";
 
 /* ══════ TIPOS Y MOCKS ══════ */
 
@@ -149,8 +153,12 @@ export function PromotionAgenciesV2({
   promotionId: string;
   onInviteAgency?: () => void;
 }) {
-  // En la versión real, filtrar por promotionId. Aquí usamos todos los mocks.
-  void promotionId;
+  // Invitaciones salientes pendientes asociadas a esta promoción.
+  const { pendientes } = useInvitaciones();
+  const invitacionesPendientesPromo = useMemo(
+    () => pendientes.filter((i) => i.promocionId === promotionId),
+    [pendientes, promotionId],
+  );
 
   const [query, setQuery] = useState("");
   const [activeCountry, setActiveCountry] = useState<string | null>(null);
@@ -201,6 +209,56 @@ export function PromotionAgenciesV2({
           Invitar agencia
         </button>
       </div>
+
+      {/* ─── Invitaciones salientes pendientes de esta promoción ─── */}
+      {invitacionesPendientesPromo.length > 0 && (
+        <section className="rounded-2xl border border-border bg-card shadow-soft p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+              <p className="text-sm font-semibold text-foreground">
+                Invitaciones pendientes
+              </p>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                ({invitacionesPendientesPromo.length})
+              </span>
+            </div>
+          </div>
+          <ul className="space-y-2">
+            {invitacionesPendientesPromo.map((inv) => {
+              const dias = Math.max(
+                0,
+                Math.round((Date.now() - inv.createdAt) / (24 * 60 * 60 * 1000)),
+              );
+              return (
+                <li
+                  key={inv.id}
+                  className="flex items-center gap-3 rounded-xl border border-border/60 bg-background p-3 hover:bg-muted/40 transition-colors"
+                >
+                  <div className="h-8 w-8 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                    <Building2 className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {inv.nombreAgencia || inv.emailAgencia}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {inv.emailAgencia} · {inv.comisionOfrecida}% ·{" "}
+                      {inv.duracionMeses
+                        ? `${inv.duracionMeses} ${inv.duracionMeses === 1 ? "mes" : "meses"}`
+                        : "Indefinida"}{" "}
+                      · enviada hace {dias} {dias === 1 ? "día" : "días"}
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-medium text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full shrink-0">
+                    Pendiente
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       {isEmpty ? (
         <EmptyState onInviteAgency={onInviteAgency} />
@@ -405,6 +463,8 @@ function HeroKpi({
 
 function AgencyCardV2({ agency }: { agency: AgencyV2 }) {
   const s = statusConfig[agency.status];
+  const { isFavorite, toggleFavorite } = useFavoriteAgencies();
+  const fav = isFavorite(agency.id);
 
   return (
     <article
@@ -413,7 +473,7 @@ function AgencyCardV2({ agency }: { agency: AgencyV2 }) {
         "shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200"
       )}
     >
-      {/* Cabecera: avatar + estado */}
+      {/* Cabecera: avatar + nombre + estrella favorito */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="h-11 w-11 rounded-full overflow-hidden bg-muted shrink-0 ring-1 ring-border">
@@ -435,6 +495,26 @@ function AgencyCardV2({ agency }: { agency: AgencyV2 }) {
             </p>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            toggleFavorite(agency.id);
+            toast.success(fav ? "Quitado de favoritos" : "Añadido a favoritos");
+          }}
+          className={cn(
+            "p-1.5 rounded-full transition-colors shrink-0",
+            fav
+              ? "text-foreground hover:bg-muted"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted",
+          )}
+          aria-label={fav ? "Quitar de favoritos" : "Añadir a favoritos"}
+          aria-pressed={fav}
+        >
+          <Star
+            className={cn("h-4 w-4", fav && "fill-foreground text-foreground")}
+            strokeWidth={1.5}
+          />
+        </button>
       </div>
 
       {/* Pill de estado */}

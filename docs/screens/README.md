@@ -17,7 +17,10 @@ contract, permisos, estados, enlaces salientes.
 | Registros | `/registros` | (pendiente) | 🎨 placeholder |
 | Ventas | `/ventas` | (pendiente) | 🎨 placeholder |
 | Calendario | `/calendario` | (pendiente) | 🎨 placeholder |
-| Colaboradores | `/colaboradores` | (pendiente) | 🎨 placeholder |
+| Colaboradores | `/colaboradores` | [`colaboradores.md`](colaboradores.md) | ✅ diseñada (versión única) |
+| Agencia · detalle | `/colaboradores/:id` | [`agencia-detalle.md`](agencia-detalle.md) | ✅ diseñada |
+| Estadísticas de colaboradores | `/colaboradores/estadisticas` | [`colaboradores-estadisticas.md`](colaboradores-estadisticas.md) | ✅ diseñada |
+| Compartir promoción (flujo) | modal desde `/promociones` y ficha | [`compartir-promocion.md`](compartir-promocion.md) | ✅ diseñada |
 | Contactos | `/contactos` | (pendiente) | 🎨 placeholder |
 | Microsites | `/microsites` | (pendiente) | 🎨 placeholder |
 | Emails | `/emails` | [`emails.md`](emails.md) | 🟡 doc + tipos (falta UI) |

@@ -17,6 +17,8 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { agencies } from "@/data/agencies";
+import { agencyToEmpresa } from "./agencyEmpresaAdapter";
 
 /* ═══════════════════════════════════════════════════════════════════
    Tipos
@@ -86,6 +88,12 @@ export interface Empresa {
   // Verificación
   verificada: boolean;
   verificadaEl: string;         // ISO date
+  // Rating Google (Places API · refrescado semanal por el backend)
+  googlePlaceId: string;        // id devuelto por Places API
+  googleRating: number;         // 0-5 (0 = sin datos)
+  googleRatingsTotal: number;   // nº de reseñas
+  googleFetchedAt: string;      // ISO · último refresco (ToS: ≤30 días)
+  googleMapsUrl: string;        // link a la ficha pública de Maps
   // Meta
   onboardingCompleto: boolean;  // true cuando nombreComercial + razonSocial + cif están
   updatedAt: number;            // timestamp ms
@@ -159,6 +167,14 @@ export const defaultEmpresa: Empresa = {
   zonaHoraria: "Europe/Madrid",
   verificada: false,
   verificadaEl: "",
+  // Seed de demo para que el card se vea poblado (hasta que el backend
+  // conecte con Places API real). Un valor real tiene `googleFetchedAt`
+  // reciente; aquí simulamos un refresco hace 2 días.
+  googlePlaceId: "ChIJDEMO_PlaceId",
+  googleRating: 4.7,
+  googleRatingsTotal: 312,
+  googleFetchedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  googleMapsUrl: "https://maps.app.goo.gl/DEMO",
   onboardingCompleto: false,
   updatedAt: 0,
 };
@@ -239,12 +255,32 @@ function saveOficinas(list: Oficina[]) {
 
 /* ═══════════════════════════════════════════════════════════════════
    useEmpresa hook
-   ═══════════════════════════════════════════════════════════════════ */
-export function useEmpresa() {
-  const [empresa, setEmpresa] = useState<Empresa>(() => loadEmpresa());
 
-  // Re-cargar al montar + suscribir a cambios
+   - Sin argumentos → carga la empresa del tenant logueado (localStorage).
+     `update` y `patch` persisten.
+   - Con `tenantId` → modo **visitor**: carga el perfil público de OTRO
+     tenant (hoy mock desde `agencies.ts` vía `agencyToEmpresa`, en prod
+     `GET /api/empresas/:id/public`). `update` y `patch` son NO-OP.
+
+   Permite que `Empresa.tsx` sirva dos casos con un solo componente:
+     · /empresa                → useEmpresa()                ← owner
+     · /colaboradores/:id      → useEmpresa(id)               ← visitor
+   ═══════════════════════════════════════════════════════════════════ */
+export function useEmpresa(tenantId?: string) {
+  const isVisitor = !!tenantId;
+
+  const loadTenant = useCallback((): Empresa => {
+    if (!tenantId) return loadEmpresa();
+    // Resolución mock · cuando haya backend: fetch a /api/empresas/:id/public
+    const agency = agencies.find((a) => a.id === tenantId);
+    return agency ? agencyToEmpresa(agency) : defaultEmpresa;
+  }, [tenantId]);
+
+  const [empresa, setEmpresa] = useState<Empresa>(() => loadTenant());
+
   useEffect(() => {
+    setEmpresa(loadTenant());
+    if (isVisitor) return; // visitor no escucha cambios propios
     const onChange = () => setEmpresa(loadEmpresa());
     window.addEventListener("byvaro:empresa-changed", onChange);
     window.addEventListener("storage", onChange);
@@ -252,27 +288,29 @@ export function useEmpresa() {
       window.removeEventListener("byvaro:empresa-changed", onChange);
       window.removeEventListener("storage", onChange);
     };
-  }, []);
+  }, [isVisitor, loadTenant]);
 
   const update = useCallback(<K extends keyof Empresa>(key: K, value: Empresa[K]) => {
+    if (isVisitor) return; // visitor no edita datos ajenos
     setEmpresa(prev => {
       const next = { ...prev, [key]: value };
       next.onboardingCompleto = !!next.nombreComercial.trim() && !!next.razonSocial.trim() && !!next.cif.trim();
       saveEmpresa(next);
       return next;
     });
-  }, []);
+  }, [isVisitor]);
 
   const patch = useCallback((partial: Partial<Empresa>) => {
+    if (isVisitor) return;
     setEmpresa(prev => {
       const next = { ...prev, ...partial };
       next.onboardingCompleto = !!next.nombreComercial.trim() && !!next.razonSocial.trim() && !!next.cif.trim();
       saveEmpresa(next);
       return next;
     });
-  }, []);
+  }, [isVisitor]);
 
-  return { empresa, update, patch };
+  return { empresa, update, patch, isVisitor };
 }
 
 /* ═══════════════════════════════════════════════════════════════════

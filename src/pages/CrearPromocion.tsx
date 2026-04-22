@@ -27,6 +27,8 @@ import type {
 } from "@/components/crear-promocion/types";
 import { defaultWizardState } from "@/components/crear-promocion/types";
 import { canPublishWizard } from "@/lib/publicationRequirements"; // valida requisitos (fotos, unidades, plan pagos, ubicación, entrega, estado, comisiones)
+import { saveDraft as persistDraft, getDraft, deleteDraft } from "@/lib/promotionDrafts";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import {
   roleOptions, tipoOptions, subUniOptions, subVariasOptions,
   estadoOptions, faseConstruccionOptions, estiloViviendaOptions,
@@ -52,17 +54,20 @@ import {
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════
-   Persistencia en localStorage (idéntica al original)
+   Persistencia · una sola fuente de verdad en promotionDrafts.ts.
+   El legacy DRAFT_KEY se mantiene solo como lectura para migración;
+   una vez migrado al array de drafts se elimina automáticamente.
    ═══════════════════════════════════════════════════════════════════ */
-const DRAFT_KEY = "byvaro-crear-promocion-draft";
-const loadDraft = (): WizardState | null => {
+const LEGACY_DRAFT_KEY = "byvaro-crear-promocion-draft";
+/** Lee el legacy single-draft una única vez; después se borra. */
+const loadLegacyDraft = (): WizardState | null => {
   try {
-    const r = localStorage.getItem(DRAFT_KEY);
-    return r ? { ...defaultWizardState, ...JSON.parse(r) } : null;
+    const r = localStorage.getItem(LEGACY_DRAFT_KEY);
+    if (!r) return null;
+    localStorage.removeItem(LEGACY_DRAFT_KEY); // consumido
+    return { ...defaultWizardState, ...JSON.parse(r) };
   } catch { return null; }
 };
-const saveDraftLS = (s: WizardState) => localStorage.setItem(DRAFT_KEY, JSON.stringify(s));
-const clearDraft = () => localStorage.removeItem(DRAFT_KEY);
 
 /* ═══════════════════════════════════════════════════════════════════
    Metadatos de cada paso (título + subtítulo mostrados en la cabecera)
@@ -135,13 +140,33 @@ function hasPublishMinimums(s: WizardState): boolean {
    ═══════════════════════════════════════════════════════════════════ */
 export default function CrearPromocion() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [searchParams] = useSearchParams();
-  const [state, setState] = useState<WizardState>(() => loadDraft() ?? defaultWizardState);
+  const draftIdParam = searchParams.get("draft");
+  // Carga inicial · prioridad: draft del query param > legacy migración > default
+  const initialDraft = useMemo(() => {
+    if (draftIdParam) {
+      const d = getDraft(draftIdParam);
+      if (d) return { id: d.id, state: d.state };
+    }
+    const legacy = loadLegacyDraft(); // se consume y borra la legacy key
+    if (legacy) return { id: null, state: legacy };
+    return { id: null, state: defaultWizardState };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [state, setState] = useState<WizardState>(initialDraft.state);
+  const [draftId, setDraftId] = useState<string | null>(initialDraft.id);
+  // Modo "sólo completar lo que falta" · activado desde la ficha. El
+  // wizard salta todos los pasos ya completados y al terminar vuelve a
+  // la ficha (returnTo) en vez de ir al paso de revisión.
+  const onlyMissing = searchParams.get("onlyMissing") === "1";
+  const returnTo = searchParams.get("returnTo");
   const initialStep = (searchParams.get("step") as StepId) || "role";
   const [step, setStep] = useState<StepId>(initialStep);
 
   // Indicador de autoguardado
-  const [savedAt, setSavedAt] = useState<number | null>(() => (loadDraft() ? Date.now() : null));
+  const [savedAt, setSavedAt] = useState<number | null>(() => (initialDraft.state !== defaultWizardState ? Date.now() : null));
   const [saving, setSaving] = useState(false);
   const saveTimeoutRef = useRef<number | null>(null);
   const isFirstRenderRef = useRef(true);
@@ -160,7 +185,15 @@ export default function CrearPromocion() {
     setSaving(true);
     if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = window.setTimeout(() => {
-      saveDraftLS(state);
+      const res = persistDraft(state, draftId ?? undefined);
+      if (!draftId) setDraftId(res.id);
+      if (!res.ok && res.error === "quota") {
+        toast.error("No se pudo autoguardar", {
+          description: "El navegador ha quedado sin espacio. Elimina algún borrador o reduce fotos para continuar.",
+        });
+      } else if (res.discarded.length > 0) {
+        toast.info(`Se descartó "${res.discarded[0]}" por superar el límite de 50 borradores`);
+      }
       setSavedAt(Date.now());
       setSaving(false);
     }, 400);
@@ -250,14 +283,69 @@ export default function CrearPromocion() {
       setState(prev => ({ ...prev, faseConstruccion: fase, trimestreEntrega: null }));
     }
   };
+  /** Predicado puro: ¿el paso está ya completado en el state? Usado
+   *  para saltar pasos ya hechos en modo `onlyMissing`. */
+  const isStepComplete = (s: WizardState, sid: StepId): boolean => {
+    switch (sid) {
+      case "role": return !!s.role;
+      case "tipo": return !!s.tipo;
+      case "sub_uni": return !!s.subUni;
+      case "sub_varias":
+        if (s.subUni === "varias") {
+          return s.tipologiasSeleccionadas.length > 0 && s.estilosSeleccionados.length > 0;
+        }
+        return !!s.subVarias && !!s.estiloVivienda;
+      case "config_edificio": return s.numBloques >= 1 && s.plantas >= 1 && s.aptosPorPlanta >= 1;
+      case "extras": return true; // siempre opcional
+      case "estado": return !!s.estado;
+      case "detalles": return !!s.tipoEntrega; // asumimos completo si hay entrega
+      case "info_basica":
+        return !!s.nombrePromocion.trim()
+          && !!s.direccionPromocion.pais.trim()
+          && !!s.direccionPromocion.ciudad.trim();
+      case "multimedia": return s.fotos.length > 0;
+      case "descripcion": return !!s.descripcion || Object.keys(s.descripcionIdiomas ?? {}).length > 0;
+      case "crear_unidades": return s.unidades.length > 0;
+      case "colaboradores": return !s.colaboracion || !!s.formaPagoComision;
+      case "plan_pagos": return !!s.metodoPago;
+      case "revision": return false; // último paso, no salta
+    }
+  };
+
   const getNext = (): StepId | null => {
     const i = visibleSteps.indexOf(step);
-    return i < visibleSteps.length - 1 ? visibleSteps[i + 1] : null;
+    let next = i + 1;
+    if (onlyMissing) {
+      // En modo "sólo lo que falta" saltamos los pasos ya completados
+      // hasta encontrar uno incompleto o llegar al final.
+      while (next < visibleSteps.length && isStepComplete(state, visibleSteps[next])) {
+        next++;
+      }
+    }
+    return next < visibleSteps.length ? visibleSteps[next] : null;
   };
   const getPrev = (): StepId | null => {
     const i = visibleSteps.indexOf(step);
-    return i > 0 ? visibleSteps[i - 1] : null;
+    let prev = i - 1;
+    if (onlyMissing) {
+      while (prev >= 0 && isStepComplete(state, visibleSteps[prev])) {
+        prev--;
+      }
+    }
+    return prev >= 0 ? visibleSteps[prev] : null;
   };
+
+  /* Al entrar en modo `onlyMissing`, saltar directamente al primer
+     paso incompleto para que el usuario no vea el "role" / "tipo"
+     ya resueltos. */
+  useEffect(() => {
+    if (!onlyMissing) return;
+    if (isStepComplete(state, step)) {
+      const firstMissing = visibleSteps.find((s) => !isStepComplete(state, s));
+      if (firstMissing) setStep(firstMissing);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* Validación de "Siguiente" por paso */
   const canContinue = () => {
@@ -293,8 +381,14 @@ export default function CrearPromocion() {
   const handleContinue = () => {
     const next = getNext();
     if (next) setStep(next);
-    else {
-      clearDraft();
+    else if (onlyMissing && returnTo) {
+      // Modo "sólo lo que falta" · al acabar vuelve a la ficha en
+      // vez de publicar. El promotor decide publicar desde ahí.
+      flushSave();
+      toast.success("Listo · vuelve a la ficha para publicar");
+      navigate(returnTo);
+    } else {
+      if (draftId) deleteDraft(draftId);
       toast.success("Promoción creada correctamente");
       navigate("/promociones");
     }
@@ -304,13 +398,43 @@ export default function CrearPromocion() {
     if (prev) setStep(prev);
     else navigate(-1);
   };
+  /** Cancela el autosave pendiente (si hay timer) y guarda síncrono
+   *  con el state actual. Evita race condition: si el usuario pulsa
+   *  "Guardar y salir" dentro de los 400ms del debounce, garantizamos
+   *  que el id se conserve y no se cree un draft duplicado. */
+  const flushSave = (): string => {
+    if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
+    const res = persistDraft(state, draftId ?? undefined);
+    if (!draftId) setDraftId(res.id);
+    if (!res.ok && res.error === "quota") {
+      toast.error("No se pudo guardar", { description: "Espacio de almacenamiento lleno." });
+    }
+    return res.id;
+  };
   const handleSaveDraft = () => {
-    saveDraftLS(state);
+    flushSave();
     setSavedAt(Date.now());
     toast.success("Borrador guardado");
   };
-  const handleClose = () => {
-    if (confirm("¿Salir del asistente? El borrador se conserva.")) navigate("/promociones");
+  const handleSaveAndExit = () => {
+    flushSave();
+    toast.success(
+      state.nombrePromocion?.trim()
+        ? `"${state.nombrePromocion}" guardada en incompletas`
+        : "Borrador guardado en incompletas",
+    );
+    navigate("/promociones?tab=incompletas");
+  };
+  const handleClose = async () => {
+    const ok = await confirm({
+      title: "¿Salir del asistente?",
+      description: "El borrador se conserva en incompletas. Podrás continuar cuando quieras.",
+      confirmLabel: "Salir",
+    });
+    if (ok) {
+      flushSave();
+      navigate("/promociones?tab=incompletas");
+    }
   };
 
   /* "Omitir" — salta el paso actual sin validación. Útil en pasos
@@ -327,7 +451,7 @@ export default function CrearPromocion() {
      muestra solo cuando hasPublishMinimums(state) === true. */
   const handleQuickPublish = () => {
     if (!hasPublishMinimums(state)) return;
-    clearDraft();
+    if (draftId) deleteDraft(draftId);
     toast.success("Promoción publicada", {
       description: "Has publicado con los datos mínimos. Podrás completar el resto desde la ficha.",
     });
@@ -401,6 +525,15 @@ export default function CrearPromocion() {
                 <span className="sm:hidden">Publicar</span>
               </button>
             )}
+            <button
+              onClick={handleSaveAndExit}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-border bg-card text-[12px] font-medium text-foreground hover:bg-muted transition-colors"
+              title="Guarda el avance y sal del asistente. Volverás a encontrar la promoción en Incompletas."
+            >
+              <FileCheck className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Guardar y salir</span>
+              <span className="sm:hidden">Guardar</span>
+            </button>
             <button
               onClick={handleClose}
               className="p-2 -mr-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"

@@ -450,3 +450,416 @@ principal. Tabs subrayado mantienen consistencia con
 
 **Modal invitar**: se reutiliza `components/empresa/InvitarAgenciaModal`
 para no duplicar el wizard de 3 pasos.
+
+---
+
+## 2026-04-22 · ADR-031 · Compartir promoción: flujo, persistencia y plantilla
+
+**Contexto:** El botón "Compartir con agencias" de `Promociones.tsx` no
+estaba conectado. Queríamos que desde ahí el promotor pudiera invitar a una
+agencia (nueva, colaboradora existente o favorita) a colaborar en una
+promoción, con condiciones (comisión, duración, forma de pago), y que la
+invitación apareciese como pendiente en `/colaboradores` y en la ficha de
+la promoción.
+
+**Decisión:** Modal de 3 pasos (`SharePromotionDialog`):
+
+1. **Choose** — 3 cards (Nueva invitación · Mis colaboradores · Mis
+   favoritos).
+2. **Email** (nueva) o **Pick** (existentes). En email: se rechazan
+   dominios públicos (gmail, hotmail…) y se detecta match de agencia por
+   dominio. En pick NO se vuelca la lista completa por defecto; solo
+   aparece tras escribir ≥2 caracteres (puede haber 100+).
+3. **Conditions** — paso único para ambos ramales, con edición
+   **reposo / hover-lápiz / click** vía `InlineEditNumber`. Default 12
+   meses. La suma del % al colaborador debe = 100%.
+
+Persistencia: hook existente `useInvitaciones()` (localStorage). Se
+amplía el tipo `Invitacion` con `promocionId`, `promocionNombre`,
+`duracionMeses`, `formaPago: PagoTramo[]`, `datosRequeridos`. Helper
+nuevo `invitacionToSyntheticAgency()` convierte invitación pendiente →
+fila sintética `Agency` con `estadoColaboracion: "contrato-pendiente"`.
+
+Visualización cross-feature:
+- `Colaboradores.tsx` fusiona las sintéticas con `baseAgencies`.
+- `PromotionAgenciesV2.tsx` añade bloque "Invitaciones pendientes" arriba
+  del hero, filtrando por `promocionId`.
+
+Plantilla email HTML: `getInvitacionHtml()` devuelve `{ asunto, html }`
+email-safe (tablas + inline + media queries). Hero con foto de la
+promoción, precios desde-hasta, entrega, pill de unidades disponibles,
+comisión destacada, tabla de tramos, checklist de datos obligatorios y
+CTA "Ver invitación". Responsive en ≤640 (edge-to-edge, cols apiladas).
+Preview estático en `email-previews/invitacion-agencia.html` · 640px.
+
+**Alternativas:**
+- 4 pasos separados (conditions en 2) — descartado por pesadez.
+- Volcar la lista de colaboradores en "Pick" — ruido a escala real.
+- Email de texto plano (reutilizar `getEmailPreview`) — el HTML con hero
+  vende mejor la promoción al colaborador.
+
+**Razón:** Unificar `conditions` para ambos ramales reduce duplicación.
+Lápiz en hover anticipa el gateo por roles (`canEditConditions`). La
+plantilla HTML responsive es email-safe (probada Gmail/Apple/iOS) y el
+preview estático nos da ciclo de iteración rápido sin backend.
+
+Ver spec completa en `docs/screens/compartir-promocion.md`.
+
+---
+
+## 2026-04-22 · ADR-032 · Favoritos de agencias como store central
+
+**Contexto:** Teníamos `FAVORITE_AGENCY_IDS` hardcodeado en dos componentes
+(`SharePromotionDialog` y `SendEmailDialog`) con ids distintos. No había
+manera de marcar/desmarcar desde la UI y los cambios en un sitio no se
+reflejaban en otros.
+
+**Decisión:** Hook `useFavoriteAgencies()` en `src/lib/favoriteAgencies.ts`
+como única fuente de verdad. Persistencia en localStorage bajo clave
+`byvaro-favoritos-agencias`, sincronización cross-tab vía storage event +
+CustomEvent. API: `{ ids, isFavorite, toggleFavorite, add, remove }`.
+
+Consumidores:
+- `Colaboradores.tsx` · botón estrella en cada `AgencyCard`.
+- `PromotionAgenciesV2.tsx` · botón estrella en cada `AgencyCardV2` del
+  tab Agencias de la ficha.
+- `SharePromotionDialog.tsx` · filtra la lista "Mis favoritos" y muestra
+  chip estrella en agencias del buscador.
+- `SendEmailDialog.tsx` · filtro "Favoritos" al elegir destinatarios de un
+  email (mantiene el nombre `FAVORITE_AGENCY_IDS` internamente vía alias
+  `const { ids: FAVORITE_AGENCY_IDS } = useFavoriteAgencies()`).
+
+**Estándar UI del toggle:** botón `p-1.5 rounded-full`, icono `Star h-4 w-4`
+`strokeWidth={1.5}`. Activo = `fill-foreground text-foreground`; inactivo =
+`text-muted-foreground`. Toast "Añadido a favoritos" / "Quitado de
+favoritos" al togglear.
+
+**Alternativas:**
+- Prop drilling desde una página raíz — demasiado ruido para un dato global.
+- Context API — válido, pero el hook con `storage` event ya ofrece la
+  sincronización que queríamos cross-tab.
+
+**Razón:** Un único lugar donde definir/leer favoritos elimina divergencia
+entre componentes, y la persistencia real llega gratis (localStorage).
+Migrar al backend cuando exista es cambiar 4 líneas del hook.
+
+**Semilla inicial:** `["ag-1", "ag-3"]` para que la primera carga no esté
+vacía (si luego el usuario toggle-a, se persiste su elección).
+
+---
+
+## 2026-04-22 · ADR-033 · Gate de compartir: publicada + activada
+
+**Contexto:** Los botones de Compartir/Invitar agencias aparecían
+activos siempre. Necesitábamos:
+1. Deshabilitar cuando la promoción no está publicada (incompleta).
+2. Tener un flag explícito `canShareWithAgencies` que el promotor
+   pueda desactivar/activar, independiente del estado de publicación.
+3. Desde la tab Comisiones, mostrar un aviso cuando esté desactivado +
+   popup para activarlo fijando condiciones por defecto.
+
+**Decisión:** Condición global `canShare = isPublished && canShareWithAgencies !== false` (con override local). Donde antes solo chequeábamos `isPublished`, ahora pasamos `canShare`:
+
+- `Promociones.tsx` · botón Compartir de cada card: `disabled` + cursor
+  `not-allowed` + tooltip con el motivo concreto (no publicada / pasos
+  pendientes / compartir desactivado).
+- `PromocionDetalle.tsx` · action dock derecho (dos variantes compact y
+  labeled): `disabled` + opacidad atenuada + hint "Activa compartir en
+  la tab Comisiones".
+- `AgenciesTab` interna · 3 botones Invitar: props `canShare` +
+  `onActivateSharing`; todos `disabled` cuando el gate cierra.
+
+**Popup activación (`ActivateSharingDialog`):** abre desde un banner ámbar
+en la tab Comisiones cuando `!sharingEnabledForPromo`. Pide comisión
+(pill editable, default `p.collaboration.comisionInternacional`) y duración
+por defecto (chips 1/3/6/12 meses, default 12). Al activar, dispara
+`setCanShareOverride(true)` + toast. Override local por ahora;
+`TODO(backend): POST /api/promociones/:id/compartir/activar`.
+
+**Alternativas:**
+- Ocultar los botones cuando están desactivados → se descartó porque deja
+  al usuario sin contexto sobre por qué no puede compartir.
+- Abrir directamente el wizard en step Collaborators → descartado: el
+  usuario explícitamente pidió un popup ligero, no una ruta completa.
+
+**Razón:** Visibilidad (el usuario ve que existe la acción pero entiende
+por qué está bloqueada) + control granular (un promotor puede decidir
+no compartir una promoción específica aunque esté publicada).
+
+Ver spec en `docs/screens/compartir-promocion.md` → sección "Condiciones
+para permitir compartir" y "Activar compartir desde la tab Comisiones".
+
+---
+
+## 2026-04-22 · ADR-034 · Doc canónico de integración backend
+
+**Contexto:** El proyecto vive en fase frontend-first con storage en
+localStorage y mocks. Muchas features (invitaciones, favoritos, ratings
+Google, contratos, colaboradores, compartir promoción…) acumulan
+`TODO(backend)` sueltos por el código. Sin un índice central, el agente
+/ desarrollador que levante el backend tendría que rastrear decenas de
+archivos para entender qué mock reemplazar.
+
+**Decisión:** Crear `docs/backend-integration.md` como **fuente única de
+verdad** del contrato UI↔API. Contenido:
+
+1. Arquitectura multi-tenant (Empresa + Collaboration).
+2. Endpoints por dominio (auth, empresa, promociones, colaboradores,
+   invitaciones, favoritos, registros, ventas, contactos, integraciones
+   externas, microsites).
+3. Modelos de datos con campos derivados vs persistidos.
+4. Crons/jobs periódicos (refresh Google, expire invitations, contracts).
+5. Integraciones externas (Google Places, WhatsApp Baileys, email
+   transaccional, storage, Drive).
+6. Referencia cruzada a cada `TODO(backend)` con `archivo:línea`.
+7. Checklist obligatorio al añadir feature nueva.
+
+**Regla de oro documentada en `CLAUDE.md`:** toda feature con storage
+local o mock debe registrar su endpoint en `backend-integration.md`
+antes de cerrarse. Si un modelo o integración nueva se introduce, se
+actualiza la sección correspondiente.
+
+**Alternativas descartadas:**
+- Mantener cada `TODO(backend)` disperso en el código → inmanejable a
+  escala (ya >60 TODOs repartidos en 50+ archivos).
+- Solo `docs/api-contract.md` → ya existe pero es por-pantalla, no por
+  dominio, y no captura crons/integraciones/multi-tenancy.
+- OpenAPI schema generado → prematuro; aún no hay backend y la forma
+  exacta de los endpoints se decidirá al implementar.
+
+**Razón:** Un solo fichero legible en 10 minutos por el backend agent /
+dev, con enlaces directos al archivo/línea del mock correspondiente,
+reduce el tiempo de integración de semanas a días. La regla de oro
+garantiza que el documento no se quede obsoleto.
+
+Ver `docs/backend-integration.md` · sección §11 "Checklist para nuevas
+features".
+
+---
+
+## 2026-04-22 · ADR-035 · Colaboradores: consolidación en una sola versión
+
+**Contexto:** Tras iterar con el usuario sobre el diseño de la pantalla
+`/colaboradores`, generamos 3 variantes:
+- V1 (clásica) — tabs Red/Analítica, bandeja pendientes, cards compactas.
+- V2 (comercial minimal) — hero + top-3 destacados + grid cards.
+- V3 (comercial enriquecida) — señales (mercados, rating Google,
+  contrato, incidencias), drawer de filtros, ordenación, integración
+  con ficha detalle, cross-sell…
+
+**Decisión:** Eliminar V1 y V2; dejar **V3 como única versión** de la
+pantalla. El antiguo toggle `?v=2|3` se retira. `Colaboradores.tsx` pasa
+a contener el código de V3 (renombrado). Los archivos
+`ColaboradoresV2.tsx` y `ColaboradoresV3.tsx` se borran; la spec
+`docs/screens/colaboradores-v3.md` se fusiona en `colaboradores.md`.
+
+**Consecuencias:**
+- Se pierde la tab "Analítica" de V1 (heatmap + top 5 + conversión).
+  Queda como `TODO(ui)` en el botón "Estadísticas ↗" del header, que
+  muestra toast "próximamente". Cuando se construya, debe ser una
+  sub-ruta o tab dentro del nuevo Colaboradores.
+- Todas las ubicaciones que listaban agencias usan ahora el mismo
+  diseño `FeatureCard` (Colaboradores + drawer solicitudes). Pendiente
+  evaluar `PromotionAgenciesV2` de la ficha de promoción — por ahora
+  sigue con su propio diseño.
+
+**Razón:** Mantener 3 variantes acumula deuda visual y code-ownership.
+La V3 es la más completa y alineada con el resto del producto (helpers
+reutilizados, filtros consistentes con Promociones, ordenación
+`MinimalSort`, ficha detalle enlazada). Consolidar ahora evita que
+cualquier iteración futura tenga que replicarse en 3 sitios.
+
+**Alternativas descartadas:**
+- Mantener el toggle como A/B → prematuro, no tenemos métrica ni user
+  testing; sumaba complejidad sin valor.
+- Fusionar V2 y V3 (tomar lo bueno de cada) → V3 ya es superset de V2.
+- Mantener V1 como fallback → el código vivo obsoleto confunde.
+
+---
+
+## 2026-04-22 · ADR-036 · Una sola vista de ficha de empresa
+
+**Contexto:** Construí inicialmente un `AgenciaDetalle` nuevo con mi
+propio hero y mis propios tabs, mimetizando visualmente el de
+`Empresa.tsx` pero sin reutilizarlo. Resultado: dos implementaciones
+paralelas para el mismo concepto (ficha de empresa). Si se mejora
+`Empresa.tsx`, la ficha de agencia no se entera. Deuda técnica inmediata.
+
+**Decisión:** **Una sola pantalla** de ficha de empresa. `Empresa.tsx`
+es el único componente. Acepta props:
+
+- `tenantId?: string` — si viene, modo visitor (lee el perfil público
+  del tenant indicado).
+- `visitorSlot?: ReactNode` — bloque inyectado sobre el hero.
+- `visitorFooter?: ReactNode` — barra sticky inferior.
+
+En visitor mode se fuerza `viewMode="preview"`, se ocultan banner
+onboarding/overlays de edición/sidebar/toggle Previsualizar, y se
+añade breadcrumb "← Colaboradores".
+
+`useEmpresa(tenantId?)` carga el tenant correcto:
+- Sin id → localStorage (dueño). `update/patch` persiste.
+- Con id → resolve via `agencyToEmpresa(agencies.find)` (mock). En
+  prod: `GET /api/empresas/:id/public`. `update/patch` no-op.
+
+`AgenciaDetalle.tsx` es un wrapper thin que lee `:id` de la URL y
+renderiza `<Empresa tenantId={id} visitorSlot={...} visitorFooter={...} />`
+con los bloques promotor-specific (contrato, métricas con tu red,
+incidencias, mensaje solicitud) + acciones (Aprobar/Descartar ·
+Pausar/Reanudar · Eliminar · Compartir).
+
+**Adapter** `src/lib/agencyEmpresaAdapter.ts · agencyToEmpresa(a)` mapea
+`Agency` → `Empresa`. Cuando el backend tenga el endpoint público, el
+adapter desaparece.
+
+**Alternativas descartadas:**
+- Crear mi propio `AgenciaDetalle` paralelo (lo hice y revertí) → dos
+  mantenimientos, inconsistencia visual progresiva.
+- Extraer un componente "EmpresaProfile" compartido por ambas vistas →
+  mismo resultado que props opcionales pero con más código.
+- Refactor mayor de `useEmpresa` a stores separados → innecesario
+  mientras el hook sepa distinguir owner vs visitor.
+
+**Razón:** Consistencia automática. Cualquier mejora en el hero, tabs o
+bloques de Empresa se refleja instantáneamente en la ficha que ve el
+promotor sobre una agencia. Zero deuda visual. La relación
+promotor↔agencia vive en slots (`visitorSlot`, `visitorFooter`), así
+Empresa queda desacoplada de Colaboradores.
+
+Ver spec completa en `docs/screens/agencia-detalle.md`.
+
+---
+
+## 2026-04-22 · ADR-037 · Estadísticas sin volumen €; con diferenciales Byvaro
+
+**Contexto:** La primera versión de `/colaboradores/estadisticas` copiaba
+un dashboard genérico: KPI "Volumen €", "Ticket medio", trends `+18,4%`
+vs. período anterior, filtro de fechas, gauges por nacionalidad, lista
+de distribución, lista de dominantes, insights hardcodeados. Al revisar,
+la mayoría de eso no encaja con Byvaro o directamente miente:
+
+- **Volumen € / ticket medio**: el promotor vende sus propias unidades a
+  precio conocido. El "ticket medio de una agencia" es un derivado del
+  mix de promociones que le asignamos — no una señal de su rendimiento.
+- **Trends y filtro fechas**: las matrices son agregados, no series
+  temporales. Mostrar "+18,4%" es inventarse el dato.
+- **Gauges / distribución / dominantes**: toda esa información ya está
+  en el heatmap (columna, ring de dominante, fila Total). Duplicaciones.
+- **Insights hardcoded**: no se recalculaban con filtros; si filtrabas a
+  una nacionalidad, los insights seguían hablando del global. No eran
+  "automáticos".
+- **Falta lo que Byvaro hace mejor**: aprobación de leads, IA de
+  duplicados, SLA de respuesta. Los diferenciales del producto no
+  aparecían en la analítica del producto.
+
+**Decisión:**
+
+1. **Sustituir Volumen € por Visitas** en KPIs, matrices, rankings e
+   insights. Las visitas son operativas (generan coste del comercial) y
+   observables en el embudo `registro → visita → venta`.
+2. **Eliminar trends falsos y filtro Fechas** hasta que haya histórico
+   real. Un KPI desnudo es mejor que un trend inventado.
+3. **Añadir panel "Calidad de los registros"** en tab Registros con los
+   3 diferenciales Byvaro (aprobación %, duplicados detectados, SLA
+   respuesta) por agencia.
+4. **Añadir eje Promoción** como segunda dimensión del heatmap, con
+   toggle segmented `Por nacionalidad / Por promoción`. El promotor
+   asigna stock por promoción — esa dimensión es tan importante como
+   la de nacionalidad.
+5. **Derivar insights y oportunidades del subset visible** con reglas
+   deterministas (`deriveInsights`, `deriveOportunidades`). Si filtras,
+   reaccionan.
+6. **Eliminar duplicaciones**: fuera gauges, distribución, dominantes.
+   El heatmap ya lo cuenta todo.
+
+**Alternativas descartadas:**
+
+- Mantener volumen € y ticket porque "otros dashboards los muestran" →
+  no somos un CRM genérico; medimos para un promotor de obra nueva.
+- Dejar filtro Fechas visual-only con una nota de "pendiente backend"
+  → peor que quitarlo: el usuario lo configura pensando que filtra.
+- Dos heatmaps separados (uno por nacionalidad, otro por promoción) →
+  duplica superficie y obliga al usuario a comparar con la mirada; el
+  toggle es más barato en atención.
+- Insights vía LLM en backend → prematuro. Reglas deterministas
+  `if conv<5 && regs>80 → warn` cubren el 80% útil hoy.
+
+**Razón:** Honestidad con el usuario (no mostrar datos que no tenemos)
++ alineación con el modelo de negocio (visitas, no volumen) +
+diferenciación del producto (aprobación, duplicados, SLA). El dashboard
+deja de parecerse a cualquier-otro-dashboard y empieza a parecerse a
+"cómo Byvaro mide a tus colaboradores".
+
+Ver spec completa en `docs/screens/colaboradores-estadisticas.md` y
+contrato backend en `docs/backend-integration.md §4.2`.
+
+---
+
+## 2026-04-22 · ADR-038 · Recomendaciones de agencias · privacidad cross-tenant · **APARCADO**
+
+> **Estado**: diseñado, mockeado, documentado — **no renderizado en UI
+> hasta tener datos cross-tenant suficientes** (decisión 2026-04-22).
+> El motor debe garantizar que cada recomendación sea mejor que la red
+> actual del promotor; hoy no podemos. Se reactivará cuando tengamos
+> volumen real de aprobaciones, conversiones y SLA por agencia.
+>
+
+**Contexto:** Byvaro es multi-tenant y tiene señal que ningún promotor
+individual posee: qué agencia es activa en qué zona, con qué
+nacionalidades, con qué tasa de aprobación/conversión frente a otros
+promotores de obra nueva. Explotar esa señal para recomendar agencias
+a los promotores es una ventaja natural del producto — pero **si se
+hace mal, destruye la confianza entre tenants**.
+
+**Decisión:**
+
+1. **Incluir recomendaciones** (strip horizontal al cierre de
+   `/colaboradores/estadisticas`): agencias activas en las zonas del
+   promotor, con buen track record, con las que aún no colabora. La
+   colocación en stats (no en el listado operativo) es intencional:
+   acabas de ver dónde tienes gaps de mercado, y justo debajo aparecen
+   los candidatos que podrían cubrirlos. El listado
+   `/colaboradores` queda limpio y es para operar sobre la red ya
+   construida.
+2. **Fase 1 (ahora) · in-app**: el promotor descubre cuando entra a la
+   pantalla. No push, no email.
+3. **Fase 2 (pendiente) · email digest**: semanalmente, si hay ≥3
+   recomendaciones de alto score, enviar email opt-out. No spam, no
+   frecuencia agresiva.
+4. **Reglas de privacidad vinculantes** (nunca se saltan):
+   - **Nunca** devolver identidad de otros promotores. Las métricas
+     cross-tenant son agregadas (`promotoresActivos: number`,
+     `aprobacionPct` con "promotores similares", etc.).
+   - **"Promotores similares"** se define por categoría (obra nueva),
+     solape geográfico y tamaño; el frontend nunca ve este grupo.
+   - **Auditoría**: cada invocación del motor queda logueada.
+5. **Mock actual** · dataset `src/data/agencyRecommendations.ts` con 6
+   recomendaciones sintéticas (Riviera Elite, Alpine International,
+   London Bridge, Russian Costa Partners, Côte d'Azur, Mediterranean US).
+   Sustituido por `GET /api/colaboradores/recomendaciones` cuando haya
+   backend.
+
+**Alternativas descartadas:**
+
+- **Marketplace abierto** (lista navegable de todas las agencias de
+  Byvaro) · rompe la promesa de curación. Byvaro **recomienda**, no
+  muestra catálogo sin opinión.
+- **Outreach automático de Byvaro a las agencias** ("Hola agencia X,
+  el promotor Y podría interesarte") · es spam y asume tracción que no
+  tenemos. Deja al promotor decidir.
+- **Exponer identidades** de otros promotores para dar prueba social
+  ("Ya colabora con Promotor B y C") · suicidio de producto. Si un
+  promotor supiera qué agencias usan sus competidores, cada tenant
+  empezaría a minería de datos.
+- **Sin filtro de exclusión** (recomendar agencias donde ya colabora)
+  · ruido, confunde.
+
+**Razón:** El motor explota la ventaja natural de ser multi-tenant sin
+cruzar la línea. Añade discovery al producto sin convertirlo en
+marketplace abierto ni violar la privacidad entre cuentas. La Fase 2
+de email se pospone hasta tener suficientes recomendaciones de alto
+score para que valga la pena despertar al promotor.
+
+Ver spec completa en `docs/screens/colaboradores-estadisticas.md`
+(sección "Recomendaciones Byvaro") y contrato backend en
+`docs/backend-integration.md §4.1`.

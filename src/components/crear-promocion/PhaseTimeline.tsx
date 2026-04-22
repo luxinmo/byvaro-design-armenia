@@ -23,6 +23,61 @@ import { cn } from "@/lib/utils";
 
 type PhaseStatus = "done" | "current" | "upcoming";
 
+/** ¿El paso está completo según su contenido en el state?
+ *  Misma lógica que `isStepComplete` del CrearPromocion (duplicada aquí
+ *  para no crear dependencias cruzadas; el contrato es idéntico). */
+function isStepComplete(s: WizardState, sid: StepId): boolean {
+  switch (sid) {
+    case "role": return !!s.role;
+    case "tipo": return !!s.tipo;
+    case "sub_uni": return !!s.subUni;
+    case "sub_varias":
+      if (s.subUni === "varias") {
+        return s.tipologiasSeleccionadas.length > 0 && s.estilosSeleccionados.length > 0;
+      }
+      return !!s.subVarias && !!s.estiloVivienda;
+    case "config_edificio": return s.numBloques >= 1 && s.plantas >= 1 && s.aptosPorPlanta >= 1;
+    case "extras": return true; // opcional
+    case "estado": return !!s.estado;
+    case "detalles": return !!s.fechaEntrega || !!s.trimestreEntrega || !!s.tipoEntrega;
+    case "info_basica":
+      return !!s.nombrePromocion.trim()
+        && !!s.direccionPromocion.pais.trim()
+        && !!s.direccionPromocion.ciudad.trim();
+    case "multimedia": return s.fotos.length > 0;
+    case "descripcion": return !!s.descripcion || Object.keys(s.descripcionIdiomas ?? {}).length > 0;
+    case "crear_unidades": return s.unidades.length > 0;
+    case "colaboradores": return !s.colaboracion || !!s.formaPagoComision;
+    case "plan_pagos": return !!s.metodoPago;
+    case "revision": return false;
+  }
+}
+
+/** ¿El paso es OBLIGATORIO para publicar? Usado para pintar en rojo
+ *  los pendientes críticos en la sidebar (vs tono neutro para opcionales). */
+function isStepRequired(s: WizardState, sid: StepId): boolean {
+  switch (sid) {
+    case "role":
+    case "tipo":
+    case "sub_uni":
+    case "sub_varias":
+    case "config_edificio":
+    case "estado":
+    case "info_basica":
+    case "multimedia":
+    case "crear_unidades":
+    case "plan_pagos":
+    case "detalles":
+      return true;
+    case "colaboradores":
+      return !!s.colaboracion; // solo si colabora
+    case "extras":
+    case "descripcion":
+    case "revision":
+      return false;
+  }
+}
+
 /* ─── Definición de fases ─────────────────────────────────────────── */
 const PHASES: PhaseDef[] = [
   {
@@ -108,13 +163,14 @@ export function PhaseTimeline({
 
   const visibleStepsList = useMemo(() => getAllSteps(state).map(s => s.id), [state]);
 
-  // Pasos considerados "done" = los que están ANTES del actual en el orden
-  // visible. El paso actual en sí no es done.
+  // Pasos considerados "done" = los que tienen contenido válido en el
+  // state (no solo porque se hayan visitado). El paso actual puede
+  // seguir siendo "done" si ya está completo antes de avanzar.
   const doneSteps = useMemo(() => {
-    const idx = visibleStepsList.indexOf(currentStep);
-    if (idx <= 0) return new Set<StepId>();
-    return new Set<StepId>(visibleStepsList.slice(0, idx));
-  }, [visibleStepsList, currentStep]);
+    const done = new Set<StepId>();
+    visibleStepsList.forEach((sid) => { if (isStepComplete(state, sid)) done.add(sid); });
+    return done;
+  }, [visibleStepsList, state]);
 
   // Filtramos fases: si la fase no tiene NINGÚN paso visible → no se muestra
   const activePhases = PHASES
@@ -124,10 +180,25 @@ export function PhaseTimeline({
     }))
     .filter(phase => phase.steps.length > 0);
 
-  // Estado de fases colapsadas: por defecto colapsadas todas excepto la actual
+  /** Una fase tiene "pendientes obligatorios" si alguno de sus pasos
+   *  es requerido y aún no está completo. Pintamos la fase en rojo
+   *  aunque esté colapsada para que el usuario vea a golpe de vista
+   *  dónde le falta rellenar datos. */
+  const phaseHasPending = (phaseId: string): boolean => {
+    const phase = activePhases.find(p => p.id === phaseId);
+    if (!phase) return false;
+    return phase.steps.some((s) => isStepRequired(state, s) && !isStepComplete(state, s));
+  };
+
+  // Estado de fases colapsadas: por defecto colapsadas todas excepto la
+  // actual y las que tengan pendientes obligatorios (para que el rojo
+  // sea visible al entrar sin tener que expandir cada una).
   const currentPhase = activePhases.find(p => p.steps.includes(currentStep));
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(() => {
-    return new Set(currentPhase ? [currentPhase.id] : []);
+    const initial = new Set<string>();
+    if (currentPhase) initial.add(currentPhase.id);
+    activePhases.forEach((p) => { if (phaseHasPending(p.id)) initial.add(p.id); });
+    return initial;
   });
 
   // Cuando el usuario cambia de paso, expande automáticamente la fase del
@@ -184,6 +255,8 @@ export function PhaseTimeline({
         const expanded = expandedPhases.has(phase.id) || status === "current";
         const doneCount = phase.steps.filter(s => doneSteps.has(s)).length;
         const total = phase.steps.length;
+        const hasPendingRequired = phase.steps.some((s) => isStepRequired(state, s) && !isStepComplete(state, s));
+        const pendingRequiredCount = phase.steps.filter((s) => isStepRequired(state, s) && !isStepComplete(state, s)).length;
 
         return (
           <div key={phase.id} className="flex flex-col">
@@ -192,25 +265,35 @@ export function PhaseTimeline({
               type="button"
               onClick={() => togglePhase(phase.id)}
               className={cn(
-                "group flex items-center gap-2.5 rounded-xl px-2.5 py-2 transition-colors text-left",
+                "group flex items-center gap-2.5 rounded-xl px-2.5 py-2 transition-colors text-left relative",
                 status === "current"
                   ? "bg-primary/5 border border-primary/20"
-                  : "border border-transparent hover:bg-muted/60",
+                  : hasPendingRequired
+                    ? "border border-destructive/30 bg-destructive/5 hover:bg-destructive/10"
+                    : "border border-transparent hover:bg-muted/60",
               )}
               aria-expanded={expanded}
             >
-              {/* Icono fase */}
-              <div
-                className={cn(
-                  "flex h-7 w-7 items-center justify-center rounded-lg shrink-0 transition-colors",
-                  status === "done"
-                    ? "bg-primary text-primary-foreground"
-                    : status === "current"
-                      ? "bg-primary/15 text-primary"
-                      : "bg-muted text-muted-foreground",
+              {/* Icono fase · dot rojo encima si hay pendientes obligatorios. */}
+              <div className="relative shrink-0">
+                <div
+                  className={cn(
+                    "flex h-7 w-7 items-center justify-center rounded-lg transition-colors",
+                    status === "done"
+                      ? "bg-primary text-primary-foreground"
+                      : status === "current"
+                        ? "bg-primary/15 text-primary"
+                        : hasPendingRequired
+                          ? "bg-destructive/10 text-destructive"
+                          : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {status === "done" ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : <Icon className="h-3.5 w-3.5" />}
+                </div>
+                {/* Dot rojo · indicador claro aunque la fase esté colapsada */}
+                {hasPendingRequired && status !== "done" && (
+                  <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-background" />
                 )}
-              >
-                {status === "done" ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : <Icon className="h-3.5 w-3.5" />}
               </div>
 
               {/* Texto */}
@@ -219,13 +302,19 @@ export function PhaseTimeline({
                   <p
                     className={cn(
                       "text-[12.5px] font-semibold tracking-tight leading-tight",
-                      status === "current" ? "text-primary" : status === "done" ? "text-foreground" : "text-muted-foreground",
+                      status === "current"
+                        ? "text-primary"
+                        : status === "done"
+                          ? "text-foreground"
+                          : hasPendingRequired
+                            ? "text-destructive"
+                            : "text-muted-foreground",
                     )}
                   >
                     <span className="text-[10px] text-muted-foreground font-medium mr-1.5 tnum">{phaseIdx + 1}</span>
                     {phase.label}
                   </p>
-                  {/* Badge contador */}
+                  {/* Badge contador · rojo si hay obligatorios pendientes. */}
                   <span
                     className={cn(
                       "shrink-0 tnum text-[10px] font-semibold rounded-full px-1.5 py-0.5 min-w-[28px] text-center",
@@ -233,14 +322,22 @@ export function PhaseTimeline({
                         ? "bg-primary/10 text-primary"
                         : status === "current"
                           ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground",
+                          : hasPendingRequired
+                            ? "bg-destructive/10 text-destructive"
+                            : "bg-muted text-muted-foreground",
                     )}
+                    title={hasPendingRequired ? `${pendingRequiredCount} obligatorio${pendingRequiredCount > 1 ? "s" : ""} pendiente${pendingRequiredCount > 1 ? "s" : ""}` : undefined}
                   >
                     {doneCount}/{total}
                   </span>
                 </div>
-                <p className="text-[10.5px] text-muted-foreground truncate mt-0.5">
-                  {phase.description}
+                <p className={cn(
+                  "text-[10.5px] truncate mt-0.5",
+                  hasPendingRequired && status !== "current" ? "text-destructive/80" : "text-muted-foreground",
+                )}>
+                  {hasPendingRequired && status !== "current"
+                    ? `${pendingRequiredCount} pendiente${pendingRequiredCount > 1 ? "s" : ""} obligatorio${pendingRequiredCount > 1 ? "s" : ""}`
+                    : phase.description}
                 </p>
               </div>
 
@@ -252,39 +349,44 @@ export function PhaseTimeline({
               />
             </button>
 
-            {/* Sub-pasos */}
+            {/* Sub-pasos · cada uno muestra estado real (done/pending)
+                 con indicador rojo si es obligatorio para publicar. */}
             {expanded && (
               <div className="mt-1 ml-3 pl-3 border-l border-border flex flex-col gap-0.5 pb-2">
                 {phase.steps.map((stepId) => {
                   const isCurrent = stepId === currentStep;
                   const isDone = doneSteps.has(stepId);
-                  const clickable = isDone || isCurrent;
+                  const required = isStepRequired(state, stepId);
+                  const isPendingRequired = !isDone && !isCurrent && required;
                   const summary = stepSummaries.get(stepId) ?? null;
 
                   return (
                     <button
                       key={stepId}
                       type="button"
-                      disabled={!clickable}
-                      onClick={() => clickable && onGoToStep(stepId)}
+                      onClick={() => onGoToStep(stepId)}
                       className={cn(
-                        "group flex items-start gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors min-w-0",
-                        clickable ? "hover:bg-muted/50 cursor-pointer" : "cursor-default",
-                        isCurrent && "bg-primary/5",
+                        "group flex items-start gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors min-w-0 cursor-pointer",
+                        isCurrent ? "bg-primary/5" : "hover:bg-muted/50",
                       )}
                     >
-                      {/* Bullet */}
-                      <div className="mt-1 shrink-0">
-                        <div
-                          className={cn(
-                            "h-1.5 w-1.5 rounded-full transition-colors",
-                            isDone
-                              ? "bg-primary"
-                              : isCurrent
-                                ? "bg-primary ring-2 ring-primary/20"
-                                : "bg-muted-foreground/30",
-                          )}
-                        />
+                      {/* Bullet · verde check si done, rojo si pendiente obligatorio, neutro si opcional */}
+                      <div className="mt-0.5 shrink-0">
+                        {isDone ? (
+                          <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                            <Check className="h-2 w-2" strokeWidth={3} />
+                          </span>
+                        ) : isCurrent ? (
+                          <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary/15">
+                            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                          </span>
+                        ) : isPendingRequired ? (
+                          <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border-[1.5px] border-destructive">
+                            <span className="h-1 w-1 rounded-full bg-destructive" />
+                          </span>
+                        ) : (
+                          <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-muted-foreground/30" />
+                        )}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p
@@ -294,7 +396,9 @@ export function PhaseTimeline({
                               ? "text-primary font-semibold"
                               : isDone
                                 ? "text-foreground font-medium"
-                                : "text-muted-foreground",
+                                : isPendingRequired
+                                  ? "text-destructive font-medium"
+                                  : "text-muted-foreground",
                           )}
                         >
                           {stepLabels[stepId]}
