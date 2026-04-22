@@ -148,14 +148,76 @@ Tipo `Lead` completo: `docs/data-model.md § Lead`.
 
 ---
 
+## Ficha de lead (`/leads/:id`)
+
+Al hacer click en cualquier fila de la tabla → navega a la ficha
+(`src/pages/LeadDetalle.tsx`).
+
+### Layout
+
+- **Header sticky** con back a `/leads`, avatar con iniciales, nombre +
+  bandera, chip de estado, meta (fuente · tiempo · asignado), chip
+  **DUPLICADO N%** si aplica, y 5 CTAs: Llamar · Email · WhatsApp ·
+  Convertir · Descartar.
+- **Grid 2-col en desktop** (stack en móvil):
+  - **Col izquierda (2/3)**:
+    - *Interés declarado* · promoción (con enlace a ficha), tipología,
+      dormitorios, presupuesto + zona preferida al pie.
+    - *Mensaje del lead* · blockquote italic con border-l primary si
+      el lead escribió texto.
+    - *Match de duplicados* · solo si `duplicateScore ≥ 70`. Banner
+      destructivo con 3 celdas comparando email/teléfono/nombre
+      (Coincide/Parcial/Similar) + botones "Ver contacto existente" /
+      "No es duplicado".
+    - *Actividad* · timeline vertical con iconos circulares coloreados
+      por tono (primary/emerald/destructive/neutral). Eventos derivados
+      del estado del lead (Lead recibido · IA detectó duplicado ·
+      Asignado a X · 1ª respuesta · Convertido/Descartado).
+  - **Col derecha (1/3)**:
+    - *Identidad* · email/teléfono como links (`mailto:`, `tel:`),
+      nacionalidad, idioma.
+    - *Asignación* · avatar del comercial asignado + "Cambiar", o botón
+      "Asignar a un comercial" si no hay.
+    - *Origen* · canal, timestamp de entrada, 1ª respuesta si existe.
+    - *Etiquetas* · chips bg-muted.
+
+### Estados
+
+| Estado | Cuándo | Qué aparece |
+|---|---|---|
+| Lead no encontrado | `id` no matchea | Icono Inbox + copy + CTA "Volver a Leads" |
+| Sin duplicado | `duplicateScore < 70` y `status !== "duplicate"` | Sección de match no se renderiza |
+| Sin mensaje | `message` es undefined | Sección "Mensaje del lead" no se renderiza |
+| Sin asignación | `assignedTo` es undefined | Botón "Asignar a un comercial" (dashed) |
+| Ya convertido / descartado | `status` = converted/rejected | CTAs Convertir y/o Descartar deshabilitados |
+
+### Interacciones
+
+- Click en cualquier fila de `/leads` → navega a la ficha.
+- Click en el kebab de fila → menú de acciones (no navega).
+- Click en el chip de promoción del interés → navega a `/promociones/:id`.
+- `mailto:` y `tel:` como links nativos.
+
+---
+
 ## TODOs al conectar backend
 
-Todos marcados como `TODO(backend)` en `src/pages/Leads.tsx` y
-`src/data/leads.ts`:
+Todos marcados como `TODO(backend)` en `src/pages/Leads.tsx`,
+`src/pages/LeadDetalle.tsx` y `src/data/leads.ts`:
 
 - Sustituir `import { leads }` por `useQuery(["leads", filters], ...)`.
-- Handlers del kebab (hoy `toast`) deben llamar a los endpoints de §7.1.
-- Botón "Filtros" debe abrir un drawer con filtros avanzados (origen,
-  nacionalidad, presupuesto, asignado, rango fechas).
+- `/leads/:id` debe llamar a `GET /api/leads/:id` con su propio query.
+- Handlers del kebab y CTAs (hoy `toast`) → endpoints de §7.1:
+  - Llamar/Email/WhatsApp = telemetría + grabar `firstResponseAt`.
+  - Convertir → `POST /api/leads/:id/convert` (devuelve registroId).
+  - Descartar → `PATCH /api/leads/:id { status: "rejected" }`.
+  - Reasignar → `PATCH /api/leads/:id/assign { userId }`.
+- Timeline de la ficha: hoy derivada del estado. En prod →
+  `GET /api/leads/:id/events` con eventos reales.
+- Match de duplicados (email/teléfono/nombre) · hoy valores fijos.
+  En prod vendrán del scoring real (`duplicateScore` y fields que
+  matchearon).
+- Botón "Filtros" (listado) debe abrir un drawer con filtros avanzados
+  (origen, nacionalidad, presupuesto, asignado, rango fechas).
 - Conectar el `badge` del sidebar (`AppSidebar.tsx` `badge: 24`) al
   contador real de `status="new"`.

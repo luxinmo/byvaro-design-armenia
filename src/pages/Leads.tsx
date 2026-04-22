@@ -258,7 +258,10 @@ function LeadRow({
   const isDup = l.status === "duplicate" || (l.duplicateScore ?? 0) >= 70;
 
   return (
-    <tr className="border-t border-border/60 hover:bg-muted/20 transition-colors">
+    <tr
+      onClick={() => navigate(`/leads/${l.id}`)}
+      className="border-t border-border/60 hover:bg-muted/20 transition-colors cursor-pointer"
+    >
       {/* Lead · nombre + email/teléfono */}
       <td className="px-4 py-3">
         <div className="flex items-start gap-3 min-w-0">
@@ -331,7 +334,7 @@ function LeadRow({
       </td>
 
       {/* Kebab */}
-      <td className="px-2 py-3 text-right align-top">
+      <td className="px-2 py-3 text-right align-top" onClick={(e) => e.stopPropagation()}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
