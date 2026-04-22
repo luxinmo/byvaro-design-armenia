@@ -330,6 +330,7 @@ Carpeta `docs/` — cada archivo cubre un área:
 | `docs/design-system.md` | Tokens, componentes, patrones visuales |
 | `docs/data-model.md` | Entidades, tipos, relaciones, reglas de negocio |
 | **`docs/backend-integration.md`** | 📌 **Canónico · todo el contrato UI↔API**, endpoints por dominio, crons, integraciones externas, referencias cruzadas a cada `TODO(backend)` del código |
+| **`docs/permissions.md`** | 🛡️ **Canónico · permisos y visibilidad** · catálogo completo de keys, defaults por rol, contrato backend (RLS, JWT), contrato frontend, deuda técnica actual |
 | `docs/ui-helpers.md` | Catálogo de helpers puros y componentes transversales |
 | `docs/services.md` | Servicios externos a instalar para producción |
 | `docs/api-contract.md` | Endpoints API esperados (histórico por pantalla) |

@@ -85,6 +85,40 @@ ambas cosas en un único tipo `Agency`. Al implementar backend, separar:
 
 ---
 
+## 1.5 · Permisos y visibilidad
+
+> 🛡️ **El contrato completo de permisos vive en `docs/permissions.md`.**
+> Esta sección solo enumera los endpoints; el catálogo de keys, los
+> defaults por rol, las RLS policies y el esquema SQL están allí.
+
+**Endpoints**:
+- `GET    /api/permissions/roles` → matriz `{ admin: [...], member: [...], <custom>: [...] }`
+- `PATCH  /api/permissions/roles/:role` (`settings.manageRoles`) — invalida tokens del workspace.
+- `POST   /api/permissions/roles` (`settings.manageRoles`) — crear rol custom.
+- `DELETE /api/permissions/roles/:role` (`settings.manageRoles`) — falla si hay miembros activos.
+- `GET    /api/me` → `{ user, workspace, role, permissions[] }`.
+
+**JWT claims** (cada token de `/auth/login` debe incluir):
+```json
+{
+  "sub": "<userId>", "workspace_id": "<wsId>",
+  "role": "admin|member|<custom>",
+  "permissions": ["whatsapp.viewOwn", "contacts.viewAll", ...]
+}
+```
+
+**Validación server-side**: cada endpoint del API valida (a) JWT, (b)
+`permission` requerido para la acción, (c) RLS aplicada vía
+`current_setting('app.user_id')`, `app.workspace_id` y
+`app.permissions`. Detalles en `docs/permissions.md` §4.
+
+**Multi-tenant + ownership**: además de `workspace_id`, las entidades
+contactos/registros/oportunidades/ventas/visitas/documentos/emails
+llevan un campo `assigned_to UUID[]` (índice GIN) sobre el que se
+hace el filtro de `viewOwn`. Migration en `docs/permissions.md` §4.1.
+
+---
+
 ## 2 · Empresa (perfil del tenant)
 
 **Tipo completo**: `src/lib/empresa.ts:32` (interface `Empresa`).

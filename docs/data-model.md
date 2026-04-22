@@ -6,6 +6,24 @@ Entidades del dominio + tipos TypeScript + reglas de negocio.
 > `src/components/crear-promocion/types.ts`. Este documento los **explica**
 > pero no los **define** — para el contrato de datos, leer el código.
 
+## 🛡️ Ownership y visibilidad
+
+Las entidades transaccionales del workspace llevan un array
+`assignedTo: string[]` (userIds) que el sistema de permisos usa para
+filtrar `viewOwn` vs `viewAll`. Aplica a:
+
+- `Contact` — agentes asignados al contacto.
+- `Registro` — agente que captó el lead.
+- `Oportunidad` — agente que la trabaja.
+- `Venta` — agente que la cerró.
+- `Visit` — agente que la realizó.
+- `Document` — heredado del `assignedTo` del contacto dueño.
+- `Email` — usuario propietario de la cuenta + delegados.
+
+**En BD**: columna `assigned_to UUID[] NOT NULL DEFAULT '{}'` con
+índice GIN. Catálogo completo de keys, defaults por rol, RLS policies
+y JWT claims en `docs/permissions.md`.
+
 ## Entidades principales
 
 ### Empresa (Company / Tenant)
