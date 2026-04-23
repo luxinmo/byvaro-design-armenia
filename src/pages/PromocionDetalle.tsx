@@ -8,7 +8,7 @@ import { unitDataToUnit, mergeUnitIntoUnitData } from "@/lib/unitDataAdapter";
 import type { Unit } from "@/data/units";
 import { promotions, getBuildingTypeLabel } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion, type Comercial, type ComercialPermissions } from "@/data/developerPromotions";
-import { agencies, type Agency } from "@/data/agencies";
+import { agencies, countAgenciesForPromotion, type Agency } from "@/data/agencies";
 import { FeatureCardV3 } from "@/pages/Colaboradores";
 import ColaboradoresEstadisticas from "@/pages/ColaboradoresEstadisticas";
 import {
@@ -527,7 +527,18 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     { icon: TrendingUp, label: "Comisión", value: p.commission > 0 ? `${p.commission}%` : "—", detail: p.commission > 0 ? (p.priceMin > 0 ? `~${formatPrice(p.priceMin * p.commission / 100)}` : "—") : "Sin configurar", color: "text-warning bg-warning/10", onClick: () => setActiveTab(visibleTabs.indexOf("Comisiones")), empty: p.commission === 0 },
     { icon: Calendar, label: "Entrega", value: p.delivery || "Por definir", detail: p.delivery ? "Estimada" : "Añádela en Información básica", color: "text-accent-foreground bg-accent/10", empty: !p.delivery },
     { icon: HardHat, label: "Construcción", value: p.constructionProgress !== undefined ? `${p.constructionProgress}%` : "—", detail: constructionPhaseLabel || "Sin configurar", color: "text-destructive bg-destructive/10", empty: p.constructionProgress === undefined },
-    ...(!viewAsCollaborator ? [{ icon: Users, label: "Agencias", value: `${p.agencies}`, detail: p.agencies > 0 ? "Colaborando" : "Ninguna aún", color: "text-primary bg-primary/10", onClick: () => setShareOpen(true), empty: false }] : []),
+    ...(!viewAsCollaborator ? (() => {
+      const realAgencies = countAgenciesForPromotion(p.id);
+      return [{
+        icon: Users,
+        label: "Agencias",
+        value: `${realAgencies}`,
+        detail: realAgencies > 0 ? "Colaborando" : "Ninguna aún",
+        color: "text-primary bg-primary/10",
+        onClick: () => setShareOpen(true),
+        empty: realAgencies === 0,
+      }];
+    })() : []),
   ];
   const kpis = viewAsCollaborator ? allKpis.filter(k => !k.empty) : allKpis;
 

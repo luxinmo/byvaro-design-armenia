@@ -361,3 +361,20 @@ export const agencies: Agency[] = [
       "Buscamos partnerships en Costa Blanca para nuestra red de clientes escandinavos. Ya colaboramos con 3 promotores en España.",
   },
 ];
+
+/**
+ * Nº real de agencias que colaboran hoy en una promoción.
+ *
+ * El mock tenía un campo `Promotion.agencies` suelto que solo era
+ * un número ilustrativo — podía mentir respecto al dataset real.
+ * Este helper cuenta las agencias que TIENEN esta promoción en su
+ * `promotionsCollaborating`, que es la fuente de verdad tanto en
+ * el mock como en el modelo backend futuro
+ * (tabla `Collaboration(promotion_id, agency_id)`).
+ *
+ * TODO(backend): sustituir por GET /api/promociones/:id/agencies/count
+ * o incluirlo en el response del listado de promociones.
+ */
+export function countAgenciesForPromotion(promotionId: string): number {
+  return agencies.filter((a) => a.promotionsCollaborating.includes(promotionId)).length;
+}
