@@ -26,6 +26,7 @@ import { listDrafts, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type Pr
 import { Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
+import { useCurrentUser } from "@/lib/currentUser";
 
 /* ═══════════════════════════════════════════════════════════════════
    Opciones estáticas (las dinámicas se derivan de los datos en el componente)
@@ -397,9 +398,31 @@ export default function Promociones() {
     [drafts],
   );
 
+  /* En modo agencia, el listado sólo contiene las promociones donde la
+   * agencia activa aparece en `promotionsCollaborating`. Los borradores y
+   * las `developerOnly` no existen desde la óptica de la agencia. */
+  const currentUser = useCurrentUser();
+  const isAgencyUser = currentUser.accountType === "agency";
+  const activeAgency = useMemo(
+    () => (isAgencyUser ? agencies.find((a) => a.id === currentUser.agencyId) ?? null : null),
+    [isAgencyUser, currentUser.agencyId],
+  );
+
   const allPromotions: DevPromotion[] = useMemo(() => {
-    return [...draftPromotions, ...developerOnlyPromotions, ...promotions.map(p => ({ ...p } as DevPromotion))];
-  }, [draftPromotions]);
+    if (isAgencyUser) {
+      /* Agencia: une promociones públicas + developerOnly (hay agencias
+       * invitadas a colaborar en ambas) y filtra por los IDs que figuran
+       * en `promotionsCollaborating` de la agencia activa. Los borradores
+       * del promotor nunca son visibles. */
+      const collaboratingIds = new Set(activeAgency?.promotionsCollaborating ?? []);
+      const pool: DevPromotion[] = [
+        ...developerOnlyPromotions,
+        ...promotions.map((p) => ({ ...p } as DevPromotion)),
+      ];
+      return pool.filter((p) => collaboratingIds.has(p.id));
+    }
+    return [...draftPromotions, ...developerOnlyPromotions, ...promotions.map((p) => ({ ...p } as DevPromotion))];
+  }, [draftPromotions, isAgencyUser, activeAgency]);
 
   /* ─── Opciones de filtros de GESTIÓN (fijas) ─── */
   const activityOptions = [

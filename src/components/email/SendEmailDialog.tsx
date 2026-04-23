@@ -76,6 +76,7 @@ import {
 // Datos mock — reemplazar por llamadas al backend cuando esté disponible
 import { unitsByPromotion } from "@/data/units";
 import { agencies } from "@/data/agencies";
+import { useCurrentUser } from "@/lib/currentUser";
 // Popover para selector de plantilla, idioma y destinatarios
 import {
   Popover, PopoverContent, PopoverTrigger,
@@ -138,6 +139,15 @@ export function SendEmailDialog({
 }: SendEmailDialogProps) {
   const { toast } = useToast();
   const { ids: FAVORITE_AGENCY_IDS } = useFavoriteAgencies();
+  /* La agencia nunca envía emails a otras agencias desde una ficha — solo
+   * a clientes propios. Forzamos audience="client" y saltamos el paso de
+   * selección de audiencia. Capa de protección adicional a la que pone
+   * el caller al pasar `defaultAudience="client"`. */
+  const currentUser = useCurrentUser();
+  const isAgencyUser = currentUser.accountType === "agency";
+  const effectiveDefaultAudience: Audience | undefined = isAgencyUser
+    ? "client"
+    : defaultAudience;
 
   // ── Derive forced template based on mode ──
   // unit / promotion → "new-availability" by default (most common case).
@@ -157,8 +167,8 @@ export function SendEmailDialog({
   //     para clientes).
   const initialStepFor = (a: Audience | undefined): Step =>
     !a ? "audience" : a === "collaborator" ? "collab-mode" : "template";
-  const [step, setStep] = useState<Step>(initialStepFor(defaultAudience));
-  const [audience, setAudience] = useState<Audience>(defaultAudience ?? "client");
+  const [step, setStep] = useState<Step>(initialStepFor(effectiveDefaultAudience));
+  const [audience, setAudience] = useState<Audience>(effectiveDefaultAudience ?? "client");
   const [templateId, setTemplateId] = useState<TemplateId>(
     forcedDefaultTemplateId ?? "new-availability",
   );
@@ -217,16 +227,16 @@ export function SendEmailDialog({
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
-      setStep(initialStepFor(defaultAudience));
-      setAudience(defaultAudience ?? "client");
+      setStep(initialStepFor(effectiveDefaultAudience));
+      setAudience(effectiveDefaultAudience ?? "client");
       const tid: TemplateId = forcedDefaultTemplateId ?? "new-availability";
       setTemplateId(tid);
       const tpl = getTemplate(tid);
       setBlocksByLang({
-        es: { ...tpl.defaultBlocks.es },
-        en: { ...tpl.defaultBlocks.en },
+        es: applyAgencyVoice(tid, { ...tpl.defaultBlocks.es }, "es"),
+        en: applyAgencyVoice(tid, { ...tpl.defaultBlocks.en }, "en"),
       });
-      setSubject(defaultLangSubject(tid, "es"));
+      setSubject(defaultLangSubject(tid, "es", isAgencyUser));
       setLanguage("es");
       setSelectedRecipients([]);
       setExternalRecipients([]);
@@ -237,20 +247,27 @@ export function SendEmailDialog({
       setIncludeSignature(true);
       setIncludeAvailability(true);
     }
-  }, [open, defaultAudience, forcedDefaultTemplateId]);
+  }, [open, effectiveDefaultAudience, forcedDefaultTemplateId]);
 
   const selectTemplate = (id: TemplateId) => {
     const tpl = getTemplate(id);
     setTemplateId(id);
     setBlocksByLang({
-      es: { ...tpl.defaultBlocks.es },
-      en: { ...tpl.defaultBlocks.en },
+      es: applyAgencyVoice(id, { ...tpl.defaultBlocks.es }, "es"),
+      en: applyAgencyVoice(id, { ...tpl.defaultBlocks.en }, "en"),
     });
-    setSubject(defaultLangSubject(id, language));
+    setSubject(defaultLangSubject(id, language, isAgencyUser));
     setStep("compose");
   };
 
   const tpl = getTemplate(templateId);
+  /* Label de la plantilla adaptado al rol · la agencia ve "Disponibilidad"
+   * en lugar de "Nueva disponibilidad" tanto en el picker como en el header
+   * del compose. */
+  const tplDisplayLabel: Record<Language, string> =
+    isAgencyUser && templateId === "new-availability"
+      ? { es: "Disponibilidad", en: "Availability" }
+      : tpl.label;
   const blocks = blocksByLang[language] ?? {};
   const previewHtml = useMemo(
     () =>
@@ -258,8 +275,9 @@ export function SendEmailDialog({
         includeSignature,
         includeAvailability,
         availabilityUnits,
+        agencyMode: isAgencyUser,
       }),
-    [tpl, blocks, language, includeSignature, includeAvailability, availabilityUnits],
+    [tpl, blocks, language, includeSignature, includeAvailability, availabilityUnits, isAgencyUser],
   );
 
   // Inject preview HTML into iframe and wire up contenteditable behaviour
@@ -405,7 +423,84 @@ export function SendEmailDialog({
     .map(email => recipientPool.find(r => r.email === email))
     .filter(Boolean) as Recipient[];
 
-  const audienceTemplates = getTemplatesByAudience(audience);
+  /* En modo agencia:
+   *   · `new-launch` ("Nuevo lanzamiento") no aplica — no es la agencia
+   *     quien lanza la promoción. Se filtra del picker.
+   *   · `new-availability` cambia de nombre a "Disponibilidad" y se
+   *     reescribe el copy para hablar en voz de agencia (ver
+   *     `agencyBlockOverride`). */
+  /* Datos de la agencia activa para personalizar el header y la firma del
+   * email (si venimos logueados como agencia). */
+  const activeAgency = isAgencyUser
+    ? agencies.find((a) => a.id === currentUser.agencyId)
+    : null;
+
+  /** Overrides de branding cuando el emisor es una agencia. El header del
+   *  template usa `brandName`, `brandTagline` y `brandLogo`; la firma usa
+   *  `agentName`, `agentRole` y `agentContact`. Los reemplazamos para que
+   *  el email refleje a la agencia, no al promotor por defecto. */
+  const agencyBrandOverrides = (lang: Language): Partial<TemplateBlocks> => {
+    if (!activeAgency) return {};
+    return {
+      brandName: activeAgency.name,
+      brandTagline: lang === "es" ? "Agencia inmobiliaria" : "Real estate agency",
+      brandLogo: activeAgency.logoRect || activeAgency.logo,
+      agentName: currentUser.name,
+      agentRole: lang === "es"
+        ? `${activeAgency.name} · Asesor${currentUser.name.endsWith("a") ? "a" : ""} comercial`
+        : `${activeAgency.name} · Sales advisor`,
+      agentContact: `${activeAgency.contactoPrincipal?.telefono ?? "+34 600 000 000"} · ${currentUser.email}`,
+    };
+  };
+
+  /** Ajusta los bloques por defecto cuando el usuario es agencia — cambia
+   *  la voz del copy ("Por My Company" → solo ubicación; "Hemos liberado" →
+   *  "Te comparto") y sobrescribe el branding. Solo se usa al inicializar
+   *  blocks y al cambiar de plantilla; el usuario puede seguir editando
+   *  libremente después. */
+  const applyAgencyVoice = (tid: TemplateId, blocks: TemplateBlocks, lang: Language): TemplateBlocks => {
+    if (!isAgencyUser) return blocks;
+    const brand = agencyBrandOverrides(lang);
+    const base = { ...blocks, ...brand };
+    if (tid === "new-availability") {
+      return {
+        ...base,
+        title: lang === "es"
+          ? "Unidades disponibles ahora mismo"
+          : "Currently available units",
+        subtitle: lang === "es"
+          ? "Selección de oportunidades que pueden encajar con tu búsqueda"
+          : "A selection of opportunities that may fit what you're looking for",
+        body: lang === "es"
+          ? "Te comparto las <strong>unidades actualmente disponibles</strong> que encajan con lo que estás buscando. Tipologías variadas, con las mejores orientaciones y áticos con solárium privado. Si alguna te encaja, coordinamos visita y te resuelvo las dudas."
+          : "Sharing the <strong>currently available units</strong> that match what you're looking for. Varied layouts with the best orientations, plus penthouses with private solarium. Let me know if any work for you and we'll arrange a viewing.",
+        cta: lang === "es" ? "Ver ficha completa" : "View full listing",
+      };
+    }
+    return base;
+  };
+
+  /* En modo agencia:
+   *   · `new-launch` ("Nuevo lanzamiento") no aplica.
+   *   · `blank` ("Sin plantilla") tampoco — la agencia siempre envía con
+   *     una plantilla cuando parte de una promoción; si no hay plantilla,
+   *     no tiene sentido el flujo desde la ficha.
+   *   · `new-availability` se renombra a "Disponibilidad" con copy de
+   *     agencia. */
+  const audienceTemplates = getTemplatesByAudience(audience)
+    .filter((t) => !(isAgencyUser && (t.id === "new-launch" || t.id === "blank")))
+    .map((t) =>
+      isAgencyUser && t.id === "new-availability"
+        ? {
+            ...t,
+            label: { es: "Disponibilidad", en: "Availability" },
+            description: {
+              es: "Comparte con tu cliente las unidades actualmente disponibles",
+              en: "Share the currently available units with your client",
+            },
+          }
+        : t,
+    );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -439,10 +534,16 @@ export function SendEmailDialog({
               Elige el tipo de destinatario para mostrarte las plantillas adecuadas.
             </p>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className={cn("grid gap-3", isAgencyUser ? "grid-cols-1" : "grid-cols-2")}>
               {([
                 { id: "client", icon: User, title: "A un cliente", desc: "Ficha de unidad o resumen de promoción", next: "template" as Step },
-                { id: "collaborator", icon: Users, title: "A un colaborador", desc: "Briefing comercial completo con comisiones", next: "collab-mode" as Step },
+                /* La opción de colaborador se filtra si el usuario es una
+                 * agencia — una agencia no envía emails a otras agencias
+                 * desde la ficha de una promoción. Ver CLAUDE.md §Vista de
+                 * Agencia. */
+                ...(isAgencyUser
+                  ? []
+                  : [{ id: "collaborator" as const, icon: Users, title: "A un colaborador", desc: "Briefing comercial completo con comisiones", next: "collab-mode" as Step }]),
               ] as const).map(opt => (
                 <button
                   key={opt.id}
@@ -802,7 +903,7 @@ export function SendEmailDialog({
                   <PopoverTrigger asChild>
                     <button className="flex items-center gap-1.5 px-2 py-1 -ml-1 rounded-md hover:bg-muted/60 transition-colors min-w-0">
                       <h2 className="text-sm font-semibold truncate">
-                        {language === "es" ? tpl.label.es : tpl.label.en}
+                        {language === "es" ? tplDisplayLabel.es : tplDisplayLabel.en}
                       </h2>
                       <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" strokeWidth={1.5} />
                     </button>
@@ -845,9 +946,9 @@ export function SendEmailDialog({
                     setLanguage(l);
                     setSubject(prev => {
                       const matchOther = languages.some(
-                        x => x.code !== l && prev === defaultLangSubject(templateId, x.code),
+                        x => x.code !== l && prev === defaultLangSubject(templateId, x.code, isAgencyUser),
                       );
-                      return matchOther ? defaultLangSubject(templateId, l) : prev;
+                      return matchOther ? defaultLangSubject(templateId, l, isAgencyUser) : prev;
                     });
                   };
                   if (languages.length <= 3) {
@@ -995,33 +1096,36 @@ export function SendEmailDialog({
                     </button>
                   </PopoverTrigger>
                   <PopoverContent align="start" className="w-[380px] p-2">
-                    {/* Audience switcher (Clients / Collaborators) */}
-                    <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-full mb-2">
-                      <button
-                        onClick={() => { setAudience("client"); setPickerTab("all"); }}
-                        className={cn(
-                          "flex-1 inline-flex items-center justify-center gap-1.5 h-7 rounded-full text-[11px] font-medium transition-colors",
-                          audience === "client"
-                            ? "bg-background text-foreground shadow-soft"
-                            : "text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        <User className="h-3 w-3" strokeWidth={1.5} />
-                        {language === "es" ? "Clientes" : "Clients"}
-                      </button>
-                      <button
-                        onClick={() => { setAudience("collaborator"); setPickerTab("all"); }}
-                        className={cn(
-                          "flex-1 inline-flex items-center justify-center gap-1.5 h-7 rounded-full text-[11px] font-medium transition-colors",
-                          audience === "collaborator"
-                            ? "bg-background text-foreground shadow-soft"
-                            : "text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        <Users className="h-3 w-3" strokeWidth={1.5} />
-                        {language === "es" ? "Colaboradores" : "Collaborators"}
-                      </button>
-                    </div>
+                    {/* Audience switcher (Clients / Collaborators) — en modo
+                        agencia se oculta, sólo existe Clientes. */}
+                    {!isAgencyUser && (
+                      <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-full mb-2">
+                        <button
+                          onClick={() => { setAudience("client"); setPickerTab("all"); }}
+                          className={cn(
+                            "flex-1 inline-flex items-center justify-center gap-1.5 h-7 rounded-full text-[11px] font-medium transition-colors",
+                            audience === "client"
+                              ? "bg-background text-foreground shadow-soft"
+                              : "text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          <User className="h-3 w-3" strokeWidth={1.5} />
+                          {language === "es" ? "Clientes" : "Clients"}
+                        </button>
+                        <button
+                          onClick={() => { setAudience("collaborator"); setPickerTab("all"); }}
+                          className={cn(
+                            "flex-1 inline-flex items-center justify-center gap-1.5 h-7 rounded-full text-[11px] font-medium transition-colors",
+                            audience === "collaborator"
+                              ? "bg-background text-foreground shadow-soft"
+                              : "text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          <Users className="h-3 w-3" strokeWidth={1.5} />
+                          {language === "es" ? "Colaboradores" : "Collaborators"}
+                        </button>
+                      </div>
+                    )}
 
                     {/* Filter tabs (All / Favorites) */}
                     <div className="flex items-center justify-between px-1 mb-2">
@@ -1237,7 +1341,25 @@ export function SendEmailDialog({
   );
 }
 
-function defaultLangSubject(id: TemplateId, lang: Language) {
+function defaultLangSubject(id: TemplateId, lang: Language, agency = false) {
+  /* Los defaults en voz de agencia son más sobrios y NUNCA incluyen el
+   * nombre de la promoción en el asunto — regla de producto: la agencia
+   * no desvela en el subject qué proyecto concreto está promocionando
+   * (el cliente abre el email primero y el detalle llega dentro). */
+  if (agency) {
+    const agencySubjects: Partial<Record<TemplateId, { es: string; en: string }>> = {
+      "new-availability": {
+        es: "Oportunidad inmobiliaria que te puede interesar",
+        en: "A real estate opportunity for you",
+      },
+      "last-unit": {
+        es: "⚠ Queda solo una unidad — revísala antes de que vuele",
+        en: "⚠ Only one unit left — take a look before it's gone",
+      },
+    };
+    const agencyMatch = agencySubjects[id];
+    if (agencyMatch) return agencyMatch[lang];
+  }
   const subjects: Record<TemplateId, { es: string; en: string }> = {
     "last-unit": {
       es: "⚠ Última unidad disponible · Mar Azul Residences",

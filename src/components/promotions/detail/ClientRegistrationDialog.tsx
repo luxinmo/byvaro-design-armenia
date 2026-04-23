@@ -42,6 +42,9 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { agencies as allAgencies, type Agency } from "@/data/agencies";
 import { NATIONALITIES } from "@/data/nationalities";
+import { useCurrentUser } from "@/lib/currentUser";
+import { addCreatedRegistro } from "@/lib/registrosStorage";
+import type { Registro } from "@/data/records";
 
 interface Props {
   open: boolean;
@@ -133,6 +136,8 @@ export function ClientRegistrationDialog({
   validezDias = 0,
   isCollaboratorView = false,
 }: Props) {
+  const currentUser = useCurrentUser();
+  const isAgencyUser = currentUser.accountType === "agency";
   const [mode, setMode] = useState<Mode | null>(null);
 
   /* Direct flow */
@@ -252,6 +257,40 @@ export function ClientRegistrationDialog({
   };
 
   const handleConfirmDirect = () => {
+    /* Persistimos el registro para que aparezca en `/registros`. En modo
+     * agencia, `origen = "collaborator"` con el `agencyId` del usuario.
+     * En modo promotor, `origen = "direct"` (registro propio, sin agencia). */
+    if (selectedClient && promotionId) {
+      const nombre = selectedClient.name;
+      const email = (selectedClient as { email?: string }).email ?? "";
+      const telefono = (selectedClient as { phone?: string }).phone ?? "";
+      const nacionalidad = (selectedClient as { nationality?: string }).nationality ?? "";
+      const registro: Registro = isAgencyUser
+        ? {
+            id: `reg-local-${Date.now()}`,
+            origen: "collaborator",
+            promotionId,
+            agencyId: currentUser.agencyId,
+            cliente: { nombre, email, telefono, dni: "", nacionalidad },
+            fecha: new Date().toISOString(),
+            estado: "pendiente",
+            matchPercentage: 0,
+            consent: true,
+            recommendation: "Registro desde agencia · sin análisis de duplicados.",
+          }
+        : {
+            id: `reg-local-${Date.now()}`,
+            origen: "direct",
+            promotionId,
+            cliente: { nombre, email, telefono, dni: "", nacionalidad },
+            fecha: new Date().toISOString(),
+            estado: "pendiente",
+            matchPercentage: 0,
+            consent: true,
+            recommendation: "Registro directo del promotor.",
+          };
+      addCreatedRegistro(registro);
+    }
     toast.success("Cliente registrado", {
       description: `${selectedClient?.name} registrado en ${promotionName}.`,
     });

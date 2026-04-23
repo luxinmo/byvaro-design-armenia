@@ -37,9 +37,11 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { toast, Toaster } from "sonner"; // feedback no bloqueante post-submit
-import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle } from "lucide-react"; // iconos inline en inputs y estados
+import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, Building2, Handshake } from "lucide-react"; // iconos inline en inputs y estados
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/BrandLogo"; // isotipo + wordmark oficial (SVG inline)
+import { findMockUser, mockUsers, DEMO_PASSWORD, type MockUser } from "@/data/mockUsers";
+import { loginAs } from "@/lib/accountType";
 
 /* ═════════════════════════════════════════════════════════════════════
    Validaciones puras (sin zod para evitar acoplamiento pesado aquí).
@@ -83,16 +85,41 @@ export default function Login() {
     }
 
     setSubmitting(true);
-    // TODO(backend): reemplazar este setTimeout por:
+    // TODO(backend): reemplazar este setTimeout + findMockUser por:
     //   await fetch("/api/v1/auth/login", { method: "POST", body: JSON.stringify({ email, password, remember }) })
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 500));
+
+    const user = findMockUser(email, password);
+    if (!user) {
+      setSubmitting(false);
+      setError("Email o contraseña incorrectos.");
+      return;
+    }
+
+    /* Login exitoso — escribimos el accountType en sessionStorage antes de
+     * navegar para que la primera renderización de /inicio vea el contexto
+     * correcto (vista promotor vs vista agencia). */
+    loginAs(user.accountType, user.agencyId);
     setSubmitting(false);
 
-    toast.success("Bienvenido de nuevo", {
-      description: "Sesión iniciada correctamente.",
+    toast.success(`Bienvenido, ${user.name.split(" ")[0]}`, {
+      description: user.label,
     });
     navigate("/inicio", { replace: true });
   }
+
+  /** Quick login desde las cards de demo · rellena inputs y dispara submit. */
+  const handleQuickLogin = async (u: MockUser) => {
+    setEmail(u.email);
+    setPassword(u.password);
+    setError(null);
+    setSubmitting(true);
+    await new Promise((r) => setTimeout(r, 300));
+    loginAs(u.accountType, u.agencyId);
+    setSubmitting(false);
+    toast.success(`Bienvenido, ${u.name.split(" ")[0]}`, { description: u.label });
+    navigate("/inicio", { replace: true });
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -276,6 +303,62 @@ export default function Login() {
                   />
                 </div>
               </div>
+
+              {/* Cuentas de demostración · atajo para entrar sin escribir
+                   credenciales. Solo visible en el mock; en producción
+                   este bloque desaparece. */}
+              <section className="mt-5 rounded-2xl border border-dashed border-border bg-muted/30 p-4">
+                <header className="mb-3 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      Cuentas de demo
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Click para entrar. Password:{" "}
+                      <code className="font-mono bg-card px-1 py-0.5 rounded border border-border">
+                        {DEMO_PASSWORD}
+                      </code>
+                    </p>
+                  </div>
+                </header>
+                <div className="space-y-1.5">
+                  {mockUsers.map((u) => {
+                    const Icon = u.accountType === "developer" ? Building2 : Handshake;
+                    return (
+                      <button
+                        key={u.email}
+                        type="button"
+                        onClick={() => handleQuickLogin(u)}
+                        disabled={submitting}
+                        className={cn(
+                          "w-full flex items-center gap-2.5 rounded-xl border border-border bg-card p-2.5 text-left",
+                          "hover:border-foreground/30 hover:shadow-soft transition-all duration-150",
+                          "disabled:opacity-50 disabled:cursor-not-allowed",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "h-7 w-7 rounded-full grid place-items-center shrink-0",
+                            u.accountType === "developer"
+                              ? "bg-foreground/10 text-foreground"
+                              : "bg-primary/10 text-primary",
+                          )}
+                        >
+                          <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-semibold text-foreground truncate">
+                            {u.name}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground truncate">
+                            {u.email} · {u.label}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
 
               {/* Link cruzado a Registro */}
               <p className="mt-5 text-center text-sm text-muted-foreground">

@@ -47,9 +47,12 @@ Scripts:
 
 1. **`CLAUDE.md`** — reglas operativas y convenciones. **Empieza aquí** si
    vas a tocar código.
-2. **`docs/architecture.md`** — qué es Byvaro, personas, flujos principales
-3. **`docs/ia-menu.md`** — estructura del menú y decisiones de IA
-4. **`docs/design-system.md`** — tokens, componentes, patrones visuales
+2. **`docs/dual-role-model.md`** 🤝 — modelo Promotor ↔ Agencia. Lectura
+   obligatoria antes de tocar cualquier feature que afecte a pantallas,
+   datos o permisos.
+3. **`docs/architecture.md`** — qué es Byvaro, personas, flujos principales
+4. **`docs/ia-menu.md`** — estructura del menú y decisiones de IA
+5. **`docs/design-system.md`** — tokens, componentes, patrones visuales
 
 ### Para entender los datos
 

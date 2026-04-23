@@ -44,6 +44,21 @@ function getEstado(a: Agency): "activa" | "contrato-pendiente" | "pausada" {
 function getOrigen(a: Agency): "invited" | "marketplace" {
   return a.origen ?? "invited";
 }
+/** Una agencia está "pendiente" cuando hay una solicitud entrante (marketplace)
+ *  o una invitación saliente sin responder. Viven fuera del grid principal y
+ *  se listan sólo cuando el usuario abre el pill "Pendientes" o el drawer. */
+function isPendiente(a: Agency): boolean {
+  return Boolean(a.solicitudPendiente || a.isNewRequest);
+}
+const TYPE_LABELS: Record<string, string> = {
+  Agency: "Agencia",
+  Broker: "Broker",
+  Network: "Network",
+};
+function typeLabel(t: string | undefined | null): string {
+  if (!t) return "";
+  return TYPE_LABELS[t] ?? t;
+}
 /** ISO2 → emoji flag. */
 function flagOf(code: string): string {
   const c = code.toUpperCase();
@@ -97,7 +112,7 @@ const ESPECIALIDAD_META: Record<NonNullable<Agency["especialidad"]>, { label: st
 export default function Colaboradores() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [estadoFilter, setEstadoFilter] = useState<"todas" | "activa" | "contrato-pendiente" | "pausada">("todas");
+  const [estadoFilter, setEstadoFilter] = useState<"todas" | "activa" | "pausada">("todas");
   /* Segmented rápido junto al buscador.
    *   · "todos"        → sin filtro.
    *   · "colaboran"    → estado activa.
@@ -176,11 +191,16 @@ export default function Colaboradores() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return agencies.filter((a) => {
-      if (a.solicitudPendiente || a.isNewRequest) return false;
+      /* Pendientes: el pill las muestra; el resto de vistas las excluye
+       * para que vivan en su drawer y no se mezclen con la red activa. */
+      if (quickFilter === "pendientes") {
+        if (!isPendiente(a)) return false;
+      } else {
+        if (isPendiente(a)) return false;
+        if (quickFilter === "colaboran" && getEstado(a) !== "activa") return false;
+        if (quickFilter === "no-colaboran" && getEstado(a) !== "pausada") return false;
+      }
       if (estadoFilter !== "todas" && getEstado(a) !== estadoFilter) return false;
-      if (quickFilter === "colaboran" && getEstado(a) !== "activa") return false;
-      if (quickFilter === "pendientes" && getEstado(a) !== "contrato-pendiente") return false;
-      if (quickFilter === "no-colaboran" && getEstado(a) !== "pausada") return false;
       if (origenFilter.length > 0 && !origenFilter.includes(getOrigen(a))) return false;
       if (tipoFilter.length > 0 && !tipoFilter.includes(a.type)) return false;
       if (contratoFilter.length > 0 && !contratoFilter.includes(getContractStatus(a).state)) return false;
@@ -317,8 +337,10 @@ export default function Colaboradores() {
               )}
             </div>
 
-            {/* Segmented · Todos / Colaboradores / No colaboradores */}
-            <div className="inline-flex items-center bg-muted rounded-full p-1 gap-0.5 shrink-0">
+            {/* Segmented · Todos / Colaboradores / Pendientes / No colaboradores.
+             *  En viewport <400px no cabe en una línea: damos scroll horizontal
+             *  al propio segmented sin que rompa el layout de la toolbar. */}
+            <div className="inline-flex max-w-full items-center bg-muted rounded-full p-1 gap-0.5 shrink-0 overflow-x-auto no-scrollbar">
               {([
                 { key: "todos", label: "Todos" },
                 { key: "colaboran", label: "Colaboradores" },
@@ -331,7 +353,7 @@ export default function Colaboradores() {
                     key={opt.key}
                     onClick={() => setQuickFilter(opt.key)}
                     className={cn(
-                      "h-8 px-3.5 rounded-full text-xs font-medium transition-colors",
+                      "h-8 px-3.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap shrink-0",
                       selected
                         ? "bg-card text-foreground shadow-soft"
                         : "text-muted-foreground hover:text-foreground",
@@ -451,7 +473,7 @@ export default function Colaboradores() {
               <header className="h-14 shrink-0 flex items-center justify-between px-5 border-b border-border">
                 <div>
                   <h2 className="text-[15px] font-semibold tracking-tight">Solicitudes</h2>
-                  <p className="text-[11.5px] text-muted-foreground mt-0.5">
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
                     {pendientes.length === 1
                       ? "1 agencia esperando respuesta"
                       : `${pendientes.length} agencias esperando respuesta`}
@@ -491,7 +513,7 @@ export default function Colaboradores() {
                         }}
                       >
                         <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-                        <span className="absolute top-2 right-2 text-[10px] font-semibold text-foreground bg-card/90 backdrop-blur px-2 py-0.5 rounded-full shadow-soft">
+                        <span className="absolute top-2 right-2 text-[11px] font-semibold text-foreground bg-card/90 backdrop-blur px-2 py-0.5 rounded-full shadow-soft">
                           {a.origen === "marketplace" ? "Marketplace" : "Invitada"}
                         </span>
                       </div>
@@ -509,7 +531,7 @@ export default function Colaboradores() {
                               {a.name}
                             </h3>
                             <p className="text-[11px] text-muted-foreground truncate">
-                              {a.location} · {a.type}
+                              {a.location}{a.type ? ` · ${typeLabel(a.type)}` : ""}
                             </p>
                           </div>
                           <GoogleRatingBadge agency={a} size="xs" />
@@ -517,7 +539,7 @@ export default function Colaboradores() {
 
                         {/* Description */}
                         {a.description && (
-                          <p className="mt-2 text-[11.5px] text-muted-foreground leading-relaxed line-clamp-3">
+                          <p className="mt-2 text-[11px] text-muted-foreground leading-relaxed line-clamp-3">
                             {a.description}
                           </p>
                         )}
@@ -599,7 +621,7 @@ export default function Colaboradores() {
               <header className="h-14 shrink-0 flex items-center justify-between px-5 border-b border-border">
                 <div>
                   <h2 className="text-[15px] font-semibold tracking-tight">Filtros</h2>
-                  <p className="text-[11.5px] text-muted-foreground mt-0.5">
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
                     {activeFilterCount === 0
                       ? "Ningún filtro aplicado"
                       : `${activeFilterCount} filtro${activeFilterCount > 1 ? "s" : ""} activo${activeFilterCount > 1 ? "s" : ""}`}
@@ -620,7 +642,6 @@ export default function Colaboradores() {
                   title="Estado"
                   options={[
                     { value: "activa", label: "Activas" },
-                    { value: "contrato-pendiente", label: "Contrato pendiente" },
                     { value: "pausada", label: "Pausadas" },
                   ]}
                   values={estadoFilter === "todas" ? [] : [estadoFilter]}
@@ -687,7 +708,7 @@ export default function Colaboradores() {
                   <button
                     onClick={() => setSoloFavoritos((v) => !v)}
                     className={cn(
-                      "inline-flex items-center gap-2 h-8 px-3.5 rounded-full border text-[12.5px] font-medium transition-colors",
+                      "inline-flex items-center gap-2 h-8 px-3.5 rounded-full border text-xs font-medium transition-colors",
                       soloFavoritos
                         ? "bg-primary/10 border-primary/30 text-primary"
                         : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-foreground/30",
@@ -704,7 +725,7 @@ export default function Colaboradores() {
                 <button
                   onClick={clearAllFilters}
                   disabled={activeFilterCount === 0}
-                  className="text-[12.5px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   Limpiar todo
                 </button>
@@ -764,7 +785,7 @@ function ChipGroup({
               key={opt.value}
               onClick={() => toggle(opt.value)}
               className={cn(
-                "inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-[12.5px] font-medium transition-colors",
+                "inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium transition-colors",
                 selected
                   ? "bg-primary/10 border-primary/30 text-primary"
                   : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-foreground/30",
@@ -846,6 +867,7 @@ function GoogleRatingBadge({
     )}>
       {/* "G" Google */}
       <span className="relative inline-flex items-center justify-center h-4 w-4 rounded-full bg-white border border-border shrink-0">
+        {/* 9px justificado: la "G" vive dentro de un círculo de 16px (h-4 w-4). */}
         <span className="font-bold text-[9px] leading-none" aria-hidden="true"
           style={{
             background: "linear-gradient(45deg,#4285F4 0%,#34A853 35%,#FBBC05 65%,#EA4335 100%)",
@@ -1075,7 +1097,7 @@ function MetricBlock({
     <div className="text-center min-w-0">
       {Icon && <Icon className="h-3 w-3 text-muted-foreground mx-auto mb-1" strokeWidth={1.75} />}
       <p className="text-[13px] font-bold text-foreground tabular-nums leading-none truncate">{value}</p>
-      <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-1 truncate">{label}</p>
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1 truncate">{label}</p>
     </div>
   );
 }

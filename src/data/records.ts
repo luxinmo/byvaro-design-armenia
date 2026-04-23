@@ -1,18 +1,22 @@
 /**
- * records.ts · Mock de registros (leads entrantes de agencias)
+ * records.ts · Mock de registros (leads entrantes de agencias o directos)
  *
  * QUÉ
  * ----
  * Fuente de datos mock para la pantalla `/registros` (src/pages/Registros.tsx).
- * Un "Registro" representa la solicitud de una agencia colaboradora para
- * "apartar" un cliente potencial ante el promotor dentro de una promoción
- * concreta. Es el núcleo del diferencial IA de duplicados (ver
- * `docs/product.md` y `docs/data-model.md`).
+ * Un "Registro" representa la solicitud de apartar un cliente potencial
+ * sobre una promoción concreta. Puede tener dos orígenes (`origen`):
+ *   · `"collaborator"` → lo envía una agencia colaboradora (caso clásico).
+ *   · `"direct"`       → lo crea el propio promotor (cliente que le llega
+ *                        directamente, sin agencia intermediaria).
+ * Es el núcleo del diferencial IA de duplicados (ver `docs/product.md` y
+ * `docs/data-model.md`).
  *
  * CÓMO
  * ----
  * - `promotionId` referencia a `src/data/promotions.ts`.
- * - `agencyId`    referencia a `src/data/agencies.ts`.
+ * - `agencyId`    referencia a `src/data/agencies.ts`. Solo obligatorio
+ *   cuando `origen === "collaborator"`; en directos es undefined.
  * - `matchPercentage` (0-100) lo calcula el detector de duplicados:
  *     < 30%  → limpio (aprobación fluida)
  *     30-69% → ambiguo (promotor decide con comparación lado-a-lado)
@@ -28,6 +32,21 @@
  */
 
 export type RegistroEstado = "pendiente" | "aprobado" | "rechazado" | "duplicado";
+
+/**
+ * Origen del registro.
+ *
+ * - `"direct"`        → lo da de alta el promotor en la ficha de promoción
+ *                       usando "Registrar cliente · Directo". No hay agencia.
+ * - `"collaborator"`  → lo envía una agencia colaboradora (solicitud entrante
+ *                       que requiere aprobación del promotor + IA duplicados).
+ *
+ * Diferencias de flujo:
+ * - Un `direct` normalmente no requiere aprobación (lo mete el propio promotor)
+ *   pero sí pasa por el detector de duplicados para avisar de colisiones.
+ * - Un `collaborator` arranca en `pendiente` y siempre requiere decisión.
+ */
+export type RegistroOrigen = "direct" | "collaborator";
 
 export type RegistroCliente = {
   nombre: string;
@@ -81,10 +100,15 @@ export type Registro = {
   /** "registration" por defecto · "registration_visit" si la solicitud
    *  incluye proponer una visita. */
   tipo?: RegistroTipo;
+  /** Origen del registro (directo vs. a través de colaborador). */
+  origen: RegistroOrigen;
   /** FK → src/data/promotions.ts::Promotion.id */
   promotionId: string;
-  /** FK → src/data/agencies.ts::Agency.id */
-  agencyId: string;
+  /**
+   * FK → src/data/agencies.ts::Agency.id.
+   * Obligatorio cuando `origen === "collaborator"`, undefined cuando es directo.
+   */
+  agencyId?: string;
   cliente: RegistroCliente;
   /** ISO 8601 (se formatea con date-fns/formatDistanceToNow en la UI). */
   fecha: string;
@@ -136,6 +160,7 @@ export const registros: Registro[] = [
   /* ───── Limpios (matchPercentage = 0) ───── */
   {
     id: "reg-001",
+    origen: "collaborator",
     promotionId: "1",
     agencyId: "ag-1",
     cliente: {
@@ -158,6 +183,7 @@ export const registros: Registro[] = [
     tipo: "registration_visit",
     visitDate: "2026-04-28",
     visitTime: "10:30",
+    origen: "collaborator",
     promotionId: "2",
     agencyId: "ag-2",
     cliente: {
@@ -175,6 +201,7 @@ export const registros: Registro[] = [
   },
   {
     id: "reg-003",
+    origen: "collaborator",
     promotionId: "3",
     agencyId: "ag-3",
     cliente: {
@@ -192,6 +219,7 @@ export const registros: Registro[] = [
   },
   {
     id: "reg-004",
+    origen: "collaborator",
     promotionId: "1",
     agencyId: "ag-2",
     cliente: {
@@ -211,6 +239,7 @@ export const registros: Registro[] = [
   /* ───── Ambiguos (30 - 69%) ───── */
   {
     id: "reg-005",
+    origen: "collaborator",
     promotionId: "2",
     agencyId: "ag-1",
     cliente: {
@@ -237,6 +266,7 @@ export const registros: Registro[] = [
   },
   {
     id: "reg-006",
+    origen: "collaborator",
     promotionId: "4",
     agencyId: "ag-3",
     cliente: {
@@ -266,6 +296,7 @@ export const registros: Registro[] = [
   },
   {
     id: "reg-007",
+    origen: "collaborator",
     promotionId: "3",
     agencyId: "ag-2",
     cliente: {
@@ -291,6 +322,7 @@ export const registros: Registro[] = [
   },
   {
     id: "reg-008",
+    origen: "collaborator",
     promotionId: "1",
     agencyId: "ag-3",
     cliente: {
@@ -318,6 +350,7 @@ export const registros: Registro[] = [
   /* ───── Duplicados fuertes (>= 70%) ───── */
   {
     id: "reg-009",
+    origen: "collaborator",
     promotionId: "2",
     agencyId: "ag-3",
     cliente: {
@@ -344,6 +377,7 @@ export const registros: Registro[] = [
   },
   {
     id: "reg-010",
+    origen: "collaborator",
     promotionId: "1",
     agencyId: "ag-2",
     cliente: {
@@ -369,6 +403,7 @@ export const registros: Registro[] = [
   },
   {
     id: "reg-011",
+    origen: "collaborator",
     promotionId: "4",
     agencyId: "ag-1",
     cliente: {
@@ -394,6 +429,7 @@ export const registros: Registro[] = [
   },
   {
     id: "reg-012",
+    origen: "collaborator",
     promotionId: "3",
     agencyId: "ag-1",
     cliente: {
@@ -422,6 +458,7 @@ export const registros: Registro[] = [
   /* ───── Más volumen limpio para que los filtros se sientan vivos ───── */
   {
     id: "reg-013",
+    origen: "collaborator",
     promotionId: "2",
     agencyId: "ag-2",
     cliente: {
@@ -442,6 +479,7 @@ export const registros: Registro[] = [
   },
   {
     id: "reg-014",
+    origen: "collaborator",
     promotionId: "1",
     agencyId: "ag-1",
     cliente: {
@@ -470,6 +508,7 @@ export const registros: Registro[] = [
   },
   {
     id: "reg-015",
+    origen: "collaborator",
     promotionId: "4",
     agencyId: "ag-2",
     cliente: {
@@ -488,6 +527,7 @@ export const registros: Registro[] = [
   },
   {
     id: "reg-016",
+    origen: "collaborator",
     promotionId: "3",
     agencyId: "ag-3",
     cliente: {
@@ -506,6 +546,7 @@ export const registros: Registro[] = [
   },
   {
     id: "reg-017",
+    origen: "collaborator",
     promotionId: "2",
     agencyId: "ag-1",
     cliente: {
@@ -523,6 +564,7 @@ export const registros: Registro[] = [
   },
   {
     id: "reg-018",
+    origen: "collaborator",
     promotionId: "1",
     agencyId: "ag-3",
     cliente: {
@@ -544,6 +586,96 @@ export const registros: Registro[] = [
       dni: "MX-MEVC850299",
       nacionalidad: "México",
     },
+    consent: true,
+  },
+
+  /* ───── Registros DIRECTOS (los mete el propio promotor) ───── */
+  {
+    id: "reg-019",
+    origen: "direct",
+    promotionId: "1",
+    cliente: {
+      nombre: "Sophie Laurent",
+      email: "sophie.laurent@privatemail.fr",
+      telefono: "+33 1 45 67 89 01",
+      dni: "FR-92847361",
+      nacionalidad: "Francia",
+      flag: "🇫🇷",
+    },
+    fecha: hoursAgo(3),
+    estado: "aprobado",
+    decidedAt: hoursAgo(3),
+    decidedBy: "Promotor",
+    matchPercentage: 0,
+    consent: true,
+    notas: "Contacto vía formulario del microsite. Interesada en planta alta.",
+  },
+  {
+    id: "reg-020",
+    tipo: "registration_visit",
+    visitDate: "2026-04-30",
+    visitTime: "17:00",
+    origen: "direct",
+    promotionId: "2",
+    cliente: {
+      nombre: "Markus Schulz",
+      email: "markus.schulz@outlook.de",
+      telefono: "+49 30 1234 5678",
+      dni: "DE-PA98712345",
+      nacionalidad: "Alemania",
+      flag: "🇩🇪",
+    },
+    fecha: hoursAgo(20),
+    estado: "aprobado",
+    decidedAt: hoursAgo(20),
+    decidedBy: "Promotor",
+    matchPercentage: 0,
+    consent: true,
+    notas: "Llamada entrante. Quiere visitar con su mujer el finde.",
+  },
+  {
+    id: "reg-021",
+    origen: "direct",
+    promotionId: "3",
+    cliente: {
+      nombre: "Beatriz Ribeiro",
+      email: "beatriz.ribeiro@hotmail.pt",
+      telefono: "+351 93 456 7890",
+      dni: "PT-18724569",
+      nacionalidad: "Portugal",
+      flag: "🇵🇹",
+    },
+    fecha: daysAgo(2),
+    estado: "pendiente",
+    matchPercentage: 72,
+    matchWith: "Beatriz Ribeiro · ya registrada por Iberia Homes hace 6 días",
+    matchCliente: {
+      nombre: "Beatriz Ribeiro",
+      email: "b.ribeiro@hotmail.pt",
+      telefono: "+351 93 456 7890",
+      dni: "PT-18724569",
+      nacionalidad: "Portugal",
+    },
+    recommendation: "Atención: cliente ya en sistema por una agencia colaboradora. Revisar antes de aprobar.",
+    consent: true,
+  },
+  {
+    id: "reg-022",
+    origen: "direct",
+    promotionId: "4",
+    cliente: {
+      nombre: "Alex Petrov",
+      email: "alex.petrov@gmail.com",
+      telefono: "+7 916 555 0123",
+      dni: "RU-7812345678",
+      nacionalidad: "Rusia",
+      flag: "🇷🇺",
+    },
+    fecha: minsAgo(45),
+    estado: "aprobado",
+    decidedAt: minsAgo(45),
+    decidedBy: "Promotor",
+    matchPercentage: 0,
     consent: true,
   },
 ];

@@ -28,6 +28,14 @@ export interface RenderOptions {
   includeSignature?: boolean;
   includeAvailability?: boolean;
   availabilityUnits?: AvailabilityUnit[];
+  /**
+   * Cuando el emisor es una agencia colaboradora, omitimos bloques que
+   * identifican a la promoción (showroom, ubicación exacta, plan de pagos,
+   * info del proyecto). La agencia NO quiere desvelar en el email qué
+   * promoción concreta es — si el cliente pregunta, viene a ella, no al
+   * promotor. Ver CLAUDE.md §Vista de Agencia + ADR asociada.
+   */
+  agencyMode?: boolean;
 }
 
 export interface EmailTemplateMeta {
@@ -355,8 +363,9 @@ export const EMAIL_TEMPLATES: EmailTemplateMeta[] = [
       es: { ...lastUnitDefaults.es, ...commercialDefaults.es, ...brandDefaults.es },
       en: { ...lastUnitDefaults.en, ...commercialDefaults.en, ...brandDefaults.en },
     },
-    render: (b, lang, opts = {}) =>
-      wrap(`
+    render: (b, lang, opts = {}) => {
+      const showPromotionDetails = !opts.agencyMode;
+      return wrap(`
         ${brandHeader(b, lang)}
         <div class="hero"><img src="${HERO_UNIT}" alt=""></div>
         <div class="px" style="padding-top:18px">
@@ -368,19 +377,20 @@ export const EMAIL_TEMPLATES: EmailTemplateMeta[] = [
             <p class="last-banner-l">${lang === "es" ? "unidad disponible" : "unit available"}</p>
           </div>
           <p class="body" data-block="body">${b.body}</p>
-          ${featuresBlock(b, lang)}
-          ${projectInfoBlock(b, lang)}
-          ${showroomBlock(b, lang)}
-          ${paymentBlock(b, lang)}
+          ${showPromotionDetails ? featuresBlock(b, lang) : ""}
+          ${showPromotionDetails ? projectInfoBlock(b, lang) : ""}
+          ${showPromotionDetails ? showroomBlock(b, lang) : ""}
+          ${showPromotionDetails ? paymentBlock(b, lang) : ""}
           ${closingBlock(b)}
           <p style="margin:22px 0;text-align:center">
             <a class="btn" href="#" data-block="cta">${b.cta}</a>
-            <a class="btn-2" href="#" data-block="cta2">${b.cta2}</a>
+            ${opts.agencyMode ? "" : `<a class="btn-2" href="#" data-block="cta2">${b.cta2}</a>`}
           </p>
           ${opts.includeSignature !== false ? agentBlock(b) : ""}
         </div>
         <div class="footer">© ${b.brandName}</div>
-      `),
+      `);
+    },
   },
   {
     id: "new-launch",
@@ -444,26 +454,35 @@ export const EMAIL_TEMPLATES: EmailTemplateMeta[] = [
       es: { ...newAvailabilityDefaults.es, ...commercialDefaults.es, ...brandDefaults.es },
       en: { ...newAvailabilityDefaults.en, ...commercialDefaults.en, ...brandDefaults.en },
     },
-    render: (b, lang, opts = {}) =>
-      wrap(`
+    render: (b, lang, opts = {}) => {
+      /* En agencyMode ocultamos los bloques que "doxean" la promoción
+       * (ubicación exacta, info del proyecto, showroom con dirección, plan
+       * de pagos). El cliente no debe poder llegar al promotor directo
+       * desde este email — si quiere más info, contacta a la agencia. */
+      const showPromotionDetails = !opts.agencyMode;
+      const pillLabel = opts.agencyMode
+        ? (lang === "es" ? "Oportunidad disponible" : "Available opportunity")
+        : (lang === "es" ? "Nueva disponibilidad" : "New availability");
+      return wrap(`
         ${brandHeader(b, lang)}
         <div class="hero"><img src="${HERO_PROMOTION}" alt=""></div>
         <div class="px" style="padding-top:18px">
-          <span class="pill">● ${lang === "es" ? "Nueva disponibilidad" : "New availability"}</span>
+          <span class="pill">● ${pillLabel}</span>
           <h1 class="h1" data-block="title">${b.title}</h1>
           <p class="sub" data-block="subtitle">${b.subtitle}</p>
           <p class="body" data-block="body">${b.body}</p>
           ${opts.includeAvailability !== false ? availabilityBlock(opts.availabilityUnits || [], lang) : ""}
-          ${featuresBlock(b, lang)}
-          ${projectInfoBlock(b, lang)}
-          ${showroomBlock(b, lang)}
-          ${paymentBlock(b, lang)}
+          ${showPromotionDetails ? featuresBlock(b, lang) : ""}
+          ${showPromotionDetails ? projectInfoBlock(b, lang) : ""}
+          ${showPromotionDetails ? showroomBlock(b, lang) : ""}
+          ${showPromotionDetails ? paymentBlock(b, lang) : ""}
           ${closingBlock(b)}
           <p style="margin:22px 0;text-align:center"><a class="btn" href="#" data-block="cta">${b.cta}</a></p>
           ${opts.includeSignature !== false ? agentBlock(b) : ""}
         </div>
         <div class="footer">${lang === "es" ? `Compartido por · ${b.brandName}` : `Shared by · ${b.brandName}`}</div>
-      `),
+      `);
+    },
   },
   {
     id: "blank",

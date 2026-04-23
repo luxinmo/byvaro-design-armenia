@@ -58,6 +58,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { RefreshCw, Trash2 } from "lucide-react";
 import { toast, Toaster } from "sonner"; // feedback tras publicar
+import { useCurrentUser } from "@/lib/currentUser";
 
 function formatPrice(n: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
@@ -130,7 +131,17 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const confirm = useConfirm();
   const [activeTab, setActiveTab] = useState(0);
   const [_availabilityVersion, _setAvailabilityVersion] = useState<"v1" | "v2">("v2");
-  const [viewAsCollaborator, setViewAsCollaborator] = useState(agentMode);
+  /* `viewAsCollaborator` tiene dos entradas:
+   *   · el usuario global es agencia → siempre vista colaborador.
+   *   · el promotor activa el preview con el toggle local (sólo disponible
+   *     cuando la cuenta es `developer`).
+   * Al cambiar la cuenta desde el AccountSwitcher, se re-renderiza y el
+   * valor derivado se recalcula sin necesidad de sincronización manual. */
+  const currentUser = useCurrentUser();
+  const isAgencyUser = currentUser.accountType === "agency";
+  const [previewAsCollaborator, setPreviewAsCollaborator] = useState(agentMode);
+  const viewAsCollaborator = isAgencyUser || previewAsCollaborator;
+  const setViewAsCollaborator = setPreviewAsCollaborator;
   // FAB móvil — abre un menú con las acciones principales de la ficha.
   const [mobileFabOpen, setMobileFabOpen] = useState(false);
   // Swipe horizontal entre tabs · sólo activa en móvil (<640px).
@@ -536,8 +547,10 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
   return (
     <div className="h-full overflow-auto bg-background">
-      {/* ── Collaborator preview banner (only in developer preview mode, not agent mode) ── */}
-      {viewAsCollaborator && !agentMode && (
+      {/* ── Collaborator preview banner — solo cuando es el PROMOTOR quien
+           está previsualizando la vista colaborador. Si el usuario ya es una
+           agencia (via AccountSwitcher) o es ruta de agente, no hay banner. */}
+      {viewAsCollaborator && !agentMode && !isAgencyUser && (
         <div className="sticky top-0 z-50 bg-foreground text-background px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Eye className="h-4 w-4 opacity-70" />
@@ -832,8 +845,13 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               );
             })()}
 
-            {/* Two-column layout: main content left, narrow icon rail right */}
-            <div className={`flex gap-4 ${!viewAsCollaborator ? "lg:flex-row" : ""} flex-col w-full min-w-0`} style={{ maxWidth: !viewAsCollaborator ? "1570px" : "1250px" }}>
+            {/* Two-column layout: main content left, narrow icon rail right.
+             *  Mismo shape en vista promotor y agencia — el rail aquí no cambia
+             *  de densidad, solo cambian los items que se enseñan dentro. Antes
+             *  se forzaba flex-col en modo agencia sin motivo claro; quedaba
+             *  incoherente con la tab Disponibilidad que ya usa `lg:flex-row`
+             *  en ambos roles. */}
+            <div className="flex gap-4 lg:flex-row flex-col w-full max-w-[1570px] min-w-0">
               {/* ── LEFT: Main content ── */}
               <div className="flex-1 min-w-0 space-y-5 order-2 lg:order-1">
 
@@ -1682,13 +1700,15 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         )}
       </div>
 
-      {/* Client Registration dialog */}
+      {/* Client Registration dialog — en vista agencia arrancamos en flujo
+          directo (no hay modo colaborador cuando tú misma eres la agencia). */}
       <ClientRegistrationDialog
         open={registerClientOpen}
         onOpenChange={setRegisterClientOpen}
         promotionName={p.name}
         promotionId={p.id}
         validezDias={p.collaboration?.validezRegistroDias}
+        isCollaboratorView={viewAsCollaborator}
       />
 
       {/* Visor fullscreen de la galería multimedia */}
@@ -1822,7 +1842,17 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       </div>
 
       {/* Send email dialog (template picker + WYSIWYG) */}
-      <SendEmailDialog open={sendEmailOpen} onOpenChange={setSendEmailOpen} mode="promotion" promotionId={id} />
+      {/* En modo agencia, el envío salta directo a "Cliente" (no hay
+          colaboradores que invitar — la agencia trabaja con sus propios
+          clientes). Regla de producto: la agencia nunca envía a otras
+          agencias desde la ficha. */}
+      <SendEmailDialog
+        open={sendEmailOpen}
+        onOpenChange={setSendEmailOpen}
+        mode="promotion"
+        promotionId={id}
+        defaultAudience={isAgencyUser ? "client" : undefined}
+      />
 
       {/* Listado de precios descargable (PDF vía window.print). */}
       <PriceListDialog open={priceListOpen} onOpenChange={setPriceListOpen} promotion={p} agencyMode={viewAsCollaborator || agentMode} />

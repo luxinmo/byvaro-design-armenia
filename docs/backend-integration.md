@@ -119,6 +119,77 @@ hace el filtro de `viewOwn`. Migration en `docs/permissions.md` §4.1.
 
 ---
 
+## 1.5.1 · Dual-role (promotor ↔ agencia)
+
+> 🤝 **El contrato completo del modelo dual vive en
+> `docs/dual-role-model.md`.** Esta sección resume solo lo que el
+> backend debe implementar — flujos, UX y matriz de features están en
+> ese documento.
+
+**Principio**: una sola plataforma, dos tipos de tenant (`developer`,
+`agency`). El JWT lleva `accountType`, y cada endpoint decide qué
+datos devolver según ese campo.
+
+**JWT claims adicionales** (extiende los de §1.5):
+```json
+{
+  "sub": "<userId>",
+  "workspace_id": "<empresaId>",
+  "accountType": "developer" | "agency",
+  "agencyId": "<agencyId>",   // solo si accountType === "agency"
+  "role": "admin|member|<custom>",
+  "permissions": [...]
+}
+```
+
+**RLS por rol** (tabla por tabla):
+
+| Tabla | Promotor (`developer`) | Agencia (`agency`) |
+|---|---|---|
+| `promociones` | `empresa_id = me.workspace_id` | `id IN (SELECT promotion_id FROM collaborations WHERE agency_id = me.workspace_id AND estado = 'activa')` |
+| `registros` | `promocion.empresa_id = me.workspace_id` | `agency_id = me.workspace_id` |
+| `contactos` | `empresa_id = me.workspace_id` | `empresa_id = me.workspace_id` (cada tenant tiene los suyos, **nunca se comparten**) |
+| `collaborations` | `promotor_id = me.workspace_id` | `agency_id = me.workspace_id` |
+| `emails_sent` | `empresa_id = me.workspace_id` | `empresa_id = me.workspace_id` |
+| `empresas` (perfil público) | read-only para todos | idem |
+
+**Endpoints exclusivos por rol**:
+
+Solo `developer`:
+- `POST   /api/promociones`
+- `PATCH  /api/promociones/:id`
+- `POST   /api/promociones/:id/invitar-agencia`
+- `POST   /api/registros/:id/aprobar` (+ `/rechazar`)
+- `GET    /api/microsites/*`
+- `PATCH  /api/empresa`
+- `GET    /api/colaboradores/estadisticas`
+
+Solo `agency`:
+- `POST   /api/promociones/:id/registros`      — registrar cliente
+- `GET    /api/marketplace/*`
+- `POST   /api/marketplace/:promotorId/solicitar-colaboracion`
+
+Simétricos (mismo path, scope por JWT):
+- `GET    /api/promociones`        — el backend filtra por rol.
+- `GET    /api/registros`          — idem.
+- `GET/POST /api/contactos`, `/api/ventas`, `/api/emails/*`,
+  `/api/calendario/*`.
+
+**Validación server-side**: antes de acceder a un endpoint exclusivo,
+validar `JWT.accountType` matchea lo esperado. Sugerencia: prefijar las
+rutas (`/api/developer/*`, `/api/agency/*`, `/api/shared/*`) y validar
+en middleware. Ver `docs/dual-role-model.md` §3.5.
+
+**Emails comerciales de agencia**: el backend debe aceptar una flag
+`agencyMode: true` en el payload de `POST /api/emails/send` para que
+las plantillas renderizadas omitan bloques identificativos de la
+promoción (showroom, ubicación exacta, plan de pagos). La generación
+del HTML puede seguir siendo cliente-side mientras no exista
+plantillas server-side — cuando migre, replicar la lógica de
+`opts.agencyMode` en `emailTemplates.ts`.
+
+---
+
 ## 1.6 · Contactos (ficha completa)
 
 > Spec UI canónica: `docs/screens/contactos-ficha.md`. Tipos en
