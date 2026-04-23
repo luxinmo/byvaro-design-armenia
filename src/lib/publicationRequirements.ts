@@ -215,10 +215,28 @@ export function getMissingForPromotion(p: Promotion): MissingRequirement[] {
   /* ── Comisiones (solo obligatorio si se comparte con agencias) ────
      Si el promotor marcó "No compartir" (canShareWithAgencies === false),
      la promoción es de uso interno y NO necesita comisiones — eso no
-     la hace incompleta, solo cambia el badge a "Solo uso interno". */
+     la hace incompleta, solo cambia el badge a "Solo uso interno".
+
+     Cuando SÍ se comparte, exigimos DOS cosas:
+       a) `commission` > 0 (el porcentaje suelto del listado).
+       b) `collaboration` presente (estructura completa: tipos de
+          cliente, forma de pago, hitos, etc. · solo en DevPromotion).
+     Sin (b) la tab Comisiones muestra "Sin estructura de comisiones
+     definida", con lo cual la agencia no puede calcular su
+     liquidación — no es publicable. */
   const willShare = (p as { canShareWithAgencies?: boolean }).canShareWithAgencies !== false;
-  if (willShare && (!p.commission || p.commission <= 0)) {
-    missing.push({ key: "comisiones", label: "Comisiones no configuradas", ficha: "collaborators" });
+  if (willShare) {
+    if (!p.commission || p.commission <= 0) {
+      missing.push({ key: "comisiones", label: "Comisiones sin porcentaje", ficha: "collaborators" });
+    }
+    const collab = (p as { collaboration?: unknown }).collaboration;
+    if (!collab) {
+      missing.push({
+        key: "estructura-comisiones",
+        label: "Sin estructura de comisiones definida",
+        ficha: "collaborators",
+      });
+    }
   }
 
   /* ── missingSteps declarativos del mock ──────────────────
