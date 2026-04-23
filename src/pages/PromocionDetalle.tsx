@@ -613,6 +613,49 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               <h1 className="text-[20px] sm:text-[28px] font-bold tracking-tight text-foreground leading-tight">
                 {p.name}
               </h1>
+              {/* Badge de estado de publicación · visible para promotor.
+                  Ayuda a responder de un vistazo la pregunta "¿esto
+                  está publicada o no?". */}
+              {!viewAsCollaborator && (() => {
+                if (isDraft) {
+                  return (
+                    <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-dashed border-primary/50 bg-primary/5 text-primary text-[11px] font-semibold">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      Borrador
+                    </span>
+                  );
+                }
+                if (p.status === "sold-out") {
+                  return (
+                    <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-border bg-muted text-foreground text-[11px] font-semibold">
+                      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+                      Agotada
+                    </span>
+                  );
+                }
+                if (isIncomplete) {
+                  return (
+                    <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-warning/30 bg-warning/10 text-warning text-[11px] font-semibold">
+                      <span className="h-1.5 w-1.5 rounded-full bg-warning" />
+                      Sin publicar · faltan {publishMissing.length} {publishMissing.length === 1 ? "campo" : "campos"}
+                    </span>
+                  );
+                }
+                if (p.status === "active") {
+                  return (
+                    <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-success/30 bg-success/10 text-success text-[11px] font-semibold">
+                      <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                      Publicada
+                    </span>
+                  );
+                }
+                return (
+                  <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-border bg-muted/40 text-muted-foreground text-[11px] font-semibold">
+                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+                    Sin publicar
+                  </span>
+                );
+              })()}
             </div>
             <div className="flex items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1.5 flex-wrap">
               {/* Ubicación · oculta en móvil (menos ruido). */}
