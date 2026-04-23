@@ -648,10 +648,13 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
   return (
     <div className="space-y-5">
 
-      {/* El promotor ve siempre los segmentos Parkings/Trasteros (puede
-          entrar a crear aunque estén vacíos). La agencia solo los ve si
-          hay al menos uno visible disponible (filtrado abajo). */}
-      {(!isCollaboratorView || parkings.some((a) => a.visibleToAgencies !== false && a.status === "available") || trasteros.some((a) => a.visibleToAgencies !== false && a.status === "available")) && (
+      {/* SegmentSwitcher solo si HAY anejos de algún tipo. Cuando la
+          promoción no tiene ningún parking/trastero no muestro los
+          tabs vacíos — el promotor tiene el CTA "Añadir anejo" en el
+          bloque Unidades y disponibilidad de la Vista general, y la
+          agencia no tiene motivo para ver pestañas en cero. */}
+      {(parkings.some((a) => !isCollaboratorView || (a.visibleToAgencies !== false && a.status === "available"))
+        || trasteros.some((a) => !isCollaboratorView || (a.visibleToAgencies !== false && a.status === "available"))) && (
         <SegmentSwitcher
           segment={segment}
           setSegment={setSegment}
@@ -1680,8 +1683,8 @@ function SegmentSwitcher({
   ];
   /* El promotor ve siempre los segmentos de anejos (puede querer
      crear el primero). La agencia solo si hay al menos uno visible. */
-  if (!isCollaboratorView || parkingsShown > 0) segments.push({ key: "parkings", label: "Parkings", count: parkingsShown });
-  if (!isCollaboratorView || trasterosShown > 0) segments.push({ key: "trasteros", label: "Trasteros", count: trasterosShown });
+  if (parkingsShown > 0) segments.push({ key: "parkings", label: "Parkings", count: parkingsShown });
+  if (trasterosShown > 0) segments.push({ key: "trasteros", label: "Trasteros", count: trasterosShown });
 
   return (
     <div className="inline-flex items-center bg-muted rounded-full p-1 gap-0.5">
