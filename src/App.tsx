@@ -15,6 +15,7 @@ import ColaboradoresEstadisticas from "@/pages/ColaboradoresEstadisticas";
 import Contactos from "@/pages/Contactos";
 import ContactoDetalle from "@/pages/ContactoDetalle";
 import Microsites from "@/pages/Microsites";
+import AgenciaEntry from "@/pages/AgenciaEntry";
 import Emails from "@/pages/Emails";
 import Ajustes from "@/pages/Ajustes";
 import AjustesEmailIndex from "@/pages/ajustes/email/index";
@@ -89,6 +90,12 @@ export default function App() {
 
         {/* Wizard fullscreen (sin AppLayout) */}
         <Route path="/crear-promocion" element={<CrearPromocion />} />
+
+        {/* Entrada al modo Agencia · picker + atajo directo.
+         *   `/agencia`        → elige agencia.
+         *   `/agencia/:id`    → salta directo a esa agencia y redirige a /inicio. */}
+        <Route path="/agencia" element={<AgenciaEntry />} />
+        <Route path="/agencia/:id" element={<AgenciaEntry />} />
 
         {/* Ajustes · fullscreen propio (SettingsShell), no AppLayout.
          * `/ajustes` raíz renderiza la home (directorio de cards),

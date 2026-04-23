@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useEmpresa } from "@/lib/empresa";
 import { BrandLogo } from "@/components/BrandLogo";
+import { useCurrentUser } from "@/lib/currentUser";
 
 type NavItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }>; badge?: string | number; accent?: boolean };
 type NavGroup = { label: string; items: NavItem[] };
@@ -61,10 +62,26 @@ const groups: NavGroup[] = [
 export function AppSidebar() {
   const location = useLocation();
   const { empresa } = useEmpresa();
+  const currentUser = useCurrentUser();
+  const isAgencyUser = currentUser.accountType === "agency";
 
   const onEmpresaRoute = location.pathname.startsWith("/empresa");
   const necesitaOnboarding = !empresa.onboardingCompleto;
   const collapsed = COLLAPSED_ROUTES.some((r) => location.pathname.startsWith(r));
+
+  /* En modo agencia, oculta rutas que sólo tienen sentido para el promotor:
+   *   · Colaboradores (la agencia no ve a otras agencias colaboradoras).
+   *   · Microsites   (los microsites son de las promociones del promotor). */
+  const visibleGroups = isAgencyUser
+    ? groups
+        .map((g) => ({
+          ...g,
+          items: g.items.filter(
+            (it) => it.url !== "/colaboradores" && it.url !== "/microsites",
+          ),
+        }))
+        .filter((g) => g.items.length > 0)
+    : groups;
 
   return (
     <aside
@@ -89,7 +106,7 @@ export function AppSidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-4 no-scrollbar">
-        {groups.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.label} className={collapsed ? "mb-2" : "mb-5"}>
             {!collapsed && (
               <div className="px-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/50 mb-2">
@@ -143,7 +160,8 @@ export function AppSidebar() {
           </div>
         ))}
 
-        {/* ═════ Administración ═════ */}
+        {/* ═════ Administración · solo promotor ═════ */}
+        {!isAgencyUser && (
         <div className={collapsed ? "mb-2" : "mb-5"}>
           {!collapsed && (
             <div className="px-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/50 mb-2">
@@ -176,6 +194,7 @@ export function AppSidebar() {
             )}
           </NavLink>
         </div>
+        )}
       </nav>
 
       {/* Footer */}
@@ -205,21 +224,32 @@ export function AppSidebar() {
           )}
         >
           <button
-            title={collapsed ? "Arman Rahmanov" : undefined}
+            title={collapsed ? currentUser.name : undefined}
             className={cn(
               "w-full flex items-center rounded-lg hover:bg-sidebar-accent/40 transition-colors",
               collapsed ? "justify-center py-2" : "gap-3 px-2 py-2",
             )}
           >
             <div className="w-8 h-8 rounded-full bg-primary/15 text-primary grid place-items-center font-semibold text-xs tnum shrink-0">
-              AR
+              {currentUser.name
+                .split(" ")
+                .map((p) => p[0])
+                .slice(0, 2)
+                .join("")
+                .toUpperCase()}
             </div>
             {!collapsed && (
               <>
                 <div className="text-left min-w-0 flex-1">
-                  <div className="text-[13px] font-semibold text-foreground truncate leading-tight">Arman Rahmanov</div>
+                  <div className="text-[13px] font-semibold text-foreground truncate leading-tight">
+                    {currentUser.name}
+                  </div>
                   <div className="text-[11px] text-muted-foreground truncate">
-                    {empresa.nombreComercial ? `${empresa.nombreComercial} · Promotor` : "Luxinmo · Promotor"}
+                    {isAgencyUser
+                      ? `${currentUser.agencyName ?? "Agencia"} · Agencia`
+                      : empresa.nombreComercial
+                        ? `${empresa.nombreComercial} · Promotor`
+                        : "Luxinmo · Promotor"}
                   </div>
                 </div>
                 <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />

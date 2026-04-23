@@ -34,7 +34,7 @@ import {
   Search, X, Check, ChevronDown, Filter, AlertTriangle, Shield,
   User as UserIcon, Mail, Phone, IdCard, Flag, Building2, Users,
   ArrowLeft, Clock, CheckCircle2, XCircle, Copy, FileText,
-  ExternalLink, Sparkles, Eye,
+  ExternalLink, Sparkles, Eye, Handshake, UserCheck,
 } from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
@@ -43,12 +43,15 @@ import {
   registros as registrosMock,
   type Registro,
   type RegistroEstado,
+  type RegistroOrigen,
   getMatchLevel,
   estadoLabel,
 } from "@/data/records";
 import { promotions } from "@/data/promotions";
 import { agencies } from "@/data/agencies";
 import { Switch } from "@/components/ui/Switch";
+import { useCurrentUser } from "@/lib/currentUser";
+import { useCreatedRegistros } from "@/lib/registrosStorage";
 import { Tag } from "@/components/ui/Tag";
 import { cn } from "@/lib/utils";
 import { RegistrosKpis } from "@/components/registros/RegistrosKpis";
@@ -99,14 +102,35 @@ function estadoTagVariant(e: RegistroEstado): "warning" | "success" | "danger" |
    PÁGINA
    ═══════════════════════════════════════════════════════════════════ */
 export default function Registros() {
+  /* Cuando el usuario global es una agencia, el listado sólo contiene sus
+   * propios registros — la agencia no puede ver ni moderar los de otras. */
+  const currentUser = useCurrentUser();
+  const isAgencyUser = currentUser.accountType === "agency";
+
+  /* Registros creados en vivo desde "Registrar cliente" (localStorage mock).
+   * Se combinan con los del seed para que los tests end-to-end sean visibles. */
+  const createdRegistros = useCreatedRegistros();
+
+  const scopedList = useMemo(() => {
+    const combined = [...createdRegistros, ...registrosMock];
+    if (!isAgencyUser) return combined;
+    return combined.filter((r) => r.agencyId === currentUser.agencyId);
+  }, [createdRegistros, isAgencyUser, currentUser.agencyId]);
+
   // Estado de datos (mutable para aprobar/rechazar en memoria).
-  const [records, setRecords] = useState<Registro[]>(registrosMock);
+  const [records, setRecords] = useState<Registro[]>(scopedList);
+  /* Si cambian los datos subyacentes (switch de cuenta, creación de nuevo
+   * registro, etc.) re-scopeamos sin perder acciones locales ya aplicadas. */
+  useEffect(() => {
+    setRecords(scopedList);
+  }, [scopedList]);
 
   // Filtros.
   const [search, setSearch] = useState("");
   const [promotionFilter, setPromotionFilter] = useState<string[]>([]);
   const [agencyFilter, setAgencyFilter] = useState<string[]>([]);
   const [estadoFilter, setEstadoFilter] = useState<RegistroEstado | "todos">("todos");
+  const [origenFilter, setOrigenFilter] = useState<RegistroOrigen[]>([]);
   const [onlyDuplicates, setOnlyDuplicates] = useState(false);
 
   // Selección múltiple.
@@ -143,12 +167,15 @@ export default function Registros() {
     return records.filter((r) => {
       if (estadoFilter !== "todos" && r.estado !== estadoFilter) return false;
       if (promotionFilter.length > 0 && !promotionFilter.includes(r.promotionId)) return false;
-      if (agencyFilter.length > 0 && !agencyFilter.includes(r.agencyId)) return false;
+      /* Agencia solo aplica a registros `collaborator`: un directo no
+       * encaja nunca con un filtro por agencia concreta. */
+      if (agencyFilter.length > 0 && (!r.agencyId || !agencyFilter.includes(r.agencyId))) return false;
+      if (origenFilter.length > 0 && !origenFilter.includes(r.origen)) return false;
       if (onlyDuplicates && r.matchPercentage < 30) return false;
 
       if (q) {
         const promo = promotionById.get(r.promotionId);
-        const ag = agencyById.get(r.agencyId);
+        const ag = r.agencyId ? agencyById.get(r.agencyId) : undefined;
         const hay =
           r.cliente.nombre.toLowerCase().includes(q) ||
           r.cliente.email.toLowerCase().includes(q) ||
@@ -161,7 +188,7 @@ export default function Registros() {
       }
       return true;
     });
-  }, [records, search, estadoFilter, promotionFilter, agencyFilter, onlyDuplicates, promotionById, agencyById]);
+  }, [records, search, estadoFilter, promotionFilter, agencyFilter, origenFilter, onlyDuplicates, promotionById, agencyById]);
 
   /* ─── Mantener activeId válido ante cambios de filtro ─── */
   useEffect(() => {
@@ -234,6 +261,7 @@ export default function Registros() {
     setPromotionFilter([]);
     setAgencyFilter([]);
     setEstadoFilter("todos");
+    setOrigenFilter([]);
     setOnlyDuplicates(false);
   };
   const hasFilters =
@@ -241,7 +269,13 @@ export default function Registros() {
     promotionFilter.length > 0 ||
     agencyFilter.length > 0 ||
     estadoFilter !== "todos" ||
+    origenFilter.length > 0 ||
     onlyDuplicates;
+
+  const origenOptions: Array<{ value: RegistroOrigen; label: string }> = [
+    { value: "direct", label: "Directo" },
+    { value: "collaborator", label: "Colaborador" },
+  ];
 
   const estadoTabs: Array<{ value: RegistroEstado | "todos"; label: string }> = [
     { value: "todos", label: "Todos" },
@@ -330,6 +364,13 @@ export default function Registros() {
             icon={<Building2 className="h-3.5 w-3.5" />}
           />
           <MultiSelectPill
+            label="Origen"
+            options={origenOptions}
+            values={origenFilter}
+            onChange={(vs) => setOrigenFilter(vs as RegistroOrigen[])}
+            icon={<Handshake className="h-3.5 w-3.5" />}
+          />
+          <MultiSelectPill
             label="Agencia"
             options={agencyOptions}
             values={agencyFilter}
@@ -380,9 +421,10 @@ export default function Registros() {
               >
                 {filtered.map((r) => {
                   const promo = promotionById.get(r.promotionId);
-                  const ag = agencyById.get(r.agencyId);
+                  const ag = r.agencyId ? agencyById.get(r.agencyId) : undefined;
                   const selected = selectedIds.includes(r.id);
                   const isActive = activeId === r.id;
+                  const isDirect = r.origen === "direct";
 
                   return (
                     <article
@@ -434,10 +476,29 @@ export default function Registros() {
                           </p>
                         </div>
 
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">
-                          {promo?.name ?? "Promoción"}
-                          <span className="text-border mx-1.5">·</span>
-                          {ag?.name ?? "Agencia"}
+                        <p className="text-xs text-muted-foreground truncate mt-0.5 inline-flex items-center gap-1.5">
+                          {/* Badge origen · compacto, siempre visible */}
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase shrink-0 border",
+                              isDirect
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
+                                : "bg-muted/60 text-muted-foreground border-border",
+                            )}
+                            title={isDirect ? "Registro directo (sin agencia)" : "A través de agencia colaboradora"}
+                          >
+                            {isDirect ? <UserCheck className="h-2.5 w-2.5" /> : <Handshake className="h-2.5 w-2.5" />}
+                            {isDirect ? "Directo" : "Colab."}
+                          </span>
+                          <span className="truncate">
+                            {promo?.name ?? "Promoción"}
+                            {!isDirect && (
+                              <>
+                                <span className="text-border mx-1.5">·</span>
+                                {ag?.name ?? "Agencia"}
+                              </>
+                            )}
+                          </span>
                         </p>
 
                         <div className="flex items-center justify-between gap-2 mt-2">
@@ -473,8 +534,8 @@ export default function Registros() {
                     record={activeRecord}
                     promotionName={promotionById.get(activeRecord.promotionId)?.name ?? "—"}
                     promotionLocation={promotionById.get(activeRecord.promotionId)?.location ?? ""}
-                    agencyName={agencyById.get(activeRecord.agencyId)?.name ?? "—"}
-                    agencyLocation={agencyById.get(activeRecord.agencyId)?.location ?? ""}
+                    agencyName={activeRecord.agencyId ? agencyById.get(activeRecord.agencyId)?.name ?? "—" : ""}
+                    agencyLocation={activeRecord.agencyId ? agencyById.get(activeRecord.agencyId)?.location ?? "" : ""}
                     onApprove={() => approve(activeRecord.id)}
                     onReject={() => reject(activeRecord.id)}
                     onRevert={() => revert(activeRecord.id)}
@@ -658,14 +719,39 @@ function RegistroDetail({
 
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-3">
-              Agencia origen
+              Origen
             </p>
-            <div className="p-3 rounded-xl border border-border bg-muted/20">
-              <p className="text-sm font-semibold text-foreground">{agencyName}</p>
-              {agencyLocation && (
-                <p className="text-xs text-muted-foreground mt-0.5">{agencyLocation}</p>
-              )}
-            </div>
+            {record.origen === "direct" ? (
+              /* Directo · lo metió el propio promotor: sin agencia intermediaria */
+              <div className="p-3 rounded-xl border border-emerald-200/50 bg-emerald-50/40 dark:bg-emerald-500/5">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 grid place-items-center shrink-0">
+                    <UserCheck className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">Registro directo</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Captado por el promotor · sin agencia intermediaria
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Colaborador · lo envía una agencia */
+              <div className="p-3 rounded-xl border border-border bg-muted/20">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-muted text-muted-foreground grid place-items-center shrink-0">
+                    <Handshake className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">{agencyName}</p>
+                    {agencyLocation && (
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{agencyLocation}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
@@ -713,7 +799,7 @@ function RegistroDetail({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <CompareCard
               title="Registro entrante"
-              subtitle={agencyName}
+              subtitle={record.origen === "direct" ? "Registro directo · promotor" : agencyName}
               accent="primary"
               cliente={record.cliente}
               matchCliente={record.matchCliente}

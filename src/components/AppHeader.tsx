@@ -1,5 +1,6 @@
 import { Bell, Home, Search } from "lucide-react";
 import { useLocation } from "react-router-dom";
+import { AccountSwitcher } from "./AccountSwitcher";
 
 /**
  * Header global (desktop).
@@ -37,8 +38,9 @@ export function AppHeader() {
         <span className="font-medium text-foreground">{title}</span>
       </div>
 
-      {/* Utilidades · ⌘K global + notificaciones */}
+      {/* Utilidades · selector de vista (mock) + ⌘K global + notificaciones */}
       <div className="flex items-center gap-1.5">
+        <AccountSwitcher />
         <button
           className="inline-flex items-center gap-2 h-7 pl-2.5 pr-1.5 rounded-full border border-border bg-card text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors text-xs"
           aria-label="Buscar (⌘K)"

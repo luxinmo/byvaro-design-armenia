@@ -138,15 +138,29 @@ function Event({ event }: { event: RegistroTimelineEvent }) {
 function synthesizeTimeline(r: Registro): RegistroTimelineEvent[] {
   const out: RegistroTimelineEvent[] = [];
 
-  out.push({
-    id: "ev-submitted",
-    type: "submitted",
-    title: "Solicitud recibida",
-    description: `Enviada por ${r.cliente.nombre}`,
-    timestamp: r.fecha,
-    status: "completed",
-    actor: "Sistema",
-  });
+  /* Para directos el evento de alta lo dispara el promotor, no el sistema
+   * ni una agencia entrante. Cambia copy, icono sigue siendo `Inbox`. */
+  if (r.origen === "direct") {
+    out.push({
+      id: "ev-submitted",
+      type: "submitted",
+      title: "Registro creado por el promotor",
+      description: `Alta directa de ${r.cliente.nombre}`,
+      timestamp: r.fecha,
+      status: "completed",
+      actor: r.decidedBy ?? "Promotor",
+    });
+  } else {
+    out.push({
+      id: "ev-submitted",
+      type: "submitted",
+      title: "Solicitud recibida",
+      description: `Enviada por ${r.cliente.nombre}`,
+      timestamp: r.fecha,
+      status: "completed",
+      actor: "Sistema",
+    });
+  }
 
   out.push({
     id: "ev-auto-check",

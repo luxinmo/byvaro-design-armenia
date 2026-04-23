@@ -223,6 +223,73 @@ Si no, falta el `recordEvent()`.
 
 ---
 
+## 🤝 REGLA DE ORO · Vista de Agencia colaboradora
+
+> **Cada cambio en la app DEBE contemplar la vista de Agencia.** Byvaro
+> no es un SaaS mono-rol: el promotor paga 249€/mes y la agencia
+> colaboradora entra en la misma plataforma con una vista distinta.
+> Olvidar ese lado rompe el diferencial del producto.
+>
+> 📖 **Modelo completo en `docs/dual-role-model.md`** — personas,
+> interacciones cross-role, contratos backend (JWT, RLS, endpoints),
+> matriz de features por pantalla y cómo portar al backend real. Lee
+> ese documento antes de implementar cualquier feature nueva.
+
+**Cómo funciona hoy (mock).**
+
+- Dos roles coexisten via `useCurrentUser().accountType`:
+  - `"developer"` → promotor (Luxinmo).
+  - `"agency"` → agencia colaboradora, con `agencyId` apuntando a una
+    agencia concreta de `src/data/agencies.ts`.
+- El rol se elige al hacer login en `/login` con una cuenta demo (ver
+  `src/data/mockUsers.ts` · password `demo1234`). Persiste en
+  `sessionStorage` por pestaña — así una pestaña puede ser Promotor y
+  otra Agencia a la vez.
+- El `AccountSwitcher` (pill arriba-derecha en desktop) permite cambiar
+  de rol en caliente y cerrar sesión.
+
+**Obligaciones al implementar cualquier cambio.**
+
+1. **Pregúntate**: ¿qué ve una agencia que entra a esta pantalla?
+   - Si no debe verla → ocultarla del sidebar / redirigirla (ver
+     `AppSidebar.tsx` → `isAgencyUser`).
+   - Si debe verla con otros datos → filtra por `currentUser.agencyId`
+     (patrón en `Promociones.tsx`, `Registros.tsx`).
+   - Si debe verla con otras acciones → esconde los botones con
+     `!isAgencyUser` (patrón en `PromocionDetalle.tsx` →
+     `viewAsCollaborator`).
+2. **Nuevo botón/acción**: declara explícitamente su disponibilidad en
+   cada rol. Si no tiene sentido para agencia, esconderlo — nunca
+   deshabilitado sin motivo.
+3. **Nuevos datasets mock**: si tienen relación con agencias (ownership,
+   ventas, contactos), añade `agencyId` al shape y filtra en la
+   pantalla que los consume.
+4. **Tests**: cuando añadas un flujo crítico, verifica que funciona en
+   al menos una cuenta de agencia (`laura@primeproperties.com`) además
+   de la del promotor (`arman@byvaro.com`).
+
+**Si el usuario pide un cambio sin mencionar la agencia: PREGUNTA
+explícitamente** qué pasa en la vista de agencia antes de
+implementar. Ejemplo de pregunta tipo:
+
+> _"¿Este cambio afecta también a la vista de agencia? Si sí, ¿qué
+> debería ver/poder hacer la agencia en este flujo?"_
+
+No inventes la respuesta. Si el producto no tiene decisión, anótalo
+como `Qnueva` en `docs/open-questions.md` en el mismo PR.
+
+**Checklist antes de cerrar cualquier tarea** (además del de la sección
+"Documentación obligatoria" de abajo):
+
+- [ ] Probé el flow logueado como **Promotor** (`arman@byvaro.com`)?
+- [ ] Probé el flow logueado como **Agencia** (`laura@primeproperties.com`
+      o alguna de las cuentas de `mockUsers.ts`)?
+- [ ] El sidebar / botones / datos tienen sentido en ambos roles?
+- [ ] Si escondí algo por rol, hay `TODO(backend)` junto al check de
+      permiso anotando la key de la matriz (ver `docs/permissions.md`)?
+
+---
+
 ## 🛡️ REGLA DE ORO · Permisos y visibilidad
 
 > **El catálogo canónico de permisos vive en `docs/permissions.md`.**
