@@ -16,12 +16,12 @@
  *   - `PATCH /api/leads/:id/assign { userId }` → reasignar
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft, Phone, Mail, MessageCircle, CheckCircle2, XCircle,
   Clock, User, UserPlus, Tag, Copy, AlertTriangle, Home, MapPin,
-  Euro, Bed, Inbox, ExternalLink, Sparkles,
+  Euro, Bed, Inbox, ExternalLink, Sparkles, Target, ArrowRight, X,
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import {
@@ -65,6 +65,7 @@ export default function LeadDetalle() {
   const navigate = useNavigate();
 
   const lead = useMemo(() => leads.find((l) => l.id === id), [id]);
+  const [convertOpen, setConvertOpen] = useState(false);
 
   if (!lead) {
     return (
@@ -162,9 +163,9 @@ export default function LeadDetalle() {
                   onClick={() => toast.success(`WhatsApp a ${lead.phone}`)}
                 />
                 <CTAPill
-                  icon={CheckCircle2} label="Convertir" primary
+                  icon={Target} label="Convertir a oportunidad" primary
                   disabled={lead.status === "converted" || lead.status === "rejected"}
-                  onClick={() => toast.success("Lead convertido a registro")}
+                  onClick={() => setConvertOpen(true)}
                 />
                 <CTAPill
                   icon={XCircle} label="Descartar" danger
@@ -338,6 +339,114 @@ export default function LeadDetalle() {
             )}
           </aside>
         </div>
+      </div>
+
+      {/* Dialog · Convertir lead → oportunidad */}
+      {convertOpen && (
+        <ConvertToOpportunityDialog
+          lead={lead}
+          onClose={() => setConvertOpen(false)}
+          onConfirm={() => {
+            setConvertOpen(false);
+            toast.success("Lead convertido a oportunidad");
+            /* TODO(backend): POST /api/leads/:id/convert-to-opportunity
+               debe:
+                 · crear Opportunity con stage="interes" (o el default del setting)
+                 · prefill interest desde lead.interest
+                 · preservar lead.timeline / emails / comments
+                 · marcar lead.status = "converted"
+                 · emitir eventos en timeline de la oportunidad y en contacto
+               Ver docs/backend-integration.md §7.3. */
+            navigate(`/oportunidades/opp-1`); // mock · en real navegaría al id nuevo
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DIALOG · Convertir lead → oportunidad
+   ═══════════════════════════════════════════════════════════════════ */
+
+function ConvertToOpportunityDialog({
+  lead, onClose, onConfirm,
+}: {
+  lead: Lead;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm grid place-items-center p-4"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md rounded-2xl bg-card shadow-soft-lg border border-border overflow-hidden"
+      >
+        <header className="flex items-start justify-between gap-3 p-5 border-b border-border">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="h-10 w-10 rounded-full bg-primary/10 grid place-items-center shrink-0">
+              <Target className="h-4 w-4 text-primary" strokeWidth={2} />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-foreground">Convertir a oportunidad</h3>
+              <p className="text-[12px] text-muted-foreground mt-0.5">
+                {lead.fullName}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="h-7 w-7 inline-flex items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </header>
+
+        <div className="p-5 space-y-3 text-[12.5px] text-foreground">
+          <p className="text-[12.5px] leading-relaxed">
+            Se creará una oportunidad nueva a partir de este lead. <strong>Se
+            preservarán</strong>:
+          </p>
+          <ul className="space-y-1.5 pl-1">
+            {[
+              "Historial y timeline del lead",
+              "Emails enviados y recibidos",
+              "Comentarios internos",
+              "Promoción/propiedad de origen",
+              "Interés declarado (se prefija en la oportunidad)",
+            ].map((txt) => (
+              <li key={txt} className="flex items-start gap-2 text-[12px]">
+                <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0 mt-0.5" strokeWidth={2} />
+                <span className="text-muted-foreground">{txt}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="rounded-xl bg-muted/60 p-3 mt-4">
+            <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+              El lead quedará marcado como <strong className="text-foreground">Convertido</strong> y
+              la oportunidad empezará en etapa <strong className="text-foreground">Interés</strong>.
+            </p>
+          </div>
+        </div>
+
+        <footer className="flex items-center justify-end gap-2 p-4 border-t border-border bg-muted/20">
+          <button
+            onClick={onClose}
+            className="inline-flex items-center h-9 px-4 rounded-full border border-border bg-card text-sm font-medium hover:bg-muted"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-foreground text-background text-sm font-semibold hover:bg-foreground/90 shadow-soft"
+          >
+            Convertir
+            <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
+          </button>
+        </footer>
       </div>
     </div>
   );

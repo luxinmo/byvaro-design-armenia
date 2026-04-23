@@ -16,6 +16,8 @@ contract, permisos, estados, enlaces salientes.
 | Promoción · detalle | `/promociones/:id` | [`promocion-detalle.md`](promocion-detalle.md) | ✅ diseñada |
 | Leads | `/leads` | [`leads.md`](leads.md) | ✅ diseñada |
 | Lead · detalle | `/leads/:id` | [`leads.md`](leads.md) (mismo doc) | ✅ diseñada |
+| Oportunidades | `/oportunidades` | [`oportunidades.md`](oportunidades.md) | ✅ diseñada |
+| Oportunidad · detalle | `/oportunidades/:id` | [`oportunidad-detalle.md`](oportunidad-detalle.md) | ✅ diseñada |
 | Registros | `/registros` | (pendiente) | 🎨 placeholder |
 | Ventas | `/ventas` | (pendiente) | 🎨 placeholder |
 | Calendario | `/calendario` | (pendiente) | 🎨 placeholder |

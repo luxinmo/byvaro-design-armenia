@@ -16,7 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Home, Tag, FileText, CircleDollarSign, CalendarDays,
   Handshake, Contact, Globe, Mail, Settings, ChevronsUpDown,
-  Building2, Inbox, User as UserIcon, LogOut, Users,
+  Building2, Inbox, User as UserIcon, LogOut, Users, Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEmpresa } from "@/lib/empresa";
@@ -40,6 +40,7 @@ const groups: NavGroup[] = [
     items: [
       { title: "Promociones", url: "/promociones", icon: Tag, badge: 12 },
       { title: "Leads", url: "/leads", icon: Inbox, badge: 24, accent: true },
+      { title: "Oportunidades", url: "/oportunidades", icon: Target, badge: 7 },
       { title: "Registros", url: "/registros", icon: FileText, badge: 8 },
       { title: "Ventas", url: "/ventas", icon: CircleDollarSign },
       { title: "Calendario", url: "/calendario", icon: CalendarDays },
@@ -94,6 +95,7 @@ export function AppSidebar() {
     "/colaboradores",
     "/microsites",
     "/leads",
+    "/oportunidades",
     "/emails",
   ]);
   const visibleGroups = isAgencyUser
