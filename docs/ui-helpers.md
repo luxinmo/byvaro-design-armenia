@@ -8,7 +8,7 @@
 > dentro de una pantalla (es card-internal), documentarlo en la spec de
 > esa pantalla, no aquí.
 
-Última actualización: 2026-04-22.
+Última actualización: 2026-04-23.
 
 ---
 
@@ -27,6 +27,33 @@ Pensado para etiquetas pequeñas (mini-stats, chips).
 
 Archivo actual: duplicado en `ColaboradoresV2/V3.tsx`. TODO: extraer a
 `src/lib/format.ts` cuando se use en un 3º sitio.
+
+### `formatDate(iso, preset?)` + `useDateFormat()` + `getDateFormat()`
+
+`src/lib/dateFormat.ts` · formateador único de fechas de la app.
+Lee la preferencia guardada en `/ajustes/idioma-region/formato-fecha`
+(`localStorage.byvaro.userDateFormat.v1`) y aplica el **mismo formato
+en TODA la app** — fichas de contacto, historial, emails, documentos.
+
+Presets soportados:
+- `DD/MM/YYYY` → `"21/04/2026"` (Europa/ES, default)
+- `MM/DD/YYYY` → `"04/21/2026"` (EEUU)
+- `YYYY-MM-DD` → `"2026-04-21"` (ISO 8601)
+- `DD MMM YYYY` → `"21 abr 2026"` (legible corto)
+- `DD MMMM YYYY` → `"21 abril 2026"` (legible largo)
+
+API:
+- `formatDate(iso, preset?)` · devuelve `""` si fecha inválida; si no
+  se pasa preset, usa el guardado en `localStorage`.
+- `getDateFormat()` · lee el preset actual (SSR-safe).
+- `useDateFormat()` · hook reactivo (escucha `"storage"` + dispatch
+  manual al guardar la preferencia).
+
+TODO(backend): `PATCH /api/me { dateFormat }` al cambiar en settings.
+
+Uso canónico: **siempre** que se pinte una fecha visible para el
+usuario, se pasa por `formatDate(iso)`. No usar `toLocaleDateString`
+en componentes — rompe la consistencia entre pantallas.
 
 ---
 

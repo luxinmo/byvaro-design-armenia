@@ -94,6 +94,7 @@ ambas cosas en un único tipo `Agency`. Al implementar backend, separar:
 | `DELETE /api/organization` | borrar workspace completo | `src/pages/ajustes/zona-critica/eliminar-workspace.tsx:48` |
 | `POST /api/organization/transfer` | transferir ownership | `src/pages/ajustes/zona-critica/transferir.tsx:45` |
 | `PATCH /api/me { locale }` | cambiar idioma | `src/pages/ajustes/idioma-region/idioma.tsx:114` |
+| `PATCH /api/me { dateFormat }` body: `"DD/MM/YYYY" \| "MM/DD/YYYY" \| "YYYY-MM-DD" \| "DD MMM YYYY" \| "DD MMMM YYYY"` | preferencia global de formato de fecha · consumida por **toda** la app vía `formatDate()` de `src/lib/dateFormat.ts` (ficha contacto, historial, emails, documentos). Mock localStorage: `byvaro.userDateFormat.v1`. | `src/pages/ajustes/idioma-region/formato-fecha.tsx`, `src/lib/dateFormat.ts` |
 | `PATCH /api/organization { currency }` | cambiar moneda | `src/pages/ajustes/idioma-region/moneda.tsx:211` |
 
 **Nota TOTP**: el secret NO debe vivir nunca en el cliente (`src/lib/totp.ts:35`, `src/lib/twoFactor.ts:21`). Actualmente es mock localStorage.
@@ -246,6 +247,16 @@ DELETE /api/contacts/:id/comments/:cid     (solo autor)
 
 GET    /api/contacts/:id/assigned          → ContactAssignedUser[]
 PUT    /api/contacts/:id/assigned          { userIds: [...] }   (contacts.assign)
+
+PATCH  /api/contacts/:id/languages         { languages: string[] }   (contacts.edit)
+                                           → `ContactDetail` con `languages` actualizado.
+                                           Códigos ISO 639 + región (ES, EN, FR, DE…).
+                                           Canónico en `src/lib/languages.ts`.
+                                           UI inline: chips + popover dentro de la card
+                                           "Datos" (sin abrir "Editar contacto"). Actualmente
+                                           mockeado en `src/components/contacts/contactLanguagesStorage.ts`
+                                           (clave `byvaro.contact.<id>.languages.v1`, evento
+                                           `byvaro:contact-languages-change`).
 
 GET    /api/contacts/:id/related           → ContactRelation[]
 POST   /api/contacts/:id/related           { contactId, relationType }
