@@ -26,6 +26,7 @@ contract, permisos, estados, enlaces salientes.
 | Contactos | `/contactos` | (pendiente · listado) | 🎨 placeholder |
 | Contacto · ficha | `/contactos/:id` | [`contactos-ficha.md`](contactos-ficha.md) | ✅ diseñada (8 tabs) |
 | Ajustes · Tipos de relación | `/ajustes/contactos/relaciones` | [`ajustes-contactos-relaciones.md`](ajustes-contactos-relaciones.md) | ✅ diseñada |
+| Ajustes · Miembros del equipo | `/ajustes/usuarios/miembros` | [`ajustes-miembros.md`](ajustes-miembros.md) | ✅ diseñada |
 | Microsites | `/microsites` | (pendiente) | 🎨 placeholder |
 | Emails | `/emails` | [`emails.md`](emails.md) | 🟡 doc + tipos (falta UI) |
 | Ajustes | `/ajustes` | (pendiente) | 🎨 placeholder |

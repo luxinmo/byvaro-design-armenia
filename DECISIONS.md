@@ -1276,3 +1276,68 @@ Ver: `src/lib/profileStorage.ts`,
 `src/components/MobileHeader.tsx` (drawer muestra identidad + logout),
 `docs/backend-integration.md §1 · Auth & usuarios` (nuevos endpoints
 `GET/PATCH /api/me` + `POST /api/auth/logout`).
+
+---
+
+## 2026-04-23 · ADR-048 · Permisos granulares por miembro, desacoplados del rol
+
+**Contexto:** Hasta ahora `TeamMember` tenía sólo `role: "admin" |
+"member"` como eje de permisos. Esto no cubre casos reales que aparecen
+en cuanto el equipo crece más allá de 3-4 personas:
+
+- Un agente senior **puede aprobar registros** pero **no es admin**
+  (no gestiona facturación ni miembros).
+- Un administrativo **es admin** para gestionar miembros e integraciones
+  pero **no debe firmar contratos** (ni tiene representación legal).
+- Parte del equipo aparece **en el microsite público** del promotor
+  (las caras comerciales), otra parte **no** (gente de backoffice).
+
+**Decisión:** Añadir tres flags booleanos independientes al
+`TeamMember`, que se combinan con `role` para decidir capacidad:
+
+- `canAcceptRegistrations` — gate en los botones Aprobar/Rechazar de
+  `/registros` (y en las acciones bulk).
+- `canSign` — gate en el flujo de cierre/activación de colaboraciones
+  con agencias (contratos, condiciones comerciales).
+- `visibleOnProfile` — filtro aplicado en `/empresa` y en los templates
+  del microsite de cada promoción para decidir qué miembros se
+  muestran al público.
+
+La UI de edición vive en `/ajustes/usuarios/miembros` · cada card es
+expandible y permite al admin editar cargo, departamento y los tres
+toggles inline.
+
+**Alternativas:**
+
+- **Rol con más valores** (`admin | senior | agent | accountant`). →
+  Combinatoria explota · tres ejes independientes cuelgan mejor de
+  flags booleanos que de un único string.
+- **Sistema de permisos totalmente libre** (catálogo de ~50 keys como
+  `docs/permissions.md` define para el largo plazo). → Correcto pero
+  excesivo para el MVP · introducir los 3 flags hoy desbloquea los
+  casos de negocio reales sin parálisis del diseño.
+- **Heredar de `role`** (admin ⇒ todo). → Rompe el caso "admin
+  técnico sin firma" que es el más frecuente en promotores pequeños.
+
+**Razón:** Tres ejes ortogonales (admin técnico / representación
+legal / cara comercial) son ejes reales del negocio que el usuario
+identifica fácilmente. Un flag booleano es más legible que un rol
+compuesto, tanto para el admin al configurarlos como para el backend
+al validarlos (middleware simple: `if (!user.canAcceptRegistrations)
+return 403`).
+
+El catálogo completo de permisos (`docs/permissions.md`) queda
+intacto — cuando se implemente, los 3 flags mapean directamente a
+keys `records.decide`, `contracts.sign`, `profile.visible` y la UI
+pasa a leer de allí sin tocar esta pantalla.
+
+**Impacto backend:** `PATCH /api/organization/members/:id` acepta los
+tres flags en el body · RLS/middleware comprueba cada uno en su
+endpoint correspondiente. Un endpoint que requiera `canAcceptRegistrations`
+y no lo tenga devuelve 403 aunque el usuario sea admin.
+
+Ver: `src/lib/team.ts` (tipo + mocks),
+`src/pages/ajustes/usuarios/miembros.tsx` (UI de edición),
+`docs/screens/ajustes-miembros.md` (spec funcional),
+`docs/backend-integration.md §1 · Auth & usuarios` (endpoints),
+`docs/data-model.md §Usuario / TeamMember`.

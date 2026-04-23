@@ -45,25 +45,52 @@ interface Company {
 
 Relaciones: 1 Company → N Users, N Promociones.
 
-### Usuario
+### Usuario / Miembro del equipo (TeamMember)
 
-Miembro del equipo de una empresa.
+Miembro del equipo de una empresa. Tipo canónico en
+`src/lib/team.ts` → `TeamMember`. Lo consumen `useCurrentUser()` (para el
+usuario logueado) y todos los selectores (`UserSelect`, asignaciones de
+registros/visitas, autor de eventos en historial de contactos, etc.).
 
 ```ts
-interface User {
+type TeamMemberStatus = "active" | "invited" | "pending" | "deactive";
+
+interface TeamMember {
   id: string;
-  companyId: string;
-  email: string;
   name: string;
-  role: "owner" | "comercial" | "asistente";
-  avatar?: string;
-  permissions: {
-    canRegister: boolean;
-    canShareWithAgencies: boolean;
-    canEdit: boolean;
-  };
+  email: string;
+  role: "admin" | "member";
+  jobTitle?: string;
+  department?: string;
+  languages?: string[];           // idiomas que habla · asignación de leads
+  phone?: string;                 // "+34 600 000 000"
+  avatarUrl?: string;             // fallback = iniciales
+  status?: TeamMemberStatus;
+  /* ─── Permisos granulares (ADR-048) ─── */
+  visibleOnProfile?: boolean;     // aparece en microsite + ficha empresa
+  canSign?: boolean;              // puede firmar contratos con agencias
+  canAcceptRegistrations?: boolean; // puede aprobar registros entrantes
+  joinedAt?: string;              // ISO
+  lastActiveAt?: string;          // ISO
 }
 ```
+
+**Estados (`status`):**
+
+| Status | Significado | UI |
+|---|---|---|
+| `active` | Cuenta operativa · puede entrar | Badge verde "Activo" |
+| `invited` | Invitación enviada, aún sin aceptar | Badge azul "Invitado" · revocable |
+| `pending` | Ha solicitado unirse por dominio de email · espera aprobación del admin | Badge ámbar "Pendiente" · aprobar/rechazar |
+| `deactive` | Antiguo miembro desactivado · sin acceso pero datos conservados | Opacidad reducida · reactivar |
+
+**Permisos granulares** — se combinan con `role` para decidir visibilidad
+y capacidad. Un `member` puede tener `canAcceptRegistrations = true` sin
+ser `admin`. Ver §6 de `docs/permissions.md` y ADR-048.
+
+**Mock inicial:** `TEAM_MEMBERS` en `src/lib/team.ts` (6 miembros que
+cubren todos los estados). Se persisten cambios de admin en
+`byvaro.organization.members.v2`.
 
 ### Promoción (Promotion)
 

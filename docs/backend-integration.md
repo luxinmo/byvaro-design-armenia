@@ -75,7 +75,15 @@ ambas cosas en un único tipo `Agency`. Al implementar backend, separar:
 | `POST /api/me/2fa/verify` | validar código 2FA en login | `src/lib/twoFactor.ts:87` |
 | `POST /api/me/2fa/disable` | desactivar 2FA | `src/pages/ajustes/seguridad/dos-fa.tsx:166` |
 | `POST /api/me/2fa/backup-codes/regenerate` | regenerar backup codes | `src/pages/ajustes/seguridad/dos-fa.tsx:182` |
-| `POST /api/organization/invitations` | invitar miembro a la cuenta (con rol) | `src/pages/ajustes/usuarios/miembros.tsx:59` |
+| `GET /api/organization/members` → `TeamMember[]` | listado del equipo (reemplaza `TEAM_MEMBERS`) | `src/lib/team.ts:23`, `src/pages/ajustes/usuarios/miembros.tsx:36` |
+| `PATCH /api/organization/members/:id` | editar campos del miembro (role, jobTitle, department, permisos granulares) | `src/pages/ajustes/usuarios/miembros.tsx:76-92` |
+| `POST /api/organization/members/:id/deactivate` · `/reactivate` | desactivar / reactivar sin borrar datos | `src/pages/ajustes/usuarios/miembros.tsx:toggleActive` |
+| `DELETE /api/organization/members/:id` | eliminar miembro del workspace | `src/pages/ajustes/usuarios/miembros.tsx:removeMember` |
+| `POST /api/organization/invitations` | invitar miembro a la cuenta (con rol) | `src/pages/ajustes/usuarios/miembros.tsx:invite` |
+| `DELETE /api/organization/invitations/:id` | revocar invitación enviada | `src/pages/ajustes/usuarios/miembros.tsx:revokeInvite` |
+| `GET /api/organization/join-requests` | solicitudes entrantes por dominio | `src/pages/ajustes/usuarios/miembros.tsx:pendingReqs` |
+| `POST /api/organization/join-requests/:id/approve` | aprobar solicitud pendiente | idem:approveRequest |
+| `POST /api/organization/join-requests/:id/reject` | rechazar solicitud (cooldown 30 días) | idem:rejectRequest |
 | `POST /api/workspace/roles/:role/permissions` | editar permisos de rol | `src/pages/ajustes/usuarios/roles.tsx:13` |
 | `DELETE /api/me` | eliminar cuenta propia (anonimizar) | `src/pages/ajustes/zona-critica/eliminar-cuenta.tsx:32` |
 | `DELETE /api/organization` | borrar workspace completo | `src/pages/ajustes/zona-critica/eliminar-workspace.tsx:48` |
