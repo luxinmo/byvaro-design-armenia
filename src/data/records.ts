@@ -40,8 +40,47 @@ export type RegistroCliente = {
   flag?: string;
 };
 
+/**
+ * Tipo de registro:
+ *   - "registration"        → solicitud sólo de registro (apartado).
+ *   - "registration_visit"  → registro + visita programada solicitada.
+ */
+export type RegistroTipo = "registration" | "registration_visit";
+
+/**
+ * Evento del ciclo de vida del Registro · ActivityTimeline.
+ *
+ * Lifecycle típico:
+ *   1. submitted          — la agencia envía la solicitud.
+ *   2. auto_check         — la IA de duplicados ejecuta la comparación.
+ *   3. decision           — el promotor aprueba/rechaza/pide info.
+ *   4. notification       — la agencia recibe la notificación
+ *                           (con grace period de 5 min para revertir).
+ *   5. sent_to_developer  — el cliente queda registrado en la promoción.
+ */
+export type RegistroTimelineEvent = {
+  id: string;
+  type: "submitted" | "auto_check" | "decision" | "notification" | "sent_to_developer";
+  title: string;
+  description?: string;
+  timestamp: string;          // ISO
+  status: "completed" | "active" | "pending";
+  actor?: string;             // quién lo disparó (usuario o "Sistema")
+  actorRole?: string;
+  /** Para decisiones, qué se decidió. */
+  decisionType?: "approved" | "declined" | "info_requested";
+  decisionReason?: string;
+  /** Cuánto tardó (ej. "1h 24min") · para events de tipo decision. */
+  responseTime?: string;
+  /** Cuánto lleva esperando · para events active. */
+  waitingDuration?: string;
+};
+
 export type Registro = {
   id: string;
+  /** "registration" por defecto · "registration_visit" si la solicitud
+   *  incluye proponer una visita. */
+  tipo?: RegistroTipo;
   /** FK → src/data/promotions.ts::Promotion.id */
   promotionId: string;
   /** FK → src/data/agencies.ts::Agency.id */
@@ -62,6 +101,21 @@ export type Registro = {
    * comparación lado-a-lado sin tener que hacer otra búsqueda.
    */
   matchCliente?: Partial<RegistroCliente>;
+  /** Recomendación textual de la IA (ej. "Aprobar · sin coincidencias"). */
+  recommendation?: string;
+  /** Solo si tipo === "registration_visit". Fecha + hora propuesta. */
+  visitDate?: string;        // YYYY-MM-DD
+  visitTime?: string;        // HH:mm
+  /** Tiempo de respuesta del promotor (ej. "1h 24min") · derivado por backend. */
+  responseTime?: string;
+  /** Quién decidió + nota libre del promotor cuando aprueba/rechaza. */
+  decidedBy?: string;
+  decidedByRole?: string;
+  decisionNote?: string;
+  /** ISO · cuándo se decidió. Sirve para el GracePeriodBanner (5min). */
+  decidedAt?: string;
+  /** Audit log de eventos del ciclo de vida del registro. */
+  timeline?: RegistroTimelineEvent[];
   notas?: string;
   /** El agente marca haber obtenido el consentimiento RGPD del cliente. */
   consent: boolean;
@@ -95,11 +149,15 @@ export const registros: Registro[] = [
     fecha: minsAgo(14),
     estado: "pendiente",
     matchPercentage: 0,
+    recommendation: "Apto para aprobación directa · sin coincidencias.",
     consent: true,
     notas: "Buscando ático con vistas al mar, presupuesto hasta 1.2M€.",
   },
   {
     id: "reg-002",
+    tipo: "registration_visit",
+    visitDate: "2026-04-28",
+    visitTime: "10:30",
     promotionId: "2",
     agencyId: "ag-2",
     cliente: {
@@ -191,8 +249,12 @@ export const registros: Registro[] = [
     },
     fecha: hoursAgo(10),
     estado: "pendiente",
+    tipo: "registration_visit",
+    visitDate: "2026-04-29",
+    visitTime: "16:00",
     matchPercentage: 55,
     matchWith: "Sofía M. Ruiz · registrada por Prime Properties (hace 11 días)",
+    recommendation: "Coincidencia parcial · revisa email y teléfono antes de decidir.",
     matchCliente: {
       nombre: "Sofía M. Ruiz",
       email: "sofimr@gmail.com",
@@ -373,6 +435,9 @@ export const registros: Registro[] = [
     fecha: daysAgo(1),
     estado: "aprobado",
     matchPercentage: 0,
+    responseTime: "1h 24min",
+    decidedBy: "Arman Rahmanov",
+    decidedByRole: "Admin",
     consent: true,
   },
   {
@@ -390,6 +455,9 @@ export const registros: Registro[] = [
     fecha: daysAgo(2),
     estado: "aprobado",
     matchPercentage: 15,
+    responseTime: "3h 12min",
+    decidedBy: "Laura Gómez",
+    decidedByRole: "Comercial senior",
     matchWith: "Contacto parecido (nombre frecuente)",
     matchCliente: {
       nombre: "Pierre Lefebvre",

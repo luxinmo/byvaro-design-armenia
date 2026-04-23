@@ -271,6 +271,71 @@ Datos mock: `src/data/agencies.ts`. Helper `getContractStatus(a)` computa
 - Atribución "Basado en reseñas de Google" obligatoria al mostrar
   `googleRating` (Places API ToS).
 
+### Lead (bandeja de entrada · sin cualificar)
+
+Entrada cruda de un potencial comprador antes de ser cualificado. Se
+origina en webhooks de portales, submits del microsite, WhatsApp,
+referrals de agencias o walk-ins en oficina.
+
+```ts
+type LeadSource =
+  | "idealista" | "fotocasa" | "habitaclia"
+  | "microsite" | "referral"  | "agency"
+  | "whatsapp"  | "walkin"    | "call";
+
+type LeadStatus =
+  | "new"          // recién entrado, sin revisar
+  | "qualified"    // revisado, cumple requisitos mínimos
+  | "contacted"    // alguien del equipo ya contactó
+  | "duplicate"    // detectado duplicado por la IA
+  | "rejected"     // descartado manualmente
+  | "converted";   // promovido a Registro
+
+interface Lead {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  nationality?: string;         // ISO2
+  idioma?: string;              // ISO2
+  source: LeadSource;
+  status: LeadStatus;
+  interest: {
+    promotionId?: string;
+    promotionName?: string;
+    tipologia?: string;
+    dormitorios?: string;        // "2-3", "3+"
+    presupuestoMax?: number;     // EUR
+    zona?: string;
+  };
+  createdAt: string;            // ISO
+  firstResponseAt?: string;     // ISO · primera acción del equipo
+  assignedTo?: { name: string; email: string };
+  message?: string;
+  duplicateScore?: number;      // 0-100 · IA de duplicados
+  duplicateOfContactId?: string;// match si score ≥ 70
+  tags?: string[];
+}
+```
+
+Datos: `src/data/leads.ts` → `leads: Lead[]`.
+
+**Reglas:**
+- Al crear un lead, backend encola un job de IA que rellena
+  `duplicateScore` y `duplicateOfContactId`. Si score ≥ 70 →
+  `status="duplicate"` automático.
+- `firstResponseAt` lo graba el servidor en la primera interacción
+  (email / WhatsApp / llamada). No editable a mano.
+- Convertir un lead a registro es **irreversible**: el lead queda en
+  `status="converted"` y el registro creado referencia el `leadId`
+  original (traza de origen).
+- Un lead descartado (`rejected`) no se elimina, se conserva para
+  estadística de calidad de fuente.
+- El SLA medio de respuesta por agencia se calcula como
+  `AVG(firstResponseAt - createdAt)` y alimenta el dashboard de
+  Estadísticas de colaboradores (§4.2 de backend-integration).
+- Contrato API completo: ver `docs/backend-integration.md §7.1`.
+
 ### Registro (Record / Client Registration)
 
 Solicitud de una agencia para "apartarse" un cliente potencial en una promo.
