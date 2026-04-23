@@ -9,6 +9,7 @@ import type { Unit } from "@/data/units";
 import { promotions, getBuildingTypeLabel } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion, type Comercial, type ComercialPermissions } from "@/data/developerPromotions";
 import { agencies, countAgenciesForPromotion, type Agency } from "@/data/agencies";
+import { InvitacionesPendientesPanel } from "@/components/promotions/detail/InvitacionesPendientesPanel";
 import { FeatureCardV3 } from "@/pages/Colaboradores";
 import ColaboradoresEstadisticas from "@/pages/ColaboradoresEstadisticas";
 import {
@@ -1643,6 +1644,15 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   )}
                 </div>
               </header>
+
+              {/* Invitaciones pendientes · sección propia con acciones
+                  Reenviar / Cancelar. Aparece siempre que exista al
+                  menos una invitación con estado=pendiente y
+                  promocionId === p.id. Inicialmente las tarjetas no
+                  tienen logo ni nombre comercial — solo el email que
+                  el promotor escribió. En cuanto la agencia se
+                  registre, los datos se completan desde el backend. */}
+              <InvitacionesPendientesPanel promotionId={p.id} promotionName={p.name} />
 
               {agenciasEnPromo.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
