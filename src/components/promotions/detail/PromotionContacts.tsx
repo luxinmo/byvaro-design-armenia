@@ -33,6 +33,8 @@
  */
 import { Phone, Mail, Globe, MapPin, ExternalLink } from "lucide-react"; // iconos Lucide para canales y puntos de venta
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"; // wrapper shadcn sobre Radix Avatar (gestiona carga + fallback)
+import { Flag } from "@/components/ui/Flag";
+import { findLanguageByCode } from "@/lib/languages";
 
 const contacts = [
   {
@@ -41,7 +43,7 @@ const contacts = [
     avatar: "https://i.pravatar.cc/80?img=33",
     phone: "+34 612 345 678",
     email: "arman@byvaro.com",
-    languages: ["ES", "FR", "GB"],
+    languages: ["ES", "FR", "EN"],
   },
   {
     name: "María López",
@@ -49,7 +51,7 @@ const contacts = [
     avatar: "https://i.pravatar.cc/80?img=12",
     phone: "+34 678 901 234",
     email: "maria@byvaro.com",
-    languages: ["ES", "GB"],
+    languages: ["ES", "EN"],
   },
   {
     name: "Thomas Müller",
@@ -57,7 +59,7 @@ const contacts = [
     avatar: "https://i.pravatar.cc/80?img=23",
     phone: "+49 170 123 456",
     email: "thomas@byvaro.com",
-    languages: ["DE", "GB", "ES"],
+    languages: ["DE", "EN", "ES"],
   },
 ];
 
@@ -93,10 +95,18 @@ export function PromotionContacts({ website }: { website: string }) {
                   <p className="text-xs text-muted-foreground">{c.role}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-1 mb-2.5">
-                {c.languages.map((f, i) => (
-                  <span key={i} className="text-xs">{f}</span>
-                ))}
+              <div className="flex items-center gap-1.5 mb-2.5">
+                {c.languages.map((code) => {
+                  const lang = findLanguageByCode(code);
+                  return (
+                    <Flag
+                      key={code}
+                      iso={lang?.countryIso ?? code}
+                      size={12}
+                      title={lang?.name ?? code}
+                    />
+                  );
+                })}
               </div>
               <div className="flex items-center gap-1.5">
                 <button className="flex-1 flex items-center justify-center gap-1 h-7 rounded-lg bg-muted/40 text-muted-foreground hover:bg-muted/60 hover:text-foreground text-xs font-medium transition-all duration-200">

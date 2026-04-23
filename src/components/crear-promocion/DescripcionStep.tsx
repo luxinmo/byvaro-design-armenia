@@ -10,17 +10,18 @@
 import { useState } from "react";
 import { Sparkles, Languages, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Flag } from "@/components/ui/Flag";
 import type { WizardState } from "./types";
 
 const idiomas = [
-  { code: "es", label: "Español", flag: "🇪🇸" },
-  { code: "en", label: "English", flag: "🇬🇧" },
-  { code: "fr", label: "Français", flag: "🇫🇷" },
-  { code: "de", label: "Deutsch", flag: "🇩🇪" },
-  { code: "pt", label: "Português", flag: "🇵🇹" },
-  { code: "it", label: "Italiano", flag: "🇮🇹" },
-  { code: "nl", label: "Nederlands", flag: "🇳🇱" },
-  { code: "ar", label: "العربية", flag: "🇸🇦" },
+  { code: "es", label: "Español",    countryIso: "ES" },
+  { code: "en", label: "English",    countryIso: "GB" },
+  { code: "fr", label: "Français",   countryIso: "FR" },
+  { code: "de", label: "Deutsch",    countryIso: "DE" },
+  { code: "pt", label: "Português",  countryIso: "PT" },
+  { code: "it", label: "Italiano",   countryIso: "IT" },
+  { code: "nl", label: "Nederlands", countryIso: "NL" },
+  { code: "ar", label: "العربية",    countryIso: "SA" },
 ] as const;
 
 const textareaClass =
@@ -136,7 +137,7 @@ export function DescripcionStep({
                     : "border-border text-muted-foreground hover:text-foreground hover:border-primary/30",
               )}
             >
-              <span aria-hidden="true">{idioma.flag}</span>
+              <Flag iso={idioma.countryIso} size={14} />
               {idioma.label}
               {hasContent && !isActive && (
                 <span className="h-1.5 w-1.5 rounded-full bg-primary" />

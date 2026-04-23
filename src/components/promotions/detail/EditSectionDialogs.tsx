@@ -88,6 +88,7 @@ import {
   Phone, Mail, Globe, BookOpen, Eye, Layers, Store, Building2, Pencil, Search, Check, UserPlus,
 } from "lucide-react";
 import { MultimediaEditor, urlsToFotoItems, fotoItemsToUrls } from "@/components/shared/MultimediaEditor";
+import { Flag } from "@/components/ui/Flag";
 
 // ═══ SHARED WRAPPER ═══
 function EditDialogShell({
@@ -298,14 +299,14 @@ export function EditStructureDialog({ open, onOpenChange, type, structure, phase
 
 // ═══ DESCRIPTION EDIT — multilingual + AI ═══
 const LANGUAGES = [
-  { code: "en", label: "English", flag: "🇬🇧" },
-  { code: "es", label: "Español", flag: "🇪🇸" },
-  { code: "fr", label: "Français", flag: "🇫🇷" },
-  { code: "de", label: "Deutsch", flag: "🇩🇪" },
-  { code: "pt", label: "Português", flag: "🇵🇹" },
-  { code: "it", label: "Italiano", flag: "🇮🇹" },
-  { code: "nl", label: "Nederlands", flag: "🇳🇱" },
-  { code: "ar", label: "العربية", flag: "🇸🇦" },
+  { code: "en", label: "English",    countryIso: "GB" },
+  { code: "es", label: "Español",    countryIso: "ES" },
+  { code: "fr", label: "Français",   countryIso: "FR" },
+  { code: "de", label: "Deutsch",    countryIso: "DE" },
+  { code: "pt", label: "Português",  countryIso: "PT" },
+  { code: "it", label: "Italiano",   countryIso: "IT" },
+  { code: "nl", label: "Nederlands", countryIso: "NL" },
+  { code: "ar", label: "العربية",    countryIso: "SA" },
 ];
 
 export function EditDescriptionDialog({ open, onOpenChange, description, descriptions = {}, onSave }: {
@@ -405,7 +406,7 @@ export function EditDescriptionDialog({ open, onOpenChange, description, descrip
                 className={cn("flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                   activeLang === l.code ? "border-primary bg-primary/10 text-primary"
                     : has ? "border-primary/30 bg-primary/5 text-foreground" : "border-border text-muted-foreground hover:text-foreground")}>
-                <span>{l.flag}</span> {l.label}
+                <Flag iso={l.countryIso} size={14} /> {l.label}
                 {has && activeLang !== l.code && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
               </button>
             );

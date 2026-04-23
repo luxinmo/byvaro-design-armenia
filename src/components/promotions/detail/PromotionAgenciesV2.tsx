@@ -38,6 +38,7 @@ import { useInvitaciones } from "@/lib/invitaciones";
 import { useFavoriteAgencies } from "@/lib/favoriteAgencies";
 import { toast } from "sonner";
 import { Star } from "lucide-react";
+import { Flag } from "@/components/ui/Flag";
 
 /* ══════ TIPOS Y MOCKS ══════ */
 
@@ -174,11 +175,11 @@ export function PromotionAgenciesV2({
   }, []);
 
   const countryChips = useMemo(() => {
-    const map = new Map<string, { country: string; flag: string; count: number }>();
+    const map = new Map<string, { country: string; iso: string; count: number }>();
     for (const a of mockAgencies) {
       const current = map.get(a.country);
       if (current) current.count += 1;
-      else map.set(a.country, { country: a.country, flag: a.countryFlag, count: 1 });
+      else map.set(a.country, { country: a.country, iso: a.countryIso, count: 1 });
     }
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, []);
@@ -351,12 +352,12 @@ export function PromotionAgenciesV2({
                   >
                     <span
                       className={cn(
-                        "h-6 w-6 rounded-full flex items-center justify-center text-base leading-none",
+                        "h-6 w-6 rounded-full flex items-center justify-center overflow-hidden",
                         isActive ? "bg-background/10" : "bg-muted"
                       )}
                       aria-hidden
                     >
-                      {c.flag}
+                      <Flag iso={c.iso} size={16} />
                     </span>
                     <span>{c.country}</span>
                     <span
@@ -487,10 +488,11 @@ function AgencyCardV2({ agency }: { agency: AgencyV2 }) {
             <h4 className="text-sm font-semibold text-foreground truncate leading-tight">
               {agency.name}
             </h4>
-            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
               <MapPin className="h-3 w-3 shrink-0" />
+              <Flag iso={agency.countryIso} size={12} />
               <span className="truncate">
-                {agency.countryFlag} {agency.city}, {agency.country}
+                {agency.city}, {agency.country}
               </span>
             </p>
           </div>

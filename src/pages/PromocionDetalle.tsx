@@ -61,6 +61,8 @@ import {
 import { RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner"; // feedback tras publicar · Toaster global en App.tsx
 import { useCurrentUser } from "@/lib/currentUser";
+import { Flag } from "@/components/ui/Flag";
+import { findLanguageByCode } from "@/lib/languages";
 
 function formatPrice(n: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
@@ -122,9 +124,9 @@ const conditionLabels: Record<string, string> = {
 
 // Mock contacts for the footer
 const contacts = [
-  { name: "Arman Yeghiazaryan", role: "Founder & Director Comercial", avatar: "https://i.pravatar.cc/80?img=33", phone: "+34 612 345 678", email: "arman@byvaro.com", languages: ["ES", "FR", "GB"] },
-  { name: "María López", role: "Responsable de Ventas", avatar: "https://i.pravatar.cc/80?img=12", phone: "+34 678 901 234", email: "maria@byvaro.com", languages: ["ES", "GB"] },
-  { name: "Thomas Müller", role: "International Sales", avatar: "https://i.pravatar.cc/80?img=23", phone: "+49 170 123 456", email: "thomas@byvaro.com", languages: ["DE", "GB", "ES"] },
+  { name: "Arman Yeghiazaryan", role: "Founder & Director Comercial", avatar: "https://i.pravatar.cc/80?img=33", phone: "+34 612 345 678", email: "arman@byvaro.com", languages: ["ES", "FR", "EN"] },
+  { name: "María López", role: "Responsable de Ventas", avatar: "https://i.pravatar.cc/80?img=12", phone: "+34 678 901 234", email: "maria@byvaro.com", languages: ["ES", "EN"] },
+  { name: "Thomas Müller", role: "International Sales", avatar: "https://i.pravatar.cc/80?img=23", phone: "+49 170 123 456", email: "thomas@byvaro.com", languages: ["DE", "EN", "ES"] },
 ];
 
 export default function DeveloperPromotionDetail({ agentMode = false }: { agentMode?: boolean } = {}) {
@@ -3433,10 +3435,18 @@ function ContactCard({ contact: c, large }: { contact: ContactPerson; large?: bo
         <div className="min-w-0 flex-1">
           <p className={`${large ? "text-sm" : "text-sm"} font-semibold text-foreground truncate`}>{c.name}</p>
           <p className={`${large ? "text-xs" : "text-[10px]"} text-muted-foreground`}>{c.role}</p>
-          <div className="flex items-center gap-1 mt-1">
-            {c.languages.map((f, i) => (
-              <span key={i} className="text-xs">{f}</span>
-            ))}
+          <div className="flex items-center gap-1.5 mt-1">
+            {c.languages.map((code) => {
+              const lang = findLanguageByCode(code);
+              return (
+                <Flag
+                  key={code}
+                  iso={lang?.countryIso ?? code}
+                  size={12}
+                  title={lang?.name ?? code}
+                />
+              );
+            })}
           </div>
         </div>
       </div>
