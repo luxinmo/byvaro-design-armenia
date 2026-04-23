@@ -85,7 +85,7 @@ import {
   Download, Search, ChevronDown, ChevronUp, ChevronRight,
   Waves, Building2, LayoutGrid, List, ArrowUpDown,
   Pencil, X, Check, Camera, Bed, Compass, Send, SlidersHorizontal,
-  MoreVertical, Eye, ShoppingCart,
+  MoreVertical, Eye, ShoppingCart, Plus,
 } from "lucide-react";
 // ColumnCustomizer: dialog Byvaro para elegir columnas visibles en el catálogo.
 import { ColumnCustomizer, type ColumnDef } from "@/components/ui/column-customizer";
@@ -652,15 +652,42 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
           entrar a crear aunque estén vacíos). La agencia solo los ve si
           hay al menos uno visible disponible (filtrado abajo). */}
       {(!isCollaboratorView || parkings.some((a) => a.visibleToAgencies !== false && a.status === "available") || trasteros.some((a) => a.visibleToAgencies !== false && a.status === "available")) && (
-        <SegmentSwitcher
-          segment={segment}
-          setSegment={setSegment}
-          viviendasCount={allUnits.length}
-          parkingsCount={parkings.length}
-          trasterosCount={trasteros.length}
-          parkingsAgencyVisibleCount={parkings.filter((a) => a.visibleToAgencies !== false && a.status === "available").length}
-          trasterosAgencyVisibleCount={trasteros.filter((a) => a.visibleToAgencies !== false && a.status === "available").length}
-          isCollaboratorView={isCollaboratorView}
+        <div className="flex flex-wrap items-center gap-2">
+          <SegmentSwitcher
+            segment={segment}
+            setSegment={setSegment}
+            viviendasCount={allUnits.length}
+            parkingsCount={parkings.length}
+            trasterosCount={trasteros.length}
+            parkingsAgencyVisibleCount={parkings.filter((a) => a.visibleToAgencies !== false && a.status === "available").length}
+            trasterosAgencyVisibleCount={trasteros.filter((a) => a.visibleToAgencies !== false && a.status === "available").length}
+            isCollaboratorView={isCollaboratorView}
+          />
+          {/* Atajo para el promotor: añadir anejo directo desde
+              Viviendas, sin tener que cambiar de segmento. El modal
+              permite elegir tipo (parking/trastero). */}
+          {!isCollaboratorView && segment === "viviendas" && (
+            <button
+              type="button"
+              onClick={() => openNewAnejo("parking")}
+              className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full border border-border bg-card text-foreground text-xs font-medium hover:bg-muted/50 transition-colors shadow-soft"
+            >
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              Añadir anejo
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Modal de alta/edición de anejo · solo promotor, disponible desde
+          cualquier segmento. */}
+      {!isCollaboratorView && (
+        <AnejoFormDialog
+          open={anejoDialogOpen}
+          onOpenChange={setAnejoDialogOpen}
+          defaultTipo={anejoDialogTipo}
+          initial={editingAnejo}
+          onSubmit={handleAnejoSubmit}
         />
       )}
 
