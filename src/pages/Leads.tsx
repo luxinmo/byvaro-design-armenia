@@ -24,7 +24,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Search, X, Inbox, Mail, Phone, MessageCircle, CheckCircle2, XCircle,
+  Search, X, Inbox, Mail, CheckCircle2,
   Copy, MoreVertical, ArrowUpRight, Filter, Clock, UserPlus, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -234,7 +234,6 @@ export default function Leads() {
                       <th className="px-3 py-2.5 text-left font-semibold">Interés</th>
                       <th className="px-3 py-2.5 text-left font-semibold">Recibido</th>
                       <th className="px-3 py-2.5 text-left font-semibold">Responsable</th>
-                      <th className="px-2 py-2.5" />
                     </tr>
                   </thead>
                   <tbody>
@@ -353,52 +352,6 @@ function LeadRow({
       {/* Responsable · único · clic abre el selector de miembros */}
       <td className="px-3 py-3 align-middle" onClick={(e) => e.stopPropagation()}>
         <AssigneeCell lead={l} />
-      </td>
-
-      {/* Kebab */}
-      <td className="px-2 py-3 text-right align-middle" onClick={(e) => e.stopPropagation()}>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
-              <MoreVertical className="h-3.5 w-3.5" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuItem
-              onClick={() => toast.success(`Contactando con ${l.fullName.split(" ")[0]}`)}
-              className="gap-2 text-xs"
-            >
-              <Phone className="h-3.5 w-3.5" /> Llamar
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => toast.success(`Abriendo email para ${l.email}`)}
-              className="gap-2 text-xs"
-            >
-              <Mail className="h-3.5 w-3.5" /> Enviar email
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => toast.success(`Abriendo WhatsApp para ${l.phone}`)}
-              className="gap-2 text-xs"
-            >
-              <MessageCircle className="h-3.5 w-3.5" /> Abrir WhatsApp
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              disabled={l.status === "converted" || l.status === "rejected"}
-              onClick={() => toast.success(`Lead ${l.fullName} convertido a registro`)}
-              className="gap-2 text-xs"
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" /> Convertir a registro
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={l.status === "rejected"}
-              className="gap-2 text-xs text-destructive focus:text-destructive"
-              onClick={() => toast.success(`Lead ${l.fullName} descartado`)}
-            >
-              <XCircle className="h-3.5 w-3.5" /> Descartar
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </td>
     </tr>
   );
