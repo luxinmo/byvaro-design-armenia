@@ -45,10 +45,12 @@ type Tab = "home" | "about" | "agents" | "statistics";
 export default function Empresa({
   tenantId,
   visitorSlot,
+  visitorHeaderRight,
   visitorFooter,
 }: {
   tenantId?: string;
   visitorSlot?: React.ReactNode;
+  visitorHeaderRight?: React.ReactNode;
   visitorFooter?: React.ReactNode;
 } = {}) {
   /* En modo agencia sin tenantId explícito, `/empresa` muestra la
@@ -162,6 +164,7 @@ export default function Empresa({
               </>
             )}
           </div>
+          {isVisitor && visitorHeaderRight}
           {!isVisitor && !isAgencyUser && (
             <button
               type="button"

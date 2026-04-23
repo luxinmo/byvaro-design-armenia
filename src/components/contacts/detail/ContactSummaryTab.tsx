@@ -20,6 +20,8 @@ import {
 import { EvaluateVisitDialog } from "./EvaluateVisitDialog";
 import { AssignMembersDialog } from "./AssignMembersDialog";
 import { LinkContactDialog } from "./LinkContactDialog";
+import { findTeamMember, memberInitials, getMemberAvatarUrl } from "@/lib/team";
+import { useMe } from "@/lib/meStorage";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -238,22 +240,45 @@ export function ContactSummaryTab({ detail, onRefresh, onOpenWhatsApp }: Props) 
             <Empty text="Sin usuarios asignados." />
           ) : (
             <ul className="space-y-2">
-              {detail.assignedUsers.map((u) => (
-                <li key={u.userId} className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-full bg-foreground/5 grid place-items-center text-foreground font-semibold text-xs shrink-0">
-                    {u.userName.split(" ").map((w) => w[0]).slice(0, 2).join("")}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{u.userName}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">{u.role ?? "Miembro"}</p>
-                  </div>
-                  {u.permissions.canEdit && (
-                    <span className="text-[10px] text-muted-foreground" title="Puede editar">
-                      <Star className="h-3 w-3 fill-current" />
-                    </span>
-                  )}
-                </li>
-              ))}
+              {detail.assignedUsers.map((u) => {
+                /* Resolver el miembro ACTUAL desde TEAM_MEMBERS. Si existe,
+                 * usamos EXCLUSIVAMENTE sus datos vivos (aunque el cargo
+                 * esté vacío porque el usuario lo borró). Solo caemos al
+                 * snapshot legacy (`u.userName`, `u.role`) cuando el
+                 * miembro YA NO existe en el equipo (fue eliminado). */
+                const member = findTeamMember(u.userId);
+                const displayName = member ? member.name : u.userName;
+                const displayRole = member
+                  ? (member.jobTitle?.trim() || "Sin cargo")
+                  : (u.role ?? "Miembro");
+                const avatarUrl = member ? getMemberAvatarUrl(member) : null;
+                const initials = member ? memberInitials(member)
+                  : displayName.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+                return (
+                  <li key={u.userId} className="flex items-center gap-3">
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt=""
+                        className="h-9 w-9 rounded-full object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="h-9 w-9 rounded-full bg-primary/15 text-primary grid place-items-center text-[11px] font-semibold shrink-0">
+                        {initials}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{displayName}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{displayRole}</p>
+                    </div>
+                    {u.permissions.canEdit && (
+                      <span className="text-[10px] text-muted-foreground" title="Puede editar">
+                        <Star className="h-3 w-3 fill-current" />
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
           <button

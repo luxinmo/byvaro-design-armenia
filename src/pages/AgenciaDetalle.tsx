@@ -19,19 +19,19 @@
  */
 
 import { useMemo } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
-  Pause, Play, Trash2, Share2, Mail,
+  Pause, Play, Trash2, Share2, Mail, History, ArrowUpRight,
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import Empresa from "./Empresa";
 import { agencies, type Agency } from "@/data/agencies";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
-import { CompanyActivityTimeline } from "@/components/collaborators/CompanyActivityTimeline";
 import {
   recordRequestApproved, recordRequestRejected,
   recordCollaborationPaused, recordCollaborationResumed,
   recordCompanyAny,
+  useCanViewCompanyHistory,
 } from "@/lib/companyEvents";
 import { useCurrentUser } from "@/lib/currentUser";
 
@@ -72,6 +72,7 @@ export default function AgenciaDetalle() {
   const isPending = !!(a.solicitudPendiente || a.isNewRequest);
   const currentUser = useCurrentUser();
   const actor = { name: currentUser.name, email: currentUser.email };
+  const canViewHistory = useCanViewCompanyHistory();
 
   const handleAprobar = () => {
     recordRequestApproved(a.id, actor);
@@ -179,33 +180,25 @@ export default function AgenciaDetalle() {
     </footer>
   );
 
-  /* ─── Slot superior con el historial confidencial (solo admin) ───
-     El componente se auto-protege con useCanViewCompanyHistory y
-     no renderiza datos si el viewer no es admin del promotor. */
-  const visitorSlot = (
-    <section
-      id="historial-confidencial"
-      className="mb-5 rounded-2xl border border-border bg-card p-5 shadow-soft"
-      aria-label="Historial cross-empresa"
+  /* ─── Link al historial cross-empresa (solo admin del promotor) ───
+     El historial es su propia página · aquí solo el enlace discreto
+     arriba a la derecha. Visible únicamente si el usuario puede
+     verlo (admin del promotor). */
+  const visitorHeaderRight = canViewHistory ? (
+    <Link
+      to={`/colaboradores/${a.id}/historial`}
+      className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
     >
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Historial de la colaboración
-          </p>
-          <h2 className="text-base font-semibold text-foreground mt-0.5">
-            Todo lo que ha pasado entre tu empresa y {a.name}
-          </h2>
-        </div>
-      </div>
-      <CompanyActivityTimeline agencyId={a.id} agencyName={a.name} />
-    </section>
-  );
+      <History className="h-3.5 w-3.5" strokeWidth={1.75} />
+      Historial conmigo
+      <ArrowUpRight className="h-3 w-3 opacity-60" />
+    </Link>
+  ) : null;
 
   return (
     <Empresa
       tenantId={id}
-      visitorSlot={visitorSlot}
+      visitorHeaderRight={visitorHeaderRight}
       visitorFooter={visitorFooter}
     />
   );
