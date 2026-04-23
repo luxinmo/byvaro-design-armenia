@@ -162,34 +162,80 @@ export function getMissingForWizard(state: WizardState): MissingRequirement[] {
 export function getMissingForPromotion(p: Promotion): MissingRequirement[] {
   const missing: MissingRequirement[] = [];
 
+  /* ── Identidad ─────────────────────────────────────────── */
+  if (!p.code || !p.code.trim()) {
+    missing.push({ key: "codigo", label: "Sin código de referencia", ficha: "basicInfo" });
+  }
+  if (!p.developer || !p.developer.trim()) {
+    missing.push({ key: "developer", label: "Sin promotor asignado", ficha: "basicInfo" });
+  }
+
+  /* ── Multimedia ────────────────────────────────────────── */
   if (!p.image) {
-    missing.push({ key: "fotos", label: "Sin fotografías", ficha: "multimedia" });
+    missing.push({ key: "fotos", label: "Sin fotografía principal", ficha: "multimedia" });
   }
 
-  if (p.availableUnits <= 0 && p.totalUnits > 0) {
-    missing.push({ key: "unidades", label: "Sin unidades disponibles", ficha: "units" });
-  } else if (p.totalUnits === 0) {
-    missing.push({ key: "unidades", label: "No hay unidades generadas", ficha: "units" });
-  }
-
-  if (p.collaborating && (!p.commission || p.commission <= 0)) {
-    missing.push({ key: "comisiones", label: "Comisiones no configuradas", ficha: "collaborators" });
-  }
-
-  if (!p.reservationCost || p.reservationCost <= 0) {
-    missing.push({ key: "plan-pagos", label: "Sin plan de pagos definido", ficha: "paymentPlan" });
-  }
-
+  /* ── Ubicación ─────────────────────────────────────────── */
   if (!p.location || !p.location.trim()) {
     missing.push({ key: "ubicacion", label: "Ubicación sin completar", ficha: "location" });
   }
 
+  /* ── Tipología + edificación ──────────────────────────── */
+  if (!Array.isArray(p.propertyTypes) || p.propertyTypes.length === 0) {
+    missing.push({ key: "tipologia", label: "Sin tipologías (apartamento/ático...)", ficha: "basicInfo" });
+  }
+  if (!p.buildingType) {
+    missing.push({ key: "tipo-edificacion", label: "Sin tipo de edificación", ficha: "basicInfo" });
+  }
+
+  /* ── Precios + entrega ────────────────────────────────── */
+  if (!p.priceMin || p.priceMin <= 0 || !p.priceMax || p.priceMax <= 0) {
+    missing.push({ key: "rango-precios", label: "Sin rango de precios", ficha: "basicInfo" });
+  }
   if (!p.delivery || !p.delivery.trim()) {
     missing.push({ key: "entrega", label: "Falta fecha de entrega", ficha: "delivery" });
   }
-
   if (p.constructionProgress === undefined || p.constructionProgress === null) {
     missing.push({ key: "estado-construccion", label: "Estado de construcción sin definir", ficha: "estado" });
+  }
+
+  /* ── Inventario ───────────────────────────────────────── */
+  if (p.totalUnits === 0) {
+    missing.push({ key: "unidades", label: "No hay unidades generadas", ficha: "units" });
+  } else if (p.availableUnits <= 0 && p.status !== "sold-out") {
+    // Tolerante: si p.status = "sold-out" no lo marcamos como faltante.
+    missing.push({ key: "unidades-disponibles", label: "Sin unidades disponibles", ficha: "units" });
+  }
+
+  /* ── Plan de pagos ────────────────────────────────────── */
+  if (!p.reservationCost || p.reservationCost <= 0) {
+    missing.push({ key: "plan-pagos", label: "Sin plan de pagos definido", ficha: "paymentPlan" });
+  }
+
+  /* ── Comisiones (si colabora con agencias) ────────────── */
+  if (p.collaborating && (!p.commission || p.commission <= 0)) {
+    missing.push({ key: "comisiones", label: "Comisiones no configuradas", ficha: "collaborators" });
+  }
+
+  /* ── missingSteps declarativos del mock ──────────────────
+     Cuando developerPromotions.ts declara campos pendientes que
+     el validador no puede derivar del shape plano (ej. "Description",
+     "Multimedia" en el sentido de galería extendida, "Collaborators"),
+     los incorporamos para que la ficha y el listado los vean. */
+  const fichaByStep: Record<string, string> = {
+    "Multimedia": "multimedia",
+    "Description": "description",
+    "Units": "units",
+    "Payment plan": "paymentPlan",
+    "Basic info": "basicInfo",
+    "Collaborators": "collaborators",
+  };
+  if (Array.isArray(p.missingSteps)) {
+    for (const step of p.missingSteps) {
+      const key = `step-${step.toLowerCase().replace(/\s+/g, "-")}`;
+      if (missing.some((m) => m.key === key)) continue;
+      missing.push({ key, label: step, ficha: fichaByStep[step] });
+    }
   }
 
   return missing;
