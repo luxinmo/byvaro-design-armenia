@@ -637,18 +637,18 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             con fondo. El <Separator> desaparece porque el borde inferior
             del <nav> hace de separador visual. */}
       <header className="px-3 sm:px-8 lg:px-10 pt-4 sm:pt-6 pb-0">
-        {/* Breadcrumb / eyebrow · sólo desde sm+. En móvil el back
-            arrow del MobileHeader sustituye esta ruta. */}
-        <div className="hidden sm:flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-3">
-          <button
-            onClick={() => navigate(agentMode ? "/promotions-agent" : "/developer-promotions")}
-            className="hover:text-foreground transition-colors"
-          >
-            Promociones
-          </button>
-          <ChevronRight className="h-3 w-3" />
-          <span className="text-foreground/70 tnum">{p.code}</span>
-        </div>
+        {/* Back link · visible en todos los tamaños. En móvil el
+            MobileHeader también pone una flecha, pero aquí damos
+            un camino de vuelta explícito dentro del contenido. */}
+        <button
+          onClick={() => navigate("/promociones")}
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+          Promociones
+          <span className="text-muted-foreground/50 mx-1">·</span>
+          <span className="text-foreground/60 tnum">{p.code}</span>
+        </button>
 
         {/* Título + acciones · relative para posicionar el ojo en móvil. */}
         <div className="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-4 sm:mb-5">

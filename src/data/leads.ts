@@ -66,6 +66,11 @@ export type LeadInterest = {
 
 export type Lead = {
   id: string;
+  /** Referencia pública de la oportunidad · `OPP-0001`. Autogen en
+   *  entrada, nunca cambia, única por workspace. Se muestra en header
+   *  de la ficha y en la fila del listado — sirve para mencionarla
+   *  en emails/llamadas. */
+  reference: string;
   fullName: string;
   email: string;
   phone: string;
@@ -129,6 +134,7 @@ const hoursAgo = (h: number) => new Date(Date.now() - h * 60 * 60 * 1000).toISOS
 export const leads: Lead[] = [
   {
     id: "lead-1",
+    reference: "OPP-0001",
     fullName: "Ivan Petrov",
     email: "ivan.petrov@example.com",
     phone: "+34 612 345 678",
@@ -150,6 +156,7 @@ export const leads: Lead[] = [
   },
   {
     id: "lead-2",
+    reference: "OPP-0002",
     fullName: "Marie Dubois",
     email: "marie.dubois@mail.fr",
     phone: "+33 6 12 34 56 78",
@@ -169,6 +176,7 @@ export const leads: Lead[] = [
   },
   {
     id: "lead-3",
+    reference: "OPP-0003",
     fullName: "Lars Andersson",
     email: "lars.andersson@nordicmail.se",
     phone: "+46 70 123 45 67",
@@ -190,6 +198,7 @@ export const leads: Lead[] = [
   },
   {
     id: "lead-4",
+    reference: "OPP-0004",
     fullName: "Klaus Hoffmann",
     email: "klaus.hoffmann@domain.de",
     phone: "+49 171 234 56 78",
@@ -212,6 +221,7 @@ export const leads: Lead[] = [
   },
   {
     id: "lead-5",
+    reference: "OPP-0005",
     fullName: "Emma Johnson",
     email: "emma.johnson@ukmail.co.uk",
     phone: "+44 7700 900123",
@@ -232,6 +242,7 @@ export const leads: Lead[] = [
   },
   {
     id: "lead-6",
+    reference: "OPP-0006",
     fullName: "Peter van der Berg",
     email: "peter.vdberg@example.nl",
     phone: "+31 6 1234 5678",
@@ -253,6 +264,7 @@ export const leads: Lead[] = [
   },
   {
     id: "lead-7",
+    reference: "OPP-0007",
     fullName: "Sofia Rossi",
     email: "sofia.rossi@mail.it",
     phone: "+39 333 123 4567",
@@ -272,6 +284,7 @@ export const leads: Lead[] = [
   },
   {
     id: "lead-8",
+    reference: "OPP-0008",
     fullName: "Olivier Moreau",
     email: "olivier.moreau@mail.fr",
     phone: "+33 6 87 65 43 21",
@@ -293,6 +306,7 @@ export const leads: Lead[] = [
   },
   {
     id: "lead-9",
+    reference: "OPP-0009",
     fullName: "Anna Schmidt",
     email: "anna.schmidt@domain.de",
     phone: "+49 151 111 22 33",
@@ -314,6 +328,7 @@ export const leads: Lead[] = [
   },
   {
     id: "lead-10",
+    reference: "OPP-0010",
     fullName: "Michael Brown",
     email: "michael.brown@example.com",
     phone: "+1 305 555 0199",
@@ -336,6 +351,7 @@ export const leads: Lead[] = [
   },
   {
     id: "lead-11",
+    reference: "OPP-0011",
     fullName: "Yuki Tanaka",
     email: "yuki.tanaka@example.jp",
     phone: "+81 90 1234 5678",
@@ -355,6 +371,7 @@ export const leads: Lead[] = [
   },
   {
     id: "lead-12",
+    reference: "OPP-0012",
     fullName: "Erik Nielsen",
     email: "erik.nielsen@example.no",
     phone: "+47 912 34 567",

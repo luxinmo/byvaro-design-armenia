@@ -18,11 +18,12 @@
  */
 
 import { useMemo, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, Phone, Mail, MessageCircle, CheckCircle2, XCircle,
   Clock, User, UserPlus, Tag, Copy, AlertTriangle, Home, MapPin,
-  Euro, Bed, Inbox, ExternalLink, Sparkles,
+  Euro, Bed, Inbox, ExternalLink, Sparkles, History as HistoryIcon,
+  FileText, Receipt, ThumbsDown, ThumbsUp, Flame,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -68,6 +69,35 @@ export default function LeadDetalle() {
   const navigate = useNavigate();
 
   const lead = useMemo(() => leads.find((l) => l.id === id), [id]);
+
+  /* Tabs del cuerpo · deep-linkables vía ?tab= */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabs = [
+    { id: "resumen",    label: "Resumen",    icon: Sparkles },
+    { id: "actividad",  label: "Actividad",  icon: HistoryIcon },
+    { id: "emails",     label: "Emails",     icon: Mail },
+    { id: "documentos", label: "Documentos", icon: FileText },
+    { id: "registros",  label: "Registros",  icon: Receipt },
+  ] as const;
+  type TabId = typeof tabs[number]["id"];
+  const activeTab: TabId = (searchParams.get("tab") as TabId) ?? "resumen";
+  const setTab = (t: TabId) => {
+    const next = new URLSearchParams(searchParams);
+    if (t === "resumen") next.delete("tab"); else next.set("tab", t);
+    setSearchParams(next, { replace: true });
+  };
+
+  /* Cualificación rápida (mock) · "No es lead" / "Es lead" / "Tiene interés". */
+  const [qualif, setQualif] = useState<"no" | "yes" | "interest" | null>(null);
+  const onQualif = (v: "no" | "yes" | "interest") => {
+    setQualif(v);
+    const msg = {
+      no: "Marcado como no-lead",
+      yes: "Confirmado como lead",
+      interest: "Marcado con interés · oportunidad viva",
+    }[v];
+    toast.success(msg);
+  };
 
   if (!lead) {
     return (
@@ -132,6 +162,10 @@ export default function LeadDetalle() {
                     )}
                   </div>
                   <p className="text-[11.5px] text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
+                    <code className="text-[10.5px] font-mono font-semibold text-foreground bg-muted/60 rounded px-1.5 py-0.5 tabular-nums">
+                      {lead.reference}
+                    </code>
+                    <span className="text-muted-foreground/60">·</span>
                     <span className="inline-flex items-center gap-1">
                       <Inbox className="h-3 w-3" strokeWidth={1.75} />
                       {leadSourceLabel[lead.source]}
@@ -205,91 +239,230 @@ export default function LeadDetalle() {
         </div>
       </header>
 
+      {/* ─── Tabs del cuerpo (no afectan la sidebar derecha) ─── */}
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-4 w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2">
+            <div className="border-b border-border/60">
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                {tabs.map((t) => {
+                  const Icon = t.icon;
+                  const active = activeTab === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => setTab(t.id)}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 px-3 py-2.5 -mb-px border-b-2 text-sm font-medium whitespace-nowrap transition-colors",
+                        active
+                          ? "border-foreground text-foreground"
+                          : "border-transparent text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          <div className="hidden lg:block" />
+        </div>
+      </div>
+
       {/* ─── Contenido ─── */}
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 w-full">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-5 w-full">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
           {/* ─── Columna izquierda · 2/3 ─── */}
           <div className="lg:col-span-2 space-y-4">
 
-            {/* Interés */}
-            <Section title="Interés declarado">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <InfoCell icon={Home} label="Promoción" value={lead.interest.promotionName}
-                  link={lead.interest.promotionId ? `/promociones/${lead.interest.promotionId}` : undefined} />
-                <InfoCell icon={Home} label="Tipología" value={lead.interest.tipologia} />
-                <InfoCell icon={Bed} label="Dormitorios" value={lead.interest.dormitorios} />
-                <InfoCell icon={Euro} label="Presupuesto" value={formatPrice(lead.interest.presupuestoMax)} />
-              </div>
-              {lead.interest.zona && (
-                <div className="mt-4 pt-4 border-t border-border/60">
-                  <InfoCell icon={MapPin} label="Zona preferida" value={lead.interest.zona} inline />
-                </div>
-              )}
-            </Section>
+            {activeTab === "resumen" && (
+              <>
+                {/* HERO · foto grande de la promoción por la que entró el lead */}
+                {promo && (
+                  <section className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
+                    <Link to={`/promociones/${promo.id}`} className="block relative group">
+                      <div className="aspect-[16/7] w-full bg-muted overflow-hidden">
+                        {promo.image ? (
+                          <img src={promo.image} alt="" className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300" />
+                        ) : (
+                          <div className="h-full w-full grid place-items-center text-muted-foreground/40">
+                            <Building2 className="h-10 w-10" strokeWidth={1.25} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-foreground/70 via-foreground/30 to-transparent p-4">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-background/80">
+                          Entró por la promoción
+                        </p>
+                        <p className="text-base sm:text-lg font-bold text-background mt-0.5 flex items-center gap-1.5">
+                          {promo.name}
+                          <ExternalLink className="h-3.5 w-3.5 opacity-80" strokeWidth={2} />
+                        </p>
+                      </div>
+                    </Link>
+                    <div className="px-4 py-3 flex items-center justify-between gap-3 text-[11.5px] text-muted-foreground">
+                      <p className="inline-flex items-center gap-1.5">
+                        <MapPin className="h-3 w-3" strokeWidth={1.75} />
+                        {lead.interest.zona ?? "—"}
+                      </p>
+                      <p className="tabular-nums font-medium text-foreground">
+                        {formatPrice(lead.interest.presupuestoMax)}
+                      </p>
+                    </div>
+                  </section>
+                )}
 
-            {/* Mensaje */}
-            {lead.message && (
-              <Section title="Mensaje del lead">
-                <blockquote className="text-sm text-foreground leading-relaxed italic border-l-2 border-primary/40 pl-4 py-1">
-                  {lead.message}
-                </blockquote>
+                {/* Cualificación rápida · No es lead / Es lead / Tiene interés */}
+                <section className="rounded-2xl border border-border bg-card shadow-soft p-4 sm:p-5">
+                  <div className="flex items-start gap-2 mb-3">
+                    <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" strokeWidth={1.75} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground">¿Qué es este cliente?</p>
+                      <p className="text-[11.5px] text-muted-foreground leading-relaxed mt-0.5">
+                        Cualifica rápido · afecta al estado en el pipeline.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <QualifyButton
+                      icon={ThumbsDown} label="No es lead" tone="danger"
+                      active={qualif === "no"}
+                      hint="Descartado · no cumple requisitos"
+                      onClick={() => onQualif("no")}
+                    />
+                    <QualifyButton
+                      icon={ThumbsUp} label="Es lead" tone="neutral"
+                      active={qualif === "yes"}
+                      hint="Contacto confirmado · seguir trabajando"
+                      onClick={() => onQualif("yes")}
+                    />
+                    <QualifyButton
+                      icon={Flame} label="Tiene interés" tone="primary"
+                      active={qualif === "interest"}
+                      hint="Oportunidad activa · priorizar"
+                      onClick={() => onQualif("interest")}
+                    />
+                  </div>
+                </section>
+
+                {/* Mensaje del cliente */}
+                {lead.message && (
+                  <Section title="Mensaje del cliente">
+                    <blockquote className="text-sm text-foreground leading-relaxed italic border-l-2 border-primary/40 pl-4 py-1">
+                      {lead.message}
+                    </blockquote>
+                  </Section>
+                )}
+
+                {/* Match de duplicados */}
+                {isDup && (
+                  <section className="rounded-2xl border border-destructive/25 bg-destructive/5 p-5 shadow-soft">
+                    <header className="flex items-start gap-3 mb-4">
+                      <div className="h-9 w-9 rounded-xl bg-destructive/15 text-destructive flex items-center justify-center shrink-0">
+                        <AlertTriangle className="h-4 w-4" strokeWidth={1.75} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-destructive">
+                          IA de duplicados
+                        </p>
+                        <h2 className="text-sm font-semibold text-foreground mt-0.5">
+                          Posible duplicado · {lead.duplicateScore ?? 92}% match
+                        </h2>
+                        <p className="text-[11.5px] text-muted-foreground mt-1 leading-relaxed">
+                          Este lead coincide con un contacto existente en tu red. Revisa la ficha
+                          para decidir si fusionar, crear nuevo registro o descartar.
+                        </p>
+                      </div>
+                    </header>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11.5px]">
+                      <DupMatchCell label="Email"    match="exact"   detail={lead.email} />
+                      <DupMatchCell label="Teléfono" match="partial" detail={`${lead.phone.slice(0, 6)}… (últimos 4)`} />
+                      <DupMatchCell label="Nombre"   match="fuzzy"   detail="90% similar" />
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-4">
+                      <button
+                        onClick={() => toast.success("Abriendo contacto existente")}
+                        className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-foreground text-background text-[11.5px] font-semibold hover:bg-foreground/90 shadow-soft transition-colors"
+                      >
+                        Ver contacto existente
+                        <ExternalLink className="h-3 w-3" strokeWidth={2} />
+                      </button>
+                      <button
+                        onClick={() => toast.success("Marcado como no duplicado")}
+                        className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full border border-border bg-card text-[11.5px] font-medium text-foreground hover:bg-muted transition-colors"
+                      >
+                        No es duplicado
+                      </button>
+                    </div>
+                  </section>
+                )}
+              </>
+            )}
+
+            {activeTab === "actividad" && (
+              <Section title="Actividad">
+                <Timeline lead={lead} />
               </Section>
             )}
 
-            {/* Match de duplicados */}
-            {isDup && (
-              <section className="rounded-2xl border border-destructive/25 bg-destructive/5 p-5 shadow-soft">
-                <header className="flex items-start gap-3 mb-4">
-                  <div className="h-9 w-9 rounded-xl bg-destructive/15 text-destructive flex items-center justify-center shrink-0">
-                    <AlertTriangle className="h-4 w-4" strokeWidth={1.75} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-destructive">
-                      IA de duplicados
-                    </p>
-                    <h2 className="text-sm font-semibold text-foreground mt-0.5">
-                      Posible duplicado · {lead.duplicateScore ?? 92}% match
-                    </h2>
-                    <p className="text-[11.5px] text-muted-foreground mt-1 leading-relaxed">
-                      Este lead coincide con un contacto existente en tu red. Revisa la ficha
-                      para decidir si fusionar, crear nuevo registro o descartar.
-                    </p>
-                  </div>
-                </header>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11.5px]">
-                  <DupMatchCell label="Email"    match="exact"   detail={lead.email} />
-                  <DupMatchCell label="Teléfono" match="partial" detail={`${lead.phone.slice(0, 6)}… (últimos 4)`} />
-                  <DupMatchCell label="Nombre"   match="fuzzy"   detail="90% similar" />
-                </div>
-
-                <div className="flex items-center gap-2 mt-4">
-                  <button
-                    onClick={() => toast.success("Abriendo contacto existente")}
-                    className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-foreground text-background text-[11.5px] font-semibold hover:bg-foreground/90 shadow-soft transition-colors"
-                  >
-                    Ver contacto existente
-                    <ExternalLink className="h-3 w-3" strokeWidth={2} />
-                  </button>
-                  <button
-                    onClick={() => toast.success("Marcado como no duplicado")}
-                    className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full border border-border bg-card text-[11.5px] font-medium text-foreground hover:bg-muted transition-colors"
-                  >
-                    No es duplicado
-                  </button>
-                </div>
-              </section>
+            {activeTab === "emails" && (
+              <Section title="Emails">
+                <p className="text-[12px] text-muted-foreground italic text-center py-8">
+                  Conversación de email · disponible al conectar el buzón del workspace
+                  (<code className="text-[10px] not-italic">TODO(backend)</code>).
+                </p>
+              </Section>
             )}
 
-            {/* Timeline */}
-            <Section title="Actividad">
-              <Timeline lead={lead} />
-            </Section>
+            {activeTab === "documentos" && (
+              <Section title="Documentos">
+                <p className="text-[12px] text-muted-foreground italic text-center py-8">
+                  Sin documentos adjuntos. El cliente podrá aportar DNI / preaprobación bancaria
+                  cuando se programe la visita.
+                </p>
+              </Section>
+            )}
+
+            {activeTab === "registros" && (
+              <Section title="Registros en promociones">
+                <p className="text-[12px] text-muted-foreground italic text-center py-8">
+                  Si una agencia registra a este cliente en una promoción, aparecerá aquí.
+                </p>
+              </Section>
+            )}
           </div>
 
           {/* ─── Columna derecha · 1/3 ─── */}
           <aside className="space-y-4">
+
+            {/* Interés declarado · movido a la sidebar (petición usuario) */}
+            <Section title="Interés declarado" dense>
+              <dl className="space-y-2.5 text-[12.5px]">
+                {lead.interest.promotionName && (
+                  <DtDd label="Promoción">
+                    {lead.interest.promotionId ? (
+                      <Link to={`/promociones/${lead.interest.promotionId}`} className="text-foreground hover:text-primary truncate inline-flex items-center gap-1">
+                        {lead.interest.promotionName}
+                        <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                      </Link>
+                    ) : (
+                      <span className="text-foreground truncate">{lead.interest.promotionName}</span>
+                    )}
+                  </DtDd>
+                )}
+                <DtDd label="Tipología">{lead.interest.tipologia ?? "—"}</DtDd>
+                <DtDd label="Dormitorios">{lead.interest.dormitorios ?? "—"}</DtDd>
+                <DtDd label="Presupuesto">
+                  <span className="tabular-nums">{formatPrice(lead.interest.presupuestoMax)}</span>
+                </DtDd>
+                {lead.interest.zona && <DtDd label="Zona">{lead.interest.zona}</DtDd>}
+              </dl>
+            </Section>
 
             <Section title="Identidad" dense>
               <dl className="space-y-2.5 text-[12.5px]">
@@ -572,5 +745,53 @@ function Timeline({ lead }: { lead: Lead }) {
         );
       })}
     </ol>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BOTÓN DE CUALIFICACIÓN · No es lead / Es lead / Tiene interés
+   ═══════════════════════════════════════════════════════════════════ */
+
+function QualifyButton({
+  icon: Icon, label, hint, tone, active, onClick,
+}: {
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  label: string;
+  hint: string;
+  tone: "danger" | "neutral" | "primary";
+  active: boolean;
+  onClick: () => void;
+}) {
+  const toneClass = {
+    danger:  active
+      ? "bg-destructive/10 border-destructive/40 text-destructive"
+      : "bg-card border-border text-foreground hover:border-destructive/30 hover:bg-destructive/5",
+    neutral: active
+      ? "bg-foreground text-background border-foreground"
+      : "bg-card border-border text-foreground hover:bg-muted",
+    primary: active
+      ? "bg-primary/10 border-primary/40 text-primary"
+      : "bg-card border-border text-foreground hover:border-primary/30 hover:bg-primary/5",
+  }[tone];
+
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex flex-col items-start gap-1 rounded-xl border px-3 py-2.5 text-left transition-all",
+        toneClass,
+        active && "ring-2 ring-offset-1 ring-offset-background",
+        active && tone === "danger"  && "ring-destructive",
+        active && tone === "neutral" && "ring-foreground",
+        active && tone === "primary" && "ring-primary",
+      )}
+      type="button"
+    >
+      <div className="inline-flex items-center gap-1.5">
+        <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+        <span className="text-[12.5px] font-semibold">{label}</span>
+      </div>
+      <span className="text-[10.5px] opacity-70 leading-tight">{hint}</span>
+    </button>
   );
 }

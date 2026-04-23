@@ -310,7 +310,11 @@ function LeadRow({
               )}
             </p>
             <p className="text-[11.5px] text-muted-foreground truncate">{l.email}</p>
-            <p className="text-[11px] text-muted-foreground/80 tabular-nums">{l.phone}</p>
+            <p className="text-[11px] text-muted-foreground/80 tabular-nums">
+              <span className="font-mono font-semibold text-foreground/80">{l.reference}</span>
+              <span className="text-muted-foreground/50"> · </span>
+              {l.phone}
+            </p>
           </div>
         </div>
       </td>
