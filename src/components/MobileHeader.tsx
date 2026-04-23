@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Home, Tag, FileText, CircleDollarSign, CalendarDays,
-  Handshake, Contact, Globe, Mail, Settings, Users,
+  Handshake, Contact, Globe, Mail, Settings, Users, Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -22,6 +22,9 @@ const drawerGroups = [
   { label: "Red", items: [
     { title: "Colaboradores", url: "/colaboradores", icon: Handshake },
     { title: "Contactos", url: "/contactos", icon: Contact },
+  ]},
+  { label: "Administración", items: [
+    { title: "Empresa", url: "/empresa", icon: Building2 },
     { title: "Equipo", url: "/equipo", icon: Users },
   ]},
   { label: "Contenido", items: [

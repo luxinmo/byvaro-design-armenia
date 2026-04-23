@@ -30,13 +30,16 @@ export type CurrentUser = {
   /** Solo presente cuando accountType === "agency". */
   agencyId?: string;
   agencyName?: string;
-  /** Datos editables desde `/ajustes/perfil/personal` (ver profileStorage.ts).
-   *  Se sobreescriben sobre el mock base cuando el usuario los edita. */
+  /** Datos editables desde `/ajustes/perfil/personal` o desde `/equipo`
+   *  (ver `src/lib/meStorage.ts`). Ambas pantallas comparten el mismo
+   *  store — cualquier cambio se refleja en sidebar, emails, historial
+   *  y dashboard del equipo en caliente. */
   jobTitle?: string;
   department?: string;
   languages?: string[];
   bio?: string;
   avatar?: string;
+  phone?: string;
 };
 
 const DEVELOPER_USER: CurrentUser = {
@@ -65,9 +68,9 @@ function buildAgencyUser(agencyId: string): CurrentUser {
 
 export function useCurrentUser(): CurrentUser {
   const { type, agencyId } = useAccountType();
-  /* El perfil editable vive en localStorage (mock) y se fusiona sobre el
-   * usuario base. Solo aplica a la cuenta "developer" — cuando el usuario
-   * ha cambiado a "ver como agencia", la identidad la manda la agencia. */
+  /* Fachada legacy · delega en meStorage. Ver ADR-050 y `src/lib/meStorage.ts`.
+   * Se sincroniza automáticamente con la lista de TEAM_MEMBERS — si un
+   * admin edita al usuario actual desde `/equipo`, este hook se refresca. */
   const profile = usePersistedProfile();
   return useMemo(() => {
     if (type === "agency") return buildAgencyUser(agencyId);
@@ -80,6 +83,7 @@ export function useCurrentUser(): CurrentUser {
       languages:  profile?.languages,
       bio:        profile?.bio,
       avatar:     profile?.avatar,
+      phone:      profile?.phone,
     };
   }, [type, agencyId, profile]);
 }

@@ -1,85 +1,67 @@
 /**
- * profileStorage.ts · Perfil del usuario actual (mock en localStorage).
+ * profileStorage.ts · fachada legacy sobre `meStorage`.
  *
- * QUÉ
- * ----
- * Hasta que haya backend de auth, el perfil que edita el usuario en
- * `/ajustes/perfil/personal` se persiste aquí. El hook `useCurrentUser()`
- * lo lee y lo fusiona con el mock base de `currentUser.ts`, así que
- * editar el nombre/email/cargo en Ajustes se refleja inmediatamente en:
- *   · Sidebar (avatar + iniciales + nombre)
- *   · Historial de contactos (autor de eventos)
- *   · Firma de emails · etc.
+ * ⚠️ Este módulo existía como store separado del perfil del usuario,
+ * pero a partir de ADR-050 todos los datos del usuario actual viven
+ * en la entrada del `TeamMember` correspondiente (gestionada por
+ * `src/lib/meStorage.ts`). Se mantiene este archivo como fachada para
+ * no romper los 10+ consumers existentes · todas las funciones
+ * delegan en `meStorage`.
  *
- * CÓMO
- * ----
- * Clave única en localStorage: `byvaro.user.profile.v1` (se mantiene el
- * mismo nombre que ya usaba `perfil/personal.tsx` para no perder datos).
- * Se dispara un `CustomEvent` al escribir para que los consumidores que
- * se monten en otras pestañas o rutas se refresquen en caliente.
- *
- * TODO(backend): sustituir por GET/PATCH /api/me y pasar a AuthProvider.
+ * No añadir más campos aquí · añadir directamente al tipo `TeamMember`
+ * en `src/lib/team.ts` y editar desde `meStorage.updateMe()`.
  */
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
+import { getMe, updateMe, useMe } from "@/lib/meStorage";
 
 export type UserProfile = {
-  /** Nombre completo (un único campo en todo el sistema — ver CLAUDE.md). */
   fullName: string;
   email: string;
   jobTitle?: string;
-  /** Departamento (Comercial, Operaciones, Admin…) */
   department?: string;
-  /** Idiomas que habla · usado para asignar leads por idioma del cliente. */
   languages?: string[];
   bio?: string;
-  /** Data URL (png/jpg) hasta que haya storage real. */
   avatar?: string;
+  phone?: string;
 };
 
-const KEY = "byvaro.user.profile.v1";
-const CHANGE_EVENT = "byvaro:profile-change";
-
-/** Migración silenciosa del schema viejo `{firstName, lastName}`. */
-function migrate(raw: unknown): Partial<UserProfile> | null {
-  if (!raw || typeof raw !== "object") return null;
-  const r = raw as Record<string, unknown>;
-  if (!r.fullName && (r.firstName || r.lastName)) {
-    r.fullName = [r.firstName, r.lastName].filter(Boolean).join(" ").trim();
-    delete r.firstName;
-    delete r.lastName;
-  }
-  return r as Partial<UserProfile>;
+/** Convierte TeamMember → shape legacy del perfil. */
+function memberToProfile(m: ReturnType<typeof getMe>): Partial<UserProfile> | null {
+  if (!m) return null;
+  return {
+    fullName: m.name,
+    email: m.email,
+    jobTitle: m.jobTitle,
+    department: m.department,
+    languages: m.languages,
+    bio: m.bio,
+    avatar: m.avatarUrl,
+    phone: m.phone,
+  };
 }
 
+/** Shape legacy · lo siguen usando formularios antiguos. */
 export function getStoredProfile(): Partial<UserProfile> | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(KEY);
-    if (!raw) return null;
-    return migrate(JSON.parse(raw));
-  } catch {
-    return null;
-  }
+  return memberToProfile(getMe());
 }
 
 export function saveStoredProfile(p: Partial<UserProfile>): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY, JSON.stringify(p));
-  window.dispatchEvent(new Event(CHANGE_EVENT));
+  updateMe({
+    name: p.fullName,
+    email: p.email,
+    jobTitle: p.jobTitle,
+    department: p.department,
+    languages: p.languages,
+    bio: p.bio,
+    avatarUrl: p.avatar,
+    phone: p.phone,
+  });
 }
 
-/** Hook reactivo: se re-renderiza cuando el perfil cambia (desde otra ruta o tab). */
+/** Hook reactivo · se actualiza cuando cambia el miembro actual o la
+ *  lista global (admin editando desde /equipo). */
 export function usePersistedProfile(): Partial<UserProfile> | null {
-  const [value, setValue] = useState<Partial<UserProfile> | null>(getStoredProfile);
-  useEffect(() => {
-    const cb = () => setValue(getStoredProfile());
-    window.addEventListener(CHANGE_EVENT, cb);
-    window.addEventListener("storage", cb);
-    return () => {
-      window.removeEventListener(CHANGE_EVENT, cb);
-      window.removeEventListener("storage", cb);
-    };
-  }, []);
-  return value;
+  const me = useMe();
+  return useMemo(() => memberToProfile(me), [me]);
 }

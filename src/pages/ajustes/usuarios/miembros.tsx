@@ -33,6 +33,7 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { isAdmin, useCurrentUser } from "@/lib/currentUser";
 import { TEAM_MEMBERS, type TeamMember, type TeamMemberStatus } from "@/lib/team";
 import { findLanguageByCode } from "@/lib/languages";
+import { emitMembersChange } from "@/lib/meStorage";
 import { Flag } from "@/components/ui/Flag";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -53,6 +54,7 @@ function load(): TeamMember[] {
 function persist(m: TeamMember[]) {
   if (typeof window !== "undefined") {
     window.localStorage.setItem(KEY, JSON.stringify(m));
+    emitMembersChange();
   }
 }
 

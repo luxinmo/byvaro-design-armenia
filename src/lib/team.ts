@@ -31,6 +31,8 @@ export type TeamMember = {
   phone?: string;
   /** URL del avatar. Si no hay, se usan iniciales. */
   avatarUrl?: string;
+  /** Biografía breve (280 chars) · firma de email y perfil interno. */
+  bio?: string;
   status?: TeamMemberStatus;
   /** Aparece en el perfil público de la empresa / microsite. */
   visibleOnProfile?: boolean;

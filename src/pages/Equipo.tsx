@@ -23,6 +23,9 @@ import {
   LayoutGrid, List as ListIcon, Shield, ShieldCheck,
   UserCheck, MessageCircle,
 } from "lucide-react";
+/* Nota: `Eye`/`EyeOff` se usan también en `VisibilityBadge` de las cards
+ *  de galería y ahora en las filas de la vista Lista para mostrar si el
+ *  miembro está marcado como visible en la ficha pública de Empresa. */
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -35,6 +38,9 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { MemberFormDialog } from "@/components/team/MemberFormDialog";
 import { InviteMemberDialog } from "@/components/team/InviteMemberDialog";
+import { DeactivateUserDialog } from "@/components/team/DeactivateUserDialog";
+import { emitMembersChange } from "@/lib/meStorage";
+import type { HandoverPlan } from "@/lib/assetOwnership";
 
 /* v4 = bump tras adoptar catálogo canónico de jobTitles (Founder, CEO…). */
 const KEY = "byvaro.organization.members.v4";
@@ -52,6 +58,9 @@ function load(): TeamMember[] {
 function persist(m: TeamMember[]) {
   if (typeof window !== "undefined") {
     window.localStorage.setItem(KEY, JSON.stringify(m));
+    /* Notificamos a meStorage · sidebar, perfil personal y cualquier
+     * consumer de useCurrentUser/useMe se refrescan en caliente. */
+    emitMembersChange();
   }
 }
 
@@ -73,6 +82,9 @@ export default function Equipo() {
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  /** Miembro que el admin quiere desactivar · abre DeactivateUserDialog
+   *  para forzar reasignación de sus activos antes de cambiar el status. */
+  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
   const confirm = useConfirm();
 
   const editingMember = useMemo(
@@ -155,12 +167,36 @@ export default function Equipo() {
     update(id, { role: m.role === "admin" ? "member" : "admin" });
     toast.success("Rol actualizado");
   };
+  /** Reactivar un miembro inactivo · directo. Desactivar uno activo
+   *  requiere reasignar sus activos primero — se delega en el
+   *  DeactivateUserDialog (`askDeactivate`). */
   const toggleActive = (id: string) => {
     const m = members.find((x) => x.id === id);
     if (!m) return;
-    const next: TeamMemberStatus = m.status === "deactive" ? "active" : "deactive";
-    update(id, { status: next });
-    toast.success(next === "active" ? "Miembro reactivado" : "Miembro desactivado");
+    if (m.status === "deactive") {
+      update(id, { status: "active" });
+      toast.success("Miembro reactivado");
+    } else {
+      setDeactivatingId(id);
+    }
+  };
+  /** Aplica el plan de reasignación + marca el miembro como deactive.
+   *  El historial de cada entidad reasignada queda con "Heredado de X". */
+  const handleDeactivateConfirm = (plan: HandoverPlan) => {
+    const m = members.find((x) => x.id === plan.fromMemberId);
+    if (!m) return;
+    update(plan.fromMemberId, { status: "deactive" });
+    /* TODO(backend): POST /api/members/:id/handover · la reasignación
+     * real de cada categoría + emisión de eventos "heredado" en el
+     * historial de cada entidad se hacen server-side. Aquí solo
+     * registramos el toast informativo. */
+    const categories = Object.keys(plan.reassignments).length;
+    toast.success(`${m.name} desactivado`, {
+      description: categories > 0
+        ? `${categories} ${categories === 1 ? "categoría reasignada" : "categorías reasignadas"} · historial actualizado con "Heredado de ${m.name}".`
+        : "Sin activos que reasignar.",
+    });
+    setDeactivatingId(null);
   };
   const removeMember = async (id: string) => {
     const m = members.find((x) => x.id === id);
@@ -212,7 +248,7 @@ export default function Equipo() {
             )}
           </div>
 
-          {/* Fila buscador + toggle de vista · misma línea */}
+          {/* Fila buscador + toggle de vista · toggle a la derecha del todo */}
           <div className="mt-5 flex items-center gap-3 flex-wrap sm:flex-nowrap">
             <div className="relative flex-1 max-w-[420px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -224,7 +260,7 @@ export default function Equipo() {
               />
             </div>
             <ViewToggle
-              className="shrink-0"
+              className="shrink-0 sm:ml-auto"
               value={view}
               onChange={setView}
               options={[
@@ -310,6 +346,14 @@ export default function Equipo() {
         onDeactivate={() => editingId && toggleActive(editingId)}
         onReactivate={() => editingId && toggleActive(editingId)}
         onRemove={() => editingId && removeMember(editingId)}
+      />
+
+      {/* Dialog de desactivación · obliga reasignar activos */}
+      <DeactivateUserDialog
+        open={deactivatingId !== null}
+        onClose={() => setDeactivatingId(null)}
+        member={members.find((m) => m.id === deactivatingId) ?? null}
+        onConfirm={handleDeactivateConfirm}
       />
 
       {/* Dialog de alta · invitar email o crear con password temporal */}
@@ -567,6 +611,24 @@ function ListRow({
           </span>
         )}
       </div>
+
+      {/* Visibilidad en perfil público de Empresa · siempre visible */}
+      <span
+        title={m.visibleOnProfile
+          ? "Visible en la ficha de Empresa"
+          : "No visible en la ficha de Empresa"}
+        className={cn(
+          "inline-flex items-center gap-1 h-6 px-2 rounded-full text-[10px] font-semibold tracking-wider shrink-0",
+          m.visibleOnProfile
+            ? "bg-success/10 text-success"
+            : "bg-muted text-muted-foreground/70",
+        )}
+      >
+        {m.visibleOnProfile ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+        <span className="hidden md:inline">
+          {m.visibleOnProfile ? "Visible" : "Oculto"}
+        </span>
+      </span>
 
       {/* Estado Activo · se oculta <sm para dar espacio al nombre */}
       <span className="hidden sm:inline-flex text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider bg-success/10 text-success">

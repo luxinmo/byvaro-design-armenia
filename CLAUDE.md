@@ -377,6 +377,79 @@ como `Qnueva` en `docs/open-questions.md` en el mismo PR.
 
 ---
 
+## 🔄 REGLA DE ORO · Handover obligatorio al desactivar miembro
+
+> **Cuando se desactiva a un miembro del equipo, el sistema DEBE
+> obligar al admin a reasignar todos sus activos a otros miembros
+> activos antes de efectuar la desactivación.** Nunca se pierde un
+> lead, oportunidad, visita programada, registro o cuenta de email
+> porque alguien sale de la empresa. Cada entidad reasignada queda
+> marcada en su historial con **"Heredado de [empleado desactivado]"**.
+
+**Cómo se aplica.** La UI que dispara la desactivación (hoy:
+`MemberFormDialog` y la fila de "Desactivar" en `Equipo.tsx`) **no
+cambia el `status` directamente**. Abre `DeactivateUserDialog`
+(`src/components/team/DeactivateUserDialog.tsx`), que:
+
+1. Lee el inventario de activos del miembro con `getMemberInventory()`
+   (`src/lib/assetOwnership.ts`) · categorías: contactos,
+   oportunidades, registros, visitas, propiedades asignadas, cuentas
+   de email.
+2. Muestra una fila por categoría con contador y dropdown de
+   miembros activos · hay un atajo "Asignar todo a X" para casos
+   rápidos.
+3. Email se marca como **"Delegación auto"**: se configura forward
+   desde la cuenta del desactivado hacia el destinatario elegido
+   durante 6 meses.
+4. Requiere seleccionar destinatario en **todas** las categorías
+   con count > 0. Si falta alguna, el botón queda deshabilitado con
+   aviso.
+5. Admin puede añadir un motivo (opcional · queda en el historial).
+6. Al confirmar → backend hace la reasignación atómica +
+   cambia `status: "deactive"` en una misma transacción.
+
+**Qué debe pasar en el historial (obligatorio):**
+
+- Cada entidad reasignada (contacto, oportunidad, visita, registro)
+  añade un evento en su timeline:
+  ```
+  { type: "reassigned",
+    reason: "handover",
+    from: { id: oldMemberId, name: oldMemberName },
+    to:   { id: newMemberId, name: newMemberName },
+    note: "Heredado de <nombre> · baja del equipo",
+    occurredAt: ISO }
+  ```
+- La ficha de contacto (`/contactos/:id?tab=historial`) debe
+  mostrar este evento con un estilo distintivo (por ejemplo icono
+  `UserCheck` en color muted).
+
+**Obligaciones al implementar cualquier feature que cree "cosas"
+asignadas a un miembro** (leads, oportunidades, registros…):
+
+1. **Incluir la categoría** en `src/lib/assetOwnership.ts` — si no,
+   el sistema puede perder esa "cosa" al desactivar a su dueño.
+2. **Añadir el label + description** para que se muestre en el
+   dialog.
+3. **Ampliar** el backend endpoint `POST /api/members/:id/handover`
+   para que acepte la nueva categoría.
+
+**Por qué esta regla existe.** Un agente que se va no puede
+llevarse sus leads a la tumba. Un cliente que tenía una visita con
+Diego y Diego se da de baja debe ver quién le atiende ahora —
+nunca "tu agente ya no existe". Preservar el linaje (`Heredado de
+X`) además permite al admin y a la IA analizar qué miembros
+heredaron cartera de quién y ajustar asignaciones si el volumen
+pesa demasiado al heredero.
+
+Ver:
+- `src/lib/assetOwnership.ts` · inventario + tipos.
+- `src/components/team/DeactivateUserDialog.tsx` · UI del handover.
+- `docs/screens/equipo.md §Desactivar miembro · handover obligatorio`.
+- `DECISIONS.md ADR-051`.
+
+---
+
 ## 📊 REGLA DE ORO · KPIs en el dashboard del miembro
 
 > **Todo dato de actividad del trabajador que tenga valor para valorar
