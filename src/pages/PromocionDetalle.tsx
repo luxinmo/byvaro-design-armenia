@@ -341,33 +341,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   // Requisitos mínimos para publicar (fotos, unidades, plan pagos, ubicación,
   // entrega, estado construcción, comisiones si colabora). Fuente única de
   // verdad en src/lib/publicationRequirements.ts.
-  const publishMissing = useMemo(() => {
-    const validator = getMissingForPromotion(p);
-    // Mock data puede declarar `missingSteps` con stepNames que el
-    // validador no detecta (p. ej. "Payment plan" aunque reservationCost>0).
-    // Fusionamos ambas fuentes y de-duplicamos por label.
-    const metaSteps = (p.missingSteps ?? []).map((stepName) => {
-      const wizardStep = stepConfig[stepName]?.wizardStep;
-      const fichaMap: Record<string, "multimedia" | "units" | "collaborators" | "paymentPlan" | "location" | "delivery" | "estado"> = {
-        multimedia: "multimedia",
-        crear_unidades: "units",
-        colaboradores: "collaborators",
-        plan_pagos: "paymentPlan",
-        info_basica: "location",
-        detalles: "delivery",
-        estado: "estado",
-      };
-      return {
-        key: `meta-${stepName}`,
-        label: stepName,
-        ficha: wizardStep ? fichaMap[wizardStep] : undefined,
-      };
-    });
-    // De-dup: si el validador ya flaggeó el mismo ficha, preferimos su label descriptivo.
-    const existingFichas = new Set(validator.map((m) => m.ficha));
-    const extras = metaSteps.filter((m) => !m.ficha || !existingFichas.has(m.ficha));
-    return [...validator, ...extras];
-  }, [p]);
+  /* El validador (src/lib/publicationRequirements.ts) ya incluye los
+   * missingSteps declarativos del mock + filtra los que no aplican en
+   * modo uso interno (Collaborators cuando canShareWithAgencies=false).
+   * No duplicamos la lógica aquí. */
+  const publishMissing = useMemo(() => getMissingForPromotion(p), [p]);
   const isIncomplete = publishMissing.length > 0 || p.status === "incomplete";
   /** Si la promo tiene explícitamente canShareWithAgencies=false, está
    *  desactivada. undefined cuenta como activada (legacy). El override local
@@ -642,6 +620,17 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   );
                 }
                 if (p.status === "active") {
+                  /* "Solo uso interno" · promoción completa pero con
+                   *  canShareWithAgencies=false. No se publica al
+                   *  marketplace de agencias; solo el equipo la ve. */
+                  if (!sharingEnabledForPromo) {
+                    return (
+                      <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-border bg-muted/50 text-muted-foreground text-[11px] font-semibold">
+                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+                        Solo uso interno
+                      </span>
+                    );
+                  }
                   return (
                     <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-success/30 bg-success/10 text-success text-[11px] font-semibold">
                       <span className="h-1.5 w-1.5 rounded-full bg-success" />
@@ -781,6 +770,24 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 </TooltipProvider>
               )}
 
+              {/* Pill "Solo uso interno" · cuando la promoción está activa
+                  pero el promotor marcó No compartir. Reemplaza el lugar
+                  donde iría Publicar (ya no aplica, ya está activa) y
+                  recuerda visualmente que NO aparece en el marketplace.
+                  Click abre el dialog de activar compartir. */}
+              {p.status === "active" && !isIncomplete && !sharingEnabledForPromo && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setActivateSharingOpen(true)}
+                  className="gap-1.5 hidden sm:inline-flex"
+                  title="Activar compartir con agencias"
+                >
+                  <Handshake className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  Solo uso interno
+                </Button>
+              )}
+
               {/* Registrar cliente · también requiere promoción publicada. */}
               {p.status === "active" && !isIncomplete && (
                 <Button size="sm" onClick={() => setRegisterClientOpen(true)} className="gap-1.5 hidden sm:inline-flex">
@@ -900,6 +907,38 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 </div>
               );
             })()}
+
+            {/* Aviso "Solo uso interno" · la promoción está completa
+                y activa, pero el promotor marcó "No compartir" → no
+                aparece para agencias. Ofrecemos el atajo para
+                activar compartir (abre ActivateSharingDialog y
+                configura comisiones). */}
+            {!viewAsCollaborator && p.status === "active" && !isIncomplete && !sharingEnabledForPromo && (
+              <div className="mb-5 rounded-2xl border border-border bg-muted/30 p-5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    <Handshake className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" strokeWidth={1.5} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-foreground">
+                        Solo uso interno
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Esta promoción está activa para tu equipo pero no se comparte con agencias
+                        colaboradoras. Para publicarla en el marketplace, configura la comisión y
+                        activa la compartición.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => setActivateSharingOpen(true)}
+                    className="rounded-full text-xs h-9 px-4 shrink-0 w-full sm:w-auto"
+                  >
+                    <Handshake className="h-3.5 w-3.5 mr-1.5" strokeWidth={1.75} />
+                    Activar compartir
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* Two-column layout: main content left, narrow icon rail right.
              *  Mismo shape en vista promotor y agencia — el rail aquí no cambia

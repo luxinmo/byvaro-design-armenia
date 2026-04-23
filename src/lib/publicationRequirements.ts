@@ -47,7 +47,7 @@ export interface MissingRequirement {
   /** Paso del wizard al que se salta al hacer click (si aplica). */
   jumpTo?: StepId;
   /** Sección de la ficha a la que apunta (si aplica). */
-  ficha?: "multimedia" | "units" | "collaborators" | "paymentPlan" | "location" | "delivery" | "estado";
+  ficha?: "multimedia" | "units" | "collaborators" | "paymentPlan" | "location" | "delivery" | "estado" | "basicInfo" | "description";
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -212,8 +212,12 @@ export function getMissingForPromotion(p: Promotion): MissingRequirement[] {
     missing.push({ key: "plan-pagos", label: "Sin plan de pagos definido", ficha: "paymentPlan" });
   }
 
-  /* ── Comisiones (si colabora con agencias) ────────────── */
-  if (p.collaborating && (!p.commission || p.commission <= 0)) {
+  /* ── Comisiones (solo obligatorio si se comparte con agencias) ────
+     Si el promotor marcó "No compartir" (canShareWithAgencies === false),
+     la promoción es de uso interno y NO necesita comisiones — eso no
+     la hace incompleta, solo cambia el badge a "Solo uso interno". */
+  const willShare = (p as { canShareWithAgencies?: boolean }).canShareWithAgencies !== false;
+  if (willShare && (!p.commission || p.commission <= 0)) {
     missing.push({ key: "comisiones", label: "Comisiones no configuradas", ficha: "collaborators" });
   }
 
@@ -221,7 +225,9 @@ export function getMissingForPromotion(p: Promotion): MissingRequirement[] {
      Cuando developerPromotions.ts declara campos pendientes que
      el validador no puede derivar del shape plano (ej. "Description",
      "Multimedia" en el sentido de galería extendida, "Collaborators"),
-     los incorporamos para que la ficha y el listado los vean. */
+     los incorporamos para que la ficha y el listado los vean. Si
+     la promoción es de uso interno (willShare=false), el paso
+     "Collaborators" deja de aplicar porque no va a compartirse. */
   const fichaByStep: Record<string, string> = {
     "Multimedia": "multimedia",
     "Description": "description",
@@ -232,6 +238,7 @@ export function getMissingForPromotion(p: Promotion): MissingRequirement[] {
   };
   if (Array.isArray(p.missingSteps)) {
     for (const step of p.missingSteps) {
+      if (!willShare && step === "Collaborators") continue;
       const key = `step-${step.toLowerCase().replace(/\s+/g, "-")}`;
       if (missing.some((m) => m.key === key)) continue;
       missing.push({ key, label: step, ficha: fichaByStep[step] });
@@ -248,11 +255,11 @@ export function canPublishWizard(state: WizardState): boolean {
 
 /** ¿Está una promoción completa para publicar?
  *  Regla de negocio: una promoción solo puede considerarse activa si
- *  pasa TODOS los requisitos. Si está marcada como `incomplete` o
- *  declara `missingSteps`, no se considera publicable aunque la
- *  intención del mock diga "active". */
+ *  pasa TODOS los requisitos. Delegamos a `getMissingForPromotion`,
+ *  que ya tiene en cuenta los missingSteps declarativos del mock
+ *  filtrados según el modo de compartición (Collaborators no aplica
+ *  si canShareWithAgencies === false). */
 export function canPublishPromotion(p: Promotion): boolean {
   if (p.status === "incomplete") return false;
-  if (p.missingSteps && p.missingSteps.length > 0) return false;
   return getMissingForPromotion(p).length === 0;
 }
