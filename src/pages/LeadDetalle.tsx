@@ -28,7 +28,7 @@ import {
   leads, leadStatusConfig, leadSourceLabel,
   type Lead, type LeadStatus,
 } from "@/data/leads";
-import { promotions } from "@/data/promotions";
+import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -89,7 +89,7 @@ export default function LeadDetalle() {
   const status = leadStatusConfig[lead.status];
   const isDup = lead.status === "duplicate" || (lead.duplicateScore ?? 0) >= 70;
   const promo = lead.interest.promotionId
-    ? promotions.find((p) => p.id === lead.interest.promotionId)
+    ? developerOnlyPromotions.find((p) => p.id === lead.interest.promotionId)
     : undefined;
 
   return (

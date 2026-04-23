@@ -36,7 +36,7 @@ import {
   leads as allLeads, leadStatusConfig, leadSourceLabel,
   type Lead, type LeadStatus,
 } from "@/data/leads";
-import { promotions } from "@/data/promotions";
+import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -297,7 +297,7 @@ function LeadRow({
               (`PromotionAvailabilityFull.tsx` · w-[80px] h-[54px]). */}
           <div className="w-[80px] h-[54px] rounded-md bg-muted/30 grid place-items-center shrink-0 overflow-hidden">
             {(() => {
-              const promo = promotions.find((p) => p.id === l.interest.promotionId);
+              const promo = developerOnlyPromotions.find((p) => p.id === l.interest.promotionId);
               if (promo?.image) {
                 return <img src={promo.image} alt="" className="w-full h-full object-cover" loading="lazy" />;
               }
