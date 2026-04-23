@@ -338,11 +338,18 @@ Datos: `src/data/leads.ts` → `leads: Lead[]`.
 
 ### Registro (Record / Client Registration)
 
-Solicitud de una agencia para "apartarse" un cliente potencial en una promo.
+Solicitud de apartar un cliente potencial sobre una promo. Puede venir de
+dos orígenes (`origen`) con flujo y privacidad muy distintas — ver
+**ADR-046** para el rationale completo.
 
 ```ts
+type RegistroOrigen = "direct" | "collaborator";
+
 interface RegistrationRecord {
   id: string;
+  /** Origen del registro. Determina el flujo de aprobación y qué campos
+   *  son visibles/compartidos. */
+  origen: RegistroOrigen;
   type: "registration" | "registration_visit";  // con visita o sin
   contactName: string;
   contactPhoneLast4?: string;  // últimos 4 dígitos (duplicate check)
@@ -350,8 +357,10 @@ interface RegistrationRecord {
   contactFlag?: string;        // "🇷🇺"
   contactEmail?: string;
   promotion: string;           // nombre de la promoción
-  agencyName: string;
-  agentName: string;
+  /** Obligatorio si origen === "collaborator", undefined si es direct. */
+  agencyId?: string;
+  agencyName?: string;
+  agentName?: string;
   status: "pending" | "approved" | "declined" | "expired";
   date: string;
   relativeDate: string;
@@ -372,20 +381,31 @@ interface RegistrationRecord {
   decidedBy?: string;
   decidedByRole?: string;
   decisionNote?: string;
+  /** ISO · cuándo se decidió. Dispara el GracePeriodBanner (5 min). */
+  decidedAt?: string;
 }
 ```
 
-Datos: `src/components/records/data.ts`, tipos en `types.ts`.
+Datos: `src/data/records.ts` (seed + tipos), UI en `src/pages/Registros.tsx`.
 
 **Reglas críticas:**
 - `matchPercentage >= 70` → se muestra warning de duplicado y se sugiere
-  rechazar
+  rechazar.
 - Si se aprueba, la agencia tiene derecho preferente sobre ese cliente
-  durante `validezRegistroDias` (configurable por promoción)
-- Si expira sin visita, se libera automáticamente
-- Los datos sensibles (cliente completo, otra agencia) NO se muestran a otras
-  agencias que intenten registrar al mismo cliente — solo se indica "cliente
-  ya registrado" genéricamente
+  durante `validezRegistroDias` (configurable por promoción).
+- Si expira sin visita, se libera automáticamente.
+- **Asimetría por `origen` (ADR-046):**
+  - `collaborator` — la agencia solo envía 3 campos canónicos (nombre,
+    nacionalidad, últimos 4 del teléfono). Email / teléfono completo / DNI
+    **no se comparten** hasta que el promotor apruebe.
+  - `direct` — lo mete el propio promotor desde su CRM, tiene todos los
+    datos del cliente desde el minuto cero.
+- Los datos sensibles del `existingClient` tampoco se muestran a otras
+  agencias que intenten registrar al mismo cliente — solo se indica
+  "cliente ya registrado" genéricamente.
+- Tras aprobar/rechazar hay un **grace period de 5 min** (`decidedAt`)
+  durante el cual el promotor puede revertir la decisión antes de que se
+  envíe la notificación a la agencia.
 
 ### Contacto (Contact / Lead)
 

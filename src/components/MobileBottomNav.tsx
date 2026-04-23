@@ -27,6 +27,10 @@ type Tab = {
   avatar?: boolean;
   /** Ruta aún no implementada → toast informativo. */
   pending?: boolean;
+  /** Solo para cuenta promotor. */
+  promotorOnly?: boolean;
+  /** Solo para cuenta agencia. */
+  agencyOnly?: boolean;
 };
 
 const tabs: Tab[] = [
@@ -34,8 +38,9 @@ const tabs: Tab[] = [
   { label: "Promociones", url: "/promociones", icon: Tag },
   { label: "Registros", url: "/registros", icon: FileText, tabletOnly: true },
   { label: "Actividades", url: "#actividades", icon: Activity, pending: true },
-  { label: "Red", url: "/colaboradores", icon: Handshake },
-  { label: "Emails", url: "/emails", icon: Mail, tabletOnly: true },
+  { label: "Red", url: "/colaboradores", icon: Handshake, promotorOnly: true },
+  { label: "Contactos", url: "/contactos", icon: Contact, agencyOnly: true },
+  { label: "Emails", url: "/emails", icon: Mail, tabletOnly: true, promotorOnly: true },
   { label: "Perfil", url: "/empresa", avatar: true },
 ];
 

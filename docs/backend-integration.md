@@ -63,7 +63,11 @@ ambas cosas en un único tipo `Agency`. Al implementar backend, separar:
 | `POST /api/v1/auth/login` | login email+password | `src/pages/Login.tsx:32,86` |
 | `POST /api/v1/companies/join-request` | usuario se une a empresa ya existente | `src/pages/Register.tsx:52,195` |
 | `GET  /api/v1/companies/lookup?domain=x` | resolver empresa por dominio email | `src/pages/Register.tsx:54` |
+| `POST /api/auth/logout` | cerrar sesión actual (invalida cookie) | `src/lib/accountType.ts:75` (`logout()`), `src/components/AccountSwitcher.tsx:155`, `src/components/MobileHeader.tsx` |
 | `POST /api/auth/sign-out-everywhere` | cerrar sesión global | `src/pages/ajustes/zona-critica/cerrar-sesion.tsx:23` |
+| `GET /api/me` → `UserProfile` | leer perfil del usuario actual | `src/lib/profileStorage.ts` (`getStoredProfile()` / `usePersistedProfile()`), `src/lib/currentUser.ts:58` |
+| `PATCH /api/me { fullName, email, jobTitle, bio, avatar }` | actualizar perfil | `src/pages/ajustes/perfil/personal.tsx:save()`, `src/lib/profileStorage.ts` (`saveStoredProfile()`) |
+| `GET/PUT /api/me/phones` | CRUD de teléfonos del usuario | `src/pages/ajustes/perfil/contacto.tsx:15` (`byvaro.user.phones.v1`) |
 | `POST /api/me/change-password/request` | pedir código 2FA para cambio password | `src/pages/ajustes/seguridad/contrasena.tsx:176` |
 | `POST /api/me/change-password/verify` | confirmar cambio password | `src/pages/ajustes/seguridad/contrasena.tsx:323` |
 | `POST /api/me/2fa/setup` | generar secret TOTP + QR | `src/pages/ajustes/seguridad/dos-fa.tsx:102` |
@@ -832,17 +836,41 @@ backend, sustituir el import por `useQuery(["leads", filters], ...)`.
 
 | Endpoint | TODO |
 |---|---|
-| `GET /api/records?status=&promotion=&agency=` | `src/pages/Registros.tsx:25` |
-| `POST /api/records/:id/approve` | idem:26 |
-| `POST /api/records/:id/reject` | idem:26 |
-| `POST /api/records/bulk-approve { ids:[] }` | idem:27 |
-| `POST /api/records/bulk-reject { ids:[] }` | idem:27 |
+| `GET /api/records?status=&promotion=&agency=&origen=` | `src/pages/Registros.tsx:25` |
+| `POST /api/records { origen, promotionId, agencyId?, cliente }` | `src/components/promotions/detail/ClientRegistrationDialog.tsx:260` |
+| `POST /api/records/:id/approve` | `Registros.tsx:26` |
+| `POST /api/records/:id/reject` | idem |
+| `POST /api/records/:id/revert` (**grace period 5 min**) | `Registros.tsx:185`, `src/components/registros/GracePeriodBanner.tsx` |
+| `POST /api/records/bulk-approve { ids:[] }` | `Registros.tsx:27` |
+| `POST /api/records/bulk-reject { ids:[] }` | idem |
 | `GET /api/records` paginado server-side | `src/data/records.ts:25` |
 
 **Diferencia con Lead**: un Registro es un lead **ya cualificado** y
 vinculado a un cliente + promoción concreta. Se crea desde el flujo
 `POST /api/leads/:id/convert` o directamente por una agencia al
 registrar un cliente sobre una promoción.
+
+**Campos canónicos en `POST /api/records` (ver ADR-046):**
+
+- `origen: "direct" | "collaborator"` — eje crítico que decide el flujo
+  y los campos obligatorios.
+- `agencyId?` — **obligatorio** si `origen === "collaborator"`,
+  **prohibido** si `origen === "direct"` (backend debe rechazar 400).
+- `cliente` — para `collaborator` solo se aceptan 3 campos (`nombre`,
+  `nacionalidad`, `phoneLast4`); cualquier email/DNI/phone completo del
+  payload debe ser ignorado silenciosamente o rechazado. Para `direct`
+  se acepta el perfil completo.
+- `decidedAt` — lo pone el backend al ejecutar `/approve` o `/reject`.
+- El job de notificación a la agencia se **programa con 5 min de delay**
+  y debe cancelarse si llega un `/revert` antes del disparo.
+
+**Reglas de visibilidad (vista promotor):**
+
+- Los registros con `origen === "direct"` **no se muestran** al
+  destinatario agencia (su RLS debe filtrarlos por `agencyId`).
+- Los campos adicionales del cliente (`email`, `telefono` completo,
+  `dni`) de un `collaborator` solo son visibles al promotor tras
+  aprobar — antes devuelve `null`/`masked` o simplemente se excluye.
 
 ### 7.3 · Ventas
 

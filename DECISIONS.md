@@ -1172,3 +1172,107 @@ Ver: `src/components/contacts/detail/ContactEmailsTab.tsx`,
 `src/components/contacts/contactEventsStorage.ts`
 (`recordEmailDelivered/Opened/Received`),
 `docs/screens/contactos-ficha.md` §Tabs · Emails.
+
+---
+
+## 2026-04-23 · ADR-046 · Asimetría de datos entre registro `direct` y `collaborator`
+
+**Contexto:** Un registro puede entrar por dos caminos: lo crea una
+agencia colaboradora (caso clásico que exige IA de duplicados) o lo
+crea el propio promotor desde su CRM para reservar un cliente "suyo".
+Hasta ahora el modelo `Registro` tenía `agencyId` obligatorio y trataba
+los dos casos igual.
+
+**Decisión:** Introducir `RegistroOrigen = "direct" | "collaborator"`
+como eje canónico del flujo. `agencyId` pasa a ser opcional (requerido
+solo para `collaborator`). La visibilidad de datos es asimétrica:
+
+- **`collaborator`** — la agencia solo envía 3 campos canónicos:
+  `nombre` completo, `nacionalidad`, `phoneLast4`. Email, DNI y teléfono
+  completo quedan **bloqueados con candado** en el detalle hasta que el
+  promotor apruebe. Backend debe ignorar/rechazar esos campos si llegan
+  en el `POST /api/records`.
+- **`direct`** — el promotor tiene todos los datos del cliente desde el
+  minuto cero (es su propio CRM). Se muestran sin restricción.
+
+UI:
+- List card → badge `Directo` (verde) vs `Colab.` (gris).
+- Detalle → card "Origen" distinta; CompareCard reetiquetada en directo.
+- ActivityTimeline → primer evento con actor = promotor en directos.
+- Filtro pill "Origen" en el toolbar de `/registros`.
+- Filtro "Agencia" excluye directos automáticamente cuando hay selección.
+
+**Alternativas:**
+
+- Mantener un solo tipo y convertir "direct" en un colaborador especial
+  con `agencyId = promotorId`. → Contamina las queries de comisiones y
+  rompe la semántica del panel "Colaboradores".
+- Dos entidades separadas (`DirectRecord` y `AgencyRecord`). → Duplica
+  IA de duplicados, endpoints, filtros y la pantalla. Peor para el
+  promotor que los quiere ver mezclados en una bandeja única.
+
+**Razón:** Un solo eje (`origen`) modela la diferencia sin duplicar
+nada. La asimetría de datos refleja una restricción real de privacidad
+cross-agencia: una agencia colaboradora **no puede** compartir el email
+de su cliente a otra agencia ni al promotor antes de la aprobación
+(riesgo legal + competitivo). La UI debe mostrar ese candado de forma
+explícita para que el promotor entienda por qué faltan campos.
+
+**Pregunta abierta** (ver `docs/open-questions.md`):
+¿Al aprobar, los campos bloqueados se desbloquean automáticamente, o
+nunca se comparten y quedan solo en el CRM de la agencia?
+
+Ver: `src/data/records.ts` (`RegistroOrigen` + mocks directos),
+`src/pages/Registros.tsx` (badge + filtro + detalle),
+`src/components/promotions/detail/ClientRegistrationDialog.tsx:260`
+(alta con origen correcto según `accountType`),
+`docs/data-model.md §Registro`,
+`docs/backend-integration.md §7.2 · Registros`,
+`docs/screens/registros.md §Origen del registro`,
+`preview/registros-clean.html` (mockup con candado).
+
+---
+
+## 2026-04-23 · ADR-047 · Perfil del usuario desacoplado del mock, con store único
+
+**Contexto:** `/ajustes/perfil/personal` permitía editar el perfil, pero
+el resultado quedaba huérfano: `useCurrentUser()` seguía devolviendo el
+`DEVELOPER_USER` hardcoded y los 93 consumers del hook (sidebar, emails,
+historial de contactos, permisos) ignoraban los cambios. El usuario
+editaba su nombre, pulsaba Guardar… y seguía apareciendo como "Arman
+Rahmanov" en todas partes.
+
+**Decisión:** Crear `src/lib/profileStorage.ts` como store único del
+perfil editable, con el mismo patrón que `registrosStorage.ts`
+(get/save + hook reactivo con `CustomEvent`). Reescribir
+`useCurrentUser()` para fusionar el perfil persistido sobre el mock
+base cuando la cuenta es promotor. El modo "ver como agencia" sigue
+recibiendo la identidad desde el mock de la agencia (es una simulación
+demo, no un perfil de usuario).
+
+Paralelamente, `logout()` limpia ahora `byvaro.user.profile.v1` y
+`byvaro.user.phones.v1` para que no se hereden datos entre sesiones.
+
+**Alternativas:**
+
+- Contexto global (React Context + Provider) para el perfil. →
+  Requiere envolver la app y añadir más re-renders. El hook + evento
+  custom es más ligero y compatible con el patrón de `registrosStorage`.
+- Leer directamente `localStorage` desde `useCurrentUser()`. → Pierde
+  reactividad entre pestañas y esconde la persistencia.
+
+**Razón:** Un único hook (`useCurrentUser`) como punto de verdad para
+la identidad. Cualquier consumer hoy o mañana se beneficia del cambio
+sin tocar su código. Al portar al backend, sustituir la implementación
+del hook para que lea del `AuthProvider`/JWT es la única pieza a cambiar
+— los 93 consumers no se tocan. La separación `profileStorage.ts`
+también hace obvio qué persistir en el servidor cuando llegue el
+`PATCH /api/me`.
+
+Ver: `src/lib/profileStorage.ts`,
+`src/lib/currentUser.ts:58-80` (fusión),
+`src/lib/accountType.ts:75-88` (logout amplía su scope),
+`src/pages/ajustes/perfil/personal.tsx` (consume los helpers),
+`src/components/MobileHeader.tsx` (drawer muestra identidad + logout),
+`docs/backend-integration.md §1 · Auth & usuarios` (nuevos endpoints
+`GET/PATCH /api/me` + `POST /api/auth/logout`).

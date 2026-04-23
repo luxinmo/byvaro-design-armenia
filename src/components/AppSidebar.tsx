@@ -69,16 +69,20 @@ export function AppSidebar() {
   const necesitaOnboarding = !empresa.onboardingCompleto;
   const collapsed = COLLAPSED_ROUTES.some((r) => location.pathname.startsWith(r));
 
-  /* En modo agencia, oculta rutas que sólo tienen sentido para el promotor:
-   *   · Colaboradores (la agencia no ve a otras agencias colaboradoras).
-   *   · Microsites   (los microsites son de las promociones del promotor). */
+  /* En modo agencia, oculta rutas que sólo tienen sentido para el
+   * promotor. Estas mismas rutas se redirigen en App.tsx vía
+   * <AgencyGuard> si el usuario entra por URL directa. */
+  const agencyHiddenRoutes = new Set([
+    "/colaboradores",
+    "/microsites",
+    "/leads",
+    "/emails",
+  ]);
   const visibleGroups = isAgencyUser
     ? groups
         .map((g) => ({
           ...g,
-          items: g.items.filter(
-            (it) => it.url !== "/colaboradores" && it.url !== "/microsites",
-          ),
+          items: g.items.filter((it) => !agencyHiddenRoutes.has(it.url)),
         }))
         .filter((g) => g.items.length > 0)
     : groups;
