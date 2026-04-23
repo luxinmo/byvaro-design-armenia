@@ -1341,3 +1341,121 @@ Ver: `src/lib/team.ts` (tipo + mocks),
 `docs/screens/ajustes-miembros.md` (spec funcional),
 `docs/backend-integration.md §1 · Auth & usuarios` (endpoints),
 `docs/data-model.md §Usuario / TeamMember`.
+
+---
+
+## 2026-04-23 · ADR-049 · Dashboard de rendimiento del miembro + 2 flows de alta
+
+**Contexto:** El admin necesitaba dos capacidades que hasta ahora no
+estaban en el producto:
+
+1. **Dar de alta** nuevos miembros de forma ágil. Invitar por email es
+   lo estándar, pero en onboarding presencial (p. ej. el admin está
+   con el nuevo agente en la oficina) no sirve — se necesita poder
+   crear la cuenta en el momento y entregar una contraseña temporal.
+2. **Medir el desempeño** de cada miembro con datos accionables. Las
+   decisiones de gestión (a quién promover, formar, reasignar leads,
+   o incluso despedir) se hacían sin datos consistentes.
+
+También había un problema colateral: un mismo email podía acabar
+ligado a varias organizaciones si el admin no tenía cuidado, creando
+una confusión grave sobre propiedad de datos (¿de quién son los
+registros creados por ese email?).
+
+**Decisión:**
+
+### 1. Dos flows de alta con una regla dura de unicidad
+
+- **Flow A · Invitar por email** (recomendado).
+  `POST /api/organization/invitations { email, role, personalMessage? }`.
+  Backend envía email con token 7 días. Plantilla canónica en
+  `src/lib/teamInvitationEmail.ts` (es/en). El dialog del admin
+  muestra **preview HTML del email** antes de enviar (iframe).
+- **Flow B · Crear con contraseña temporal**.
+  `POST /api/organization/members { ..., generateTempPassword: true }`.
+  Devuelve `{ member, tempPassword }`. Admin copia y comparte por
+  canal seguro. `mustChangePassword = true` al primer login.
+- **Regla fuerte**: `409 EMAIL_TAKEN` si el email ya está en cualquier
+  otra organización. La respuesta incluye `existingWorkspace` para que
+  el frontend muestre "Este email ya pertenece a Prime Properties".
+
+### 2. Dashboard `/equipo/:id/estadisticas` con 4 bloques canónicos
+
+- **Resultados comerciales** · ventas €, count, comisión, registros
+  aprobados, tasa aprobación, visitas realizadas, conversión visita→venta.
+- **Pipeline** · leads asignados, oportunidades abiertas, visitas
+  próximas 7d, registros pendientes.
+- **Comunicación** · emails + % apertura, WhatsApp, llamadas, tiempo
+  medio respuesta a lead.
+- **Actividad CRM** · tiempo activo diario, tiempo/sesión, hora pico,
+  heatmap día×hora (168 celdas), racha, duplicados, visitas sin evaluar.
+
+Benchmarks contra la media del equipo en los KPIs principales
+(↑34% vs equipo) para dar contexto inmediato.
+
+### 3. Plan de comisiones opcional
+
+Dos campos `commissionCapturePct` (0-100) y `commissionSalePct` (0-100)
+en el `TeamMember`. `undefined` = hereda plan del workspace. Expuestos
+en un pill del header del dashboard del miembro cuando tienen valor.
+
+### 4. Resumen de rendimiento en el popup de edición
+
+`MemberFormDialog` incluye una sección "Rendimiento · últimos 30 días"
+con 6 KPI tiles y un link "Ver estadísticas completas →" al dashboard.
+Esto evita hacer un popup gigante y mantiene el dialog centrado en
+edición de perfil, dejando el análisis profundo para su pantalla.
+
+**Alternativas:**
+
+- **Un único flow de alta (solo invitación)**. → Bloquea el caso
+  onboarding presencial, que es real en agencias pequeñas.
+- **Crear siempre con contraseña temporal y nunca invitar**. → Peor
+  UX para casos remotos (mucha agencia es distribuida).
+- **Dashboard dentro del popup** sin página dedicada. → 15 campos en
+  un popup rompe el foco · un dashboard completo merece su pantalla.
+- **Mostrar stats solo al admin**. → Lo hacemos inicialmente, pero
+  cuando haya privacy granular, el miembro debería ver sus propias
+  stats también (pendiente · TODO en la pantalla).
+
+**Razón:**
+
+- La regla de un email único por organización es **estructural**: evita
+  datos huérfanos, facilita RLS backend, y alinea con cómo funcionan
+  SaaS estándar (Slack, Linear, Notion — todos lo hacen así).
+- Los 4 bloques de KPIs corresponden a preguntas reales del dueño de
+  agencia: ¿produce?, ¿tiene pipeline?, ¿comunica?, ¿es constante?.
+- El plan de comisiones a nivel de miembro habilita configuraciones
+  heterogéneas (junior 10%, senior 20%) sin tocar el plan global.
+
+**Preparación para IA (sin implementar todavía):**
+
+- El shape de `MemberStats` está diseñado para ser el INPUT directo
+  de `POST /api/ai/analyze-member/:id`. El output `AIMemberReport` ya
+  está especificado en `docs/plan-equipo-estadisticas.md §3`.
+- La golden rule de CLAUDE.md (§📊 KPIs en el dashboard del miembro)
+  obliga a que cualquier señal nueva de actividad se añada al
+  `MemberStats` y se muestre en la pantalla, manteniendo sincronizado
+  lo que ve el admin con lo que procesa la IA.
+
+**Impacto:**
+
+- Frontend: 4 archivos nuevos (`Equipo.tsx`, `EquipoMiembroEstadisticas.tsx`,
+  `MemberFormDialog.tsx`, `InviteMemberDialog.tsx`), 4 helpers
+  (`memberStats.ts`, `jobTitles.ts`, `teamInvitationEmail.ts`,
+  `flags.ts`), 2 components reutilizables (`Flag.tsx`, `ViewToggle.tsx`).
+- Backend: 7 endpoints nuevos listados en
+  `docs/backend-integration.md §1` y `§1.9`.
+- Regla de oro nueva en CLAUDE.md (§📊 KPIs en el dashboard del miembro).
+- 250 SVGs de banderas en `public/flags/` · reemplazan emojis en
+  nacionalidades, idiomas y prefijos telefónicos.
+
+Ver:
+- `src/pages/Equipo.tsx` · `src/pages/EquipoMiembroEstadisticas.tsx`,
+- `src/components/team/{MemberFormDialog,InviteMemberDialog,JobTitlePicker}.tsx`,
+- `src/data/{memberStats,jobTitles}.ts`,
+- `src/lib/{teamInvitationEmail,flags}.ts`,
+- `docs/screens/{equipo,equipo-estadisticas}.md`,
+- `docs/plan-equipo-estadisticas.md`,
+- `docs/backend-integration.md §1.9`,
+- CLAUDE.md §📊 KPIs en el dashboard del miembro.

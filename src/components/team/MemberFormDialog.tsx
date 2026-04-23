@@ -86,6 +86,9 @@ export function MemberFormDialog({
   const [visibleOnProfile, setVisibleOnProfile] = useState(false);
   const [canSign, setCanSign] = useState(false);
   const [canAcceptRegistrations, setCanAcceptRegistrations] = useState(false);
+  /* Plan de comisiones · opcional. `""` en el input = no asignar. */
+  const [commissionCapture, setCommissionCapture] = useState<string>("");
+  const [commissionSale, setCommissionSale] = useState<string>("");
 
   /* UI state */
   const [photoOpen, setPhotoOpen] = useState(false);
@@ -107,6 +110,12 @@ export function MemberFormDialog({
     setVisibleOnProfile(!!member?.visibleOnProfile);
     setCanSign(!!member?.canSign);
     setCanAcceptRegistrations(!!member?.canAcceptRegistrations);
+    setCommissionCapture(
+      member?.commissionCapturePct !== undefined ? String(member.commissionCapturePct) : "",
+    );
+    setCommissionSale(
+      member?.commissionSalePct !== undefined ? String(member.commissionSalePct) : "",
+    );
   }, [open, member]);
 
   const status: TeamMemberStatus = member?.status ?? "active";
@@ -137,6 +146,15 @@ export function MemberFormDialog({
     }
   };
 
+  /** Parseo seguro de % · devuelve undefined si vacío o fuera de rango. */
+  const parsePct = (s: string): number | undefined => {
+    const t = s.trim();
+    if (!t) return undefined;
+    const n = Number(t.replace(",", "."));
+    if (!Number.isFinite(n)) return undefined;
+    return Math.max(0, Math.min(100, n));
+  };
+
   const handleSave = () => {
     const encoded = encodeJobTitle(jobTitleKeys);
     onSave({
@@ -147,6 +165,8 @@ export function MemberFormDialog({
       department: department.trim() || undefined,
       languages: languages.length ? languages : undefined,
       role,
+      commissionCapturePct: parsePct(commissionCapture),
+      commissionSalePct: parsePct(commissionSale),
       avatarUrl: avatar,
       visibleOnProfile,
       canSign,
@@ -436,6 +456,34 @@ export function MemberFormDialog({
               </div>
             </section>
 
+            {/* Plan de comisiones · opcional */}
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Plan de comisiones
+                </h3>
+                <span className="text-[10px] text-muted-foreground">Opcional</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Porcentajes que este miembro recibe por captación y por venta.
+                Si quedan vacíos, hereda el plan por defecto del workspace.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <CommissionField
+                  label="% por captación"
+                  description="Al traer un lead al sistema."
+                  value={commissionCapture}
+                  onChange={setCommissionCapture}
+                />
+                <CommissionField
+                  label="% por venta"
+                  description="Al cerrar la venta del registro."
+                  value={commissionSale}
+                  onChange={setCommissionSale}
+                />
+              </div>
+            </section>
+
             {/* Acciones destructivas · solo miembros existentes */}
             {member && !isPending && !isInvited && (
               <section className="pt-4 border-t border-border/60 flex flex-wrap gap-2 justify-end">
@@ -519,6 +567,42 @@ function Field({
         {label}
       </span>
       <div className="mt-1">{children}</div>
+    </label>
+  );
+}
+
+/** Input de porcentaje · acepta "25", "25.5", "25,5" · admite vacío. */
+function CommissionField({
+  label, description, value, onChange,
+}: {
+  label: string;
+  description: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+        {label}
+      </span>
+      <div className="mt-1 relative">
+        <Input
+          type="text"
+          inputMode="decimal"
+          value={value}
+          onChange={(e) => {
+            /* Permitir solo números, coma y punto. */
+            const cleaned = e.target.value.replace(/[^\d.,]/g, "");
+            onChange(cleaned);
+          }}
+          placeholder="—"
+          className="pr-8 tnum"
+        />
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+          %
+        </span>
+      </div>
+      <p className="text-[10.5px] text-muted-foreground mt-1 leading-snug">{description}</p>
     </label>
   );
 }

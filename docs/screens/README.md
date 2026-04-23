@@ -27,6 +27,8 @@ contract, permisos, estados, enlaces salientes.
 | Contacto · ficha | `/contactos/:id` | [`contactos-ficha.md`](contactos-ficha.md) | ✅ diseñada (8 tabs) |
 | Ajustes · Tipos de relación | `/ajustes/contactos/relaciones` | [`ajustes-contactos-relaciones.md`](ajustes-contactos-relaciones.md) | ✅ diseñada |
 | Ajustes · Miembros del equipo | `/ajustes/usuarios/miembros` | [`ajustes-miembros.md`](ajustes-miembros.md) | ✅ diseñada |
+| Equipo (hub rich) | `/equipo` | [`equipo.md`](equipo.md) | ✅ diseñada (galería + lista + 2 flows alta) |
+| Dashboard de miembro | `/equipo/:id/estadisticas` | [`equipo-estadisticas.md`](equipo-estadisticas.md) | ✅ diseñada (4 bloques KPIs + heatmap) |
 | Microsites | `/microsites` | (pendiente) | 🎨 placeholder |
 | Emails | `/emails` | [`emails.md`](emails.md) | 🟡 doc + tipos (falta UI) |
 | Ajustes | `/ajustes` | (pendiente) | 🎨 placeholder |

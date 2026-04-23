@@ -223,6 +223,93 @@ Si no, falta el `recordEvent()`.
 
 ---
 
+## 🏢 REGLA DE ORO · Historial entre empresas (solo admin)
+
+> **Toda interacción entre dos empresas (promotor ↔ agencia) se
+> registra en el historial cross-tenant de ambas fichas.** El
+> historial es la auditoría cruzada del negocio: primera solicitud,
+> invitaciones enviadas/aceptadas/rechazadas, registros aprobados/
+> rechazados, visitas (quién, cuándo, con qué resultado), contratos
+> enviados/firmados, ventas cerradas/rechazadas, incidencias.
+>
+> **Solo visible para administradores.** No para agentes de la
+> organización ni para la agencia colaboradora. El resto de usuarios
+> no ve este timeline aunque tenga acceso a la ficha.
+
+**Cómo se aplica.** Toda acción que ocurra "entre empresas" DEBE
+llamar a `recordCompanyEvent()` (o uno de sus helpers tipados) de
+`src/lib/companyEvents.ts` en el mismo handler que dispara la
+acción. El timeline vive en la ficha de la agencia
+(`/colaboradores/:id?tab=historial`) y es **la única fuente de
+verdad** del vínculo comercial entre las dos organizaciones.
+
+**Qué se registra.** Sin pretender ser exhaustivo:
+
+- **Ciclo de vida de la relación**: solicitud entrante desde
+  marketplace, invitación enviada por el promotor,
+  aceptación/rechazo de ambos lados, pausa, reactivación, baja.
+- **Promociones**: asignación/desasignación a una promoción concreta,
+  cambio de comisión pactada, cambio de plan de pagos.
+- **Registros de clientes**: creación por la agencia, aprobación,
+  rechazo, cambio de estado, caducidad.
+- **Visitas**: programación, realización, evaluación (quién hizo
+  la visita, cuándo, con qué resultado).
+- **Ofertas y ventas**: envío de oferta, aceptación, rechazo,
+  reserva, contrato, escritura, caída.
+- **Contratos firmados**: envío de borrador, firma, modificación,
+  expiración.
+- **Incidencias**: reclamación, cancelación, conflicto por duplicados.
+- **Comunicación formal**: email enviado, whatsapp, llamada (solo
+  los que son "entre empresas", no la conversación interna).
+- **Bot/Sistema**: cambios automáticos (bloqueo de registros
+  duplicados, expiración de invitaciones no respondidas, etc.)
+
+**Helpers disponibles** (azúcar para no construir el evento a
+mano — ver el catálogo completo en `src/lib/companyEvents.ts`):
+
+```ts
+recordInvitationSent(agencyId, promotionId?, by)
+recordInvitationAccepted(agencyId, by)
+recordInvitationRejected(agencyId, by, reason?)
+recordInvitationCancelled(agencyId, by)
+recordRequestReceived(agencyId, promotionId?, message?)
+recordRequestApproved(agencyId, by)
+recordRequestRejected(agencyId, by, reason?)
+recordRegistrationApproved(agencyId, by, clientName, promotionName)
+recordRegistrationRejected(agencyId, by, clientName, reason?)
+recordVisitScheduled(agencyId, by, { clientName, promotionName, date })
+recordVisitCompleted(agencyId, by, { clientName, outcome, rating? })
+recordContractSent(agencyId, by, docName)
+recordContractSigned(agencyId, by, docName)
+recordSaleClosed(agencyId, by, { clientName, unit, amount })
+recordSaleRejected(agencyId, by, { clientName, reason })
+recordCollaborationPaused(agencyId, by, reason?)
+recordCollaborationResumed(agencyId, by)
+recordCompanyAny(agencyId, type, title, description?, by?)
+```
+
+`by` siempre es `{ name, email }` del usuario actual. Los eventos
+del sistema pasan `{ name: "Sistema" }` y se renderizan con
+estilo bot.
+
+**Bidireccional.** Si la agencia Byvaro gana visibilidad propia
+(futuro `agency.workspaceId`), el mismo evento se duplica en "su"
+historial. Por ahora vive solo del lado del promotor.
+
+**Visibilidad.** El componente `<CompanyActivityTimeline>` se
+renderiza dentro de `<AdminOnly>`. Además la página muestra un
+banner "Historial solo visible para administradores · los agentes
+no ven esta sección" para que sea **explícito** en pantalla. No
+se oculta: se declara. Si un agente entra a la ficha, el tab
+Historial no aparece.
+
+**No te olvides.** Antes de hacer commit de una acción que afecte
+a otra empresa (invitación, rechazo, oferta, contrato…), verifica:
+¿se ve reflejada en `/colaboradores/:id?tab=historial`? Si no,
+falta el `recordCompanyEvent()`.
+
+---
+
 ## 🤝 REGLA DE ORO · Vista de Agencia colaboradora
 
 > **Cada cambio en la app DEBE contemplar la vista de Agencia.** Byvaro

@@ -42,6 +42,9 @@ import {
   derivedDepartment, encodeJobTitle,
 } from "@/data/jobTitles";
 import type { TeamMember } from "@/lib/team";
+import { renderTeamInvitation } from "@/lib/teamInvitationEmail";
+import { useCurrentUser } from "@/lib/currentUser";
+import { useEmpresa } from "@/lib/empresa";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -58,7 +61,11 @@ type Props = {
   open: boolean;
   onClose: () => void;
   /** Se llama al confirmar. El padre crea el miembro y persiste. */
-  onInvite: (payload: { email: string; role: TeamMember["role"] }) => void;
+  onInvite: (payload: {
+    email: string;
+    role: TeamMember["role"];
+    personalMessage?: string;
+  }) => void;
   onCreate: (payload: Omit<TeamMember, "id"> & { tempPassword: string }) => void;
 };
 
@@ -89,6 +96,10 @@ function generatePassword(): string {
 
 export function InviteMemberDialog({ open, onClose, onInvite, onCreate }: Props) {
   const [mode, setMode] = useState<Mode>("invite");
+  const currentUser = useCurrentUser();
+  const { empresa } = useEmpresa();
+  const [personalMessage, setPersonalMessage] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
 
   /* ─── Campos comunes ─── */
   const [email, setEmail] = useState("");
@@ -99,6 +110,8 @@ export function InviteMemberDialog({ open, onClose, onInvite, onCreate }: Props)
   const [phone, setPhone] = useState("");
   const [jobTitleKeys, setJobTitleKeys] = useState<string[]>([]);
   const [department, setDepartment] = useState("");
+  const [commissionCapture, setCommissionCapture] = useState("");
+  const [commissionSale, setCommissionSale] = useState("");
   const [tempPassword, setTempPassword] = useState(() => generatePassword());
   const [showPassword, setShowPassword] = useState(false);
 
@@ -110,8 +123,20 @@ export function InviteMemberDialog({ open, onClose, onInvite, onCreate }: Props)
     setPhone("");
     setJobTitleKeys([]);
     setDepartment("");
+    setCommissionCapture("");
+    setCommissionSale("");
     setTempPassword(generatePassword());
     setShowPassword(false);
+    setPersonalMessage("");
+    setShowPreview(false);
+  };
+
+  const parsePct = (s: string): number | undefined => {
+    const t = s.trim();
+    if (!t) return undefined;
+    const n = Number(t.replace(",", "."));
+    if (!Number.isFinite(n)) return undefined;
+    return Math.max(0, Math.min(100, n));
   };
 
   const handleClose = () => {
@@ -133,7 +158,11 @@ export function InviteMemberDialog({ open, onClose, onInvite, onCreate }: Props)
   /* ─── Acciones ─── */
   const handleInvite = () => {
     if (!canSubmitInvite) return;
-    onInvite({ email: email.trim().toLowerCase(), role });
+    onInvite({
+      email: email.trim().toLowerCase(),
+      role,
+      personalMessage: personalMessage.trim() || undefined,
+    });
     toast.success(`Invitación enviada a ${email.trim()}`, {
       description: "El enlace de activación caduca en 7 días.",
     });
@@ -149,6 +178,8 @@ export function InviteMemberDialog({ open, onClose, onInvite, onCreate }: Props)
       phone: phone.trim() || undefined,
       jobTitle: encodeJobTitle(jobTitleKeys) || undefined,
       department: department.trim() || undefined,
+      commissionCapturePct: parsePct(commissionCapture),
+      commissionSalePct: parsePct(commissionSale),
       status: "active",
       joinedAt: new Date().toISOString(),
       tempPassword,
@@ -256,6 +287,40 @@ export function InviteMemberDialog({ open, onClose, onInvite, onCreate }: Props)
             </div>
           </Field>
 
+          {/* Tab "Invitar" · mensaje personalizado + preview del email */}
+          {mode === "invite" && (
+            <>
+              <Field label="Mensaje personal (opcional)">
+                <textarea
+                  value={personalMessage}
+                  onChange={(e) => setPersonalMessage(e.target.value)}
+                  placeholder="Un saludo o contexto personal (2-3 frases)."
+                  rows={2}
+                  maxLength={300}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-border bg-card text-foreground outline-none focus:border-primary resize-none"
+                />
+                <p className="text-[10.5px] text-muted-foreground text-right mt-1 tnum">
+                  {personalMessage.length}/300
+                </p>
+              </Field>
+
+              <InvitationEmailPreview
+                show={showPreview}
+                onToggle={() => setShowPreview((s) => !s)}
+                payload={{
+                  inviterName: currentUser.name,
+                  companyName: empresa.nombreComercial || "Byvaro",
+                  email: email.trim() || "nombre@empresa.com",
+                  role,
+                  personalMessage: personalMessage.trim() || undefined,
+                  activationLink: "https://app.byvaro.com/activate?token=__backend__",
+                  expiresInDays: 7,
+                  lang: "es",
+                }}
+              />
+            </>
+          )}
+
           {/* Campos extra · sólo modo "create" */}
           {mode === "create" && (
             <>
@@ -288,6 +353,36 @@ export function InviteMemberDialog({ open, onClose, onInvite, onCreate }: Props)
               <Field label="Teléfono">
                 <PhoneInput value={phone} onChange={setPhone} placeholder="600 000 000" />
               </Field>
+
+              {/* Plan de comisiones · opcional */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="% por captación">
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={commissionCapture}
+                      onChange={(e) => setCommissionCapture(e.target.value.replace(/[^\d.,]/g, ""))}
+                      placeholder="Opcional"
+                      className="pr-8 tnum"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+                  </div>
+                </Field>
+                <Field label="% por venta">
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={commissionSale}
+                      onChange={(e) => setCommissionSale(e.target.value.replace(/[^\d.,]/g, ""))}
+                      placeholder="Opcional"
+                      className="pr-8 tnum"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+                  </div>
+                </Field>
+              </div>
 
               {/* Password temporal */}
               <div className="rounded-xl border border-border bg-muted/20 p-3 space-y-2">
@@ -371,6 +466,54 @@ export function InviteMemberDialog({ open, onClose, onInvite, onCreate }: Props)
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   InvitationEmailPreview · colapsable con el render HTML del email
+   ═══════════════════════════════════════════════════════════════════ */
+function InvitationEmailPreview({
+  show, onToggle, payload,
+}: {
+  show: boolean;
+  onToggle: () => void;
+  payload: Parameters<typeof renderTeamInvitation>[0];
+}) {
+  const rendered = renderTeamInvitation(payload);
+  return (
+    <div className="rounded-xl border border-border bg-muted/20 overflow-hidden">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-muted/40 transition-colors"
+      >
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground inline-flex items-center gap-1.5">
+          <Mail className="h-3 w-3" />
+          Previsualizar email que recibirá
+        </span>
+        <span className="text-[10px] text-muted-foreground">
+          {show ? "Ocultar" : "Ver preview"}
+        </span>
+      </button>
+      {show && (
+        <div className="border-t border-border">
+          <div className="px-3 py-2 bg-muted/30">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+              Asunto
+            </p>
+            <p className="text-[12.5px] font-semibold text-foreground mt-0.5 truncate">
+              {rendered.subject}
+            </p>
+          </div>
+          <iframe
+            srcDoc={rendered.html}
+            title="Preview del email de invitación"
+            className="w-full h-[360px] bg-white"
+            sandbox=""
+          />
+        </div>
+      )}
+    </div>
   );
 }
 

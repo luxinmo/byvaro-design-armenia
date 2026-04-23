@@ -129,15 +129,37 @@ export default function EquipoMiembroEstadisticas() {
               )}
             </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-full"
-              onClick={() => toast.info("Análisis IA · próximamente con Claude Haiku")}
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              Análisis IA
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+              {(member.commissionCapturePct !== undefined || member.commissionSalePct !== undefined) && (
+                <div className="inline-flex items-center gap-2 h-9 px-3 rounded-full border border-border bg-muted/30">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Comisión
+                  </span>
+                  {member.commissionCapturePct !== undefined && (
+                    <span className="text-xs font-bold text-foreground tnum">
+                      {member.commissionCapturePct}% capt.
+                    </span>
+                  )}
+                  {member.commissionCapturePct !== undefined && member.commissionSalePct !== undefined && (
+                    <span className="text-muted-foreground/50">·</span>
+                  )}
+                  {member.commissionSalePct !== undefined && (
+                    <span className="text-xs font-bold text-foreground tnum">
+                      {member.commissionSalePct}% venta
+                    </span>
+                  )}
+                </div>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+                onClick={() => toast.info("Análisis IA · próximamente con Claude Haiku")}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Análisis IA
+              </Button>
+            </div>
           </div>
 
           {/* Filtro temporal */}
@@ -299,10 +321,10 @@ function Funnel({ stats }: { stats: MemberStats }) {
           const Icon = s.icon;
           const pct = (s.value / max) * 100;
           return (
-            <div key={s.label} className="flex items-center gap-3">
-              <div className="flex items-center gap-2 w-[180px] shrink-0">
-                <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs text-foreground truncate">{s.label}</span>
+            <div key={s.label} className="flex items-center gap-2 sm:gap-3">
+              <div className="flex items-center gap-1.5 sm:gap-2 w-[110px] sm:w-[180px] shrink-0">
+                <Icon className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground shrink-0" />
+                <span className="text-[11px] sm:text-xs text-foreground truncate">{s.label}</span>
               </div>
               <div className="flex-1 h-7 bg-muted/40 rounded-lg overflow-hidden relative">
                 <div

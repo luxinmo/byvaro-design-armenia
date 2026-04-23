@@ -316,7 +316,11 @@ export default function Equipo() {
       <InviteMemberDialog
         open={inviteOpen}
         onClose={() => setInviteOpen(false)}
-        onInvite={({ email, role: inviteRole }) => {
+        onInvite={({ email, role: inviteRole, personalMessage: _msg }) => {
+          /* TODO(backend): POST /api/organization/invitations { email, role,
+           * personalMessage? } · el backend usa `renderTeamInvitation()` y
+           * envía el email vía SMTP. Aquí solo persistimos el placeholder
+           * para que aparezca en el listado de invitados. */
           const id = `u${Date.now()}`;
           setMembers((prev) => [
             ...prev,

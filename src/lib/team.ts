@@ -52,6 +52,14 @@ export type TeamMember = {
   twoFactorEnabled?: boolean;
   /** Cuántos registros ha aprobado/rechazado en los últimos 30 días. */
   recordsDecidedLast30d?: number;
+  /* ─── Plan de comisiones · opcional ─────────────────────────────
+     Porcentajes `0-100`. Cuando `undefined`, el miembro hereda el
+     plan por defecto del workspace o no tiene comisión (p. ej.
+     admin técnico, coordinadora). */
+  /** % que se lleva por captación (traer un lead al sistema). */
+  commissionCapturePct?: number;
+  /** % que se lleva por cerrar la venta asociada a un registro. */
+  commissionSalePct?: number;
 };
 
 export const TEAM_MEMBERS: TeamMember[] = [
@@ -63,7 +71,8 @@ export const TEAM_MEMBERS: TeamMember[] = [
     status: "active", visibleOnProfile: true, canSign: true, canAcceptRegistrations: true,
     joinedAt: "2026-01-12T10:00:00Z", lastActiveAt: "2026-04-23T16:40:00Z",
     emailAccountsCount: 2, emailsSentLast30d: 142,
-    whatsappLinked: true, twoFactorEnabled: true, recordsDecidedLast30d: 28 },
+    whatsappLinked: true, twoFactorEnabled: true, recordsDecidedLast30d: 28,
+    commissionCapturePct: 20, commissionSalePct: 40 },
   { id: "u2", name: "Laura Gómez", email: "laura@byvaro.com", role: "member",
     jobTitle: "Senior Property Consultant", department: "Comercial",
     languages: ["ES", "EN", "FR"],
@@ -72,7 +81,8 @@ export const TEAM_MEMBERS: TeamMember[] = [
     status: "active", visibleOnProfile: true, canAcceptRegistrations: true,
     joinedAt: "2026-02-20T10:00:00Z", lastActiveAt: "2026-04-23T14:15:00Z",
     emailAccountsCount: 1, emailsSentLast30d: 87,
-    whatsappLinked: true, twoFactorEnabled: true, recordsDecidedLast30d: 16 },
+    whatsappLinked: true, twoFactorEnabled: true, recordsDecidedLast30d: 16,
+    commissionCapturePct: 15, commissionSalePct: 35 },
   { id: "u3", name: "Diego Sánchez", email: "diego@byvaro.com", role: "member",
     jobTitle: "Property Consultant", department: "Comercial",
     languages: ["ES", "DE"],
@@ -81,7 +91,8 @@ export const TEAM_MEMBERS: TeamMember[] = [
     status: "active", visibleOnProfile: true,
     joinedAt: "2026-03-05T10:00:00Z", lastActiveAt: "2026-04-22T09:30:00Z",
     emailAccountsCount: 1, emailsSentLast30d: 43,
-    whatsappLinked: false, twoFactorEnabled: false, recordsDecidedLast30d: 4 },
+    whatsappLinked: false, twoFactorEnabled: false, recordsDecidedLast30d: 4,
+    commissionCapturePct: 10, commissionSalePct: 25 },
   { id: "u4", name: "Marta Jiménez", email: "marta@byvaro.com", role: "member",
     jobTitle: "Listings Coordinator", department: "Comercial",
     languages: ["ES", "EN"],
@@ -107,7 +118,8 @@ export const TEAM_MEMBERS: TeamMember[] = [
     status: "active", visibleOnProfile: true, canAcceptRegistrations: true,
     joinedAt: "2026-02-15T10:00:00Z", lastActiveAt: "2026-04-23T11:20:00Z",
     emailAccountsCount: 1, emailsSentLast30d: 64,
-    whatsappLinked: true, twoFactorEnabled: true, recordsDecidedLast30d: 11 },
+    whatsappLinked: true, twoFactorEnabled: true, recordsDecidedLast30d: 11,
+    commissionCapturePct: 15, commissionSalePct: 30 },
   { id: "u8", name: "Carlos Ruiz", email: "carlos.ruiz@byvaro.com", role: "admin",
     jobTitle: "Accountant", department: "Administración",
     languages: ["ES"],

@@ -88,9 +88,89 @@ interface TeamMember {
 y capacidad. Un `member` puede tener `canAcceptRegistrations = true` sin
 ser `admin`. Ver §6 de `docs/permissions.md` y ADR-048.
 
-**Mock inicial:** `TEAM_MEMBERS` en `src/lib/team.ts` (6 miembros que
+**Mock inicial:** `TEAM_MEMBERS` en `src/lib/team.ts` (8 miembros que
 cubren todos los estados). Se persisten cambios de admin en
-`byvaro.organization.members.v2`.
+`byvaro.organization.members.v4` (bump tras catálogo de jobTitles +
+avatars SVG).
+
+**Campos añadidos en abril 2026 (ver ADR-048 y ADR-049):**
+
+- Permisos granulares: `visibleOnProfile`, `canSign`,
+  `canAcceptRegistrations`.
+- Señales de estado (para el dashboard del admin): `emailAccountsCount`,
+  `emailsSentLast30d`, `whatsappLinked`, `twoFactorEnabled`,
+  `recordsDecidedLast30d`, `lastActiveAt`.
+- Plan de comisiones opcional: `commissionCapturePct` (% por captar un
+  lead) y `commissionSalePct` (% al cerrar la venta). `undefined` →
+  hereda plan por defecto del workspace.
+
+### MemberStats (dashboard de rendimiento)
+
+Fuente canónica: `src/data/memberStats.ts`. Consumido por el
+`MemberFormDialog` (resumen con 6 KPIs) y la página
+`/equipo/:id/estadisticas` (dashboard completo).
+
+> ⚠️ **Regla de oro de CLAUDE.md** (§📊 KPIs en el dashboard del miembro):
+> cualquier señal de actividad del trabajador con valor para valorar
+> desempeño debe añadirse aquí + mostrarse en la pantalla de stats.
+
+```ts
+type StatsWindow = "7d" | "30d" | "90d" | "year";
+
+interface MemberStats {
+  memberId: string;
+  window: StatsWindow;
+
+  /* ─── Resultados comerciales ─── */
+  salesCount: number;
+  salesValue: number;             // €
+  commissionValue: number;        // €
+  recordsApproved: number;
+  recordsTotal: number;
+  recordsDeclined: number;
+  visitsDone: number;
+  visitsScheduled: number;
+  conversionRate: number;         // 0-1 (visitas hechas / registros aprobados)
+
+  /* ─── Pipeline ─── */
+  openOpportunities: number;
+  assignedLeads: number;
+  pendingRecords: number;
+  assignedPromotions: number;
+  visitsUpcoming: number;         // próximas 7d
+
+  /* ─── Comunicación ─── */
+  emailsSent: number;
+  emailsOpenRate: number;         // 0-1
+  whatsappSent: number;
+  callsLogged: number;
+  avgLeadResponseMin: number;
+
+  /* ─── Actividad CRM (para IA) ─── */
+  avgDailyActiveMin: number;
+  avgSessionMin: number;
+  peakHour: number;               // 0-23
+  hourlyHeatmap: number[];        // 168 celdas · [día 0=Lun...6=Dom] × [hora 0...23]
+  daysWithoutLogin: number;
+  activeStreakDays: number;
+  actionsPerSession: number;
+  overduePendingTasks: number;
+  duplicatesCreated: number;
+  visitsUnevaluated: number;
+}
+```
+
+**Agregaciones disponibles:**
+
+- `getMemberStats(memberId, window)` · stats de un miembro.
+- `getTeamAverages(window)` · media del equipo (para benchmarks `↑34%`
+  vs media en `HeroKpis`).
+
+**Helpers de formato:** `formatEur`, `formatPct`, `formatMinutes`.
+
+**Próximo paso (IA):** `POST /api/ai/analyze-member/:id?window=30d`
+recibirá este mismo shape + medias del equipo y devolverá un informe
+`AIMemberReport` (ver `docs/plan-equipo-estadisticas.md §3`).
 
 ### Promoción (Promotion)
 
