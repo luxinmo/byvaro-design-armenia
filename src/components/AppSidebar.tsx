@@ -11,16 +11,18 @@
  *     ancho al cliente de correo sin hacer desaparecer la navegación.
  */
 
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
 import {
   Home, Tag, FileText, CircleDollarSign, CalendarDays,
   Handshake, Contact, Globe, Mail, Settings, ChevronsUpDown,
-  Building2, Inbox,
+  Building2, Inbox, User as UserIcon, LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEmpresa } from "@/lib/empresa";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useCurrentUser } from "@/lib/currentUser";
+import { logout } from "@/lib/accountType";
 
 type NavItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }>; badge?: string | number; accent?: boolean };
 type NavGroup = { label: string; items: NavItem[] };
@@ -61,6 +63,7 @@ const groups: NavGroup[] = [
 
 export function AppSidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { empresa } = useEmpresa();
   const currentUser = useCurrentUser();
   const isAgencyUser = currentUser.accountType === "agency";
@@ -68,6 +71,21 @@ export function AppSidebar() {
   const onEmpresaRoute = location.pathname.startsWith("/empresa");
   const necesitaOnboarding = !empresa.onboardingCompleto;
   const collapsed = COLLAPSED_ROUTES.some((r) => location.pathname.startsWith(r));
+
+  /* Dropdown del botón de usuario (pie del sidebar) · abre arriba porque
+   * el botón vive en la última fila. Cierra al clicar fuera o elegir opción. */
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [userMenuOpen]);
 
   /* En modo agencia, oculta rutas que sólo tienen sentido para el
    * promotor. Estas mismas rutas se redirigen en App.tsx vía
@@ -222,15 +240,21 @@ export function AppSidebar() {
           {!collapsed && <span>Ajustes</span>}
         </NavLink>
         <div
+          ref={userMenuRef}
           className={cn(
-            "mt-2 pt-3 border-t border-sidebar-border/60",
+            "relative mt-2 pt-3 border-t border-sidebar-border/60",
             collapsed ? "px-2" : "px-4",
           )}
         >
           <button
+            type="button"
+            onClick={() => setUserMenuOpen((o) => !o)}
+            aria-haspopup="menu"
+            aria-expanded={userMenuOpen}
             title={collapsed ? currentUser.name : undefined}
             className={cn(
-              "w-full flex items-center rounded-lg hover:bg-sidebar-accent/40 transition-colors",
+              "w-full flex items-center rounded-lg transition-colors",
+              userMenuOpen ? "bg-sidebar-accent/60" : "hover:bg-sidebar-accent/40",
               collapsed ? "justify-center py-2" : "gap-3 px-2 py-2",
             )}
           >
@@ -260,6 +284,63 @@ export function AppSidebar() {
               </>
             )}
           </button>
+
+          {userMenuOpen && (
+            <div
+              role="menu"
+              className={cn(
+                "absolute z-40 rounded-xl border border-border bg-card shadow-soft-lg overflow-hidden",
+                // Abre arriba del botón · ancho fijo en modo expanded,
+                // flotante a la derecha en modo collapsed.
+                collapsed
+                  ? "left-[calc(100%+8px)] bottom-0 w-56"
+                  : "left-4 right-4 bottom-[calc(100%+6px)]",
+              )}
+            >
+              <div className="px-3 py-2.5 border-b border-border">
+                <p className="text-[13px] font-semibold text-foreground truncate">{currentUser.name}</p>
+                <p className="text-[11px] text-muted-foreground truncate">{currentUser.email}</p>
+              </div>
+              <div className="py-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    navigate("/ajustes/perfil/personal");
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-foreground hover:bg-muted/60 transition-colors"
+                >
+                  <UserIcon className="h-4 w-4 text-muted-foreground" />
+                  Mi perfil
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    navigate("/ajustes");
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-foreground hover:bg-muted/60 transition-colors"
+                >
+                  <Settings className="h-4 w-4 text-muted-foreground" />
+                  Ajustes
+                </button>
+              </div>
+              <div className="border-t border-border py-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    logout();
+                    setUserMenuOpen(false);
+                    navigate("/login", { replace: true });
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Cerrar sesión
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </aside>
