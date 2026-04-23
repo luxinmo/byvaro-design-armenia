@@ -47,6 +47,35 @@ export type RegistroCliente = {
  */
 export type RegistroTipo = "registration" | "registration_visit";
 
+/**
+ * Evento del ciclo de vida del Registro · ActivityTimeline.
+ *
+ * Lifecycle típico:
+ *   1. submitted          — la agencia envía la solicitud.
+ *   2. auto_check         — la IA de duplicados ejecuta la comparación.
+ *   3. decision           — el promotor aprueba/rechaza/pide info.
+ *   4. notification       — la agencia recibe la notificación
+ *                           (con grace period de 5 min para revertir).
+ *   5. sent_to_developer  — el cliente queda registrado en la promoción.
+ */
+export type RegistroTimelineEvent = {
+  id: string;
+  type: "submitted" | "auto_check" | "decision" | "notification" | "sent_to_developer";
+  title: string;
+  description?: string;
+  timestamp: string;          // ISO
+  status: "completed" | "active" | "pending";
+  actor?: string;             // quién lo disparó (usuario o "Sistema")
+  actorRole?: string;
+  /** Para decisiones, qué se decidió. */
+  decisionType?: "approved" | "declined" | "info_requested";
+  decisionReason?: string;
+  /** Cuánto tardó (ej. "1h 24min") · para events de tipo decision. */
+  responseTime?: string;
+  /** Cuánto lleva esperando · para events active. */
+  waitingDuration?: string;
+};
+
 export type Registro = {
   id: string;
   /** "registration" por defecto · "registration_visit" si la solicitud
@@ -83,6 +112,10 @@ export type Registro = {
   decidedBy?: string;
   decidedByRole?: string;
   decisionNote?: string;
+  /** ISO · cuándo se decidió. Sirve para el GracePeriodBanner (5min). */
+  decidedAt?: string;
+  /** Audit log de eventos del ciclo de vida del registro. */
+  timeline?: RegistroTimelineEvent[];
   notas?: string;
   /** El agente marca haber obtenido el consentimiento RGPD del cliente. */
   consent: boolean;

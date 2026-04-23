@@ -57,9 +57,10 @@ export function DuplicateResult({ record }: { record: Registro }) {
         </div>
       </div>
 
-      {/* Tabla side-by-side */}
+      {/* Tabla side-by-side · en mobile (≤640px) las celdas se hacen
+       *  más compactas para evitar truncado agresivo de los valores. */}
       <div className="rounded-lg border border-border/40 overflow-hidden bg-card">
-        <div className="grid grid-cols-[1fr_1fr_1fr_28px] bg-muted/40 px-3 py-1.5">
+        <div className="grid grid-cols-[80px_1fr_1fr_24px] sm:grid-cols-[1fr_1fr_1fr_28px] bg-muted/40 px-2.5 sm:px-3 py-1.5 gap-2 sm:gap-3">
           <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Campo</span>
           <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Solicitud</span>
           <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Existente</span>
@@ -68,14 +69,14 @@ export function DuplicateResult({ record }: { record: Registro }) {
         {fields.map((f) => (
           <div
             key={f.field}
-            className="grid grid-cols-[1fr_1fr_1fr_28px] items-center px-3 py-2 border-t border-border/30"
+            className="grid grid-cols-[80px_1fr_1fr_24px] sm:grid-cols-[1fr_1fr_1fr_28px] items-center px-2.5 sm:px-3 py-2 gap-2 sm:gap-3 border-t border-border/30"
           >
-            <span className="text-[10px] text-muted-foreground font-medium">{f.field}</span>
-            <span className="text-xs font-semibold text-foreground truncate" title={f.newValue}>
+            <span className="text-[10px] text-muted-foreground font-medium truncate">{f.field}</span>
+            <span className="text-[11px] sm:text-xs font-semibold text-foreground break-words" title={f.newValue}>
               {f.newValue}
             </span>
             <span className={cn(
-              "text-xs truncate",
+              "text-[11px] sm:text-xs break-words",
               f.match ? "text-foreground font-medium" : "text-muted-foreground",
             )} title={f.existingValue}>
               {f.existingValue || "—"}

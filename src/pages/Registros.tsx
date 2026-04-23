@@ -54,6 +54,8 @@ import { cn } from "@/lib/utils";
 import { RegistrosKpis } from "@/components/registros/RegistrosKpis";
 import { MatchRing } from "@/components/registros/MatchRing";
 import { DuplicateResult } from "@/components/registros/DuplicateResult";
+import { ActivityTimeline } from "@/components/registros/ActivityTimeline";
+import { GracePeriodBanner } from "@/components/registros/GracePeriodBanner";
 
 /* ═══════════════════════════════════════════════════════════════════
    Helpers visuales
@@ -180,13 +182,30 @@ export default function Registros() {
     setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, estado } : r)));
   };
 
+  /** Aprobar/Rechazar marca `decidedAt` para activar el GracePeriodBanner.
+   *  TODO(backend): POST /api/records/:id/approve|reject programa la
+   *  notificación con delay 5min y la cancela si llega /revert antes. */
   const approve = (id: string) => {
-    setEstado(id, "aprobado");
-    toast.success("Registro aprobado", { description: "La agencia y el cliente recibirán confirmación." });
+    const now = new Date().toISOString();
+    setRecords((prev) => prev.map((r) => r.id === id ? {
+      ...r, estado: "aprobado", decidedAt: now,
+    } : r));
+    toast.success("Registro aprobado", { description: "Tienes 5 min para revertir antes de notificar a la agencia." });
   };
   const reject = (id: string) => {
-    setEstado(id, "rechazado");
-    toast.error("Registro rechazado", { description: "Se notifica a la agencia." });
+    const now = new Date().toISOString();
+    setRecords((prev) => prev.map((r) => r.id === id ? {
+      ...r, estado: "rechazado", decidedAt: now,
+    } : r));
+    toast.error("Registro rechazado", { description: "Tienes 5 min para revertir antes de notificar a la agencia." });
+  };
+
+  /** Revierte una decisión dentro del grace period (devuelve a pending). */
+  const revert = (id: string) => {
+    setRecords((prev) => prev.map((r) => r.id === id ? {
+      ...r, estado: "pendiente", decidedAt: undefined,
+    } : r));
+    toast.info("Decisión revertida", { description: "El registro vuelve a pendiente." });
   };
 
   const bulkApprove = () => {
@@ -352,8 +371,10 @@ export default function Registros() {
               {/* ─── LISTA MAESTRA ─── */}
               <aside
                 className={cn(
-                  "w-full lg:w-[420px] shrink-0 flex flex-col gap-2.5",
-                  // En móvil: si hay activeRecord ocultamos la lista (vista detalle)
+                  "w-full lg:w-[420px] shrink-0 flex flex-col gap-2.5 pb-24 lg:pb-0",
+                  // En móvil: si hay activeRecord ocultamos la lista (vista detalle).
+                  //  pb-24 evita que la última card quede tapada por
+                  //  el MobileBottomNav.
                   activeRecord && "hidden lg:flex",
                 )}
               >
@@ -456,6 +477,7 @@ export default function Registros() {
                     agencyLocation={agencyById.get(activeRecord.agencyId)?.location ?? ""}
                     onApprove={() => approve(activeRecord.id)}
                     onReject={() => reject(activeRecord.id)}
+                    onRevert={() => revert(activeRecord.id)}
                     onBack={() => setActiveId(null)}
                   />
                 ) : (
@@ -532,6 +554,7 @@ function RegistroDetail({
   agencyLocation,
   onApprove,
   onReject,
+  onRevert,
   onBack,
 }: {
   record: Registro;
@@ -541,6 +564,7 @@ function RegistroDetail({
   agencyLocation: string;
   onApprove: () => void;
   onReject: () => void;
+  onRevert: () => void;
   onBack: () => void;
 }) {
   const level = getMatchLevel(record.matchPercentage);
@@ -705,6 +729,19 @@ function RegistroDetail({
           </div>
         </div>
       )}
+
+      {/* GracePeriodBanner — visible 5min tras aprobar/rechazar.
+       *  Permite revertir antes de notificar a la agencia. */}
+      {(record.estado === "aprobado" || record.estado === "rechazado") && (
+        <div className="px-4 sm:px-6 mt-4">
+          <GracePeriodBanner record={record} onRevert={onRevert} />
+        </div>
+      )}
+
+      {/* ActivityTimeline — siempre visible. Cronología del registro. */}
+      <div className="px-4 sm:px-6 py-5 border-t border-border/40">
+        <ActivityTimeline record={record} />
+      </div>
 
       {/* Footer de acciones */}
       <div className="border-t border-border bg-card px-4 sm:px-6 py-4 flex flex-wrap items-center gap-2">
