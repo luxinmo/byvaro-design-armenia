@@ -290,7 +290,7 @@ function LeadRow({
       </td>
 
       {/* Interés · thumbnail + promoción + tipología + presupuesto */}
-      <td className="px-3 py-3 align-top">
+      <td className="px-3 py-3 align-middle">
         <div className="flex items-start gap-2.5 min-w-0">
           {/* Thumbnail de la promoción referenciada · mismo tamaño que las
               miniaturas del catálogo de Disponibilidad
@@ -323,14 +323,14 @@ function LeadRow({
       </td>
 
       {/* Origen */}
-      <td className="px-3 py-3 align-top">
+      <td className="px-3 py-3 align-middle">
         <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground bg-muted rounded-full px-2 py-0.5">
           {leadSourceLabel[l.source]}
         </span>
       </td>
 
       {/* Recibido */}
-      <td className="px-3 py-3 align-top">
+      <td className="px-3 py-3 align-middle">
         <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
           <Clock className="h-3 w-3" strokeWidth={1.75} />
           {relativeTime(l.createdAt)}
@@ -343,7 +343,7 @@ function LeadRow({
       </td>
 
       {/* Estado */}
-      <td className="px-3 py-3 text-center align-top">
+      <td className="px-3 py-3 text-center align-middle">
         <span className={cn("inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-2 py-0.5", status.badgeClass)}>
           <span className={cn("h-1.5 w-1.5 rounded-full", status.dotClass)} />
           {status.label}
@@ -351,7 +351,7 @@ function LeadRow({
       </td>
 
       {/* Kebab */}
-      <td className="px-2 py-3 text-right align-top" onClick={(e) => e.stopPropagation()}>
+      <td className="px-2 py-3 text-right align-middle" onClick={(e) => e.stopPropagation()}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
