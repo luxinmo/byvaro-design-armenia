@@ -27,13 +27,28 @@ export type LeadSource =
   | "walkin"
   | "call";
 
+/** Pipeline unificado: Lead y Oportunidad conviven en la misma entidad.
+ *  El lead entra en `solicitud` y va avanzando por el embudo hasta
+ *  `ganada` / `perdida` (o `duplicate` si la IA detecta doble entrada).
+ *
+ *  Orden canónico:
+ *    1. solicitud   · entrada cruda sin cualificar
+ *    2. contactado  · ya se contactó (email/call/WS)
+ *    3. visita      · visita programada o realizada (label "En visita")
+ *    4. evaluacion  · post-visita, cliente evalúa
+ *    5. negociando  · oferta concreta en negociación
+ *    6. ganada      · terminal · cliente firmado/reservó
+ *    7. perdida     · terminal · se descartó
+ *    8. duplicate   · IA detectó que es doble entrada */
 export type LeadStatus =
-  | "new"          // recién entrado, sin revisar
-  | "qualified"    // revisado, cumple requisitos mínimos
-  | "contacted"    // alguien del equipo ya contactó
-  | "duplicate"    // detectado duplicado por la IA
-  | "rejected"     // descartado manualmente
-  | "converted";   // promovido a Registro
+  | "solicitud"
+  | "contactado"
+  | "visita"
+  | "evaluacion"
+  | "negociando"
+  | "ganada"
+  | "perdida"
+  | "duplicate";
 
 export type LeadInterest = {
   /** Promoción con la que el lead ha mostrado interés. */
@@ -93,13 +108,15 @@ export const leadSourceLabel: Record<LeadSource, string> = {
   call:       "Llamada",
 };
 
-export const leadStatusConfig: Record<LeadStatus, { label: string; badgeClass: string; dotClass: string }> = {
-  new:        { label: "Nuevo",       badgeClass: "bg-primary/10 text-primary border border-primary/25",             dotClass: "bg-primary" },
-  qualified:  { label: "Cualificado", badgeClass: "bg-sky-50 text-sky-800 border border-sky-200",                    dotClass: "bg-sky-500" },
-  contacted:  { label: "Contactado",  badgeClass: "bg-warning/10 text-warning border border-warning/25",              dotClass: "bg-warning" },
-  duplicate:  { label: "Duplicado",   badgeClass: "bg-destructive/5 text-destructive border border-destructive/25",  dotClass: "bg-destructive" },
-  rejected:   { label: "Descartado",  badgeClass: "bg-muted text-muted-foreground border border-border",             dotClass: "bg-muted-foreground" },
-  converted:  { label: "Convertido",  badgeClass: "bg-success/10 text-success border border-success/25",        dotClass: "bg-success" },
+export const leadStatusConfig: Record<LeadStatus, { label: string; order: number; badgeClass: string; dotClass: string }> = {
+  solicitud:  { label: "Solicitud",  order: 1, badgeClass: "bg-primary/10 text-primary border border-primary/25",            dotClass: "bg-primary" },
+  contactado: { label: "Contactado", order: 2, badgeClass: "bg-cyan-50 text-cyan-800 border border-cyan-200",                dotClass: "bg-cyan-500" },
+  visita:     { label: "En visita",  order: 3, badgeClass: "bg-sky-50 text-sky-800 border border-sky-200",                   dotClass: "bg-sky-500" },
+  evaluacion: { label: "Evaluación", order: 4, badgeClass: "bg-indigo-50 text-indigo-800 border border-indigo-200",          dotClass: "bg-indigo-500" },
+  negociando: { label: "Negociando", order: 5, badgeClass: "bg-warning/10 text-warning border border-warning/25",            dotClass: "bg-warning" },
+  ganada:     { label: "Ganada",     order: 6, badgeClass: "bg-success/10 text-success border border-success/25",            dotClass: "bg-success" },
+  perdida:    { label: "Perdida",    order: 7, badgeClass: "bg-muted text-muted-foreground border border-border",            dotClass: "bg-muted-foreground" },
+  duplicate:  { label: "Duplicado",  order: 8, badgeClass: "bg-destructive/5 text-destructive border border-destructive/25", dotClass: "bg-destructive" },
 };
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -118,7 +135,7 @@ export const leads: Lead[] = [
     nationality: "RU",
     idioma: "RU",
     source: "idealista",
-    status: "new",
+    status: "solicitud",
     interest: {
       promotionId: "dev-1",
       promotionName: "Villa Serena",
@@ -139,7 +156,7 @@ export const leads: Lead[] = [
     nationality: "FR",
     idioma: "FR",
     source: "fotocasa",
-    status: "new",
+    status: "solicitud",
     interest: {
       promotionId: "dev-4",
       promotionName: "Terrazas del Golf",
@@ -158,7 +175,7 @@ export const leads: Lead[] = [
     nationality: "SE",
     idioma: "EN",
     source: "microsite",
-    status: "qualified",
+    status: "evaluacion",
     interest: {
       promotionId: "dev-5",
       promotionName: "Mar Azul Residences",
@@ -179,7 +196,7 @@ export const leads: Lead[] = [
     nationality: "DE",
     idioma: "DE",
     source: "idealista",
-    status: "contacted",
+    status: "visita",
     interest: {
       promotionId: "dev-3",
       promotionName: "Residencial Aurora",
@@ -201,7 +218,7 @@ export const leads: Lead[] = [
     nationality: "GB",
     idioma: "EN",
     source: "agency",
-    status: "new",
+    status: "solicitud",
     interest: {
       promotionId: "dev-1",
       promotionName: "Villa Serena",
@@ -242,7 +259,7 @@ export const leads: Lead[] = [
     nationality: "IT",
     idioma: "IT",
     source: "microsite",
-    status: "new",
+    status: "solicitud",
     interest: {
       promotionId: "dev-3",
       promotionName: "Residencial Aurora",
@@ -261,7 +278,7 @@ export const leads: Lead[] = [
     nationality: "FR",
     idioma: "FR",
     source: "referral",
-    status: "converted",
+    status: "ganada",
     interest: {
       promotionId: "dev-4",
       promotionName: "Terrazas del Golf",
@@ -282,7 +299,7 @@ export const leads: Lead[] = [
     nationality: "DE",
     idioma: "DE",
     source: "whatsapp",
-    status: "new",
+    status: "contactado",
     interest: {
       promotionId: "dev-1",
       promotionName: "Villa Serena",
@@ -303,7 +320,7 @@ export const leads: Lead[] = [
     nationality: "US",
     idioma: "EN",
     source: "walkin",
-    status: "qualified",
+    status: "negociando",
     interest: {
       promotionId: "dev-1",
       promotionName: "Villa Serena",
@@ -325,7 +342,7 @@ export const leads: Lead[] = [
     nationality: "JP",
     idioma: "EN",
     source: "microsite",
-    status: "rejected",
+    status: "perdida",
     interest: {
       promotionId: "dev-5",
       promotionName: "Mar Azul Residences",
@@ -344,7 +361,7 @@ export const leads: Lead[] = [
     nationality: "NO",
     idioma: "EN",
     source: "idealista",
-    status: "new",
+    status: "solicitud",
     interest: {
       promotionId: "dev-5",
       promotionName: "Mar Azul Residences",

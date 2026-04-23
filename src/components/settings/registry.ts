@@ -165,9 +165,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         { label: "Ventanas de visita", to: "/ajustes/registros/visitas" },
         { label: "Flujo de aprobación", to: "/ajustes/registros/aprobacion" },
       ]},
-      { id: "leads-oportunidades", title: "Leads y oportunidades", icon: Zap, links: [
-        { label: "Flujo y conversión", to: "/ajustes/leads-oportunidades", live: true },
-      ]},
       { id: "calendario", title: "Calendario y visitas", icon: Calendar, links: [
         { label: "Horario laboral", to: "/ajustes/calendario/horario" },
         { label: "Duración de visitas", to: "/ajustes/calendario/duracion" },

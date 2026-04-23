@@ -152,11 +152,9 @@ Ficha de contacto completa con 8 tabs operativos. Spec en
 - ✅ Catálogo dinámico de tipos de relación (`/ajustes/contactos/relaciones` · ADR-044)
 - ✅ Documentación canónica de permisos ([`docs/permissions.md`](docs/permissions.md))
 - ⬜ Listado `/contactos` con filtros + visibilidad por ownership
-- ✅ Vista de detalle de Oportunidad (`/oportunidades/:id` · ADR-052)
-- ✅ Listado de Oportunidades con filtros (`/oportunidades` · ADR-052)
-- ✅ Conversión Lead → Oportunidad con dialog (UI mock · ADR-052)
-- ✅ Settings `/ajustes/leads-oportunidades` (flow mode · etapa inicial · badges)
-- ⬜ `AddOpportunityDialog` (CTA stub en Operaciones del contacto)
+- ✅ Pipeline unificado dentro de Lead · sin entidad Oportunidad separada (ADR-053 · revierte ADR-052)
+- ✅ Listado `/leads` con KPIs por etapa + segmented + thumbnail promoción + responsable único
+- ⬜ Ficha interior `/leads/:id` con pipeline bar + mover etapa + matching + timeline completo
 - ⬜ Implementar gating de permisos por ownership en todos los listados (deuda en `docs/permissions.md` §6)
 
 ### ⬜ Fase 10 — Calendario

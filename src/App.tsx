@@ -7,8 +7,6 @@ import Promociones from "@/pages/Promociones";
 import Registros from "@/pages/Registros";
 import Leads from "@/pages/Leads";
 import LeadDetalle from "@/pages/LeadDetalle";
-import Oportunidades from "@/pages/Oportunidades";
-import OportunidadDetalle from "@/pages/OportunidadDetalle";
 import Ventas from "@/pages/Ventas";
 import Calendario from "@/pages/Calendario";
 import Colaboradores from "@/pages/Colaboradores";
@@ -37,7 +35,6 @@ import AjustesContactosRelaciones from "@/pages/ajustes/contactos/relaciones";
 import AjustesIdioma from "@/pages/ajustes/idioma-region/idioma";
 import AjustesZonaHoraria from "@/pages/ajustes/idioma-region/zona-horaria";
 import AjustesFormatoFecha from "@/pages/ajustes/idioma-region/formato-fecha";
-import AjustesLeadsOportunidades from "@/pages/ajustes/leads-oportunidades";
 import AjustesMoneda from "@/pages/ajustes/idioma-region/moneda";
 import AjustesPerfilPersonal from "@/pages/ajustes/perfil/personal";
 import AjustesPerfilContacto from "@/pages/ajustes/perfil/contacto";
@@ -160,7 +157,6 @@ export default function App() {
                 <Route path="idioma-region/zona-horaria" element={<AjustesZonaHoraria />} />
                 <Route path="idioma-region/formato-fecha" element={<AjustesFormatoFecha />} />
                 <Route path="idioma-region/moneda" element={<AjustesMoneda />} />
-                <Route path="leads-oportunidades" element={<AjustesLeadsOportunidades />} />
                 <Route path="email" element={<AjustesEmailIndex />} />
                 <Route path="email/firma" element={<AjustesEmailFirma />} />
                 <Route path="email/plantillas" element={<AjustesEmailPlantillas />} />
@@ -193,8 +189,6 @@ export default function App() {
                 <Route path="/promociones/:id" element={<PromocionDetalle />} />
                 <Route path="/leads" element={<PromotorOnly><Leads /></PromotorOnly>} />
                 <Route path="/leads/:id" element={<PromotorOnly><LeadDetalle /></PromotorOnly>} />
-                <Route path="/oportunidades" element={<Oportunidades />} />
-                <Route path="/oportunidades/:id" element={<OportunidadDetalle />} />
                 <Route path="/registros" element={<Registros />} />
                 <Route path="/ventas" element={<Ventas />} />
                 <Route path="/calendario" element={<Calendario />} />

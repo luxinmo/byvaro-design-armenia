@@ -1,24 +1,22 @@
 /**
- * Leads · bandeja de entrada de potenciales compradores sin cualificar.
+ * Leads · pipeline unificado de potenciales compradores.
  *
- * Muestra los leads crudos (portales, microsite, agencias, WhatsApp…)
- * antes de ser promovidos a `Registro` o descartados. La IA de
- * duplicados marca los que probablemente ya existen como contacto
- * (`duplicateScore ≥ 70`).
+ * En Byvaro no hay entidad "Oportunidad" separada: el lead entra y va
+ * recorriendo las etapas (`solicitud → contactado → visita →
+ * evaluación → negociando → ganada/perdida`) dentro de la misma
+ * pantalla. La IA de duplicados marca los que probablemente ya
+ * existen como contacto (`duplicateScore ≥ 70`).
  *
  * Actualmente es una pantalla de listado con:
- *   - 5 KPI chips arriba (Total · Nuevos · Cualificados · Duplicados · Convertidos).
- *   - Filter bar: buscador, segmentado rápido por estado.
- *   - Tabla con filas expandibles + kebab de acciones por lead.
+ *   - 5 KPI chips arriba (Activos · En visita · Negociando · Ganadas · Duplicados).
+ *   - Filter bar: buscador, segmentado rápido por etapa del pipeline.
+ *   - Tabla con thumbnail de promoción, responsable y etapa.
  *
  * TODO(backend): `GET /api/leads` con paginación y filtros. Ver
  *   `docs/backend-integration.md §7.1`. Hoy data de `src/data/leads.ts`.
- * TODO(backend): kebab → endpoints de §7.1:
- *   - Llamar/email/whatsapp = telemetría + grabar `firstResponseAt`.
- *   - Convertir → `POST /api/leads/:id/convert`.
- *   - Descartar → `PATCH /api/leads/:id { status: "rejected" }`.
+ * TODO(backend): cambios de etapa → `PATCH /api/leads/:id { status }`.
  * TODO(ui): filtros avanzados (origen, nacionalidad, presupuesto, asignado).
- * TODO(ui): ficha detalle `/leads/:id` con timeline + match duplicados.
+ * TODO(ui): ficha detalle `/leads/:id` con pipeline bar + matching + timeline.
  */
 
 import { useMemo, useState } from "react";
@@ -73,13 +71,15 @@ export default function Leads() {
   const [quickFilter, setQuickFilter] = useState<LeadStatus | "all">("all");
 
   const counts = useMemo(() => ({
-    total:      allLeads.length,
-    new:        allLeads.filter((l) => l.status === "new").length,
-    qualified:  allLeads.filter((l) => l.status === "qualified").length,
-    contacted:  allLeads.filter((l) => l.status === "contacted").length,
-    duplicate:  allLeads.filter((l) => l.status === "duplicate").length,
-    converted:  allLeads.filter((l) => l.status === "converted").length,
-    rejected:   allLeads.filter((l) => l.status === "rejected").length,
+    total:       allLeads.length,
+    solicitud:   allLeads.filter((l) => l.status === "solicitud").length,
+    contactado:  allLeads.filter((l) => l.status === "contactado").length,
+    visita:      allLeads.filter((l) => l.status === "visita").length,
+    evaluacion:  allLeads.filter((l) => l.status === "evaluacion").length,
+    negociando:  allLeads.filter((l) => l.status === "negociando").length,
+    ganada:      allLeads.filter((l) => l.status === "ganada").length,
+    perdida:     allLeads.filter((l) => l.status === "perdida").length,
+    duplicate:   allLeads.filter((l) => l.status === "duplicate").length,
   }), []);
 
   const filtered = useMemo(() => {
@@ -127,11 +127,11 @@ export default function Leads() {
 
           {/* KPIs */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 mt-5">
-            <KpiChip label="Total"        value={counts.total}     icon={Inbox}          tone="neutral" />
-            <KpiChip label="Nuevos"       value={counts.new}       icon={UserPlus}       tone="primary" />
-            <KpiChip label="Cualificados" value={counts.qualified} icon={CheckCircle2}   tone="sky" />
-            <KpiChip label="Duplicados"   value={counts.duplicate} icon={AlertTriangle}  tone="destructive" />
-            <KpiChip label="Convertidos"  value={counts.converted} icon={ArrowUpRight}   tone="emerald" />
+            <KpiChip label="Solicitudes" value={counts.solicitud}  icon={Inbox}          tone="primary" />
+            <KpiChip label="Contactado"  value={counts.contactado} icon={UserPlus}       tone="sky" />
+            <KpiChip label="En visita"   value={counts.visita}     icon={CheckCircle2}   tone="sky" />
+            <KpiChip label="Evaluación"  value={counts.evaluacion} icon={Filter}         tone="primary" />
+            <KpiChip label="Negociando"  value={counts.negociando} icon={AlertTriangle}  tone="warning" />
           </div>
 
           {/* Toolbar */}
@@ -158,12 +158,14 @@ export default function Leads() {
             {/* Segmented quick filter */}
             <div className="inline-flex items-center bg-muted rounded-full p-1 gap-0.5 shrink-0 overflow-x-auto no-scrollbar">
               {([
-                { key: "all" as const,       label: "Todos",       count: counts.total },
-                { key: "new" as const,       label: "Nuevos",      count: counts.new },
-                { key: "qualified" as const, label: "Cualificados",count: counts.qualified },
-                { key: "contacted" as const, label: "Contactados", count: counts.contacted },
-                { key: "duplicate" as const, label: "Duplicados",  count: counts.duplicate },
-                { key: "converted" as const, label: "Convertidos", count: counts.converted },
+                { key: "all" as const,        label: "Todos",       count: counts.total },
+                { key: "solicitud" as const,  label: "Solicitudes", count: counts.solicitud },
+                { key: "contactado" as const, label: "Contactado",  count: counts.contactado },
+                { key: "visita" as const,     label: "En visita",   count: counts.visita },
+                { key: "evaluacion" as const, label: "Evaluación",  count: counts.evaluacion },
+                { key: "negociando" as const, label: "Negociando",  count: counts.negociando },
+                { key: "ganada" as const,     label: "Ganadas",     count: counts.ganada },
+                { key: "duplicate" as const,  label: "Duplicados",  count: counts.duplicate },
               ]).map((opt) => {
                 const selected = quickFilter === opt.key;
                 return (
@@ -367,7 +369,7 @@ function KpiChip({
   label: string;
   value: number;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
-  tone: "neutral" | "primary" | "sky" | "emerald" | "destructive";
+  tone: "neutral" | "primary" | "sky" | "emerald" | "destructive" | "warning";
 }) {
   const toneClass = {
     neutral:     "bg-card border-border text-foreground",
@@ -375,6 +377,7 @@ function KpiChip({
     sky:         "bg-sky-50 border-sky-200 text-sky-800",
     emerald:     "bg-success/10 border-success/25 text-success",
     destructive: "bg-destructive/5 border-destructive/20 text-destructive",
+    warning:     "bg-warning/10 border-warning/25 text-warning",
   }[tone];
 
   return (

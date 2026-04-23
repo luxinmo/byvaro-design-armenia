@@ -1652,69 +1652,72 @@ Ver: `src/lib/assetOwnership.ts`,
 `docs/screens/equipo.md §Desactivar miembro`.
 
 
-## 2026-04-23 · ADR-052 · Oportunidades como entidad standalone con pipeline fijo
+## 2026-04-23 · ADR-052 · ~~Oportunidades como entidad standalone~~ · **REVERTIDO**
 
-**Contexto.** Hasta ahora las oportunidades vivían **embebidas** dentro
-de la ficha de contacto (`ContactOpportunityEntry` en
-`src/components/contacts/types.ts`). Eso funcionaba para mostrar
-"compras en curso" del contacto, pero faltaba el otro lado: la vista
-**comercial** del equipo — pipeline del equipo, embudo, ranking,
-filtros de etapa. Cuando el usuario pidió diseñar Leads + Oportunidades
-como flujo comercial de verdad, quedó claro que el contacto no era el
-contenedor correcto.
+> **Status: SUPERSEDED por ADR-053**. Esta decisión se revirtió el
+> mismo día tras probar el diseño: la distinción Lead/Oportunidad
+> añadía fricción sin aportar claridad. Se vuelve a una sola entidad
+> **Lead** con pipeline interno de etapas (ver ADR-053).
 
-**Decisión.**
-1. **Oportunidad es una entidad standalone** (`src/data/opportunities.ts`
-   → `Opportunity`) con su propia pantalla `/oportunidades` + ficha
-   `/oportunidades/:id`. El `contactId` la liga al contacto canónico,
-   pero el concepto vive por su cuenta.
-2. **Pipeline fijo V1**: Interés → Visita → Evaluación → Negociación →
-   Ganada (+ Perdida como terminal). Sin customización por workspace.
-   Esto evita que el diseño V1 se vuelva un constructor de etapas y
-   deja espacio para iterar con datos reales antes de abrir la puerta.
-3. **Los registros viven dentro de la oportunidad** como bloque
-   colapsable, no fuera. Una oportunidad puede tener 0..N registros
-   (un cliente se puede registrar en varias promociones a la vez). El
-   badge "Registro pendiente" sube a la cabecera y al listado cuando
-   hay al menos uno `status=pendiente`.
-4. **El flow por defecto es `Lead → Oportunidad`**, no `Lead → Registro`.
-   El CTA principal en la ficha del lead cambia a "Convertir a
-   oportunidad" y abre un dialog que lista qué se preserva (historia,
-   emails, comentarios, interés, promoción origen). El setting
-   `/ajustes/leads-oportunidades` deja alternar a "Directo a
-   oportunidad" para equipos que quieran saltarse la fase de lead.
-5. **Acciones primarias máx 5** en la cabecera de la ficha; todo lo
-   secundario va bajo **"Ver más opciones"** (regla dura del spec del
-   usuario). Los primarios: Comentar · Enviar email · Registrar
-   cliente · Programar visita · Mover etapa.
+**Contexto original.** Se diseñaron Leads + Oportunidades como dos
+entidades separadas con una pantalla cada una (`/leads` + `/oportunidades`),
+un seed propio (`src/data/opportunities.ts`), conversión manual
+`Lead → Oportunidad` con diálogo de confirmación y settings en
+`/ajustes/leads-oportunidades` para alternar el flow-mode.
 
-**Por qué no reutilizar `ContactOpportunityEntry`.**
-- Ese tipo es un **resumen** (lo justo para pintar una card de
-  operación en la ficha de contacto). Una oportunidad real tiene
-  matching con IA, registros asociados, timeline propio, emails
-  propios, pipeline con 5 etapas. Meter todo eso en el tipo
-  "embebido" ensucia el contrato del contacto.
-- La auditoría cruzada (oportunidad ↔ contacto) queda más limpia si
-  son entidades separadas: cada evento se escribe en los dos
-  timelines (`opportunity.timeline` + `contact.history`).
+**Por qué se revirtió.** Al usar la UI quedó claro que para el tamaño
+del equipo y la operativa del promotor inmobiliario no hace falta la
+separación. "Está contactado", "en visita" o "negociando" son estados
+del mismo lead, no conceptos distintos. Mantener dos listados + dos
+fichas + una conversión manual era peso muerto: el comercial salta
+entre pantallas para seguir al mismo cliente.
 
-**Consecuencia clara.** En backend:
-- Los registros (`src/data/records.ts`) van a tener un `opportunityId`
-  opcional cuando lleguen desde una ficha de oportunidad. Los del lado
-  agencia seguirán sin `opportunityId` hasta que el admin cree la
-  oportunidad correspondiente. Migración tipada sin drama.
+Decisión nueva: pipeline interno en la entidad Lead (ADR-053).
+
+**Archivos borrados en el revert.**
+- `src/data/opportunities.ts`
+- `src/pages/Oportunidades.tsx`
+- `src/pages/OportunidadDetalle.tsx`
+- `src/pages/ajustes/leads-oportunidades.tsx`
+- `docs/screens/oportunidades.md`
+- `docs/screens/oportunidad-detalle.md`
+- §7.3 de `docs/backend-integration.md`
+
+## 2026-04-23 · ADR-053 · Pipeline unificado dentro de Lead (sin entidad Oportunidad)
+
+**Decisión.** En Byvaro no existe una entidad "Oportunidad" separada.
+Todo cliente potencial vive en la lista de **Leads** y avanza por un
+pipeline de 5 etapas + 2 terminales:
+
+```
+solicitud → contactado → visita → evaluacion → negociando → ganada | perdida
+                                                           + duplicate (IA)
+```
+
+- La etapa se guarda en `lead.status` (ampliación del enum
+  `LeadStatus` en `src/data/leads.ts`).
+- No hay conversión manual ni botón "Convertir a oportunidad" — el
+  comercial simplemente cambia la etapa desde la ficha del lead.
+- Un solo listado (`/leads`), una sola ficha (`/leads/:id`), un solo
+  pipeline. La ficha interior se diseñará en una iteración siguiente
+  con la barra de etapas, matching e historial dentro del mismo lead.
+
+**Por qué.** Fricción. La distinción Lead/Oportunidad pertenece a
+CRMs grandes con equipos segmentados (SDR → AE). Para un promotor
+inmobiliario, es el mismo comercial quien lleva al cliente desde que
+entra hasta que firma — separarlo en dos entidades solo duplica UI y
+obliga a una conversión manual que no aporta.
+
+**Implicación en mocks / backend.**
+- Los 12 leads del seed cubren ahora las 5 etapas (distribuidos para
+  demo: solicitud · contactado · visita · evaluacion · negociando ·
+  ganada · perdida · duplicate).
+- Backend: `PATCH /api/leads/:id { status }` para avanzar etapa.
+  Cuando toque, cada cambio emitirá evento en el timeline del lead y
+  en el historial del contacto (regla §🥇).
 
 Ver:
-- `src/data/opportunities.ts` · tipos + seed con 7 oportunidades
-  cubriendo todos los estados del spec.
-- `src/pages/Oportunidades.tsx` · listado con KPIs + filtros
-  compactos + "Más filtros" + tabla.
-- `src/pages/OportunidadDetalle.tsx` · ficha completa con pipeline
-  bar + matching + registros colapsables + timeline + comunicación +
-  "Ver más opciones".
-- `src/pages/LeadDetalle.tsx:ConvertToOpportunityDialog` · diálogo de
-  conversión (mock).
-- `src/pages/ajustes/leads-oportunidades.tsx` · flow mode + etapa
-  inicial + toggles.
-- `docs/screens/oportunidades.md`, `docs/screens/oportunidad-detalle.md`.
-- `docs/backend-integration.md §7.3 Oportunidades`.
+- `src/data/leads.ts` · `LeadStatus` + `leadStatusConfig`.
+- `src/pages/Leads.tsx` · KPIs + segmented por etapa actualizados.
+- `src/pages/LeadDetalle.tsx` · sin diálogo de conversión (queda
+  pendiente la iteración de la vista de dentro).
