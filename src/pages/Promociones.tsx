@@ -22,11 +22,13 @@ import { Tag } from "@/components/ui/Tag";
 import { PromocionesMap } from "@/components/promociones/PromocionesMap";
 import { cn } from "@/lib/utils";
 import { MinimalSort } from "@/components/ui/MinimalSort";
+import { ViewToggle } from "@/components/ui/ViewToggle";
 import { listDrafts, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
 import { Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
 import { useCurrentUser } from "@/lib/currentUser";
+import { canPublishPromotion } from "@/lib/publicationRequirements";
 
 /* ═══════════════════════════════════════════════════════════════════
    Opciones estáticas (las dinámicas se derivan de los datos en el componente)
@@ -413,13 +415,24 @@ export default function Promociones() {
       /* Agencia: une promociones públicas + developerOnly (hay agencias
        * invitadas a colaborar en ambas) y filtra por los IDs que figuran
        * en `promotionsCollaborating` de la agencia activa. Los borradores
-       * del promotor nunca son visibles. */
+       * del promotor nunca son visibles. Además:
+       *   · status === "active" (publicada, no archivada/incompleta)
+       *   · canPublishPromotion(p) (todos los campos obligatorios OK)
+       *   · canShareWithAgencies !== false (el promotor no desactivó la
+       *     compartición)
+       * Si una promo falla cualquiera de estos, no existe para la agencia. */
       const collaboratingIds = new Set(activeAgency?.promotionsCollaborating ?? []);
       const pool: DevPromotion[] = [
         ...developerOnlyPromotions,
         ...promotions.map((p) => ({ ...p } as DevPromotion)),
       ];
-      return pool.filter((p) => collaboratingIds.has(p.id));
+      return pool.filter((p) => {
+        if (!collaboratingIds.has(p.id)) return false;
+        if (p.status !== "active") return false;
+        if (!canPublishPromotion(p as unknown as Promotion)) return false;
+        if ((p as DevPromotion).canShareWithAgencies === false) return false;
+        return true;
+      });
     }
     return [...draftPromotions, ...developerOnlyPromotions, ...promotions.map((p) => ({ ...p } as DevPromotion))];
   }, [draftPromotions, isAgencyUser, activeAgency]);
@@ -714,11 +727,17 @@ export default function Promociones() {
 
             {/* Toggle Lista / Cuadrícula / Mapa — sólo desde sm+. En
                 móvil mostramos una sola vista (lista) para simplificar. */}
-            <div className="hidden sm:inline-flex items-center bg-muted/40 border border-border rounded-full p-0.5 text-xs">
-              <ViewToggleBtn active={viewMode === "list"} onClick={() => setViewMode("list")} icon={List} label="Lista" />
-              <ViewToggleBtn active={viewMode === "grid"} onClick={() => setViewMode("grid")} icon={LayoutGrid} label="Cuadrícula" />
-              <ViewToggleBtn active={viewMode === "map"} onClick={() => setViewMode("map")} icon={MapIcon} label="Mapa" />
-            </div>
+            <ViewToggle
+              value={viewMode}
+              onChange={setViewMode}
+              iconOnly
+              hiddenOnMobile
+              options={[
+                { value: "list", icon: List,       label: "Lista" },
+                { value: "grid", icon: LayoutGrid, label: "Cuadrícula" },
+                { value: "map",  icon: MapIcon,    label: "Mapa" },
+              ]}
+            />
           </div>
         </div>
       </div>
@@ -779,7 +798,7 @@ export default function Promociones() {
                     isDraft
                       ? "border-dashed border-primary/40"
                       : hasMissing
-                      ? "border-destructive/30 ring-1 ring-destructive/10"
+                      ? "border-border"
                       : trending
                       ? "border-border ring-1 ring-warning/40"
                       : "border-border"
@@ -869,12 +888,16 @@ export default function Promociones() {
                       )}
                     </div>
 
-                    {/* Missing steps warning */}
+                    {/* Missing steps · aviso neutral (gris). En el listado es
+                        información, no un error — una promoción recién creada
+                        naturalmente tiene pasos pendientes. El tono rojo se
+                        reserva para dentro de la ficha cuando el promotor la
+                        abre para publicar. */}
                     {hasMissing && (
-                      <div className="flex items-start gap-2.5 mb-3 px-3 py-2.5 rounded-xl bg-destructive/5 border border-destructive/20">
-                        <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                      <div className="flex items-start gap-2.5 mb-3 px-3 py-2.5 rounded-xl bg-muted/40 border border-border">
+                        <AlertTriangle className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" strokeWidth={1.5} />
                         <div>
-                          <p className="text-sm xl:text-xs font-semibold text-destructive mb-0.5">Pasos pendientes para publicar</p>
+                          <p className="text-sm xl:text-xs font-semibold text-foreground mb-0.5">Pasos pendientes para publicar</p>
                           <p className="text-sm xl:text-xs text-muted-foreground">{p.missingSteps!.join(" · ")}</p>
                         </div>
                       </div>
@@ -1227,28 +1250,6 @@ function FilterGroup({
 /* ═══════════════════════════════════════════════════════════════════
    Sub-componentes
    ═══════════════════════════════════════════════════════════════════ */
-/* ═══════════════════════════════════════════════════════════════════
-   ViewToggleBtn · botón de segmento del toggle Lista/Cuadrícula/Mapa
-   ═══════════════════════════════════════════════════════════════════ */
-function ViewToggleBtn({
-  active, onClick, icon: Icon, label,
-}: { active: boolean; onClick: () => void; icon: LucideIcon; label: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center justify-center h-8 w-8 rounded-full transition-all",
-        active ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
-      )}
-      aria-label={`Vista ${label.toLowerCase()}`}
-      title={label}
-      aria-pressed={active}
-    >
-      <Icon className="h-4 w-4" />
-    </button>
-  );
-}
-
 /* ═══════════════════════════════════════════════════════════════════
    SearchableFilterGroup · chips con buscador arriba (para listas largas)
    Se usa para Ubicación (muchas zonas posibles).

@@ -26,6 +26,8 @@ import { registros as records } from "@/data/records";
 import { sales as salesMock, getComisionImporte } from "@/data/sales";
 import { agencies } from "@/data/agencies";
 import { useCreatedRegistros } from "@/lib/registrosStorage";
+import { canPublishPromotion } from "@/lib/publicationRequirements";
+import type { Promotion } from "@/data/promotions";
 
 function formatEuro(n: number) {
   if (!Number.isFinite(n) || n === 0) return "0 €";
@@ -38,13 +40,20 @@ export default function AgencyHome() {
   const navigate = useNavigate();
   const agency = useMemo(() => agencies.find((a) => a.id === user.agencyId), [user.agencyId]);
 
-  /* Promociones donde colabora la agencia. El modelo mock marca
-   * `collaboratingAgencies` en `developerOnlyPromotions`. */
+  /* Promociones donde colabora la agencia. Además del match por
+   * agencyId debe pasar los mismos filtros que /promociones: activa,
+   * publicable y compartición habilitada. Una promoción incompleta no
+   * existe para la agencia. */
   const promocionesAsignadas = useMemo(() => {
-    const mine = [...developerOnlyPromotions, ...promotions.map((p) => ({ ...p, collaboratingAgencies: [] as string[] }))]
-      .filter((p) => Array.isArray((p as { collaboratingAgencies?: string[] }).collaboratingAgencies)
-        && ((p as { collaboratingAgencies?: string[] }).collaboratingAgencies ?? []).includes(user.agencyId ?? ""));
-    return mine;
+    const pool = [...developerOnlyPromotions, ...promotions.map((p) => ({ ...p, collaboratingAgencies: [] as string[] }))];
+    return pool.filter((p) => {
+      const collab = (p as { collaboratingAgencies?: string[] }).collaboratingAgencies ?? [];
+      if (!collab.includes(user.agencyId ?? "")) return false;
+      if ((p as { status?: string }).status !== "active") return false;
+      if (!canPublishPromotion(p as unknown as Promotion)) return false;
+      if ((p as { canShareWithAgencies?: boolean }).canShareWithAgencies === false) return false;
+      return true;
+    });
   }, [user.agencyId]);
 
   /* Registros propios (seed + creados). */
