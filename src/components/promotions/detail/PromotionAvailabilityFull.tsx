@@ -75,6 +75,7 @@ import { unitsByPromotion, Unit, UnitStatus, PromotionContext } from "@/data/uni
 import { type Anejo, type AnejoStatus, type AnejoTipo } from "@/data/anejos";
 import { PromotionAnejosTable } from "./PromotionAnejosTable";
 import { AnejoFormDialog, type AnejoFormValues } from "./AnejoFormDialog";
+import { AddAnejosBatchDialog } from "./AddAnejosBatchDialog";
 import {
   useAnejosForPromotion, addAnejo, updateAnejo, deleteAnejo,
 } from "@/lib/anejosStorage";
@@ -202,15 +203,22 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
   const [segment, setSegment] = useState<"viviendas" | "parkings" | "trasteros">("viviendas");
 
   /* Alta/edición y acciones sobre anejos · solo promotor.
-     --------------------------------------------------- */
+     ---------------------------------------------------
+     · Añadir nuevo(s) → `AddAnejosBatchDialog` (mismo modal que el
+       wizard): elige tipo + cantidad, se auto-crean los publicIds
+       (P{n+1}, T{n+1}) con precio por defecto (último del tipo ó 0).
+     · Editar un anejo existente → `AnejoFormDialog` (precio / ID /
+       visibilidad por unidad). */
+  const [batchDialogOpen, setBatchDialogOpen] = useState(false);
+  const [batchDefaultTipo, setBatchDefaultTipo] = useState<AnejoTipo>("parking");
+
   const [anejoDialogOpen, setAnejoDialogOpen] = useState(false);
   const [editingAnejo, setEditingAnejo] = useState<Anejo | undefined>(undefined);
   const [anejoDialogTipo, setAnejoDialogTipo] = useState<AnejoTipo>("parking");
 
   const openNewAnejo = (tipo: AnejoTipo) => {
-    setEditingAnejo(undefined);
-    setAnejoDialogTipo(tipo);
-    setAnejoDialogOpen(true);
+    setBatchDefaultTipo(tipo);
+    setBatchDialogOpen(true);
   };
   const openEditAnejo = (a: Anejo) => {
     setEditingAnejo(a);
@@ -221,13 +229,46 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
     if (editingAnejo) {
       updateAnejo(promotionId, editingAnejo.id, values);
       toast({ title: "Anejo actualizado", description: values.publicId });
-    } else {
-      const created = addAnejo(promotionId, values);
-      toast({ title: "Anejo añadido", description: created.publicId });
-      // Autoswitch al segmento del tipo creado si estamos en otro.
-      if (values.tipo === "parking" && segment !== "parkings") setSegment("parkings");
-      if (values.tipo === "trastero" && segment !== "trasteros") setSegment("trasteros");
     }
+  };
+
+  /** Crea N anejos de golpe con publicIds auto-generados (P1, P2… o
+   *  T1, T2…) y el precio que el promotor introdujo en el modal. El
+   *  promotor puede ajustar ID y precio individualmente desde el kebab
+   *  de cada fila después. */
+  const handleBatchConfirm = (payload: {
+    parking:  { count: number; price: number };
+    trastero: { count: number; price: number };
+  }) => {
+    const makeBatch = (tipo: AnejoTipo, count: number, price: number) => {
+      if (count <= 0) return 0;
+      const sameType = anejos.filter((a) => a.tipo === tipo);
+      const prefix = tipo === "parking" ? "P" : "T";
+      const maxNum = sameType.reduce((m, a) => {
+        const n = parseInt(a.publicId.replace(/[^\d]/g, ""), 10);
+        return Number.isFinite(n) && n > m ? n : m;
+      }, 0);
+      for (let i = 1; i <= count; i++) {
+        addAnejo(promotionId, {
+          tipo,
+          publicId: `${prefix}${maxNum + i}`,
+          precio: price,
+          visibleToAgencies: true,
+        });
+      }
+      return count;
+    };
+    const addedP = makeBatch("parking",  payload.parking.count,  payload.parking.price);
+    const addedT = makeBatch("trastero", payload.trastero.count, payload.trastero.price);
+    const total = addedP + addedT;
+    if (total === 0) return;
+    const parts: string[] = [];
+    if (addedP > 0) parts.push(`${addedP} parking${addedP === 1 ? "" : "s"}`);
+    if (addedT > 0) parts.push(`${addedT} trastero${addedT === 1 ? "" : "s"}`);
+    toast({ title: `Se añadieron ${total} anejo${total === 1 ? "" : "s"}`, description: parts.join(" · ") });
+    // Autoswitch al segmento del tipo añadido (priorizando donde hubo más).
+    if (addedP > 0 && segment !== "parkings" && addedP >= addedT) setSegment("parkings");
+    else if (addedT > 0 && segment !== "trasteros") setSegment("trasteros");
   };
   const handleToggleVisibility = (a: Anejo) => {
     const next = !(a.visibleToAgencies !== false);
@@ -633,13 +674,22 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
           onDeleteAnejo={handleDeleteAnejo}
         />
         {!isCollaboratorView && (
-          <AnejoFormDialog
-            open={anejoDialogOpen}
-            onOpenChange={setAnejoDialogOpen}
-            defaultTipo={anejoDialogTipo}
-            initial={editingAnejo}
-            onSubmit={handleAnejoSubmit}
-          />
+          <>
+            <AddAnejosBatchDialog
+              open={batchDialogOpen}
+              onOpenChange={setBatchDialogOpen}
+              existing={anejos}
+              defaultTipo={batchDefaultTipo}
+              onConfirm={handleBatchConfirm}
+            />
+            <AnejoFormDialog
+              open={anejoDialogOpen}
+              onOpenChange={setAnejoDialogOpen}
+              defaultTipo={anejoDialogTipo}
+              initial={editingAnejo}
+              onSubmit={handleAnejoSubmit}
+            />
+          </>
         )}
       </div>
     );

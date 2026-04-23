@@ -32,6 +32,9 @@ import {
 } from "@/data/leads";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { Building2 } from "lucide-react";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
+import { ContactWhatsAppDialog } from "@/components/contacts/detail/ContactWhatsAppDialog";
+import type { ContactDetail } from "@/components/contacts/types";
 import { cn } from "@/lib/utils";
 
 function flagOf(code?: string): string {
@@ -86,6 +89,12 @@ export default function LeadDetalle() {
     if (t === "resumen") next.delete("tab"); else next.set("tab", t);
     setSearchParams(next, { replace: true });
   };
+
+  /* WhatsApp · mismo modal lateral que la ficha de contacto
+     (ContactWhatsAppDialog). Reutilizamos el componente con un shim
+     del Lead como ContactDetail — sólo se consultan `id`, `name`,
+     `flag`, `phones[].number` / `phones[].hasWhatsapp`. */
+  const [whatsappOpen, setWhatsappOpen] = useState(false);
 
   /* Cualificación rápida (mock) · "No es lead" / "Es lead" / "Tiene interés". */
   const [qualif, setQualif] = useState<"no" | "yes" | "interest" | null>(null);
@@ -186,34 +195,37 @@ export default function LeadDetalle() {
                     )}
                   </p>
 
-                  {/* Promoción/propiedad referenciada · spec §B.1
-                     "related property or promotion · image thumbnail if reference exists". */}
-                  {promo && (
+                  {/* Accesos rápidos · mismo patrón que ContactSummaryTab:
+                     - Email → Link a `/emails?compose=1&to=...` (cliente
+                       de email interno, igual que contact).
+                     - Teléfono → `<a href={tel:}>`.
+                     - WhatsApp → abre ContactWhatsAppDialog (modal lateral). */}
+                  <div className="mt-2 inline-flex items-center gap-1.5">
                     <Link
-                      to={`/promociones/${promo.id}`}
-                      className="mt-2 inline-flex items-center gap-2.5 rounded-xl border border-border bg-card pl-1 pr-3 py-1 hover:bg-muted transition-colors shadow-soft max-w-full"
-                      title={`Ir a la promoción · ${promo.name}`}
+                      to={`/emails?compose=1&to=${encodeURIComponent(lead.email)}`}
+                      title={`Abrir cliente de email con destinatario ${lead.email}`}
+                      className="inline-flex items-center gap-1.5 h-8 pl-2.5 pr-3 rounded-full border border-border bg-card text-[11.5px] font-medium text-foreground hover:bg-muted transition-colors"
                     >
-                      {/* Thumbnail · mismo tamaño que Disponibilidad
-                          (w-[80px] h-[54px]). */}
-                      <span className="w-[80px] h-[54px] rounded-md bg-muted/30 overflow-hidden shrink-0 grid place-items-center">
-                        {promo.image ? (
-                          <img src={promo.image} alt="" className="w-full h-full object-cover" loading="lazy" />
-                        ) : (
-                          <Building2 className="h-4 w-4 text-muted-foreground/60" strokeWidth={1.5} />
-                        )}
-                      </span>
-                      <span className="min-w-0">
-                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground leading-none">
-                          Promoción referenciada
-                        </p>
-                        <p className="text-[13px] font-semibold text-foreground truncate max-w-[260px] leading-tight mt-0.5">
-                          {promo.name}
-                        </p>
-                      </span>
-                      <ExternalLink className="h-3 w-3 text-muted-foreground/60 shrink-0" strokeWidth={1.75} />
+                      <Mail className="h-3 w-3 text-muted-foreground" strokeWidth={1.75} />
+                      <span className="truncate max-w-[220px]">{lead.email}</span>
                     </Link>
-                  )}
+                    <a
+                      href={`tel:${lead.phone.replace(/\s/g, "")}`}
+                      title={`Llamar a ${lead.phone}`}
+                      className="inline-flex items-center gap-1.5 h-8 pl-2.5 pr-3 rounded-full border border-border bg-card text-[11.5px] font-medium text-foreground hover:bg-muted transition-colors tabular-nums"
+                    >
+                      <Phone className="h-3 w-3 text-muted-foreground" strokeWidth={1.75} />
+                      {lead.phone}
+                    </a>
+                    <button
+                      onClick={() => setWhatsappOpen(true)}
+                      title={`Abrir conversación de WhatsApp con ${lead.fullName}`}
+                      className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full border border-border bg-card text-[11.5px] font-medium text-foreground hover:bg-muted transition-colors"
+                    >
+                      <WhatsAppIcon className="h-3.5 w-3.5 text-[#25D366]" />
+                      WhatsApp
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -280,84 +292,31 @@ export default function LeadDetalle() {
 
             {activeTab === "resumen" && (
               <>
-                {/* HERO · foto grande de la promoción por la que entró el lead */}
-                {promo && (
-                  <section className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
-                    <Link to={`/promociones/${promo.id}`} className="block relative group">
-                      <div className="aspect-[16/7] w-full bg-muted overflow-hidden">
-                        {promo.image ? (
-                          <img src={promo.image} alt="" className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300" />
-                        ) : (
-                          <div className="h-full w-full grid place-items-center text-muted-foreground/40">
-                            <Building2 className="h-10 w-10" strokeWidth={1.25} />
-                          </div>
-                        )}
-                      </div>
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-foreground/70 via-foreground/30 to-transparent p-4">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-background/80">
-                          Entró por la promoción
-                        </p>
-                        <p className="text-base sm:text-lg font-bold text-background mt-0.5 flex items-center gap-1.5">
-                          {promo.name}
-                          <ExternalLink className="h-3.5 w-3.5 opacity-80" strokeWidth={2} />
-                        </p>
-                      </div>
-                    </Link>
-                    <div className="px-4 py-3 flex items-center justify-between gap-3 text-[11.5px] text-muted-foreground">
-                      <p className="inline-flex items-center gap-1.5">
-                        <MapPin className="h-3 w-3" strokeWidth={1.75} />
-                        {lead.interest.zona ?? "—"}
+                {/* Resumen · vista limpia con lo esencial para el
+                   comercial. El detalle de entrada vive en el tab
+                   Actividad (foto + mensaje + preguntas del sistema). */}
+                <Section title="Resumen de la oportunidad">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <MiniFact label="Etapa" value={status.label} />
+                    <MiniFact label="Origen" value={leadSourceLabel[lead.source]} />
+                    <MiniFact label="Recibido" value={relativeTime(lead.createdAt)} />
+                  </div>
+                  {qualif && (
+                    <div className="mt-4 pt-4 border-t border-border/50">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                        Cualificación del comercial
                       </p>
-                      <p className="tabular-nums font-medium text-foreground">
-                        {formatPrice(lead.interest.presupuestoMax)}
+                      <p className="text-[12.5px] text-foreground">
+                        {qualif === "no" && "Marcado como no-lead."}
+                        {qualif === "yes" && "Confirmado como lead · seguir trabajando."}
+                        {qualif === "interest" && "Con interés · oportunidad viva."}
                       </p>
                     </div>
-                  </section>
-                )}
+                  )}
+                </Section>
 
-                {/* Cualificación rápida · No es lead / Es lead / Tiene interés */}
-                <section className="rounded-2xl border border-border bg-card shadow-soft p-4 sm:p-5">
-                  <div className="flex items-start gap-2 mb-3">
-                    <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" strokeWidth={1.75} />
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground">¿Qué es este cliente?</p>
-                      <p className="text-[11.5px] text-muted-foreground leading-relaxed mt-0.5">
-                        Cualifica rápido · afecta al estado en el pipeline.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <QualifyButton
-                      icon={ThumbsDown} label="No es lead" tone="danger"
-                      active={qualif === "no"}
-                      hint="Descartado · no cumple requisitos"
-                      onClick={() => onQualif("no")}
-                    />
-                    <QualifyButton
-                      icon={ThumbsUp} label="Es lead" tone="neutral"
-                      active={qualif === "yes"}
-                      hint="Contacto confirmado · seguir trabajando"
-                      onClick={() => onQualif("yes")}
-                    />
-                    <QualifyButton
-                      icon={Flame} label="Tiene interés" tone="primary"
-                      active={qualif === "interest"}
-                      hint="Oportunidad activa · priorizar"
-                      onClick={() => onQualif("interest")}
-                    />
-                  </div>
-                </section>
-
-                {/* Mensaje del cliente */}
-                {lead.message && (
-                  <Section title="Mensaje del cliente">
-                    <blockquote className="text-sm text-foreground leading-relaxed italic border-l-2 border-primary/40 pl-4 py-1">
-                      {lead.message}
-                    </blockquote>
-                  </Section>
-                )}
-
-                {/* Match de duplicados */}
+                {/* Match de duplicados · sigue en Resumen porque es una
+                   alerta de la IA que afecta al tratamiento del lead. */}
                 {isDup && (
                   <section className="rounded-2xl border border-destructive/25 bg-destructive/5 p-5 shadow-soft">
                     <header className="flex items-start gap-3 mb-4">
@@ -406,6 +365,21 @@ export default function LeadDetalle() {
 
             {activeTab === "actividad" && (
               <Section title="Actividad">
+                {/* Primer evento · entrada del lead. Si aún no se ha
+                   cualificado, se muestra expandido con foto 125px,
+                   mensaje y 3 botones del sistema. Al responder se
+                   colapsa: queda línea pequeña "usuario consideró que
+                   es lead" y el mensaje sigue visible. */}
+                <LeadEntryEvent
+                  lead={lead}
+                  promo={promo}
+                  qualif={qualif}
+                  onQualif={onQualif}
+                />
+
+                <hr className="my-4 border-border/50" />
+
+                {/* Timeline normal debajo */}
                 <Timeline lead={lead} />
               </Section>
             )}
@@ -540,6 +514,21 @@ export default function LeadDetalle() {
           </aside>
         </div>
       </div>
+
+      {/* Modal de WhatsApp · reutiliza el mismo Dialog que la ficha
+         de contacto. Shim: construimos un objeto con los campos que
+         ContactWhatsAppTab consulta (id, name, flag, phones[]). */}
+      <ContactWhatsAppDialog
+        open={whatsappOpen}
+        onOpenChange={setWhatsappOpen}
+        detail={{
+          id: lead.id,
+          name: lead.fullName,
+          flag: lead.nationality ? flagOf(lead.nationality) : undefined,
+          phone: lead.phone,
+          phones: [{ number: lead.phone, hasWhatsapp: true, isPrimary: true }],
+        } as unknown as ContactDetail}
+      />
     </div>
   );
 }
@@ -793,5 +782,160 @@ function QualifyButton({
       </div>
       <span className="text-[10.5px] opacity-70 leading-tight">{hint}</span>
     </button>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MINI-FACT · celda compacta label + valor
+   ═══════════════════════════════════════════════════════════════════ */
+
+function MiniFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-3 min-w-0">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="text-[13px] font-medium text-foreground mt-1 truncate">{value}</p>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LEAD ENTRY EVENT · primera tarjeta del timeline
+   ───────────────────────────────────────────────────────────────────
+   Dos estados:
+   - Sin responder (qualif === null): tarjeta "expandida"
+       · Foto promoción 125×85px (a la izquierda)
+       · Fuente · fecha · mensaje del cliente
+       · 3 botones del sistema: "No es lead" / "Es lead" / "Tiene interés"
+   - Respondida: tarjeta "colapsada"
+       · Línea pequeña "Ha entrado un lead · [fuente]"
+       · Nota "[Usuario] consideró que es [lead/interés/no-lead]"
+       · El mensaje sigue visible debajo
+   ═══════════════════════════════════════════════════════════════════ */
+
+function LeadEntryEvent({
+  lead, promo, qualif, onQualif,
+}: {
+  lead: Lead;
+  promo: { id: string; name: string; image?: string } | undefined;
+  qualif: "no" | "yes" | "interest" | null;
+  onQualif: (v: "no" | "yes" | "interest") => void;
+}) {
+  const answered = qualif !== null;
+  const qualifLabel = qualif === "no"       ? "No es lead"
+                     : qualif === "yes"      ? "Es lead"
+                     : qualif === "interest" ? "Tiene interés"
+                     : "";
+
+  /* Colapsado (respondido) — resumen pequeño con mensaje visible. */
+  if (answered) {
+    return (
+      <div className="rounded-xl border border-border bg-muted/20 p-3 min-w-0">
+        <div className="flex items-start gap-2.5 min-w-0">
+          <div className="h-6 w-6 rounded-full bg-muted grid place-items-center shrink-0 text-muted-foreground">
+            <Inbox className="h-3 w-3" strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11.5px] text-foreground">
+              <strong>Ha entrado un lead</strong>
+              <span className="text-muted-foreground">
+                {" "}· {leadSourceLabel[lead.source]} · {relativeTime(lead.createdAt)}
+              </span>
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Tú consideraste que: <strong className="text-foreground">{qualifLabel}</strong>
+            </p>
+            {lead.message && (
+              <blockquote className="mt-2 text-[12px] italic text-foreground/90 border-l-2 border-primary/40 pl-2.5 py-0.5">
+                "{lead.message}"
+              </blockquote>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* Expandido (sin responder) — foto 125px + mensaje + botones. */
+  return (
+    <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4 shadow-soft">
+      <div className="flex items-start gap-3 min-w-0">
+        <Sparkles className="h-4 w-4 text-primary mt-0.5 shrink-0" strokeWidth={1.75} />
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] font-semibold text-foreground">
+            Ha entrado un lead
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            {leadSourceLabel[lead.source]} · {relativeTime(lead.createdAt)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-start gap-3">
+        {/* Foto 125px */}
+        {promo && (
+          <Link
+            to={`/promociones/${promo.id}`}
+            className="w-[125px] h-[85px] rounded-lg overflow-hidden bg-muted grid place-items-center shrink-0 border border-border shadow-soft hover:shadow-soft-lg transition-shadow"
+            title={`Ir a la promoción · ${promo.name}`}
+          >
+            {promo.image ? (
+              <img src={promo.image} alt="" className="w-full h-full object-cover" loading="lazy" />
+            ) : (
+              <Building2 className="h-5 w-5 text-muted-foreground/60" strokeWidth={1.5} />
+            )}
+          </Link>
+        )}
+
+        {/* Mensaje + preview promoción */}
+        <div className="min-w-0 flex-1">
+          {promo && (
+            <p className="text-[11px] text-muted-foreground mb-1.5">
+              Promoción: <Link to={`/promociones/${promo.id}`} className="text-foreground font-medium hover:text-primary">
+                {promo.name}
+              </Link>
+            </p>
+          )}
+          {lead.message ? (
+            <blockquote className="text-[12.5px] italic text-foreground leading-relaxed border-l-2 border-primary/40 pl-3 py-0.5">
+              "{lead.message}"
+            </blockquote>
+          ) : (
+            <p className="text-[12px] text-muted-foreground italic">
+              El cliente no dejó mensaje.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Botones del sistema */}
+      <div className="mt-3.5 pt-3 border-t border-primary/20">
+        <p className="text-[10.5px] uppercase tracking-wider text-muted-foreground mb-2">
+          ¿Qué opinas de este lead?
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            onClick={() => onQualif("no")}
+            className="inline-flex items-center justify-center gap-1 h-8 px-2 rounded-full border border-border bg-card text-[11.5px] font-medium text-foreground hover:border-destructive/30 hover:bg-destructive/5 hover:text-destructive transition-colors"
+          >
+            <ThumbsDown className="h-3 w-3" strokeWidth={1.75} />
+            No es lead
+          </button>
+          <button
+            onClick={() => onQualif("yes")}
+            className="inline-flex items-center justify-center gap-1 h-8 px-2 rounded-full border border-border bg-card text-[11.5px] font-medium text-foreground hover:bg-muted transition-colors"
+          >
+            <ThumbsUp className="h-3 w-3" strokeWidth={1.75} />
+            Es lead
+          </button>
+          <button
+            onClick={() => onQualif("interest")}
+            className="inline-flex items-center justify-center gap-1 h-8 px-2 rounded-full bg-foreground text-background text-[11.5px] font-semibold hover:bg-foreground/90 transition-colors"
+          >
+            <Flame className="h-3 w-3" strokeWidth={2} />
+            Tiene interés
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

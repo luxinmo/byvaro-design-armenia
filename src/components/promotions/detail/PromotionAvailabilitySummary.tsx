@@ -44,8 +44,9 @@ import { ArrowRight, Plus } from "lucide-react";
 // Button: primitiva Byvaro. Mantener el import aunque no se use directamente — se
 // conserva por paridad con el archivo original y para futuros CTAs en este panel.
 import { Button } from "@/components/ui/button";
-import { AnejoFormDialog, type AnejoFormValues } from "./AnejoFormDialog";
+import { AddAnejosBatchDialog } from "./AddAnejosBatchDialog";
 import { useAnejosForPromotion, addAnejo } from "@/lib/anejosStorage";
+import type { AnejoTipo } from "@/data/anejos";
 import { useToast } from "@/hooks/use-toast";
 
 function formatPrice(n: number) {
@@ -69,13 +70,41 @@ export function PromotionAvailabilitySummary({
   /* Alta de anejo · solo promotor. El CTA vive aquí (en el bloque
    * "Unidades y disponibilidad" de la ficha) para que el promotor
    * tenga un único punto de acceso, sin pasar por el detalle de
-   * Disponibilidad. */
+   * Disponibilidad. Usamos el mismo modal que el wizard: batch con
+   * stepper para parking/trastero. */
   const [anejoDialogOpen, setAnejoDialogOpen] = useState(false);
   const anejos = useAnejosForPromotion(promotionId);
   const anejosVisibleCount = anejos.filter((a) => !isCollaboratorView || (a.visibleToAgencies !== false && a.status === "available")).length;
-  const handleAnejoSubmit = (values: AnejoFormValues) => {
-    const created = addAnejo(promotionId, values);
-    toast({ title: "Anejo añadido", description: created.publicId });
+  const handleBatchConfirm = (payload: {
+    parking:  { count: number; price: number };
+    trastero: { count: number; price: number };
+  }) => {
+    const makeBatch = (tipo: AnejoTipo, count: number, price: number) => {
+      if (count <= 0) return 0;
+      const sameType = anejos.filter((a) => a.tipo === tipo);
+      const prefix = tipo === "parking" ? "P" : "T";
+      const maxNum = sameType.reduce((m, a) => {
+        const n = parseInt(a.publicId.replace(/[^\d]/g, ""), 10);
+        return Number.isFinite(n) && n > m ? n : m;
+      }, 0);
+      for (let i = 1; i <= count; i++) {
+        addAnejo(promotionId, {
+          tipo,
+          publicId: `${prefix}${maxNum + i}`,
+          precio: price,
+          visibleToAgencies: true,
+        });
+      }
+      return count;
+    };
+    const addedP = makeBatch("parking",  payload.parking.count,  payload.parking.price);
+    const addedT = makeBatch("trastero", payload.trastero.count, payload.trastero.price);
+    const total = addedP + addedT;
+    if (total === 0) return;
+    const parts: string[] = [];
+    if (addedP > 0) parts.push(`${addedP} parking${addedP === 1 ? "" : "s"}`);
+    if (addedT > 0) parts.push(`${addedT} trastero${addedT === 1 ? "" : "s"}`);
+    toast({ title: `Se añadieron ${total} anejo${total === 1 ? "" : "s"}`, description: parts.join(" · ") });
   };
 
   if (units.length === 0) return null;
@@ -162,11 +191,12 @@ export function PromotionAvailabilitySummary({
       )}
 
       {!isCollaboratorView && (
-        <AnejoFormDialog
+        <AddAnejosBatchDialog
           open={anejoDialogOpen}
           onOpenChange={setAnejoDialogOpen}
+          existing={anejos}
           defaultTipo="parking"
-          onSubmit={handleAnejoSubmit}
+          onConfirm={handleBatchConfirm}
         />
       )}
     </div>

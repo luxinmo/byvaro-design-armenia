@@ -9,7 +9,6 @@ import type { Unit } from "@/data/units";
 import { promotions, getBuildingTypeLabel } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion, type Comercial, type ComercialPermissions } from "@/data/developerPromotions";
 import { agencies, countAgenciesForPromotion, type Agency } from "@/data/agencies";
-import { AgenciasPendientesDialog } from "@/components/promotions/detail/AgenciasPendientesDialog";
 import { AgenciasTabStats } from "@/components/promotions/detail/AgenciasTabStats";
 import { FeatureCardV3 } from "@/pages/Colaboradores";
 import ColaboradoresEstadisticas from "@/pages/ColaboradoresEstadisticas";
@@ -239,7 +238,6 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const [priceListOpen, setPriceListOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [activateSharingOpen, setActivateSharingOpen] = useState(false);
-  const [pendientesOpen, setPendientesOpen] = useState(false);
   /** El brochure puede eliminarse desde su card. Al eliminarlo, la sección
    *  se oculta y la acción rápida "Brochure" queda deshabilitada. */
   const [brochureRemoved, setBrochureRemoved] = useState(false);
@@ -1658,7 +1656,8 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             canShare={canShare}
             onInvitar={() => setShareOpen(true)}
             onOpenStats={() => setStatsOverlayOpen(true)}
-            onOpenPendientes={() => setPendientesOpen(true)}
+            onOpenPendientes={() => { /* solicitudes e invitaciones ya se
+              muestran inline en la tab Agencias; el dialog queda deprecado */ }}
           />
         )}
 
@@ -1915,16 +1914,6 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       <SharePromotionDialog
         open={shareOpen}
         onOpenChange={setShareOpen}
-        promotionId={p.id}
-        promotionName={p.name}
-      />
-
-      {/* Agencias pendientes · dialog compartido con solicitudes
-          entrantes + invitaciones enviadas. Se abre desde el botón
-          "Pendientes · N" de la tab Agencias. */}
-      <AgenciasPendientesDialog
-        open={pendientesOpen}
-        onOpenChange={setPendientesOpen}
         promotionId={p.id}
         promotionName={p.name}
       />
