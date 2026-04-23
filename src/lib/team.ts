@@ -31,6 +31,8 @@ export type TeamMember = {
   phone?: string;
   /** URL del avatar. Si no hay, se usan iniciales. */
   avatarUrl?: string;
+  /** Biografía breve (280 chars) · firma de email y perfil interno. */
+  bio?: string;
   status?: TeamMemberStatus;
   /** Aparece en el perfil público de la empresa / microsite. */
   visibleOnProfile?: boolean;
@@ -130,10 +132,35 @@ export const TEAM_MEMBERS: TeamMember[] = [
     whatsappLinked: false, twoFactorEnabled: true, recordsDecidedLast30d: 0 },
 ];
 
-/** Busca por id o por nombre (case-insensitive). */
+/**
+ * Devuelve la lista efectiva de miembros.
+ *
+ * Prefiere el localStorage `byvaro.organization.members.v4` (donde viven
+ * los cambios del admin desde `/equipo` y del propio usuario desde
+ * `/ajustes/perfil/personal`). Fallback al seed en SSR/tests.
+ *
+ * Las funciones síncronas como `findTeamMember` y `getMemberAvatarUrl`
+ * leen siempre la versión más reciente, por lo que cualquier consumer
+ * (ficha de contacto, historial, oficinas…) ve el avatar / nombre
+ * actual sin necesidad de suscribirse explícitamente — basta con un
+ * re-render cuando otro hook como `useMe` dispara cambios.
+ */
+export function getAllTeamMembers(): TeamMember[] {
+  if (typeof window === "undefined") return TEAM_MEMBERS;
+  try {
+    const raw = window.localStorage.getItem("byvaro.organization.members.v4");
+    if (!raw) return TEAM_MEMBERS;
+    const parsed = JSON.parse(raw) as TeamMember[];
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : TEAM_MEMBERS;
+  } catch {
+    return TEAM_MEMBERS;
+  }
+}
+
+/** Busca por id o por nombre (case-insensitive) · datos vivos de localStorage. */
 export function findTeamMember(idOrName: string): TeamMember | undefined {
   const q = idOrName.trim().toLowerCase();
-  return TEAM_MEMBERS.find(
+  return getAllTeamMembers().find(
     (m) => m.id.toLowerCase() === q || m.name.toLowerCase() === q,
   );
 }

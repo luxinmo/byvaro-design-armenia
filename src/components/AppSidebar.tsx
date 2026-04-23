@@ -50,7 +50,6 @@ const groups: NavGroup[] = [
     items: [
       { title: "Colaboradores", url: "/colaboradores", icon: Handshake },
       { title: "Contactos", url: "/contactos", icon: Contact },
-      { title: "Equipo", url: "/equipo", icon: Users },
     ],
   },
   {
@@ -215,6 +214,28 @@ export function AppSidebar() {
                 aria-label="Pendiente de configurar"
               />
             )}
+          </NavLink>
+
+          {/* Equipo · vive junto a Empresa porque conceptualmente es parte
+           *  del perfil organizativo (miembros que aparecen en el microsite,
+           *  plan de comisiones, invitaciones). */}
+          <NavLink
+            to="/equipo"
+            title={collapsed ? "Equipo" : undefined}
+            className={({ isActive }) =>
+              cn(
+                "relative flex items-center transition-colors",
+                collapsed
+                  ? "justify-center h-10 mx-2 rounded-lg"
+                  : "gap-3 px-5 py-2 text-sm",
+                isActive
+                  ? "bg-sidebar-accent/70 text-sidebar-accent-foreground font-medium nav-item-active"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent/40",
+              )
+            }
+          >
+            <Users className="h-[18px] w-[18px] shrink-0" />
+            {!collapsed && <span>Equipo</span>}
           </NavLink>
         </div>
         )}

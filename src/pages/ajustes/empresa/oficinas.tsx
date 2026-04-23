@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDirty } from "@/components/settings/SettingsDirtyContext";
 import { isAdmin, useCurrentUser } from "@/lib/currentUser";
+import { UserSelect } from "@/components/ui/UserSelect";
+import { findTeamMember } from "@/lib/team";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -21,20 +23,33 @@ type Office = {
   name: string;
   city: string;
   address: string;
-  manager: string;
+  /** Id del miembro del equipo que gestiona la oficina (ver TEAM_MEMBERS).
+   *  `null` = sin manager asignado. Se resuelve al nombre vía findTeamMember. */
+  managerId: string | null;
   phone: string;
   primary: boolean;
 };
 
 const DEFAULT: Office[] = [
-  { id: "o1", name: "Marbella HQ", city: "Marbella", address: "Calle Real 25", manager: "Arman Rahmanov", phone: "+34 952 000 000", primary: true },
-  { id: "o2", name: "Estepona", city: "Estepona", address: "Av. Litoral 14", manager: "Laura Gómez", phone: "+34 952 111 111", primary: false },
+  { id: "o1", name: "Marbella HQ", city: "Marbella", address: "Calle Real 25", managerId: "u1", phone: "+34 952 000 000", primary: true },
+  { id: "o2", name: "Estepona",    city: "Estepona", address: "Av. Litoral 14", managerId: "u2", phone: "+34 952 111 111", primary: false },
 ];
 
 function load(): Office[] {
   if (typeof window === "undefined") return DEFAULT;
-  try { return JSON.parse(window.localStorage.getItem(KEY) ?? JSON.stringify(DEFAULT)); }
-  catch { return DEFAULT; }
+  try {
+    const raw = window.localStorage.getItem(KEY);
+    if (!raw) return DEFAULT;
+    const parsed = JSON.parse(raw) as Array<Office & { manager?: string }>;
+    /* Migración silenciosa del schema viejo `{ manager: string }` → `{ managerId }`.
+     * Busca el miembro por nombre; si no coincide, deja el manager como null. */
+    return parsed.map((o) => {
+      if (o.managerId !== undefined) return o as Office;
+      const legacy = (o as { manager?: string }).manager;
+      const found = legacy ? findTeamMember(legacy) : undefined;
+      return { ...o, managerId: found?.id ?? null } as Office;
+    });
+  } catch { return DEFAULT; }
 }
 
 export default function AjustesEmpresaOficinas() {
@@ -57,7 +72,7 @@ export default function AjustesEmpresaOficinas() {
 
   const add = () => setOffices((p) => [...p, {
     id: `o${Date.now()}`, name: "Nueva oficina", city: "", address: "",
-    manager: "", phone: "", primary: p.length === 0,
+    managerId: null, phone: "", primary: p.length === 0,
   }]);
   const remove = (id: string) => setOffices((p) => p.filter((x) => x.id !== id));
   const update = (id: string, patch: Partial<Office>) =>
@@ -88,7 +103,14 @@ export default function AjustesEmpresaOficinas() {
             <SettingsField label="Dirección" htmlFor={`addr-${o.id}`}>
               <Input id={`addr-${o.id}`} value={o.address} onChange={(e) => update(o.id, { address: e.target.value })} disabled={!canEdit} />
             </SettingsField>
-            <SettingsField label="Manager"><Input value={o.manager} onChange={(e) => update(o.id, { manager: e.target.value })} disabled={!canEdit} /></SettingsField>
+            <SettingsField label="Manager">
+              <UserSelect
+                value={o.managerId}
+                onChange={(id) => update(o.id, { managerId: id })}
+                placeholder="Sin asignar"
+                onlyActive
+              />
+            </SettingsField>
             <SettingsField label="Teléfono"><Input value={o.phone} onChange={(e) => update(o.id, { phone: e.target.value })} disabled={!canEdit} /></SettingsField>
           </div>
           {canEdit && (

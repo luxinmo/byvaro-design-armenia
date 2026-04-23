@@ -18,6 +18,7 @@ import type {
 } from "./types";
 import { loadAllEvaluations } from "./visitEvaluationsStorage";
 import { loadAssignedOverride, loadRelationsOverride } from "./contactRelationsStorage";
+import { TEAM_MEMBERS } from "@/lib/team";
 
 /* PRNG determinista (mulberry32). Estable entre runs si la semilla es
  * la misma. Lo usamos para generar números, índices y timestamps
@@ -56,7 +57,10 @@ const PROMOTIONS = [
   { id: "mare-nostrum",     name: "Mare Nostrum",     units: ["A-201", "B-104"],                   image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&h=200&fit=crop", refPrefix: "MN" },
 ];
 
-const AGENTS = ["Arman Rahmanov", "Laura Gómez", "Diego Sánchez", "Marta Jiménez"];
+/* AGENTS y TEAM_USERS derivan de TEAM_MEMBERS (fuente única · ADR-050).
+ * Filtramos los 4 primeros activos para tener seeds deterministas. */
+const ACTIVE_TEAM = TEAM_MEMBERS.filter((m) => !m.status || m.status === "active");
+const AGENTS = ACTIVE_TEAM.slice(0, 4).map((m) => m.name);
 
 /** Posibles orígenes de un lead (de dónde entró). */
 const LEAD_SOURCES = [
@@ -94,12 +98,11 @@ const CANCEL_REASONS = [
   "Cambio de planes personales",
 ];
 
-const TEAM_USERS = [
-  { id: "u1", name: "Arman Rahmanov",  role: "Admin" },
-  { id: "u2", name: "Laura Gómez",     role: "Comercial senior" },
-  { id: "u3", name: "Diego Sánchez",   role: "Comercial" },
-  { id: "u4", name: "Marta Jiménez",   role: "Coordinadora" },
-];
+const TEAM_USERS = ACTIVE_TEAM.slice(0, 4).map((m) => ({
+  id: m.id,
+  name: m.name,
+  role: m.jobTitle ?? (m.role === "admin" ? "Admin" : "Comercial"),
+}));
 
 function buildPhones(rng: () => number, base?: string): ContactPhone[] {
   const phones: ContactPhone[] = [];

@@ -77,11 +77,26 @@ Layout 2 columnas en desktop, 1 en mobile. Datos del contacto +
 sidebar de gestión.
 
 **Columna principal** (más ancha):
-- Card **Información personal** (nombre, NIF, fecha nac., nacionalidad).
+- Card **Datos** · solo campos no duplicados por el header o por la
+  dirección: **NIF/DNI · Fecha de nacimiento · Dirección**. La fecha
+  se formatea con `formatDate()` de `src/lib/dateFormat.ts` →
+  respeta la preferencia de `/ajustes/idioma-region/formato-fecha`
+  (DD/MM/YYYY · MM/DD/YYYY · YYYY-MM-DD · DD MMM YYYY · DD MMMM YYYY).
+  Campos vacíos ocultos por defecto (toggle "Mostrar N campos vacíos").
+  Dentro de la misma card, sección **Idiomas** · chips editables
+  **inline** (no hay que abrir "Editar contacto") con `<Flag iso>`
+  SVG + botón X para quitar + popover "Añadir idioma" que recorre el
+  catálogo `LANGUAGES` de `src/lib/languages.ts`. Override por
+  contacto en `contactLanguagesStorage.ts` (clave
+  `byvaro.contact.<id>.languages.v1`, evento
+  `byvaro:contact-languages-change`); si no hay override, cae al
+  seed del contacto.
+  > **No duplicar**: Referencia ya es chip en el header;
+  > Nacionalidad se ve como `<Flag>` al lado del nombre;
+  > Ciudad/postalCode están dentro de la dirección Google Maps.
 - Card **Datos de contacto** (teléfonos múltiples + emails múltiples
   con marca "Principal" y verified). Cada teléfono tiene icono
   WhatsApp que **abre el modal** lateral.
-- Card **Idiomas** (chips).
 - Card **Origen** (sourceType + source label).
 - Card **Etiquetas** (org + personales del usuario).
 

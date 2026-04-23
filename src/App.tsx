@@ -11,6 +11,7 @@ import Ventas from "@/pages/Ventas";
 import Calendario from "@/pages/Calendario";
 import Colaboradores from "@/pages/Colaboradores";
 import AgenciaDetalle from "@/pages/AgenciaDetalle";
+import ColaboradorHistorial from "@/pages/ColaboradorHistorial";
 import ColaboradoresEstadisticas from "@/pages/ColaboradoresEstadisticas";
 import Contactos from "@/pages/Contactos";
 import Equipo from "@/pages/Equipo";
@@ -194,6 +195,7 @@ export default function App() {
                 <Route path="/colaboradores" element={<PromotorOnly><Colaboradores /></PromotorOnly>} />
                 <Route path="/colaboradores/estadisticas" element={<PromotorOnly><ColaboradoresEstadisticas /></PromotorOnly>} />
                 <Route path="/colaboradores/:id" element={<PromotorOnly><AgenciaDetalle /></PromotorOnly>} />
+                <Route path="/colaboradores/:id/historial" element={<PromotorOnly><ColaboradorHistorial /></PromotorOnly>} />
                 <Route path="/contactos" element={<Contactos />} />
                 <Route path="/contactos/:id" element={<ContactoDetalle />} />
                 <Route path="/equipo" element={<PromotorOnly><Equipo /></PromotorOnly>} />

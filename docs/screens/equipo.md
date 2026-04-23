@@ -5,16 +5,39 @@
 > intercambiables y permite al admin dar de alta, editar y gestionar sus
 > permisos, roles, cargos, idiomas y planes de comisión.
 
+## Ubicación en el navbar
+
+**Administración** (pie del sidebar, junto a Empresa). El equipo es
+parte del perfil organizativo — no de la red comercial — porque los
+miembros aparecen en la **ficha pública de Empresa** / microsite
+según su flag `visibleOnProfile`.
+
 ## Propósito
 
 - Visualizar al equipo con foto y metadatos ricos (idiomas, cargo,
   contacto, estado de salud).
+- Marcar quién aparece en la ficha pública de Empresa (icono ojo).
 - Dar de alta nuevos miembros con dos flows: invitación por email o
   creación directa con contraseña temporal.
 - Editar el perfil de cualquier miembro al clicar su card / fila.
 - Ver un **resumen de rendimiento** sin salir del popup · click en
   "Ver estadísticas completas →" lleva al dashboard detallado
   (`/equipo/:id/estadisticas` · ver `equipo-estadisticas.md`).
+
+## Regla de visibilidad en Empresa (ADR-050)
+
+Cada miembro tiene un flag `visibleOnProfile: boolean`. En la
+**galería** aparece el `VisibilityBadge` (esquina superior derecha:
+`Eye` verde = visible, `EyeOff` gris = oculto, `Invited` / `Pending`
+para los otros estados). En la **lista**, una pill a la derecha del
+nombre indica lo mismo. Al editar en `MemberFormDialog` hay un toggle
+"Visible en el perfil público" que cambia este flag.
+
+**Dónde se usa este flag:**
+- `/empresa` (perfil público del tenant) — filtra miembros por
+  `visibleOnProfile === true`.
+- Templates de microsite de cada promoción — mismo filtro.
+- Backend (futuro): RLS / query `WHERE visible_on_profile = true`.
 
 ## Audiencia
 
@@ -98,8 +121,45 @@ activos van a **Comercial**.
 | `Aprobar` (en pending) | `status → active` · toast success |
 | `Rechazar` (en pending) | Confirm dialog · elimina · cooldown 30d |
 | `Revocar` (en invited) | Confirm · elimina invitación |
-| `Reactivar` (en deactive) | `status → active` |
+| `Reactivar` (en deactive) | `status → active` directo |
+| `Desactivar` (en activo) | **Abre `DeactivateUserDialog`** · handover obligatorio (ver abajo) |
 | Toggle rol (solo en vista lista) | Cambia `role` admin/member |
+
+## Desactivar miembro · handover obligatorio (ADR-051)
+
+> **REGLA DE ORO (CLAUDE.md §🔄):** desactivar un miembro nunca es
+> un toggle directo. El admin debe reasignar todos sus activos
+> primero, y cada activo queda en el historial con "Heredado de X".
+
+Al hacer clic en **Desactivar** se abre `DeactivateUserDialog`
+(`src/components/team/DeactivateUserDialog.tsx`). Flujo:
+
+1. Se muestra el inventario del miembro (counts por categoría):
+   contactos, oportunidades, registros, visitas, propiedades
+   asignadas, cuentas de email.
+2. Cada categoría con count > 0 aparece como una fila con:
+   - Icono + label + descripción.
+   - Contador (ej. `48 contactos`).
+   - Dropdown de miembros activos.
+3. Atajo: **"Asignar todo a un miembro"** — rellena todos los
+   dropdowns de una vez (útil para mano derecha).
+4. El email es especial: se marca como **Delegación auto** →
+   forward desde la cuenta del desactivado hacia el elegido durante
+   6 meses.
+5. Motivo opcional (texto libre · queda en el historial).
+6. Al confirmar:
+   - `status: "deactive"` (en el backend es atomic con la
+     reasignación).
+   - Cada entidad reasignada añade a su timeline un evento
+     `{ type: "reassigned", reason: "handover", from, to, note: "Heredado de <nombre> · baja del equipo" }`.
+   - La ficha de contacto correspondiente muestra ese evento con
+     estilo diferenciado.
+
+El botón "Reasignar y desactivar" queda deshabilitado si falta
+asignar alguna categoría.
+
+**Reactivar** un miembro inactivo sigue siendo directo (no hay
+reasignación inversa).
 
 ## MemberFormDialog · editar un miembro
 

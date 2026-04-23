@@ -8,7 +8,9 @@ import { unitDataToUnit, mergeUnitIntoUnitData } from "@/lib/unitDataAdapter";
 import type { Unit } from "@/data/units";
 import { promotions, getBuildingTypeLabel } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion, type Comercial, type ComercialPermissions } from "@/data/developerPromotions";
-import { agencies, type Agency } from "@/data/agencies";
+import { agencies, countAgenciesForPromotion, type Agency } from "@/data/agencies";
+import { AgenciasPendientesDialog } from "@/components/promotions/detail/AgenciasPendientesDialog";
+import { AgenciasTabStats } from "@/components/promotions/detail/AgenciasTabStats";
 import { FeatureCardV3 } from "@/pages/Colaboradores";
 import ColaboradoresEstadisticas from "@/pages/ColaboradoresEstadisticas";
 import {
@@ -59,6 +61,9 @@ import {
 import { RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner"; // feedback tras publicar · Toaster global en App.tsx
 import { useCurrentUser } from "@/lib/currentUser";
+import { Flag } from "@/components/ui/Flag";
+import { findLanguageByCode } from "@/lib/languages";
+import { TEAM_MEMBERS, type TeamMember } from "@/lib/team";
 
 function formatPrice(n: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
@@ -118,18 +123,67 @@ const conditionLabels: Record<string, string> = {
   email_completo: "Email completo",
 };
 
-// Mock contacts for the footer
-const contacts = [
-  { name: "Arman Yeghiazaryan", role: "Founder & Director Comercial", avatar: "https://i.pravatar.cc/80?img=33", phone: "+34 612 345 678", email: "arman@byvaro.com", languages: ["🇪🇸", "🇫🇷", "🇬🇧"] },
-  { name: "María López", role: "Responsable de Ventas", avatar: "https://i.pravatar.cc/80?img=12", phone: "+34 678 901 234", email: "maria@byvaro.com", languages: ["🇪🇸", "🇬🇧"] },
-  { name: "Thomas Müller", role: "International Sales", avatar: "https://i.pravatar.cc/80?img=23", phone: "+49 170 123 456", email: "thomas@byvaro.com", languages: ["🇩🇪", "🇬🇧", "🇪🇸"] },
-];
+/**
+ * Los contactos comerciales del footer ahora se derivan de TEAM_MEMBERS
+ * (ver ADR-050) · se filtran los miembros activos con
+ * `visibleOnProfile === true` (la misma regla que /empresa). Reactivo
+ * al localStorage `byvaro.organization.members.v4`.
+ *
+ * La función `buildContactsFromTeam` vive fuera del componente para
+ * que sea pura y fácil de testear.
+ */
+function buildContactsFromTeam(members: TeamMember[]): ContactPerson[] {
+  return members
+    .filter((m) => (!m.status || m.status === "active") && m.visibleOnProfile)
+    .map((m) => ({
+      name: m.name,
+      role: m.jobTitle ?? m.department ?? "",
+      avatar: m.avatarUrl ?? "",
+      phone: m.phone ?? "",
+      email: m.email,
+      languages: m.languages ?? [],
+    }));
+}
+
+/** Hook reactivo · lee TEAM_MEMBERS de localStorage y se actualiza
+ *  cuando el admin modifica algún miembro desde /equipo o /ajustes/perfil. */
+function useTeamMembersReactive(): TeamMember[] {
+  const [list, setList] = useState<TeamMember[]>(() => {
+    if (typeof window === "undefined") return TEAM_MEMBERS;
+    try {
+      const raw = window.localStorage.getItem("byvaro.organization.members.v4");
+      return raw ? JSON.parse(raw) : TEAM_MEMBERS;
+    } catch { return TEAM_MEMBERS; }
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const reload = () => {
+      try {
+        const raw = window.localStorage.getItem("byvaro.organization.members.v4");
+        setList(raw ? JSON.parse(raw) : TEAM_MEMBERS);
+      } catch { setList(TEAM_MEMBERS); }
+    };
+    window.addEventListener("byvaro:members-change", reload);
+    window.addEventListener("byvaro:me-change", reload);
+    window.addEventListener("storage", reload);
+    return () => {
+      window.removeEventListener("byvaro:members-change", reload);
+      window.removeEventListener("byvaro:me-change", reload);
+      window.removeEventListener("storage", reload);
+    };
+  }, []);
+  return list;
+}
 
 export default function DeveloperPromotionDetail({ agentMode = false }: { agentMode?: boolean } = {}) {
   const { id } = useParams();
   const navigate = useNavigate();
   const confirm = useConfirm();
   const [activeTab, setActiveTab] = useState(0);
+  /* Contactos comerciales del footer · derivados de TEAM_MEMBERS reactivo.
+   * Filtro idéntico al que usa /empresa (visibleOnProfile + active). */
+  const teamMembers = useTeamMembersReactive();
+  const contacts = useMemo(() => buildContactsFromTeam(teamMembers), [teamMembers]);
   const [_availabilityVersion, _setAvailabilityVersion] = useState<"v1" | "v2">("v2");
   /* `viewAsCollaborator` tiene dos entradas:
    *   · el usuario global es agencia → siempre vista colaborador.
@@ -185,6 +239,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const [priceListOpen, setPriceListOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [activateSharingOpen, setActivateSharingOpen] = useState(false);
+  const [pendientesOpen, setPendientesOpen] = useState(false);
   /** El brochure puede eliminarse desde su card. Al eliminarlo, la sección
    *  se oculta y la acción rápida "Brochure" queda deshabilitada. */
   const [brochureRemoved, setBrochureRemoved] = useState(false);
@@ -527,7 +582,18 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     { icon: TrendingUp, label: "Comisión", value: p.commission > 0 ? `${p.commission}%` : "—", detail: p.commission > 0 ? (p.priceMin > 0 ? `~${formatPrice(p.priceMin * p.commission / 100)}` : "—") : "Sin configurar", color: "text-warning bg-warning/10", onClick: () => setActiveTab(visibleTabs.indexOf("Comisiones")), empty: p.commission === 0 },
     { icon: Calendar, label: "Entrega", value: p.delivery || "Por definir", detail: p.delivery ? "Estimada" : "Añádela en Información básica", color: "text-accent-foreground bg-accent/10", empty: !p.delivery },
     { icon: HardHat, label: "Construcción", value: p.constructionProgress !== undefined ? `${p.constructionProgress}%` : "—", detail: constructionPhaseLabel || "Sin configurar", color: "text-destructive bg-destructive/10", empty: p.constructionProgress === undefined },
-    ...(!viewAsCollaborator ? [{ icon: Users, label: "Agencias", value: `${p.agencies}`, detail: p.agencies > 0 ? "Colaborando" : "Ninguna aún", color: "text-primary bg-primary/10", onClick: () => setShareOpen(true), empty: false }] : []),
+    ...(!viewAsCollaborator ? (() => {
+      const realAgencies = countAgenciesForPromotion(p.id);
+      return [{
+        icon: Users,
+        label: "Agencias",
+        value: `${realAgencies}`,
+        detail: realAgencies > 0 ? "Colaborando" : "Ninguna aún",
+        color: "text-primary bg-primary/10",
+        onClick: () => setShareOpen(true),
+        empty: realAgencies === 0,
+      }];
+    })() : []),
   ];
   const kpis = viewAsCollaborator ? allKpis.filter(k => !k.empty) : allKpis;
 
@@ -1586,80 +1652,15 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           </div>
         )}
 
-        {activeTabKey === "Agencies" && !viewAsCollaborator && (() => {
-          /* Mismo lenguaje visual que `/colaboradores` (FeatureCardV3
-           *  en grid 3-col). Aquí filtramos a las agencias que están
-           *  colaborando en ESTA promoción. */
-          const agenciasEnPromo = agencies.filter(
-            (a) => a.promotionsCollaborating?.includes(p.id),
-          );
-          return (
-            <div className="space-y-4">
-              <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    Red comercial de esta promoción
-                  </p>
-                  <h2 className="text-base font-semibold text-foreground leading-tight mt-0.5">
-                    {agenciasEnPromo.length} {agenciasEnPromo.length === 1 ? "agencia" : "agencias"} colaborando
-                  </h2>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    onClick={() => setStatsOverlayOpen(true)}
-                    className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:bg-muted transition-colors"
-                    title="Ver estadísticas de esta promoción"
-                  >
-                    <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.75} />
-                    Estadísticas
-                  </button>
-                  <button
-                    onClick={() => navigate("/colaboradores/estadisticas")}
-                    className="group inline-flex items-center gap-1.5 h-10 px-4 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:bg-muted transition-colors"
-                    title="Ver estadísticas globales de tu red"
-                  >
-                    Estadísticas generales
-                    <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" strokeWidth={1.75} />
-                  </button>
-                  {canShare && (
-                    <button
-                      onClick={() => setShareOpen(true)}
-                      className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-foreground text-background text-sm font-semibold hover:bg-foreground/90 shadow-soft transition-colors"
-                    >
-                      <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                      Invitar agencia
-                    </button>
-                  )}
-                </div>
-              </header>
-
-              {agenciasEnPromo.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
-                  <Users className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
-                  <p className="text-sm font-medium text-foreground mb-1">Ninguna agencia colabora aún</p>
-                  <p className="text-xs text-muted-foreground mb-4">
-                    Invita a tus colaboradores o favoritos desde "Invitar agencia".
-                  </p>
-                  {canShare && (
-                    <button
-                      onClick={() => setShareOpen(true)}
-                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-border bg-background text-xs font-semibold text-foreground hover:bg-muted transition-colors"
-                    >
-                      <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                      Invitar agencia
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {agenciasEnPromo.map((a) => (
-                    <FeatureCardV3 key={a.id} agency={a} />
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })()}
+        {activeTabKey === "Agencies" && !viewAsCollaborator && (
+          <AgenciasTabStats
+            promotion={p}
+            canShare={canShare}
+            onInvitar={() => setShareOpen(true)}
+            onOpenStats={() => setStatsOverlayOpen(true)}
+            onOpenPendientes={() => setPendientesOpen(true)}
+          />
+        )}
 
         {/* ═══ TAB: COMISIONES ═══ */}
         {activeTabKey === "Comisiones" && (
@@ -1914,6 +1915,16 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       <SharePromotionDialog
         open={shareOpen}
         onOpenChange={setShareOpen}
+        promotionId={p.id}
+        promotionName={p.name}
+      />
+
+      {/* Agencias pendientes · dialog compartido con solicitudes
+          entrantes + invitaciones enviadas. Se abre desde el botón
+          "Pendientes · N" de la tab Agencias. */}
+      <AgenciasPendientesDialog
+        open={pendientesOpen}
+        onOpenChange={setPendientesOpen}
         promotionId={p.id}
         promotionName={p.name}
       />
@@ -3474,10 +3485,18 @@ function ContactCard({ contact: c, large }: { contact: ContactPerson; large?: bo
         <div className="min-w-0 flex-1">
           <p className={`${large ? "text-sm" : "text-sm"} font-semibold text-foreground truncate`}>{c.name}</p>
           <p className={`${large ? "text-xs" : "text-[10px]"} text-muted-foreground`}>{c.role}</p>
-          <div className="flex items-center gap-1 mt-1">
-            {c.languages.map((f, i) => (
-              <span key={i} className="text-xs">{f}</span>
-            ))}
+          <div className="flex items-center gap-1.5 mt-1">
+            {c.languages.map((code) => {
+              const lang = findLanguageByCode(code);
+              return (
+                <Flag
+                  key={code}
+                  iso={lang?.countryIso ?? code}
+                  size={12}
+                  title={lang?.name ?? code}
+                />
+              );
+            })}
           </div>
         </div>
       </div>

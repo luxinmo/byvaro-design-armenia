@@ -78,7 +78,8 @@ ambas cosas en un único tipo `Agency`. Al implementar backend, separar:
 | `GET /api/organization/members` → `TeamMember[]` | listado del equipo (reemplaza `TEAM_MEMBERS`) | `src/lib/team.ts:23`, `src/pages/ajustes/usuarios/miembros.tsx:36`, `src/pages/Equipo.tsx` |
 | `PATCH /api/organization/members/:id` | editar campos del miembro (role, jobTitle, department, permisos granulares, commissionCapturePct, commissionSalePct, avatarUrl) | `src/pages/ajustes/usuarios/miembros.tsx`, `src/components/team/MemberFormDialog.tsx:handleSave` |
 | `POST /api/organization/members` body: `{ email, fullName, jobTitle?, department?, languages?, role, phone?, commissionCapturePct?, commissionSalePct?, generateTempPassword?: boolean }` → `201 { member, tempPassword? }` · `409 EMAIL_TAKEN { existingWorkspace: string }` | crear miembro **directamente** (flow B · onboarding presencial con contraseña temporal) | `src/components/team/InviteMemberDialog.tsx:handleCreate`, `src/pages/Equipo.tsx:onCreate` |
-| `POST /api/organization/members/:id/deactivate` · `/reactivate` | desactivar / reactivar sin borrar datos | `src/pages/ajustes/usuarios/miembros.tsx:toggleActive`, `src/pages/Equipo.tsx` |
+| `POST /api/organization/members/:id/handover` body: `{ reassignments: { contacts?, opportunities?, records?, visits?, promotions?, email?: string /* newMemberId */ }, reason?: string, deactivate: true }` | **Desactivación con reasignación forzada** (ver ADR-051 + CLAUDE.md §🔄). El backend ejecuta en la misma transacción: reasignar cada categoría, configurar forward de email 6m, añadir evento `reassigned` con nota "Heredado de <nombre>" al historial de cada entidad, y cambiar `status: "deactive"`. | `src/components/team/DeactivateUserDialog.tsx`, `src/lib/assetOwnership.ts`, `src/pages/Equipo.tsx:handleDeactivateConfirm` |
+| `POST /api/organization/members/:id/reactivate` | reactivar sin borrar datos | `src/pages/Equipo.tsx:toggleActive` |
 | `DELETE /api/organization/members/:id` | eliminar miembro del workspace | `src/pages/ajustes/usuarios/miembros.tsx:removeMember` |
 | `POST /api/organization/invitations` body: `{ email, role, personalMessage? }` | invitar miembro (flow A · email con token 7d). **El backend genera el email** con `renderTeamInvitation()` de `src/lib/teamInvitationEmail.ts` (plantilla ya diseñada · es/en). Responde `409 EMAIL_TAKEN` si el email pertenece a otra org. | `src/components/team/InviteMemberDialog.tsx:handleInvite`, `src/pages/Equipo.tsx:onInvite` |
 | `DELETE /api/organization/invitations/:id` | revocar invitación enviada | `src/pages/ajustes/usuarios/miembros.tsx:revokeInvite`, `src/pages/Equipo.tsx:revokeInvite` |
@@ -93,6 +94,7 @@ ambas cosas en un único tipo `Agency`. Al implementar backend, separar:
 | `DELETE /api/organization` | borrar workspace completo | `src/pages/ajustes/zona-critica/eliminar-workspace.tsx:48` |
 | `POST /api/organization/transfer` | transferir ownership | `src/pages/ajustes/zona-critica/transferir.tsx:45` |
 | `PATCH /api/me { locale }` | cambiar idioma | `src/pages/ajustes/idioma-region/idioma.tsx:114` |
+| `PATCH /api/me { dateFormat }` body: `"DD/MM/YYYY" \| "MM/DD/YYYY" \| "YYYY-MM-DD" \| "DD MMM YYYY" \| "DD MMMM YYYY"` | preferencia global de formato de fecha · consumida por **toda** la app vía `formatDate()` de `src/lib/dateFormat.ts` (ficha contacto, historial, emails, documentos). Mock localStorage: `byvaro.userDateFormat.v1`. | `src/pages/ajustes/idioma-region/formato-fecha.tsx`, `src/lib/dateFormat.ts` |
 | `PATCH /api/organization { currency }` | cambiar moneda | `src/pages/ajustes/idioma-region/moneda.tsx:211` |
 
 **Nota TOTP**: el secret NO debe vivir nunca en el cliente (`src/lib/totp.ts:35`, `src/lib/twoFactor.ts:21`). Actualmente es mock localStorage.
@@ -245,6 +247,16 @@ DELETE /api/contacts/:id/comments/:cid     (solo autor)
 
 GET    /api/contacts/:id/assigned          → ContactAssignedUser[]
 PUT    /api/contacts/:id/assigned          { userIds: [...] }   (contacts.assign)
+
+PATCH  /api/contacts/:id/languages         { languages: string[] }   (contacts.edit)
+                                           → `ContactDetail` con `languages` actualizado.
+                                           Códigos ISO 639 + región (ES, EN, FR, DE…).
+                                           Canónico en `src/lib/languages.ts`.
+                                           UI inline: chips + popover dentro de la card
+                                           "Datos" (sin abrir "Editar contacto"). Actualmente
+                                           mockeado en `src/components/contacts/contactLanguagesStorage.ts`
+                                           (clave `byvaro.contact.<id>.languages.v1`, evento
+                                           `byvaro:contact-languages-change`).
 
 GET    /api/contacts/:id/related           → ContactRelation[]
 POST   /api/contacts/:id/related           { contactId, relationType }

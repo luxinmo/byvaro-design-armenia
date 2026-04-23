@@ -41,12 +41,13 @@ import { SettingsScreen, SettingsCard } from "@/components/settings/SettingsScre
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Flag } from "@/components/ui/Flag";
 
 const KEY = "byvaro.userLocale.v1";
 
 type Language = {
   code: string;       // BCP 47
-  flag: string;       // emoji bandera
+  countryIso: string; // ISO 3166-1 alpha-2 (ES, GB, FR…) · render con <Flag>
   label: string;      // nombre en español
   native: string;     // nombre en su propio idioma
   rtl?: boolean;
@@ -56,33 +57,33 @@ type Language = {
  *  Costa Blanca + clientes internacionales) ordenados por tracción
  *  esperada. */
 const LANGUAGES: Language[] = [
-  { code: "es-ES", flag: "🇪🇸", label: "Español",          native: "Español (España)" },
-  { code: "en-US", flag: "🇺🇸", label: "English (US)",      native: "English (United States)" },
-  { code: "en-GB", flag: "🇬🇧", label: "English (UK)",      native: "English (United Kingdom)" },
-  { code: "fr-FR", flag: "🇫🇷", label: "Francés",           native: "Français (France)" },
-  { code: "de-DE", flag: "🇩🇪", label: "Alemán",            native: "Deutsch (Deutschland)" },
-  { code: "it-IT", flag: "🇮🇹", label: "Italiano",          native: "Italiano (Italia)" },
-  { code: "pt-PT", flag: "🇵🇹", label: "Portugués",         native: "Português (Portugal)" },
-  { code: "pt-BR", flag: "🇧🇷", label: "Portugués (Brasil)",native: "Português (Brasil)" },
-  { code: "nl-NL", flag: "🇳🇱", label: "Neerlandés",        native: "Nederlands" },
-  { code: "sv-SE", flag: "🇸🇪", label: "Sueco",             native: "Svenska" },
-  { code: "no-NO", flag: "🇳🇴", label: "Noruego",           native: "Norsk" },
-  { code: "da-DK", flag: "🇩🇰", label: "Danés",             native: "Dansk" },
-  { code: "fi-FI", flag: "🇫🇮", label: "Finés",             native: "Suomi" },
-  { code: "pl-PL", flag: "🇵🇱", label: "Polaco",            native: "Polski" },
-  { code: "ro-RO", flag: "🇷🇴", label: "Rumano",            native: "Română" },
-  { code: "cs-CZ", flag: "🇨🇿", label: "Checo",             native: "Čeština" },
-  { code: "hu-HU", flag: "🇭🇺", label: "Húngaro",           native: "Magyar" },
-  { code: "ru-RU", flag: "🇷🇺", label: "Ruso",              native: "Русский" },
-  { code: "uk-UA", flag: "🇺🇦", label: "Ucraniano",         native: "Українська" },
-  { code: "tr-TR", flag: "🇹🇷", label: "Turco",             native: "Türkçe" },
-  { code: "hy-AM", flag: "🇦🇲", label: "Armenio",           native: "Հայերեն" },
-  { code: "ka-GE", flag: "🇬🇪", label: "Georgiano",         native: "ქართული" },
-  { code: "ar-SA", flag: "🇸🇦", label: "Árabe",             native: "العربية", rtl: true },
-  { code: "he-IL", flag: "🇮🇱", label: "Hebreo",            native: "עברית", rtl: true },
-  { code: "zh-CN", flag: "🇨🇳", label: "Chino simplificado",native: "简体中文" },
-  { code: "ja-JP", flag: "🇯🇵", label: "Japonés",           native: "日本語" },
-  { code: "ko-KR", flag: "🇰🇷", label: "Coreano",           native: "한국어" },
+  { code: "es-ES", countryIso: "ES", label: "Español",          native: "Español (España)" },
+  { code: "en-US", countryIso: "US", label: "English (US)",      native: "English (United States)" },
+  { code: "en-GB", countryIso: "GB", label: "English (UK)",      native: "English (United Kingdom)" },
+  { code: "fr-FR", countryIso: "FR", label: "Francés",           native: "Français (France)" },
+  { code: "de-DE", countryIso: "DE", label: "Alemán",            native: "Deutsch (Deutschland)" },
+  { code: "it-IT", countryIso: "IT", label: "Italiano",          native: "Italiano (Italia)" },
+  { code: "pt-PT", countryIso: "PT", label: "Portugués",         native: "Português (Portugal)" },
+  { code: "pt-BR", countryIso: "BR", label: "Portugués (Brasil)",native: "Português (Brasil)" },
+  { code: "nl-NL", countryIso: "NL", label: "Neerlandés",        native: "Nederlands" },
+  { code: "sv-SE", countryIso: "SE", label: "Sueco",             native: "Svenska" },
+  { code: "no-NO", countryIso: "NO", label: "Noruego",           native: "Norsk" },
+  { code: "da-DK", countryIso: "DK", label: "Danés",             native: "Dansk" },
+  { code: "fi-FI", countryIso: "FI", label: "Finés",             native: "Suomi" },
+  { code: "pl-PL", countryIso: "PL", label: "Polaco",            native: "Polski" },
+  { code: "ro-RO", countryIso: "RO", label: "Rumano",            native: "Română" },
+  { code: "cs-CZ", countryIso: "CZ", label: "Checo",             native: "Čeština" },
+  { code: "hu-HU", countryIso: "HU", label: "Húngaro",           native: "Magyar" },
+  { code: "ru-RU", countryIso: "RU", label: "Ruso",              native: "Русский" },
+  { code: "uk-UA", countryIso: "UA", label: "Ucraniano",         native: "Українська" },
+  { code: "tr-TR", countryIso: "TR", label: "Turco",             native: "Türkçe" },
+  { code: "hy-AM", countryIso: "AM", label: "Armenio",           native: "Հայերեն" },
+  { code: "ka-GE", countryIso: "GE", label: "Georgiano",         native: "ქართული" },
+  { code: "ar-SA", countryIso: "SA", label: "Árabe",             native: "العربية", rtl: true },
+  { code: "he-IL", countryIso: "IL", label: "Hebreo",            native: "עברית", rtl: true },
+  { code: "zh-CN", countryIso: "CN", label: "Chino simplificado",native: "简体中文" },
+  { code: "ja-JP", countryIso: "JP", label: "Japonés",           native: "日本語" },
+  { code: "ko-KR", countryIso: "KR", label: "Coreano",           native: "한국어" },
 ];
 
 function loadLocale(): string {
@@ -175,7 +176,7 @@ export default function AjustesIdioma() {
                       : "border-border hover:border-foreground/20 hover:bg-muted/40",
                   )}
                 >
-                  <span className="text-2xl shrink-0 leading-none">{lang.flag}</span>
+                  <Flag iso={lang.countryIso} size={24} className="shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">
                       {lang.label}

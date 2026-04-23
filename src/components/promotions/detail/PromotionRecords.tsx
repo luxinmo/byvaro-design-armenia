@@ -42,6 +42,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { cn } from "@/lib/utils";
+import { Flag } from "@/components/ui/Flag";
 
 /* ── Types ── */
 interface MatchDetail {
@@ -54,7 +55,7 @@ interface RegistrationRecord {
   id: string;
   type: "registration" | "registration_visit";
   contactName: string;
-  contactFlag?: string;
+  contactCountryIso?: string;
   promotion: string;
   company: string;
   status: "pending" | "approved" | "declined";
@@ -73,7 +74,7 @@ const pendingRecords: RegistrationRecord[] = [
     id: "p1",
     type: "registration",
     contactName: "TestCliente",
-    contactFlag: "🇪🇸",
+    contactCountryIso: "ES",
     promotion: "Villa Azahar",
     company: "Luximno Real Estate",
     status: "pending",
@@ -95,7 +96,7 @@ const pendingRecords: RegistrationRecord[] = [
     id: "p2",
     type: "registration_visit",
     contactName: "TestCliente n234",
-    contactFlag: "🇬🇧",
+    contactCountryIso: "GB",
     promotion: "new promotion",
     company: "Luximno Real Estate",
     status: "pending",
@@ -126,15 +127,15 @@ const pendingRecords: RegistrationRecord[] = [
 ];
 
 const processedRecords: RegistrationRecord[] = [
-  { id: "h1", type: "registration", contactName: "TestArman", contactFlag: "🇪🇸", promotion: "Villa Azahar", company: "JustRent - Spain Rentales", status: "approved", date: "15/01/26", relativeDate: "" },
-  { id: "h2", type: "registration_visit", contactName: "Arman 6789", contactFlag: "🇬🇧", promotion: "new promotion", company: "Luximno Real Estate", status: "approved", date: "12/01/26", relativeDate: "" },
-  { id: "h3", type: "registration_visit", contactName: "TestCliente 78901233", contactFlag: "🇫🇷", promotion: "new promotion 3", company: "Luximno Real Estate", status: "approved", date: "12/01/26", relativeDate: "" },
-  { id: "h4", type: "registration_visit", contactName: "TestCliente", contactFlag: "🇪🇸", promotion: "Villa Azahar", company: "Luximno Real Estate", status: "approved", date: "12/01/26", relativeDate: "" },
+  { id: "h1", type: "registration", contactName: "TestArman", contactCountryIso: "ES", promotion: "Villa Azahar", company: "JustRent - Spain Rentales", status: "approved", date: "15/01/26", relativeDate: "" },
+  { id: "h2", type: "registration_visit", contactName: "Arman 6789", contactCountryIso: "GB", promotion: "new promotion", company: "Luximno Real Estate", status: "approved", date: "12/01/26", relativeDate: "" },
+  { id: "h3", type: "registration_visit", contactName: "TestCliente 78901233", contactCountryIso: "FR", promotion: "new promotion 3", company: "Luximno Real Estate", status: "approved", date: "12/01/26", relativeDate: "" },
+  { id: "h4", type: "registration_visit", contactName: "TestCliente", contactCountryIso: "ES", promotion: "Villa Azahar", company: "Luximno Real Estate", status: "approved", date: "12/01/26", relativeDate: "" },
   { id: "h5", type: "registration", contactName: "'N/A'", promotion: "new promotion test 432", company: "", status: "declined", date: "12/01/26", relativeDate: "" },
   { id: "h6", type: "registration", contactName: "'N/A'", promotion: "Villa Azahar", company: "", status: "declined", date: "09/01/26", relativeDate: "" },
   { id: "h7", type: "registration", contactName: "'N/A'", promotion: "Villa Azahar", company: "", status: "declined", date: "16/11/25", relativeDate: "" },
   { id: "h8", type: "registration", contactName: "'N/A'", promotion: "Villa Azahar", company: "", status: "approved", date: "13/09/25", relativeDate: "" },
-  { id: "h9", type: "registration", contactName: "Florence Fernandez", contactFlag: "🇪🇸", promotion: "Villa Azahar", company: "", status: "approved", date: "13/09/25", relativeDate: "" },
+  { id: "h9", type: "registration", contactName: "Florence Fernandez", contactCountryIso: "ES", promotion: "Villa Azahar", company: "", status: "approved", date: "13/09/25", relativeDate: "" },
 ];
 
 /* ── Status badge ── */
@@ -243,7 +244,7 @@ function RecordRow({ record, isPending }: { record: RegistrationRecord; isPendin
         </div>
         <div className="w-[180px] shrink-0 flex items-center gap-2 min-w-0">
           <span className="text-xs font-semibold text-foreground truncate">{record.contactName}</span>
-          {record.contactFlag && <span className="text-sm leading-none">{record.contactFlag}</span>}
+          {record.contactCountryIso && <Flag iso={record.contactCountryIso} size={14} />}
         </div>
         <div className="w-[150px] shrink-0 text-xs text-muted-foreground truncate">
           {record.promotion}

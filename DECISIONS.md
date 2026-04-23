@@ -1459,3 +1459,194 @@ Ver:
 - `docs/plan-equipo-estadisticas.md`,
 - `docs/backend-integration.md §1.9`,
 - CLAUDE.md §📊 KPIs en el dashboard del miembro.
+
+---
+
+## 2026-04-23 · ADR-050 · Usuario unificado · "mí" es mi entrada en el equipo
+
+**Contexto:** Hasta ahora había dos stores independientes que
+describían a la misma persona:
+
+- `byvaro.user.profile.v1` (profileStorage · editado en
+  `/ajustes/perfil/personal`).
+- `byvaro.organization.members.v4` → entrada `u1` (editado en
+  `/equipo` → `MemberFormDialog`).
+
+Resultado: el usuario editaba su perfil en Ajustes, pero al verse a
+sí mismo en `/equipo` encontraba **datos distintos**. Y al revés: un
+admin podía cambiarle la foto o el cargo desde `/equipo` y eso no se
+reflejaba en el sidebar ni en la firma de emails del propio usuario.
+
+**Decisión:** Unificar en una sola fuente. "Mí" es **la entrada de
+TEAM_MEMBERS donde `id === currentUser.id`**. Nace
+`src/lib/meStorage.ts` como fachada única:
+
+- `getMe()` / `updateMe(patch)` / `useMe()` reactivo.
+- `emitMembersChange()` helper que cualquier pantalla que edite
+  miembros llama tras persistir · dispara `byvaro:me-change` +
+  `byvaro:members-change` para que sidebar, perfil, historial y
+  equipo se refresquen en caliente.
+- `profileStorage.ts` queda como **fachada legacy**: todas sus
+  funciones delegan en `meStorage`. No se rompen los 10+ consumers
+  existentes.
+- Migración silenciosa: si existía un `byvaro.user.profile.v1`, en
+  la primera carga del cliente se vuelca sobre `meStorage` (una sola
+  vez · flag `byvaro.me-migration.v1`).
+
+**División editor ↔ admin:**
+
+- Usuario edita (desde `/ajustes/perfil/personal`): fullName, email,
+  avatar, teléfono, cargo (JobTitlePicker), departamento (auto +
+  manual override), idiomas, bio.
+- Admin edita (desde `/equipo/MemberFormDialog`): todo lo anterior
+  **más** rol, permisos granulares, `visibleOnProfile`, plan de
+  comisiones, status (activate/deactivate).
+- El usuario ve una nota al pie de `/ajustes/perfil/personal` que
+  explica qué campos solo gestiona el admin.
+
+**Segundo cambio · ubicación en el navbar:**
+
+Equipo baja del grupo **Red** al grupo **Administración** (junto a
+Empresa). Lógica: los miembros del equipo forman parte del perfil
+organizativo (aparecen en la ficha pública de Empresa y microsites
+según `visibleOnProfile`), no son "red comercial" como agencias y
+contactos. El usuario mental del admin es: "aquí gestiono mi
+empresa" (Empresa + Equipo) vs "aquí gestiono el pipeline" (Red).
+
+**Tercer cambio · visibilidad en ficha de Empresa (pill explícita):**
+
+La vista Lista de `/equipo` ahora muestra una **pill explícita**
+junto a cada miembro con `Eye` "Visible" (verde) o `EyeOff` "Oculto"
+(gris). Antes solo aparecía en la galería como badge sutil. Razón:
+el admin necesita poder escanear rápido quién sale en el microsite
+sin tener que abrir el dialog de cada miembro.
+
+**Alternativas descartadas:**
+
+- **Dos stores sincronizados vía reactividad** (sync on write hacia
+  ambas direcciones). → Mantenible en teoría, fuente de bugs
+  sutiles en la práctica. Hoy lo tenemos cerrado con un único store.
+- **Mover profileStorage completamente y eliminar la fachada**. →
+  Rompe los 10+ consumers existentes en un solo commit. La fachada
+  legacy permite migración gradual.
+- **Mantener Equipo en Red**. → Usuario dejó claro que conceptualmente
+  pertenece a Administración junto a Empresa.
+
+**Consecuencias:**
+
+- `useCurrentUser()` ahora es reactivo a cambios en TEAM_MEMBERS —
+  un admin editando al usuario desde `/equipo` refresca el sidebar,
+  historial y firma en tiempo real.
+- `MemberFormDialog`, `InviteMemberDialog`, `miembros.tsx` y `Equipo.tsx`
+  llaman a `emitMembersChange()` tras escribir para propagar.
+- `TeamMember.bio` añadido al tipo (antes solo en profileStorage).
+- `/ajustes/perfil/personal` ahora permite editar phone, cargo
+  (JobTitlePicker con máx 2), y los mismos idiomas (ISO codes) que
+  el resto del sistema.
+
+**Backend:** cuando se conecte, el mapping es directo:
+
+- `GET /api/me` → devuelve el `TeamMember` del usuario logueado
+  (equivalente a `meStorage.getMe()`).
+- `PATCH /api/me` → actualiza los campos permitidos al propio
+  usuario (fullName, email, avatar, phone, jobTitle, department,
+  languages, bio).
+- `PATCH /api/organization/members/:id` → actualiza campos reservados
+  a admin (role, permisos, commissions, visibleOnProfile).
+
+Ver: `src/lib/meStorage.ts`, `src/lib/profileStorage.ts` (fachada),
+`src/lib/currentUser.ts`, `src/pages/ajustes/perfil/personal.tsx`,
+`src/pages/Equipo.tsx`, `src/pages/ajustes/usuarios/miembros.tsx`,
+`src/components/AppSidebar.tsx` (Equipo movido a Administración),
+`docs/screens/equipo.md §Regla de visibilidad en Empresa`.
+
+---
+
+## 2026-04-23 · ADR-051 · Handover obligatorio al desactivar miembro
+
+**Contexto:** Si un miembro del equipo se da de baja (despido, baja
+voluntaria, excedencia) y el admin lo desactiva con un simple toggle,
+todas sus cosas quedan **huérfanas**:
+
+- Sus contactos dejan de tener agente asignado (los clientes llaman
+  y no saben a quién dirigirse).
+- Sus oportunidades se pierden del pipeline.
+- Sus visitas programadas no aparecen en la agenda de nadie.
+- Los emails que entran a su cuenta rebotan o se quedan sin leer.
+- La IA pierde contexto · no sabe quién heredó qué.
+
+Este es un problema real de SaaS inmobiliario — la rotación en el
+sector es alta y sin un handover bien diseñado se pierden leads con
+coste alto de adquisición.
+
+**Decisión:** La desactivación NO es un toggle atómico. Pasa por
+`DeactivateUserDialog` que **obliga** al admin a reasignar cada
+categoría de activos antes de ejecutar el cambio de status.
+
+**Categorías contempladas** (en `src/lib/assetOwnership.ts`):
+
+- `contacts` · contactos asignados.
+- `opportunities` · oportunidades abiertas.
+- `records` · registros con validez vigente.
+- `visits` · visitas programadas + pendientes de evaluar.
+- `promotions` · si era el agente de referencia de alguna promoción.
+- `email` · cuenta(s) de email del miembro → **delegación
+  automática** (forward de 6 meses a otro destinatario).
+
+**Contrato del historial (CRÍTICO):** cada entidad reasignada añade
+en su timeline un evento `reassigned` con:
+
+```ts
+{
+  type: "reassigned",
+  reason: "handover",
+  from: { id, name },
+  to: { id, name },
+  note: "Heredado de <nombre> · baja del equipo",
+  occurredAt: ISO,
+}
+```
+
+Esto se renderiza en la ficha de contacto (`/contactos/:id?tab=historial`)
+como un evento diferenciado. La IA puede leer esta señal para
+detectar patrones ("el 40 % de los contactos heredados de Diego
+acabaron cerrando con Isabel — considerar darle más leads RU").
+
+**Alternativas descartadas:**
+
+- **Toggle directo** (lo que había). → Pérdida de datos garantizada
+  en cuanto hay volumen real. Inaceptable en producción.
+- **Reasignación en bulk automática** al miembro con menos carga. →
+  Sin intención del admin · desbalancea equipos por accidente.
+- **Solo bloquear el login** sin reasignar. → El activo sigue
+  vinculado al miembro que no puede ejecutar nada · mismo problema.
+- **Categorías reasignadas por email (soft)** en vez de obligar. → La
+  UI no debe dejar salir al admin sin resolver esto.
+
+**Email · caso especial:** el email se delega automáticamente porque:
+1. Reasignar emails individuales es inviable.
+2. El forward temporal (6 meses) captura la cola sin perder mensajes
+   entrantes.
+3. El admin elige el destinatario una sola vez en el dialog.
+
+**Consecuencias de diseño:**
+
+- `Equipo.tsx` y `MemberFormDialog` ya no llaman directamente a
+  `toggleActive` para desactivar · abren el dialog.
+- Reactivar sigue siendo un toggle directo (no hay nada que
+  reasignar al revés).
+- Backend (`POST /api/members/:id/handover`) ejecuta la transacción
+  atómica: reasignaciones + `status: "deactive"` + eventos de
+  historial + forward de email. Si falla, rollback.
+- Cualquier feature nueva que cree "cosas" asignadas a un miembro
+  tiene que añadirse al inventario en `assetOwnership.ts` · si no,
+  pierde esa cosa al desactivar al dueño (rule aplicable a
+  code-reviews).
+
+**Regla de oro** añadida a `CLAUDE.md §🔄 Handover obligatorio al
+desactivar miembro`.
+
+Ver: `src/lib/assetOwnership.ts`,
+`src/components/team/DeactivateUserDialog.tsx`,
+`src/pages/Equipo.tsx:toggleActive + handleDeactivateConfirm`,
+`docs/screens/equipo.md §Desactivar miembro`.

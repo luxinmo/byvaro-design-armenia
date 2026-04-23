@@ -25,9 +25,16 @@ type Props = {
   placeholder?: string;
   /** Si true, no permite cerrar el popover sin elegir. */
   required?: boolean;
+  /** Ids a ocultar (p. ej. el propio miembro en un handover). */
+  excludeIds?: string[];
+  /** Si true, solo muestra miembros con status = active. */
+  onlyActive?: boolean;
 };
 
-export function UserSelect({ value, onChange, placeholder = "Selecciona miembro…", required }: Props) {
+export function UserSelect({
+  value, onChange, placeholder = "Selecciona miembro…", required,
+  excludeIds, onlyActive,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -35,13 +42,20 @@ export function UserSelect({ value, onChange, placeholder = "Selecciona miembro�
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return TEAM_MEMBERS;
-    return TEAM_MEMBERS.filter(
+    let base = TEAM_MEMBERS;
+    if (onlyActive) {
+      base = base.filter((m) => !m.status || m.status === "active");
+    }
+    if (excludeIds && excludeIds.length > 0) {
+      base = base.filter((m) => !excludeIds.includes(m.id));
+    }
+    if (!q) return base;
+    return base.filter(
       (m) => m.name.toLowerCase().includes(q) ||
              m.email.toLowerCase().includes(q) ||
              (m.jobTitle?.toLowerCase().includes(q) ?? false),
     );
-  }, [query]);
+  }, [query, excludeIds, onlyActive]);
 
   const handleClose = (next: boolean) => {
     if (!next && required && !value) return;

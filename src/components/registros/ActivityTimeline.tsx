@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Registro, RegistroTimelineEvent } from "@/data/records";
+import { findTeamMember } from "@/lib/team";
 
 const EVENT_META: Record<RegistroTimelineEvent["type"], {
   icon: typeof Inbox;
@@ -175,6 +176,11 @@ function synthesizeTimeline(r: Registro): RegistroTimelineEvent[] {
   });
 
   if (r.estado === "aprobado" || r.estado === "rechazado") {
+    /* Resolver el nombre/cargo a partir del userId (fuente única) · si
+     * no existe el id, caemos al snapshot legacy en `decidedBy`. */
+    const decidedMember = r.decidedByUserId
+      ? findTeamMember(r.decidedByUserId)
+      : undefined;
     out.push({
       id: "ev-decision",
       type: "decision",
@@ -182,8 +188,8 @@ function synthesizeTimeline(r: Registro): RegistroTimelineEvent[] {
       description: r.decisionNote,
       timestamp: r.decidedAt ?? r.fecha,
       status: "completed",
-      actor: r.decidedBy,
-      actorRole: r.decidedByRole,
+      actor: decidedMember?.name ?? r.decidedBy,
+      actorRole: decidedMember?.jobTitle ?? r.decidedByRole,
       decisionType: r.estado === "aprobado" ? "approved" : "declined",
       responseTime: r.responseTime,
     });

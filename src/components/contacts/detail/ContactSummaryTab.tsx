@@ -13,13 +13,21 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Mail, Phone, MapPin, Calendar as CalendarIcon,
-  Globe, IdCard, Building2, Star, UserPlus, Users, Hash, Plus, X,
+  Globe, IdCard, Star, UserPlus, Users, Plus, X,
   AlertCircle, TrendingUp, Shield, ArrowRight, ChevronDown, Sparkles, Search,
-  ClipboardCheck,
+  ClipboardCheck, Check,
 } from "lucide-react";
 import { EvaluateVisitDialog } from "./EvaluateVisitDialog";
 import { AssignMembersDialog } from "./AssignMembersDialog";
 import { LinkContactDialog } from "./LinkContactDialog";
+import { findTeamMember, memberInitials, getMemberAvatarUrl } from "@/lib/team";
+import { useMe } from "@/lib/meStorage";
+import { Flag } from "@/components/ui/Flag";
+import { LANGUAGES, findLanguageByCode } from "@/lib/languages";
+import { formatDate as formatDateWithPreference, useDateFormat } from "@/lib/dateFormat";
+import {
+  saveContactLanguages, useContactLanguages,
+} from "@/components/contacts/contactLanguagesStorage";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -44,13 +52,11 @@ type Props = {
   onOpenWhatsApp?: () => void;
 };
 
+/* `formatDate` ahora respeta la preferencia del usuario
+ * (/ajustes/idioma-region/formato-fecha) vía `formatDateWithPreference`.
+ * Se conserva este helper local como fachada para compatibilidad. */
 function formatDate(iso?: string): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("es-ES", {
-      day: "numeric", month: "long", year: "numeric",
-    });
-  } catch { return iso; }
+  return formatDateWithPreference(iso) || "—";
 }
 
 export function ContactSummaryTab({ detail, onRefresh, onOpenWhatsApp }: Props) {
@@ -81,21 +87,26 @@ export function ContactSummaryTab({ detail, onRefresh, onOpenWhatsApp }: Props) 
   const [evalOpen, setEvalOpen] = useState(false);
   const [evalVersion, setEvalVersion] = useState(0); // refresca tras evaluar
 
-  /** Toggle de campos vacíos en Información personal — escondidos
+  /** Toggle de campos vacíos en "Datos personales" — escondidos
    *  por defecto para no llenar la card de "No registrado". */
   const [showEmptyFields, setShowEmptyFields] = useState(false);
 
+  /* El formato de fecha se reactualiza si el usuario lo cambia en
+   * /ajustes/idioma-region/formato-fecha. */
+  useDateFormat();
+
   /** Definimos los campos en orden y los partimos en dos buckets:
    *  los que tienen valor y los que no. Solo mostramos los vacíos si
-   *  el usuario abre el toggle. */
+   *  el usuario abre el toggle.
+   *
+   *  · Referencia: quitada · ya aparece como chip en el header.
+   *  · Nacionalidad: quitada · la bandera está al lado del nombre.
+   *  · Ciudad: quitada · la dirección (Google Maps) ya la contiene.
+   *  · Idiomas: se renderiza fuera como chips editables inline. */
   const personalFields = [
-    { icon: Hash,         label: "Referencia",         value: detail.reference, mono: true },
     { icon: IdCard,       label: "NIF / DNI",          value: detail.nif },
     { icon: CalendarIcon, label: "Fecha de nacimiento", value: detail.birthDate ? formatDate(detail.birthDate) : undefined },
-    { icon: Globe,        label: "Nacionalidad",       value: detail.nationality ? `${detail.flag ?? ""} ${detail.nationality}`.trim() : undefined },
-    { icon: Globe,        label: "Idiomas",            value: detail.languages?.join(" · ") },
     { icon: MapPin,       label: "Dirección",          value: detail.address },
-    { icon: Building2,    label: "Ciudad",             value: [detail.city, detail.postalCode].filter(Boolean).join(" · ") || undefined },
   ];
   const filledFields = personalFields.filter((f) => f.value);
   const emptyFields = personalFields.filter((f) => !f.value);
@@ -126,20 +137,24 @@ export function ContactSummaryTab({ detail, onRefresh, onOpenWhatsApp }: Props) 
           />
         )}
 
-        {/* Información personal · campos vacíos colapsados por defecto */}
-        <Card title="Información personal">
+        {/* Datos · sin duplicar Referencia/Nacionalidad/Ciudad (ya en header/dirección) */}
+        <Card title="Datos">
           {filledFields.length === 0 ? (
-            <Empty text="Sin datos personales registrados todavía." />
+            <Empty text="Sin datos registrados todavía." />
           ) : (
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
               {filledFields.map((f) => (
-                <Field key={f.label} icon={f.icon} label={f.label} value={f.value} mono={f.mono} />
+                <Field key={f.label} icon={f.icon} label={f.label} value={f.value} />
               ))}
               {showEmptyFields && emptyFields.map((f) => (
                 <Field key={f.label} icon={f.icon} label={f.label} value={undefined} />
               ))}
             </dl>
           )}
+
+          {/* Idiomas · chips editables inline (no hay que abrir "Editar") */}
+          <ContactLanguagesChips detail={detail} />
+
           {emptyFields.length > 0 && (
             <button
               onClick={() => setShowEmptyFields((s) => !s)}
@@ -238,22 +253,45 @@ export function ContactSummaryTab({ detail, onRefresh, onOpenWhatsApp }: Props) 
             <Empty text="Sin usuarios asignados." />
           ) : (
             <ul className="space-y-2">
-              {detail.assignedUsers.map((u) => (
-                <li key={u.userId} className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-full bg-foreground/5 grid place-items-center text-foreground font-semibold text-xs shrink-0">
-                    {u.userName.split(" ").map((w) => w[0]).slice(0, 2).join("")}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{u.userName}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">{u.role ?? "Miembro"}</p>
-                  </div>
-                  {u.permissions.canEdit && (
-                    <span className="text-[10px] text-muted-foreground" title="Puede editar">
-                      <Star className="h-3 w-3 fill-current" />
-                    </span>
-                  )}
-                </li>
-              ))}
+              {detail.assignedUsers.map((u) => {
+                /* Resolver el miembro ACTUAL desde TEAM_MEMBERS. Si existe,
+                 * usamos EXCLUSIVAMENTE sus datos vivos (aunque el cargo
+                 * esté vacío porque el usuario lo borró). Solo caemos al
+                 * snapshot legacy (`u.userName`, `u.role`) cuando el
+                 * miembro YA NO existe en el equipo (fue eliminado). */
+                const member = findTeamMember(u.userId);
+                const displayName = member ? member.name : u.userName;
+                const displayRole = member
+                  ? (member.jobTitle?.trim() || "Sin cargo")
+                  : (u.role ?? "Miembro");
+                const avatarUrl = member ? getMemberAvatarUrl(member) : null;
+                const initials = member ? memberInitials(member)
+                  : displayName.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+                return (
+                  <li key={u.userId} className="flex items-center gap-3">
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt=""
+                        className="h-9 w-9 rounded-full object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="h-9 w-9 rounded-full bg-primary/15 text-primary grid place-items-center text-[11px] font-semibold shrink-0">
+                        {initials}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{displayName}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{displayRole}</p>
+                    </div>
+                    {u.permissions.canEdit && (
+                      <span className="text-[10px] text-muted-foreground" title="Puede editar">
+                        <Star className="h-3 w-3 fill-current" />
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
           <button
@@ -800,4 +838,89 @@ function ConsentItem({ label, granted, signed }: { label: string; granted: boole
 
 function Empty({ text }: { text: string }) {
   return <p className="text-xs text-muted-foreground italic text-center py-3">{text}</p>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ContactLanguagesChips · chips editables inline (no entra al "Editar")
+   ═══════════════════════════════════════════════════════════════════ */
+function ContactLanguagesChips({ detail }: { detail: ContactDetail }) {
+  /* Prioriza el override local · si no hay, cae al valor del seed. */
+  const override = useContactLanguages(detail.id);
+  const currentLangs = override ?? detail.languages ?? [];
+
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const toggle = (code: string) => {
+    const next = currentLangs.includes(code)
+      ? currentLangs.filter((x) => x !== code)
+      : [...currentLangs, code];
+    saveContactLanguages(detail.id, next);
+  };
+
+  return (
+    <div className="mt-4 pt-4 border-t border-border/50">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 inline-flex items-center gap-1.5">
+        <Globe className="h-3 w-3" />
+        Idiomas
+      </p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {currentLangs.length === 0 && (
+          <span className="text-[11px] text-muted-foreground italic">Sin idiomas registrados</span>
+        )}
+        {currentLangs.map((code) => {
+          const lang = findLanguageByCode(code);
+          return (
+            <span
+              key={code}
+              className="inline-flex items-center gap-1.5 h-7 pl-2 pr-1.5 rounded-full bg-muted text-foreground text-[11px] font-medium"
+              title={lang?.name ?? code}
+            >
+              <Flag iso={lang?.countryIso ?? code} size={12} />
+              {lang?.name ?? code}
+              <button
+                type="button"
+                onClick={() => toggle(code)}
+                className="h-4 w-4 rounded-full hover:bg-background/70 grid place-items-center"
+                aria-label={`Quitar ${code}`}
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </span>
+          );
+        })}
+        <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full border border-dashed border-border text-[11px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+            >
+              <Plus className="h-3 w-3" /> Añadir idioma
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-60 p-1.5" align="start">
+            <div className="max-h-64 overflow-y-auto">
+              {LANGUAGES.map((l) => {
+                const active = currentLangs.includes(l.code);
+                return (
+                  <button
+                    key={l.code}
+                    type="button"
+                    onClick={() => toggle(l.code)}
+                    className="w-full text-left px-2.5 py-1.5 text-sm rounded-lg hover:bg-muted flex items-center justify-between"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Flag iso={l.countryIso} size={14} />
+                      <span>{l.name}</span>
+                      <span className="text-[10px] text-muted-foreground/60 tracking-wider">{l.code}</span>
+                    </span>
+                    {active && <Check className="h-3.5 w-3.5 text-foreground" />}
+                  </button>
+                );
+              })}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+    </div>
+  );
 }

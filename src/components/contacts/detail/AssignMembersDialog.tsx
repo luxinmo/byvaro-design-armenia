@@ -19,8 +19,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
-  TEAM_MEMBERS, memberInitials, getMemberAvatarUrl,
+  memberInitials, getMemberAvatarUrl, getAllTeamMembers,
 } from "@/lib/team";
+import { useMe } from "@/lib/meStorage";
 import { saveAssignedOverride } from "@/components/contacts/contactRelationsStorage";
 import { recordAssigneeAdded, recordAssigneeRemoved } from "@/components/contacts/contactEventsStorage";
 import { useCurrentUser } from "@/lib/currentUser";
@@ -39,6 +40,16 @@ export function AssignMembersDialog({ open, onOpenChange, contactId, current, on
   const [assigned, setAssigned] = useState<ContactAssignedUser[]>(current);
   const [query, setQuery] = useState("");
 
+  /* Lectura LIVE de miembros · al suscribirnos a `useMe()` el dialog se
+   * re-renderiza cuando el admin edita un miembro (o el propio usuario
+   * cambia su perfil desde /ajustes/perfil/personal). Así los cargos
+   * borrados no se ven aquí. */
+  useMe();
+  const liveMembers = useMemo(() => getAllTeamMembers(), [
+    /* Recalcular cada re-render · getAllTeamMembers() es una lectura
+     * síncrona de localStorage (rápido, menos de 10 miembros). */
+  ]);
+
   useEffect(() => {
     if (open) {
       setAssigned(current);
@@ -52,7 +63,7 @@ export function AssignMembersDialog({ open, onOpenChange, contactId, current, on
     if (isAssigned(userId)) {
       setAssigned((prev) => prev.filter((a) => a.userId !== userId));
     } else {
-      const m = TEAM_MEMBERS.find((u) => u.id === userId);
+      const m = liveMembers.find((u) => u.id === userId);
       if (!m) return;
       setAssigned((prev) => [...prev, {
         userId: m.id,
@@ -73,13 +84,13 @@ export function AssignMembersDialog({ open, onOpenChange, contactId, current, on
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return TEAM_MEMBERS;
-    return TEAM_MEMBERS.filter(
+    if (!q) return liveMembers;
+    return liveMembers.filter(
       (m) => m.name.toLowerCase().includes(q) ||
              m.email.toLowerCase().includes(q) ||
              (m.jobTitle?.toLowerCase().includes(q) ?? false),
     );
-  }, [query]);
+  }, [query, liveMembers]);
 
   const save = () => {
     /* Diff con current para registrar add/remove granular en historial. */
@@ -159,7 +170,7 @@ export function AssignMembersDialog({ open, onOpenChange, contactId, current, on
                   onClick={() => toggleMember(m.id)}
                   className="flex-1 flex items-center gap-3 min-w-0 text-left"
                 >
-                  <MemberAvatar name={m.name} email={m.email} size={32} />
+                  <MemberAvatar member={m} size={32} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-foreground truncate">{m.name}</p>
                     {m.jobTitle && (
@@ -211,9 +222,13 @@ export function AssignMembersDialog({ open, onOpenChange, contactId, current, on
   );
 }
 
-function MemberAvatar({ name, email, size }: { name: string; email: string; size: number }) {
-  const initials = memberInitials({ name });
-  const url = getMemberAvatarUrl({ email, avatarUrl: undefined });
+function MemberAvatar({
+  member, size,
+}: { member: { name: string; email: string; avatarUrl?: string }; size: number }) {
+  const initials = memberInitials({ name: member.name });
+  /* Usa el avatarUrl real del TeamMember (la foto subida por el admin
+   * o del seed Unsplash). Solo cae a pravatar si realmente no hay foto. */
+  const url = getMemberAvatarUrl(member);
   return (
     <div
       className="rounded-full bg-foreground/10 grid place-items-center text-foreground font-semibold shrink-0 overflow-hidden"
@@ -221,7 +236,7 @@ function MemberAvatar({ name, email, size }: { name: string; email: string; size
     >
       <img
         src={url}
-        alt={name}
+        alt={member.name}
         className="w-full h-full object-cover"
         onError={(e) => {
           (e.target as HTMLImageElement).style.display = "none";

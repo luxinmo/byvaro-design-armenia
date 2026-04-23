@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatPrice } from "@/lib/utils";
+import { findTeamMember } from "@/lib/team";
 import type {
   ContactDetail, ContactRecordEntry, ContactOpportunityEntry,
   ContactActiveOperation,
@@ -218,7 +219,13 @@ function OpportunityRow({ opportunity }: { opportunity: ContactOpportunityEntry 
           <p className="text-[10px] sm:text-[11px] text-muted-foreground">
             {opportunity.agencyName ?? "Venta directa"}
             {" · "}
-            <span className="text-foreground font-medium">{opportunity.agentName}</span>
+            <span className="text-foreground font-medium">
+              {/* Resolver el nombre desde userId · si el miembro fue
+                * eliminado, caemos al snapshot legacy `agentName`. */}
+              {opportunity.agentUserId
+                ? (findTeamMember(opportunity.agentUserId)?.name ?? opportunity.agentName)
+                : opportunity.agentName}
+            </span>
           </p>
 
           {opportunity.clientInterests && (

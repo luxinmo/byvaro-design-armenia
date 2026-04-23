@@ -38,6 +38,7 @@ import { useInvitaciones } from "@/lib/invitaciones";
 import { useFavoriteAgencies } from "@/lib/favoriteAgencies";
 import { toast } from "sonner";
 import { Star } from "lucide-react";
+import { Flag } from "@/components/ui/Flag";
 
 /* ══════ TIPOS Y MOCKS ══════ */
 
@@ -48,7 +49,7 @@ type AgencyV2 = {
   name: string;
   logo: string;
   country: string;
-  countryFlag: string;   // emoji
+  countryIso: string;    // ISO 3166-1 alpha-2 (ES, GB, FR…) · render con <Flag>
   city: string;
   status: AgencyStatus;
   registrations: number;
@@ -63,7 +64,7 @@ const mockAgencies: AgencyV2[] = [
     name: "Prime Properties Costa del Sol",
     logo: "https://ui-avatars.com/api/?name=PP&background=3b82f6&color=fff&size=120&font-size=0.4&bold=true",
     country: "España",
-    countryFlag: "🇪🇸",
+    countryIso: "ES",
     city: "Marbella",
     status: "active",
     registrations: 14,
@@ -76,7 +77,7 @@ const mockAgencies: AgencyV2[] = [
     name: "Nordic Home Finders",
     logo: "https://ui-avatars.com/api/?name=NH&background=10b981&color=fff&size=120&font-size=0.4&bold=true",
     country: "Suecia",
-    countryFlag: "🇸🇪",
+    countryIso: "SE",
     city: "Estocolmo",
     status: "active",
     registrations: 22,
@@ -89,7 +90,7 @@ const mockAgencies: AgencyV2[] = [
     name: "Dutch & Belgian Realty",
     logo: "https://ui-avatars.com/api/?name=DB&background=f59e0b&color=fff&size=120&font-size=0.4&bold=true",
     country: "Países Bajos",
-    countryFlag: "🇳🇱",
+    countryIso: "NL",
     city: "Amsterdam",
     status: "active",
     registrations: 8,
@@ -102,7 +103,7 @@ const mockAgencies: AgencyV2[] = [
     name: "Berlin Living GmbH",
     logo: "https://ui-avatars.com/api/?name=BL&background=6366f1&color=fff&size=120&font-size=0.4&bold=true",
     country: "Alemania",
-    countryFlag: "🇩🇪",
+    countryIso: "DE",
     city: "Berlín",
     status: "pending",
     registrations: 0,
@@ -115,7 +116,7 @@ const mockAgencies: AgencyV2[] = [
     name: "Iberia Luxury Homes",
     logo: "https://ui-avatars.com/api/?name=IL&background=8b5cf6&color=fff&size=120&font-size=0.4&bold=true",
     country: "España",
-    countryFlag: "🇪🇸",
+    countryIso: "ES",
     city: "Valencia",
     status: "active",
     registrations: 11,
@@ -128,7 +129,7 @@ const mockAgencies: AgencyV2[] = [
     name: "Meridian Real Estate Group",
     logo: "https://ui-avatars.com/api/?name=MR&background=ef4444&color=fff&size=120&font-size=0.4&bold=true",
     country: "Reino Unido",
-    countryFlag: "🇬🇧",
+    countryIso: "GB",
     city: "Londres",
     status: "inactive",
     registrations: 5,
@@ -174,11 +175,11 @@ export function PromotionAgenciesV2({
   }, []);
 
   const countryChips = useMemo(() => {
-    const map = new Map<string, { country: string; flag: string; count: number }>();
+    const map = new Map<string, { country: string; iso: string; count: number }>();
     for (const a of mockAgencies) {
       const current = map.get(a.country);
       if (current) current.count += 1;
-      else map.set(a.country, { country: a.country, flag: a.countryFlag, count: 1 });
+      else map.set(a.country, { country: a.country, iso: a.countryIso, count: 1 });
     }
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, []);
@@ -351,12 +352,12 @@ export function PromotionAgenciesV2({
                   >
                     <span
                       className={cn(
-                        "h-6 w-6 rounded-full flex items-center justify-center text-base leading-none",
+                        "h-6 w-6 rounded-full flex items-center justify-center overflow-hidden",
                         isActive ? "bg-background/10" : "bg-muted"
                       )}
                       aria-hidden
                     >
-                      {c.flag}
+                      <Flag iso={c.iso} size={16} />
                     </span>
                     <span>{c.country}</span>
                     <span
@@ -487,10 +488,11 @@ function AgencyCardV2({ agency }: { agency: AgencyV2 }) {
             <h4 className="text-sm font-semibold text-foreground truncate leading-tight">
               {agency.name}
             </h4>
-            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
               <MapPin className="h-3 w-3 shrink-0" />
+              <Flag iso={agency.countryIso} size={12} />
               <span className="truncate">
-                {agency.countryFlag} {agency.city}, {agency.country}
+                {agency.city}, {agency.country}
               </span>
             </p>
           </div>

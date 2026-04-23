@@ -16,6 +16,7 @@ import { TestimoniosCard } from "./TestimoniosCard";
 import { PortfolioShowcase } from "./PortfolioShowcase";
 import { GoogleRatingCard } from "./GoogleRatingCard";
 import { cn } from "@/lib/utils";
+import { Flag } from "@/components/ui/Flag";
 
 /* ─── Datos mock (agents + collab) ────────────────────────────────── */
 const collaboratingPromoters = [
@@ -119,7 +120,11 @@ export function EmpresaHomeTab({
           <InfoItem icon={Users} label="Agentes" value={empresa.agentesCount || "0"} />
           <div>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Idiomas</p>
-            <div className="flex gap-1 text-[14px]">🇪🇸 🇬🇧 🇫🇷</div>
+            <div className="flex gap-1">
+              {["ES", "GB", "FR"].map((iso) => (
+                <Flag key={iso} iso={iso} size={14} />
+              ))}
+            </div>
           </div>
         </div>
       </EditableSection>

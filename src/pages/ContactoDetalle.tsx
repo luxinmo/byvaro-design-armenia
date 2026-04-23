@@ -16,7 +16,7 @@
 import { useMemo } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
-  ArrowLeft, Pencil,
+  ArrowLeft, Pencil, Camera, Plus, X,
   Flame, Sparkles, Calendar as CalendarIcon, FileText,
   ClipboardList, Bot, History, Receipt, Hash, Copy, Check, Mail,
   MoreHorizontal, Trash2,
@@ -46,6 +46,10 @@ import { ContactRecordsTab } from "@/components/contacts/detail/ContactRecordsTa
 import { ContactOperacionesTab } from "@/components/contacts/detail/ContactOperacionesTab";
 import { ContactEmailsTab } from "@/components/contacts/detail/ContactEmailsTab";
 import { EditContactDialog } from "@/components/contacts/detail/EditContactDialog";
+import { Flag } from "@/components/ui/Flag";
+import { PhotoCropModal } from "@/components/settings/PhotoCropModal";
+import { useContactAvatar, saveContactAvatar } from "@/components/contacts/contactAvatarStorage";
+import { LANGUAGES, findLanguageByCode } from "@/lib/languages";
 
 const TABS = [
   { id: "resumen",      label: "Resumen",     icon: Sparkles },
@@ -97,6 +101,9 @@ export default function ContactoDetalle() {
   const [editOpen, setEditOpen] = useState(false);
   /* WhatsApp ahora se abre como modal lateral en vez de tab. */
   const [whatsappOpen, setWhatsappOpen] = useState(false);
+  /* Modal de recorte de foto del contacto (avatar). */
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const contactAvatar = useContactAvatar(detail.id);
 
   const initials = detail.name
     .split(" ").filter(Boolean).slice(0, 2)
@@ -133,25 +140,42 @@ export default function ContactoDetalle() {
        *  meta inline + acciones. Sin card envolvente — la jerarquía
        *  visual la da el contenido, no más cromo. */}
       <header className="flex items-center gap-3 mb-4">
-        <div className="h-11 w-11 rounded-xl bg-foreground/5 grid place-items-center text-foreground font-semibold text-base shrink-0 relative">
-          {detail.flag ? (
-            <span className="text-xl">{detail.flag}</span>
+        {/* Avatar del contacto · iniciales por defecto, foto si el admin
+         *  subió una. Clic abre PhotoCropModal. La bandera ya NO vive
+         *  en el avatar — va al lado del nombre (regla CLAUDE.md §🧱). */}
+        <button
+          type="button"
+          onClick={() => setPhotoOpen(true)}
+          className="group relative h-11 w-11 rounded-full shrink-0 overflow-hidden hover:-translate-y-0.5 transition-transform"
+          aria-label="Cambiar foto del contacto"
+          title="Click para subir/cambiar foto"
+        >
+          {contactAvatar ? (
+            <img src={contactAvatar} alt="" className="h-full w-full object-cover" />
           ) : (
-            <span>{initials}</span>
+            <div className="h-full w-full rounded-full bg-foreground/5 grid place-items-center text-foreground font-semibold text-base">
+              {initials}
+            </div>
           )}
-          {isHot && (
-            <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-warning text-white grid place-items-center shadow-soft ring-2 ring-background" title={`Lead caliente · ${detail.leadScore}/100`}>
-              <Flame className="h-2.5 w-2.5" strokeWidth={2.5} />
-            </span>
-          )}
-        </div>
+          <span className="absolute inset-0 bg-foreground/50 text-background grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <Camera className="h-4 w-4" />
+          </span>
+        </button>
 
         <div className="flex-1 min-w-0">
-          {/* Línea 1: nombre + estado */}
+          {/* Línea 1: nombre + bandera nacionalidad + estado */}
           <div className="flex items-center gap-2">
             <h1 className="text-base sm:text-lg font-semibold tracking-tight text-foreground truncate">
               {detail.name}
             </h1>
+            {detail.nationalityIso && (
+              <Flag
+                iso={detail.nationalityIso}
+                size={14}
+                className="shrink-0"
+                title={detail.nationality}
+              />
+            )}
             {!isHot && (
               <span className={cn(
                 "inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-full shrink-0",
@@ -329,6 +353,14 @@ export default function ContactoDetalle() {
         onOpenChange={setEditOpen}
         detail={detail}
         onSaved={() => setEditVersion((v) => v + 1)}
+      />
+
+      {/* ══════ Modal de recorte de avatar del contacto ══════ */}
+      <PhotoCropModal
+        open={photoOpen}
+        onClose={() => setPhotoOpen(false)}
+        onSave={(url) => saveContactAvatar(detail.id, url || null)}
+        currentImage={contactAvatar ?? undefined}
       />
     </div>
   );

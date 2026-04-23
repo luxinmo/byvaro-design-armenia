@@ -38,6 +38,7 @@ import {
 } from "@/components/contacts/tagsStorage";
 import type { Contact, ContactTag, TagScope } from "@/components/contacts/types";
 import { useCurrentUser, isAdmin } from "@/lib/currentUser";
+import { Flag } from "@/components/ui/Flag";
 
 /* ══════ Helpers ══════ */
 
@@ -707,7 +708,9 @@ function ContactRow({
           <span className="text-sm font-semibold text-foreground leading-snug truncate">
             <Highlight text={contact.name} query={query} />
           </span>
-          {contact.flag && <span className="text-xs shrink-0">{contact.flag}</span>}
+          {contact.nationalityIso && (
+            <Flag iso={contact.nationalityIso} size={12} className="shrink-0" title={contact.nationality} />
+          )}
           {contact.reference && (
             <span className="text-[10px] font-mono text-muted-foreground/70 tnum shrink-0 hidden sm:inline">
               <Highlight text={contact.reference} query={query} />

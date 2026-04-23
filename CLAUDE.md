@@ -147,6 +147,39 @@ hex ni colores literales en componentes. Usa siempre los tokens semánticos:
 
 ---
 
+## 🧱 Componentes canónicos · obligatorios
+
+> Antes de escribir un `<select>`, `<input>` o "chip con bandera" desde
+> cero, **comprueba si ya existe el componente del sistema**. Si no,
+> amplía el existente (p. ej. añadiendo `excludeIds` a `UserSelect`)
+> antes de crear uno nuevo.
+
+| Caso de uso | Usa | Dónde vive |
+|---|---|---|
+| Elegir un miembro del equipo | `<UserSelect>` con avatar + buscador | `src/components/ui/UserSelect.tsx` |
+| Teléfono internacional (prefijo + número) | `<PhoneInput>` unificado | `src/components/ui/PhoneInput.tsx` |
+| Bandera de país / idioma | `<Flag iso="es" size={16}>` | `src/components/ui/Flag.tsx` |
+| Toggle de vista (lista / grid / mapa) | `<ViewToggle>` segmented control | `src/components/ui/ViewToggle.tsx` |
+| Cargo del miembro (multiselect máx 2) | `<JobTitlePicker>` agrupado | `src/components/team/JobTitlePicker.tsx` |
+| Foto con recorte circular | `<PhotoCropModal>` | `src/components/settings/PhotoCropModal.tsx` |
+| Multi-select con buscador | `<MultiSelectFilter>` | `src/components/ui/MultiSelectFilter.tsx` |
+| Confirmación destructiva | `useConfirm()` | `src/components/ui/ConfirmDialog.tsx` |
+| Dialog base | `<Dialog>` + `<DialogContent>` de Radix wrap | `src/components/ui/dialog.tsx` |
+| Tag/badge con variante semántica | `<Tag variant="success" size="sm">` | `src/components/ui/Tag.tsx` |
+
+**Catálogos canónicos** (los componentes anteriores los consumen):
+
+- `TEAM_MEMBERS` · `src/lib/team.ts`
+- `LANGUAGES` · `src/lib/languages.ts` (ISO + nombre + `countryIso`)
+- `PHONE_COUNTRIES` · `src/lib/phoneCountries.ts`
+- `JOB_TITLES` (agrupados) · `src/data/jobTitles.ts`
+- `public/flags/{iso}.svg` · 250 SVGs locales
+
+Cualquier lista de países, idiomas o cargos **en un componente**
+es un code-smell. Se extrae al catálogo canónico.
+
+---
+
 ## 🚫 No hacer
 
 - ❌ **No usar `localStorage` para roles o autenticación** (solo para drafts
@@ -161,6 +194,17 @@ hex ni colores literales en componentes. Usa siempre los tokens semánticos:
   se añade al lado. Las versiones antiguas viven en `src/pages/design-previews/`.
 - ❌ **No saltarse la auditoría**: antes de tocar una pantalla, se compara
   con el estándar (Inicio) y se documenta qué cambios se hacen.
+- ❌ **No usar `<select>` nativo para elegir un miembro del equipo.** Usa
+  siempre `<UserSelect>` (`src/components/ui/UserSelect.tsx`). El select
+  nativo no muestra avatar, no busca por cargo/email y no respeta los
+  tokens del sistema. Para excluir al propio miembro (p. ej. en un
+  handover) usa `excludeIds`; para filtrar solo activos, `onlyActive`.
+- ❌ **No construir dropdowns de países/prefijos/idiomas ad-hoc.** Usa
+  `<PhoneInput>` (prefijo + número), `<Flag iso>` (bandera SVG desde
+  `/flags/`) y los catálogos canónicos `src/lib/phoneCountries.ts` /
+  `src/lib/languages.ts`.
+- ❌ **No hardcodear listas de miembros / idiomas / cargos / prefijos** en
+  un componente. Siempre desde el catálogo canónico del módulo correspondiente.
 
 ---
 
@@ -374,6 +418,79 @@ como `Qnueva` en `docs/open-questions.md` en el mismo PR.
 - [ ] El sidebar / botones / datos tienen sentido en ambos roles?
 - [ ] Si escondí algo por rol, hay `TODO(backend)` junto al check de
       permiso anotando la key de la matriz (ver `docs/permissions.md`)?
+
+---
+
+## 🔄 REGLA DE ORO · Handover obligatorio al desactivar miembro
+
+> **Cuando se desactiva a un miembro del equipo, el sistema DEBE
+> obligar al admin a reasignar todos sus activos a otros miembros
+> activos antes de efectuar la desactivación.** Nunca se pierde un
+> lead, oportunidad, visita programada, registro o cuenta de email
+> porque alguien sale de la empresa. Cada entidad reasignada queda
+> marcada en su historial con **"Heredado de [empleado desactivado]"**.
+
+**Cómo se aplica.** La UI que dispara la desactivación (hoy:
+`MemberFormDialog` y la fila de "Desactivar" en `Equipo.tsx`) **no
+cambia el `status` directamente**. Abre `DeactivateUserDialog`
+(`src/components/team/DeactivateUserDialog.tsx`), que:
+
+1. Lee el inventario de activos del miembro con `getMemberInventory()`
+   (`src/lib/assetOwnership.ts`) · categorías: contactos,
+   oportunidades, registros, visitas, propiedades asignadas, cuentas
+   de email.
+2. Muestra una fila por categoría con contador y dropdown de
+   miembros activos · hay un atajo "Asignar todo a X" para casos
+   rápidos.
+3. Email se marca como **"Delegación auto"**: se configura forward
+   desde la cuenta del desactivado hacia el destinatario elegido
+   durante 6 meses.
+4. Requiere seleccionar destinatario en **todas** las categorías
+   con count > 0. Si falta alguna, el botón queda deshabilitado con
+   aviso.
+5. Admin puede añadir un motivo (opcional · queda en el historial).
+6. Al confirmar → backend hace la reasignación atómica +
+   cambia `status: "deactive"` en una misma transacción.
+
+**Qué debe pasar en el historial (obligatorio):**
+
+- Cada entidad reasignada (contacto, oportunidad, visita, registro)
+  añade un evento en su timeline:
+  ```
+  { type: "reassigned",
+    reason: "handover",
+    from: { id: oldMemberId, name: oldMemberName },
+    to:   { id: newMemberId, name: newMemberName },
+    note: "Heredado de <nombre> · baja del equipo",
+    occurredAt: ISO }
+  ```
+- La ficha de contacto (`/contactos/:id?tab=historial`) debe
+  mostrar este evento con un estilo distintivo (por ejemplo icono
+  `UserCheck` en color muted).
+
+**Obligaciones al implementar cualquier feature que cree "cosas"
+asignadas a un miembro** (leads, oportunidades, registros…):
+
+1. **Incluir la categoría** en `src/lib/assetOwnership.ts` — si no,
+   el sistema puede perder esa "cosa" al desactivar a su dueño.
+2. **Añadir el label + description** para que se muestre en el
+   dialog.
+3. **Ampliar** el backend endpoint `POST /api/members/:id/handover`
+   para que acepte la nueva categoría.
+
+**Por qué esta regla existe.** Un agente que se va no puede
+llevarse sus leads a la tumba. Un cliente que tenía una visita con
+Diego y Diego se da de baja debe ver quién le atiende ahora —
+nunca "tu agente ya no existe". Preservar el linaje (`Heredado de
+X`) además permite al admin y a la IA analizar qué miembros
+heredaron cartera de quién y ajustar asignaciones si el volumen
+pesa demasiado al heredero.
+
+Ver:
+- `src/lib/assetOwnership.ts` · inventario + tipos.
+- `src/components/team/DeactivateUserDialog.tsx` · UI del handover.
+- `docs/screens/equipo.md §Desactivar miembro · handover obligatorio`.
+- `DECISIONS.md ADR-051`.
 
 ---
 

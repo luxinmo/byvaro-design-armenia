@@ -80,10 +80,24 @@ export type Contact = {
   totalRegistrations: number;
   /** Promociones que le interesan (nombres, derivado de records). */
   promotionsOfInterest: string[];
-  /** Asignado a (nombres de agentes de la organización). */
+  /** Ids de miembros (TEAM_MEMBERS) asignados al contacto · fuente única.
+   *  El nombre/avatar se resuelven en render vía `findTeamMember()`. */
+  assignedToUserIds?: string[];
+  /** LEGACY · snapshot de nombres cuando no hay userIds (p. ej. datos
+   *  pre-migración). Mantenido como fallback para renderizar el listado
+   *  y para filtros del menú. TODO: eliminar cuando backend devuelva
+   *  siempre `assignedToUserIds`. */
   assignedTo: string[];
   /** Idiomas que habla (códigos ISO o nombres cortos). */
   languages?: string[];
+  /** Código ISO 3166-1 alpha-2 del país de nacionalidad (ES, AE, GB…).
+   *  Se renderiza con <Flag iso={nationalityIso} /> al lado del nombre
+   *  — nunca sustituyendo al avatar. Regla CLAUDE.md §🧱. */
+  nationalityIso?: string;
+  /** Avatar del contacto (foto subida por el admin). Data URL (JPEG)
+   *  vía PhotoCropModal. Si no hay, se usan iniciales. Persistido en
+   *  localStorage `byvaro.contact.<id>.avatar.v1`. */
+  avatarUrl?: string;
   /** Notas internas cortas — preview en el listado. */
   notes?: string;
   /** Propietario del contacto. Si `ownerAgencyId` está puesto, el
@@ -182,7 +196,12 @@ export type ContactOpportunityEntry = {
   /** Agencia que abrió la oportunidad (puede ser null si la abre el
    *  promotor en directo). */
   agencyName?: string;
-  /** Agente que la trabaja. */
+  /** Id del miembro (TEAM_MEMBERS) que trabaja la oportunidad · fuente única.
+   *  El nombre se resuelve en render vía `findTeamMember()`. */
+  agentUserId?: string;
+  /** LEGACY · snapshot del nombre del agente en el momento de crear la
+   *  oportunidad. Se mantiene como fallback (agente externo de agencia,
+   *  miembro desactivado). */
   agentName: string;
   status: "active" | "won" | "archived";
   createdAt: string;
