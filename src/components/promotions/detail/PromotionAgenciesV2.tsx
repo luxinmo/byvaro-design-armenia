@@ -48,7 +48,7 @@ type AgencyV2 = {
   name: string;
   logo: string;
   country: string;
-  countryFlag: string;   // emoji
+  countryIso: string;    // ISO 3166-1 alpha-2 (ES, GB, FR…) · render con <Flag>
   city: string;
   status: AgencyStatus;
   registrations: number;
@@ -63,7 +63,7 @@ const mockAgencies: AgencyV2[] = [
     name: "Prime Properties Costa del Sol",
     logo: "https://ui-avatars.com/api/?name=PP&background=3b82f6&color=fff&size=120&font-size=0.4&bold=true",
     country: "España",
-    countryFlag: "🇪🇸",
+    countryIso: "ES",
     city: "Marbella",
     status: "active",
     registrations: 14,
@@ -76,7 +76,7 @@ const mockAgencies: AgencyV2[] = [
     name: "Nordic Home Finders",
     logo: "https://ui-avatars.com/api/?name=NH&background=10b981&color=fff&size=120&font-size=0.4&bold=true",
     country: "Suecia",
-    countryFlag: "🇸🇪",
+    countryIso: "SE",
     city: "Estocolmo",
     status: "active",
     registrations: 22,
@@ -89,7 +89,7 @@ const mockAgencies: AgencyV2[] = [
     name: "Dutch & Belgian Realty",
     logo: "https://ui-avatars.com/api/?name=DB&background=f59e0b&color=fff&size=120&font-size=0.4&bold=true",
     country: "Países Bajos",
-    countryFlag: "🇳🇱",
+    countryIso: "NL",
     city: "Amsterdam",
     status: "active",
     registrations: 8,
@@ -102,7 +102,7 @@ const mockAgencies: AgencyV2[] = [
     name: "Berlin Living GmbH",
     logo: "https://ui-avatars.com/api/?name=BL&background=6366f1&color=fff&size=120&font-size=0.4&bold=true",
     country: "Alemania",
-    countryFlag: "🇩🇪",
+    countryIso: "DE",
     city: "Berlín",
     status: "pending",
     registrations: 0,
@@ -115,7 +115,7 @@ const mockAgencies: AgencyV2[] = [
     name: "Iberia Luxury Homes",
     logo: "https://ui-avatars.com/api/?name=IL&background=8b5cf6&color=fff&size=120&font-size=0.4&bold=true",
     country: "España",
-    countryFlag: "🇪🇸",
+    countryIso: "ES",
     city: "Valencia",
     status: "active",
     registrations: 11,
@@ -128,7 +128,7 @@ const mockAgencies: AgencyV2[] = [
     name: "Meridian Real Estate Group",
     logo: "https://ui-avatars.com/api/?name=MR&background=ef4444&color=fff&size=120&font-size=0.4&bold=true",
     country: "Reino Unido",
-    countryFlag: "🇬🇧",
+    countryIso: "GB",
     city: "Londres",
     status: "inactive",
     registrations: 5,

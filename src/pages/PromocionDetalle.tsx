@@ -9,8 +9,8 @@ import type { Unit } from "@/data/units";
 import { promotions, getBuildingTypeLabel } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion, type Comercial, type ComercialPermissions } from "@/data/developerPromotions";
 import { agencies, countAgenciesForPromotion, type Agency } from "@/data/agencies";
-import { InvitacionesPendientesPanel } from "@/components/promotions/detail/InvitacionesPendientesPanel";
-import { AgenciasPendientesDialog, useTotalAgenciasPendientes } from "@/components/promotions/detail/AgenciasPendientesDialog";
+import { AgenciasPendientesDialog } from "@/components/promotions/detail/AgenciasPendientesDialog";
+import { AgenciasTabStats } from "@/components/promotions/detail/AgenciasTabStats";
 import { FeatureCardV3 } from "@/pages/Colaboradores";
 import ColaboradoresEstadisticas from "@/pages/ColaboradoresEstadisticas";
 import {
@@ -122,9 +122,9 @@ const conditionLabels: Record<string, string> = {
 
 // Mock contacts for the footer
 const contacts = [
-  { name: "Arman Yeghiazaryan", role: "Founder & Director Comercial", avatar: "https://i.pravatar.cc/80?img=33", phone: "+34 612 345 678", email: "arman@byvaro.com", languages: ["🇪🇸", "🇫🇷", "🇬🇧"] },
-  { name: "María López", role: "Responsable de Ventas", avatar: "https://i.pravatar.cc/80?img=12", phone: "+34 678 901 234", email: "maria@byvaro.com", languages: ["🇪🇸", "🇬🇧"] },
-  { name: "Thomas Müller", role: "International Sales", avatar: "https://i.pravatar.cc/80?img=23", phone: "+49 170 123 456", email: "thomas@byvaro.com", languages: ["🇩🇪", "🇬🇧", "🇪🇸"] },
+  { name: "Arman Yeghiazaryan", role: "Founder & Director Comercial", avatar: "https://i.pravatar.cc/80?img=33", phone: "+34 612 345 678", email: "arman@byvaro.com", languages: ["ES", "FR", "GB"] },
+  { name: "María López", role: "Responsable de Ventas", avatar: "https://i.pravatar.cc/80?img=12", phone: "+34 678 901 234", email: "maria@byvaro.com", languages: ["ES", "GB"] },
+  { name: "Thomas Müller", role: "International Sales", avatar: "https://i.pravatar.cc/80?img=23", phone: "+49 170 123 456", email: "thomas@byvaro.com", languages: ["DE", "GB", "ES"] },
 ];
 
 export default function DeveloperPromotionDetail({ agentMode = false }: { agentMode?: boolean } = {}) {
@@ -1600,89 +1600,15 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           </div>
         )}
 
-        {activeTabKey === "Agencies" && !viewAsCollaborator && (() => {
-          /* Mismo lenguaje visual que `/colaboradores` (FeatureCardV3
-           *  en grid 3-col). Aquí filtramos a las agencias que están
-           *  colaborando en ESTA promoción. */
-          const agenciasEnPromo = agencies.filter(
-            (a) => a.promotionsCollaborating?.includes(p.id),
-          );
-          return (
-            <div className="space-y-4">
-              <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    Red comercial de esta promoción
-                  </p>
-                  <h2 className="text-base font-semibold text-foreground leading-tight mt-0.5">
-                    {agenciasEnPromo.length} {agenciasEnPromo.length === 1 ? "agencia" : "agencias"} colaborando
-                  </h2>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    onClick={() => setStatsOverlayOpen(true)}
-                    className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:bg-muted transition-colors"
-                    title="Ver estadísticas de esta promoción"
-                  >
-                    <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.75} />
-                    Estadísticas
-                  </button>
-                  <button
-                    onClick={() => navigate("/colaboradores/estadisticas")}
-                    className="group inline-flex items-center gap-1.5 h-10 px-4 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:bg-muted transition-colors"
-                    title="Ver estadísticas globales de tu red"
-                  >
-                    Estadísticas generales
-                    <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" strokeWidth={1.75} />
-                  </button>
-                  {canShare && (
-                    <button
-                      onClick={() => setShareOpen(true)}
-                      className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-foreground text-background text-sm font-semibold hover:bg-foreground/90 shadow-soft transition-colors"
-                    >
-                      <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                      Invitar agencia
-                    </button>
-                  )}
-                </div>
-              </header>
-
-              {/* Invitaciones pendientes · sección propia con acciones
-                  Reenviar / Cancelar. Aparece siempre que exista al
-                  menos una invitación con estado=pendiente y
-                  promocionId === p.id. Inicialmente las tarjetas no
-                  tienen logo ni nombre comercial — solo el email que
-                  el promotor escribió. En cuanto la agencia se
-                  registre, los datos se completan desde el backend. */}
-              <InvitacionesPendientesPanel promotionId={p.id} promotionName={p.name} />
-
-              {agenciasEnPromo.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
-                  <Users className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
-                  <p className="text-sm font-medium text-foreground mb-1">Ninguna agencia colabora aún</p>
-                  <p className="text-xs text-muted-foreground mb-4">
-                    Invita a tus colaboradores o favoritos desde "Invitar agencia".
-                  </p>
-                  {canShare && (
-                    <button
-                      onClick={() => setShareOpen(true)}
-                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-border bg-background text-xs font-semibold text-foreground hover:bg-muted transition-colors"
-                    >
-                      <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                      Invitar agencia
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {agenciasEnPromo.map((a) => (
-                    <FeatureCardV3 key={a.id} agency={a} />
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })()}
+        {activeTabKey === "Agencies" && !viewAsCollaborator && (
+          <AgenciasTabStats
+            promotion={p}
+            canShare={canShare}
+            onInvitar={() => setShareOpen(true)}
+            onOpenStats={() => setStatsOverlayOpen(true)}
+            onOpenPendientes={() => setPendientesOpen(true)}
+          />
+        )}
 
         {/* ═══ TAB: COMISIONES ═══ */}
         {activeTabKey === "Comisiones" && (
@@ -1937,6 +1863,16 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       <SharePromotionDialog
         open={shareOpen}
         onOpenChange={setShareOpen}
+        promotionId={p.id}
+        promotionName={p.name}
+      />
+
+      {/* Agencias pendientes · dialog compartido con solicitudes
+          entrantes + invitaciones enviadas. Se abre desde el botón
+          "Pendientes · N" de la tab Agencias. */}
+      <AgenciasPendientesDialog
+        open={pendientesOpen}
+        onOpenChange={setPendientesOpen}
         promotionId={p.id}
         promotionName={p.name}
       />

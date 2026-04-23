@@ -41,7 +41,7 @@ const contacts = [
     avatar: "https://i.pravatar.cc/80?img=33",
     phone: "+34 612 345 678",
     email: "arman@byvaro.com",
-    languages: ["🇪🇸", "🇫🇷", "🇬🇧"],
+    languages: ["ES", "FR", "GB"],
   },
   {
     name: "María López",
@@ -49,7 +49,7 @@ const contacts = [
     avatar: "https://i.pravatar.cc/80?img=12",
     phone: "+34 678 901 234",
     email: "maria@byvaro.com",
-    languages: ["🇪🇸", "🇬🇧"],
+    languages: ["ES", "GB"],
   },
   {
     name: "Thomas Müller",
@@ -57,7 +57,7 @@ const contacts = [
     avatar: "https://i.pravatar.cc/80?img=23",
     phone: "+49 170 123 456",
     email: "thomas@byvaro.com",
-    languages: ["🇩🇪", "🇬🇧", "🇪🇸"],
+    languages: ["DE", "GB", "ES"],
   },
 ];
 
