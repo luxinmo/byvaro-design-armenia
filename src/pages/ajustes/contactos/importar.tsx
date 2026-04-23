@@ -309,7 +309,7 @@ export default function AjustesContactosImportar() {
               <div key={s} className="flex items-center gap-2 flex-1">
                 <div className={cn(
                   "h-7 w-7 rounded-full grid place-items-center text-xs font-semibold shrink-0 transition-colors",
-                  passed ? "bg-emerald-500/15 text-emerald-700" :
+                  passed ? "bg-success/15 text-success" :
                   active ? "bg-foreground text-background" :
                   "bg-muted text-muted-foreground",
                 )}>
@@ -322,7 +322,7 @@ export default function AjustesContactosImportar() {
                   {s === "review" && "Revisar"}
                   {s === "done" && "Listo"}
                 </span>
-                {i < arr.length - 1 && <div className={cn("flex-1 h-px", passed ? "bg-emerald-500/40" : "bg-border")} />}
+                {i < arr.length - 1 && <div className={cn("flex-1 h-px", passed ? "bg-success/40" : "bg-border")} />}
               </div>
             );
           })}
@@ -446,7 +446,7 @@ export default function AjustesContactosImportar() {
                     </Select>
                     <div className="w-5 flex justify-center">
                       {isDup ? <AlertCircle className="h-3.5 w-3.5 text-destructive" /> :
-                       matched ? <Check className="h-3.5 w-3.5 text-emerald-600" /> :
+                       matched ? <Check className="h-3.5 w-3.5 text-success" /> :
                        <X className="h-3.5 w-3.5 text-muted-foreground/40" />}
                     </div>
                   </div>
@@ -478,11 +478,11 @@ export default function AjustesContactosImportar() {
 
             {/* Aviso si no hay ninguna columna de nombre mapeada */}
             {file && !hasAnyName && (
-              <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 rounded-xl px-3 py-2.5">
+              <div className="flex items-start gap-2 text-xs text-warning bg-warning/10 dark:bg-warning/15 border border-warning/30 dark:border-warning/40 rounded-xl px-3 py-2.5">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 <div>
                   <p className="font-semibold">Falta el nombre del contacto</p>
-                  <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80 mt-0.5">
+                  <p className="text-[11px] text-warning/80 dark:text-warning/80 mt-0.5">
                     Mapea al menos una columna a <strong>Nombre</strong>, <strong>Apellido</strong> o <strong>Nombre completo</strong>.
                   </p>
                 </div>
@@ -491,11 +491,11 @@ export default function AjustesContactosImportar() {
 
             {/* Avisos de validación */}
             {requiredMissing.length > 0 && (
-              <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 rounded-xl px-3 py-2.5">
+              <div className="flex items-start gap-2 text-xs text-warning bg-warning/10 dark:bg-warning/15 border border-warning/30 dark:border-warning/40 rounded-xl px-3 py-2.5">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 <div>
                   <p className="font-semibold">Campos obligatorios sin mapear</p>
-                  <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80 mt-0.5">
+                  <p className="text-[11px] text-warning/80 dark:text-warning/80 mt-0.5">
                     Mapea una columna a: {requiredMissing.map((f) => f.label).join(", ")}.
                   </p>
                 </div>
@@ -587,8 +587,8 @@ export default function AjustesContactosImportar() {
         {/* ══════ STEP 4 — Done ══════ */}
         {step === "done" && (
           <div className="text-center py-8">
-            <div className="h-14 w-14 mx-auto rounded-2xl bg-emerald-500/15 grid place-items-center mb-4">
-              <CheckCircle2 className="h-7 w-7 text-emerald-600" />
+            <div className="h-14 w-14 mx-auto rounded-2xl bg-success/15 grid place-items-center mb-4">
+              <CheckCircle2 className="h-7 w-7 text-success" />
             </div>
             <p className="text-base font-semibold text-foreground">{importedCount} contactos importados</p>
             <p className="text-xs text-muted-foreground mt-1">

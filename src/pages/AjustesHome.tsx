@@ -107,7 +107,7 @@ export default function AjustesHome() {
                           </span>
                           {SHOW_DONE_TICKS && link.done && (
                             <Check
-                              className="h-3.5 w-3.5 text-emerald-600 shrink-0"
+                              className="h-3.5 w-3.5 text-success shrink-0"
                               strokeWidth={3}
                               aria-label="Confirmado"
                             />

@@ -92,13 +92,13 @@ export default function AjustesContactosLeadScore() {
             label="Presupuesto / capacidad económica"
             value={state.weightBudget}
             onChange={(v) => setState((s) => ({ ...s, weightBudget: v }))}
-            color="accent-emerald-500"
+            color="accent-success"
           />
           <Slider
             label="Urgencia"
             value={state.weightUrgency}
             onChange={(v) => setState((s) => ({ ...s, weightUrgency: v }))}
-            color="accent-amber-500"
+            color="accent-warning"
           />
           <Slider
             label="Oportunidad activa"
@@ -110,7 +110,7 @@ export default function AjustesContactosLeadScore() {
         <div className="mt-5 pt-4 border-t border-border/40 flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Total</span>
           <span className={cn("text-lg font-bold tabular-nums",
-            valid ? "text-emerald-600" : "text-destructive")}>
+            valid ? "text-success" : "text-destructive")}>
             {total}% {valid ? "✓" : `· ${total < 100 ? "faltan" : "sobran"} ${Math.abs(total - 100)}%`}
           </span>
         </div>
@@ -119,7 +119,7 @@ export default function AjustesContactosLeadScore() {
       <SettingsCard title="Umbral de lead caliente" description="A partir de qué score se marca como 'hot' con icono fuego.">
         <SettingsField label="Score mínimo (0-100)">
           <div className="flex items-center gap-3">
-            <Flame className="h-4 w-4 text-amber-500" />
+            <Flame className="h-4 w-4 text-warning" />
             <Input
               type="number" min={0} max={100}
               value={state.hotThreshold}

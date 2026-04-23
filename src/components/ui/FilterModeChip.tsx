@@ -31,7 +31,7 @@ export type ChipMode = "off" | "and" | "or" | "exclude";
 
 interface Props {
   label: string;
-  /** Dot de color opcional (ej. `bg-amber-500`). */
+  /** Dot de color opcional (ej. `bg-warning`). */
   color?: string;
   mode: ChipMode;
   onModeChange: (mode: ChipMode) => void;

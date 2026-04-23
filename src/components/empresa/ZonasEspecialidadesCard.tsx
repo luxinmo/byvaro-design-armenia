@@ -53,7 +53,7 @@ function ChipList({
   accent?: "primary" | "amber" | "indigo";
 }) {
   const accentClass = accent === "amber"
-    ? "bg-amber-500/10 text-amber-700 dark:text-amber-500 border-amber-500/30"
+    ? "bg-warning/10 text-warning dark:text-warning border-warning/30"
     : accent === "indigo"
       ? "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30"
       : "bg-primary/10 text-primary border-primary/30";

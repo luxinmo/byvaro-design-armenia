@@ -38,6 +38,18 @@
     --destructive: 0 70% 56%;
     --destructive-foreground: 0 0% 100%;
 
+    /* Success · verde semántico para confirmaciones, contratos vigentes,
+       actividad reciente, exigencias cumplidas. Reemplaza los usos
+       directos de `emerald-*` de Tailwind en el repo. Solo tono "sólido";
+       los paneles suaves salen de `bg-success/10` etc. */
+    --success: 152 58% 38%;
+    --success-foreground: 0 0% 100%;
+
+    /* Warning · ámbar semántico para pendientes, pre-expirar, favoritos.
+       Reemplaza los usos directos de `amber-*` de Tailwind. */
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
     --border: 220 13% 91%;
     --input: 220 13% 91%;
     --ring: 215 72% 55%;

@@ -72,10 +72,19 @@ export function loginAs(type: AccountType, agencyId?: string) {
   emit();
 }
 
-/** Limpia la sesión · equivale a logout. */
+/** Limpia la sesión · equivale a logout.
+ *  Borra también el perfil editable del usuario (ver profileStorage.ts) y
+ *  los teléfonos, para que al entrar como otro usuario no se hereden datos.
+ *  TODO(backend): sustituir por `fetch('/api/auth/logout', { method: 'POST' })`
+ *  + borrado de cookies httpOnly. */
 export function logout() {
   sessionStorage.removeItem(STORAGE_KEY);
   sessionStorage.removeItem(AGENCY_KEY);
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("byvaro.user.profile.v1");
+    localStorage.removeItem("byvaro.user.phones.v1");
+    window.dispatchEvent(new Event("byvaro:profile-change"));
+  }
   emit();
 }
 

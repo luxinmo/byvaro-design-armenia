@@ -78,7 +78,7 @@ export default function AjustesEmpresaOficinas() {
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-primary" />
               <span>{o.name || "Nueva oficina"}</span>
-              {o.primary && <span className="text-[10px] font-semibold text-amber-600 inline-flex items-center gap-1"><Star className="h-3 w-3 fill-amber-400" /> Primaria</span>}
+              {o.primary && <span className="text-[10px] font-semibold text-warning inline-flex items-center gap-1"><Star className="h-3 w-3 fill-warning" /> Primaria</span>}
             </div>
           }
         >
@@ -99,7 +99,7 @@ export default function AjustesEmpresaOficinas() {
                 className={cn("inline-flex items-center gap-1.5 text-xs",
                   o.primary ? "text-muted-foreground cursor-default" : "text-muted-foreground hover:text-foreground")}
               >
-                <Star className={cn("h-3.5 w-3.5", o.primary && "fill-amber-400 text-amber-500")} />
+                <Star className={cn("h-3.5 w-3.5", o.primary && "fill-warning text-warning")} />
                 {o.primary ? "Oficina primaria" : "Marcar como primaria"}
               </button>
               <button

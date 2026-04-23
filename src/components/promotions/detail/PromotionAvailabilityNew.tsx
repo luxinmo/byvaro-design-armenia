@@ -12,8 +12,8 @@ function formatPrice(n: number) {
 }
 
 const statusDot: Record<UnitStatus, string> = {
-  available: "bg-emerald-500",
-  reserved: "bg-amber-500",
+  available: "bg-success",
+  reserved: "bg-warning",
   sold: "bg-blue-500",
   withdrawn: "bg-muted-foreground/30",
 };
@@ -169,8 +169,8 @@ function MultiUnitView({ allUnits, readOnly }: { allUnits: Unit[]; readOnly: boo
     <div className="space-y-4" style={{ maxWidth: "1250px" }}>
       {/* Stats strip */}
       <div className="flex items-center gap-6">
-        <StatPill label="Disponibles" value={available} color="text-emerald-600" />
-        <StatPill label="Reservadas" value={reserved} color="text-amber-600" />
+        <StatPill label="Disponibles" value={available} color="text-success" />
+        <StatPill label="Reservadas" value={reserved} color="text-warning" />
         <StatPill label="Vendidas" value={sold} color="text-blue-600" />
         <StatPill label="Total" value={allUnits.length} />
       </div>

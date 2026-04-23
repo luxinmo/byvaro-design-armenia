@@ -32,7 +32,7 @@ function StatusBadge({ status, badge }: { status?: string; badge?: string }) {
   const isNew = badge === "new";
   const isLastUnits = badge === "last-units";
   if (isLastUnits) {
-    return <span className="inline-flex items-center text-[9.5px] font-bold uppercase tracking-wide rounded-full bg-amber-500/95 text-white px-2 py-1 shadow-soft">Últimas unidades</span>;
+    return <span className="inline-flex items-center text-[9.5px] font-bold uppercase tracking-wide rounded-full bg-warning/95 text-white px-2 py-1 shadow-soft">Últimas unidades</span>;
   }
   if (isNew) {
     return <span className="inline-flex items-center gap-1 text-[9.5px] font-bold uppercase tracking-wide rounded-full bg-primary text-primary-foreground px-2 py-1 shadow-soft">
@@ -40,8 +40,8 @@ function StatusBadge({ status, badge }: { status?: string; badge?: string }) {
     </span>;
   }
   const map: Record<string, { label: string; cls: string }> = {
-    "active":     { label: "Activa",     cls: "bg-emerald-500/95 text-white" },
-    "incomplete": { label: "Incompleta", cls: "bg-amber-500/95 text-white" },
+    "active":     { label: "Activa",     cls: "bg-success/95 text-white" },
+    "incomplete": { label: "Incompleta", cls: "bg-warning/95 text-white" },
     "inactive":   { label: "Inactiva",   cls: "bg-muted text-muted-foreground" },
     "sold-out":   { label: "Vendido",    cls: "bg-foreground text-background" },
   };

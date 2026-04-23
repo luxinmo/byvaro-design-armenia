@@ -271,8 +271,8 @@ export function InvitarAgenciaModal({ onClose }: { onClose: () => void }) {
 
           {step === "preview" && (
             <div className="flex flex-col gap-4">
-              <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/30 p-3 flex items-center gap-2.5">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 shrink-0">
+              <div className="rounded-xl bg-success/5 border border-success/30 p-3 flex items-center gap-2.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-success/15 text-success dark:text-success shrink-0">
                   <Check className="h-4 w-4" strokeWidth={3} />
                 </div>
                 <p className="text-[12.5px] text-foreground">

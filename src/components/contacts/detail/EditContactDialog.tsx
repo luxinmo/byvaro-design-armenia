@@ -762,7 +762,7 @@ function SourceSelect({
               )}
             >
               <span className="truncate">{o}</span>
-              {value === o && <Check className="h-3 w-3 text-emerald-600 shrink-0" />}
+              {value === o && <Check className="h-3 w-3 text-success shrink-0" />}
             </button>
           ))}
         </div>
@@ -846,7 +846,7 @@ function NationalityPicker({
               >
                 <span className="text-base leading-none shrink-0">{c.flag}</span>
                 <span className="flex-1 text-xs truncate">{c.name}</span>
-                {isSelected && <Check className="h-3 w-3 text-emerald-600 shrink-0" />}
+                {isSelected && <Check className="h-3 w-3 text-success shrink-0" />}
               </button>
             );
           })}
@@ -937,7 +937,7 @@ function LanguagesPicker({
               >
                 <span className="text-base leading-none shrink-0">{l.flag}</span>
                 <span className="flex-1 text-xs truncate">{l.name}</span>
-                {isSelected && <Check className="h-3 w-3 text-emerald-600 shrink-0" />}
+                {isSelected && <Check className="h-3 w-3 text-success shrink-0" />}
               </button>
             );
           })}

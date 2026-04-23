@@ -33,14 +33,14 @@ const STATUS_META: Record<ContactVisitEntry["status"], {
   scheduled: {
     label: "Programada",
     icon: Calendar,
-    pillClass: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
-    iconClass: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+    pillClass: "bg-warning/15 text-warning dark:text-warning",
+    iconClass: "bg-warning/15 text-warning dark:text-warning",
   },
   done: {
     label: "Realizada",
     icon: CheckCircle2,
-    pillClass: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-    iconClass: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+    pillClass: "bg-success/15 text-success dark:text-success",
+    iconClass: "bg-success/15 text-success dark:text-success",
   },
   cancelled: {
     label: "Cancelada",
@@ -63,8 +63,8 @@ const INTEREST_LABEL: Record<VisitEvaluation["clientInterest"], string> = {
 };
 const INTEREST_COLOR: Record<VisitEvaluation["clientInterest"], string> = {
   low: "text-muted-foreground",
-  medium: "text-amber-700 dark:text-amber-400",
-  high: "text-emerald-700 dark:text-emerald-400",
+  medium: "text-warning dark:text-warning",
+  high: "text-success dark:text-success",
 };
 
 export function ContactVisitsTab({ detail }: { detail: ContactDetail }) {
@@ -173,13 +173,13 @@ function Stat({
     <div>
       <p className={cn(
         "text-xl font-bold tnum",
-        highlight ? "text-amber-600" : muted ? "text-muted-foreground" : "text-foreground",
+        highlight ? "text-warning" : muted ? "text-muted-foreground" : "text-foreground",
       )}>
         {value}
       </p>
       <p className={cn(
         "text-[10px] uppercase tracking-wider font-semibold",
-        highlight ? "text-amber-600/80" : "text-muted-foreground",
+        highlight ? "text-warning/80" : "text-muted-foreground",
       )}>
         {label}
       </p>
@@ -201,11 +201,11 @@ function Section({
       <div className="mb-2.5">
         <h3 className={cn(
           "text-[11px] uppercase tracking-[0.16em] font-semibold inline-flex items-center gap-1.5",
-          accent ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground/80",
+          accent ? "text-warning dark:text-warning" : "text-muted-foreground/80",
         )}>
           {accent && <AlertCircle className="h-3 w-3" />}
           {title}
-          <span className={cn("ml-1 tnum font-normal", accent ? "text-amber-600/80" : "text-muted-foreground/60")}>
+          <span className={cn("ml-1 tnum font-normal", accent ? "text-warning/80" : "text-muted-foreground/60")}>
             ({count})
           </span>
         </h3>
@@ -236,7 +236,7 @@ function VisitItem({
     <article className={cn(
       "rounded-2xl border p-4 transition-all duration-200 shadow-soft",
       pending
-        ? "bg-amber-50/50 dark:bg-amber-950/10 border-amber-200/60 dark:border-amber-900/40 hover:shadow-soft-lg"
+        ? "bg-warning/50 dark:bg-warning/15 border-warning/30 dark:border-warning/40 hover:shadow-soft-lg"
         : "bg-card border-border/40 hover:shadow-soft-lg hover:-translate-y-0.5",
     )}>
       <div className="flex items-start gap-3">
@@ -270,7 +270,7 @@ function VisitItem({
             <span className={cn(
               "inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full shrink-0",
               pending
-                ? "bg-amber-500 text-white"
+                ? "bg-warning text-white"
                 : meta.pillClass,
             )}>
               {pending ? "Sin evaluar" : meta.label}
@@ -292,7 +292,7 @@ function VisitItem({
                     key={n}
                     className={cn(
                       "h-3 w-3",
-                      n <= ev.rating ? "text-amber-500 fill-current" : "text-muted-foreground/30",
+                      n <= ev.rating ? "text-warning fill-current" : "text-muted-foreground/30",
                     )}
                   />
                 ))}

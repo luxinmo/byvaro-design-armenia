@@ -157,8 +157,8 @@ function floorLabel(floor: number, t: typeof T["es"]) {
 }
 
 function statusDot(s: Unit["status"]) {
-  if (s === "available") return "bg-emerald-500";
-  if (s === "reserved") return "bg-amber-500";
+  if (s === "available") return "bg-success";
+  if (s === "reserved") return "bg-warning";
   if (s === "sold") return "bg-destructive";
   return "bg-muted-foreground/40";
 }

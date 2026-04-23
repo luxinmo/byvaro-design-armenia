@@ -87,9 +87,9 @@ export default function AjustesPerfilContacto() {
                 onClick={() => setPrimary(p.id)}
                 title={p.primary ? "Primario" : "Marcar primario"}
                 className={cn("h-8 w-8 rounded-full flex items-center justify-center transition-colors",
-                  p.primary ? "text-amber-500" : "text-muted-foreground hover:text-foreground hover:bg-muted")}
+                  p.primary ? "text-warning" : "text-muted-foreground hover:text-foreground hover:bg-muted")}
               >
-                <Star className={cn("h-4 w-4", p.primary && "fill-amber-400")} />
+                <Star className={cn("h-4 w-4", p.primary && "fill-warning")} />
               </button>
               <button
                 onClick={() => remove(p.id)}

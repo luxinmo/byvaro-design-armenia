@@ -112,9 +112,9 @@ export const INITIAL_DELEGATES: Delegate[] = [
  */
 export const ACCOUNT_DOT_COLORS: Record<string, string> = {
   a1: "bg-primary",
-  a2: "bg-emerald-500",
+  a2: "bg-success",
   a3: "bg-violet-500",
-  a4: "bg-amber-500",
+  a4: "bg-warning",
 };
 
 /** Fallback si la cuenta no tiene color asignado (hash simple por id). */
@@ -122,9 +122,9 @@ export function getAccountDotColor(id: string): string {
   if (ACCOUNT_DOT_COLORS[id]) return ACCOUNT_DOT_COLORS[id];
   const palette = [
     "bg-primary",
-    "bg-emerald-500",
+    "bg-success",
     "bg-violet-500",
-    "bg-amber-500",
+    "bg-warning",
     "bg-rose-500",
     "bg-cyan-500",
   ];

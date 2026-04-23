@@ -103,7 +103,7 @@ export default function AjustesFacturacionPago() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground">
                   •••• •••• •••• {m.last4}
-                  {m.primary && <span className="ml-2 text-[10px] font-semibold text-amber-600 inline-flex items-center gap-1"><Star className="h-3 w-3 fill-amber-400" /> Primaria</span>}
+                  {m.primary && <span className="ml-2 text-[10px] font-semibold text-warning inline-flex items-center gap-1"><Star className="h-3 w-3 fill-warning" /> Primaria</span>}
                 </p>
                 <p className="text-[11px] text-muted-foreground">{m.holderName} · Caduca {m.expiry}</p>
               </div>

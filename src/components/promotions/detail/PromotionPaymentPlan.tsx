@@ -25,7 +25,7 @@
  *   - `text-primary` → icono "current" + label del hito activo (usa el
  *     azul de marca en vez del verde emerald original).
  *   - `text-muted-foreground/40` → icono "upcoming".
- *   - `text-primary` sustituye al `text-emerald-500` original para
+ *   - `text-primary` sustituye al `text-success` original para
  *     "completed"; emerald no está en el sistema Byvaro.
  *   - Radios: panel `rounded-2xl`.
  *   - Sombras: `shadow-soft` en reposo (sin hover lift porque es un

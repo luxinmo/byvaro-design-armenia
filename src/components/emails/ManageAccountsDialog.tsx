@@ -364,7 +364,7 @@ export default function ManageAccountsDialog({
                           </Badge>
                         )}
                         {acc.delegated && (
-                          <Badge className="rounded-full bg-amber-100 text-amber-700 hover:bg-amber-100 text-[10px] font-medium px-2 py-0">
+                          <Badge className="rounded-full bg-warning/15 text-warning hover:bg-warning/15 text-[10px] font-medium px-2 py-0">
                             Delegada
                           </Badge>
                         )}
@@ -474,7 +474,7 @@ export default function ManageAccountsDialog({
                         <span className="text-xs text-foreground">Cuenta por defecto al redactar</span>
                       </div>
                       {acc.isDefault ? (
-                        <span className="text-xs text-emerald-600 font-medium">Activa</span>
+                        <span className="text-xs text-success font-medium">Activa</span>
                       ) : (
                         <Button
                           variant="ghost"
@@ -528,8 +528,8 @@ export default function ManageAccountsDialog({
             <>
               <div className="bg-card border border-border rounded-2xl p-4">
                 <div className="flex items-start gap-3">
-                  <div className="h-9 w-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-                    <Shield className="h-4 w-4 text-amber-700" />
+                  <div className="h-9 w-9 rounded-xl bg-warning/15 flex items-center justify-center shrink-0">
+                    <Shield className="h-4 w-4 text-warning" />
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-foreground">¿Qué es la delegación de acceso?</p>
@@ -553,7 +553,7 @@ export default function ManageAccountsDialog({
                         key={d.id}
                         className="bg-card border border-border rounded-2xl p-4 flex items-center gap-3"
                       >
-                        <div className="h-9 w-9 rounded-full bg-emerald-500 flex items-center justify-center text-white text-xs font-semibold shrink-0">
+                        <div className="h-9 w-9 rounded-full bg-success flex items-center justify-center text-white text-xs font-semibold shrink-0">
                           {d.name
                             .split(" ")
                             .map((n) => n[0])
@@ -612,15 +612,15 @@ export default function ManageAccountsDialog({
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-start gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200">
-                  <AlertTriangle className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
+                <div className="mt-4 flex items-start gap-3 p-3 rounded-xl bg-warning/10 border border-warning/25">
+                  <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
                   <label className="flex items-start gap-2.5 cursor-pointer">
                     <Checkbox
                       checked={acknowledged}
                       onCheckedChange={setAcknowledged}
                       className="mt-0.5"
                     />
-                    <span className="text-xs text-amber-900 leading-relaxed">
+                    <span className="text-xs text-warning leading-relaxed">
                       Entiendo que esta persona podrá <strong>leer, enviar y gestionar</strong> los emails
                       de todas mis cuentas conectadas en mi nombre. Concedo este acceso a sabiendas y
                       bajo mi responsabilidad.

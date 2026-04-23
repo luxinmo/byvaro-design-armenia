@@ -113,7 +113,7 @@ export function UserSelect({ value, onChange, placeholder = "Selecciona miembroâ
                     <p className="text-[10px] text-muted-foreground truncate">{m.jobTitle}</p>
                   )}
                 </div>
-                {isSelected && <Check className="h-3 w-3 text-emerald-600 shrink-0" />}
+                {isSelected && <Check className="h-3 w-3 text-success shrink-0" />}
               </button>
             );
           })}

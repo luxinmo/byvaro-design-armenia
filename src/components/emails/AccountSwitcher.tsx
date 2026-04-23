@@ -170,7 +170,7 @@ export default function AccountSwitcher({
                   <div className="flex items-center gap-1.5">
                     <p className="text-sm text-foreground truncate">{acc.email}</p>
                     {acc.delegated && (
-                      <span className="text-[10px] font-medium px-1.5 py-0 rounded-full bg-amber-100 text-amber-700 shrink-0">
+                      <span className="text-[10px] font-medium px-1.5 py-0 rounded-full bg-warning/15 text-warning shrink-0">
                         Delegada
                       </span>
                     )}

@@ -106,17 +106,17 @@ export default function Empresa({
 
       {/* ═════ Banner onboarding (solo dueño, no visitor) ═════ */}
       {!isVisitor && isIncomplete && viewMode === "edit" && (
-        <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 sm:px-6 lg:px-10 py-3 flex items-center gap-3 flex-wrap">
-          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0" />
+        <div className="bg-warning/10 border-b border-warning/30 px-4 sm:px-6 lg:px-10 py-3 flex items-center gap-3 flex-wrap">
+          <AlertTriangle className="h-4 w-4 text-warning dark:text-warning shrink-0" />
           <p className="text-[11.5px] text-foreground flex-1 min-w-0">
             <span className="font-semibold">Tu perfil de empresa está al {completionPercent}%.</span>{" "}
             Completa todas las secciones para que agencias y promotores puedan encontrarte.
           </p>
           <div className="flex items-center gap-2 shrink-0">
-            <div className="w-24 h-1.5 bg-amber-500/20 rounded-full overflow-hidden">
-              <div className="h-full bg-amber-500/70 rounded-full transition-all" style={{ width: `${completionPercent}%` }} />
+            <div className="w-24 h-1.5 bg-warning/20 rounded-full overflow-hidden">
+              <div className="h-full bg-warning/70 rounded-full transition-all" style={{ width: `${completionPercent}%` }} />
             </div>
-            <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-500 tnum">{completionPercent}%</span>
+            <span className="text-[10px] font-semibold text-warning dark:text-warning tnum">{completionPercent}%</span>
           </div>
         </div>
       )}

@@ -11,9 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDirty } from "@/components/settings/SettingsDirtyContext";
 import { useCurrentUser } from "@/lib/currentUser";
+import { getStoredProfile, saveStoredProfile } from "@/lib/profileStorage";
 import { toast } from "sonner";
-
-const KEY = "byvaro.user.profile.v1";
 
 type Profile = {
   /** Nombre completo (en todo el sistema usamos un único campo). */
@@ -25,19 +24,8 @@ type Profile = {
 };
 
 function loadProfile(defaults: Profile): Profile {
-  if (typeof window === "undefined") return defaults;
-  try {
-    const raw = JSON.parse(window.localStorage.getItem(KEY) ?? "{}");
-    /* Migración silenciosa de schemas anteriores que tenían
-     * { firstName, lastName }. Se concatenan al fullName y se
-     * descartan los campos viejos. */
-    if (raw && (raw.firstName || raw.lastName) && !raw.fullName) {
-      raw.fullName = [raw.firstName, raw.lastName].filter(Boolean).join(" ").trim();
-      delete raw.firstName;
-      delete raw.lastName;
-    }
-    return { ...defaults, ...raw };
-  } catch { return defaults; }
+  const stored = getStoredProfile();
+  return { ...defaults, ...(stored ?? {}) };
 }
 
 export default function AjustesPerfilPersonal() {
@@ -60,7 +48,7 @@ export default function AjustesPerfilPersonal() {
   const onChange = (patch: Partial<Profile>) => setProfile((p) => ({ ...p, ...patch }));
 
   const save = () => {
-    if (typeof window !== "undefined") window.localStorage.setItem(KEY, JSON.stringify(profile));
+    saveStoredProfile(profile);
     setInitial(profile);
     setDirty(false);
     toast.success("Perfil guardado");

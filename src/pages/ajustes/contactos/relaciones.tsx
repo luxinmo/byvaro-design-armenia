@@ -227,7 +227,7 @@ export default function AjustesContactosRelaciones() {
                           className="h-7 w-7 rounded-full grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                         >
                           {disabled
-                            ? <Check className="h-3.5 w-3.5 text-emerald-600" />
+                            ? <Check className="h-3.5 w-3.5 text-success" />
                             : <X className="h-3.5 w-3.5" />}
                         </button>
                         <button

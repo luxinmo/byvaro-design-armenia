@@ -72,8 +72,12 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { unitsByPromotion, Unit, UnitStatus, PromotionContext } from "@/data/units";
-import { anejosByPromotion, type Anejo } from "@/data/anejos";
+import { type Anejo, type AnejoStatus, type AnejoTipo } from "@/data/anejos";
 import { PromotionAnejosTable } from "./PromotionAnejosTable";
+import { AnejoFormDialog, type AnejoFormValues } from "./AnejoFormDialog";
+import {
+  useAnejosForPromotion, addAnejo, updateAnejo, deleteAnejo,
+} from "@/lib/anejosStorage";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge"; // Reservado para futuras chips custom (no usado directamente ahora).
 import { Checkbox } from "@/components/ui/Checkbox";
@@ -108,12 +112,15 @@ function getUnitDisplayId(unit: Pick<Unit, "publicId" | "floor" | "door">) {
 // Amber conservado únicamente para "reserved" — warning estándar del sistema.
 const statusConfig: Record<UnitStatus, { label: string; class: string; dotClass: string }> = {
   available: { label: "Disponible", class: "bg-primary/10 text-primary border-primary/20", dotClass: "bg-primary" },
-  reserved: { label: "Reservada", class: "bg-amber-500/10 text-amber-700 border-amber-500/20", dotClass: "bg-amber-500" },
+  reserved: { label: "Reservada", class: "bg-warning/10 text-warning border-warning/20", dotClass: "bg-warning" },
   sold: { label: "Vendida", class: "bg-destructive/10 text-destructive border-destructive/20", dotClass: "bg-destructive" },
   withdrawn: { label: "Retirada", class: "bg-muted text-muted-foreground border-border", dotClass: "bg-muted-foreground" },
 };
 
 const statusOptions: UnitStatus[] = ["available", "reserved", "sold", "withdrawn"];
+/** En vista colaborador ocultamos "withdrawn" — la agencia no gestiona
+ *  retiradas, es una decisión interna del promotor. */
+const statusOptionsCollab: UnitStatus[] = ["available", "reserved", "sold"];
 const typeOptions = ["Apartamento", "Ático", "Dúplex", "Estudio"];
 const orientationOptions = ["Norte", "Sur", "Este", "Oeste", "NE", "NO", "SE", "SO"];
 
@@ -187,11 +194,64 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
 
   /** Anejos sueltos · parkings/trasteros que se venden separados.
    *  Cada tipo tiene su propio segmento en la toolbar; solo aparece si
-   *  existe al menos uno de ese tipo. */
-  const anejos: Anejo[] = useMemo(() => anejosByPromotion[promotionId] ?? [], [promotionId]);
+   *  existe al menos uno de ese tipo. Se leen del storage (seed +
+   *  mutaciones del usuario). */
+  const anejos: Anejo[] = useAnejosForPromotion(promotionId);
   const parkings = useMemo(() => anejos.filter((a) => a.tipo === "parking"), [anejos]);
   const trasteros = useMemo(() => anejos.filter((a) => a.tipo === "trastero"), [anejos]);
   const [segment, setSegment] = useState<"viviendas" | "parkings" | "trasteros">("viviendas");
+
+  /* Alta/edición y acciones sobre anejos · solo promotor.
+     --------------------------------------------------- */
+  const [anejoDialogOpen, setAnejoDialogOpen] = useState(false);
+  const [editingAnejo, setEditingAnejo] = useState<Anejo | undefined>(undefined);
+  const [anejoDialogTipo, setAnejoDialogTipo] = useState<AnejoTipo>("parking");
+
+  const openNewAnejo = (tipo: AnejoTipo) => {
+    setEditingAnejo(undefined);
+    setAnejoDialogTipo(tipo);
+    setAnejoDialogOpen(true);
+  };
+  const openEditAnejo = (a: Anejo) => {
+    setEditingAnejo(a);
+    setAnejoDialogTipo(a.tipo);
+    setAnejoDialogOpen(true);
+  };
+  const handleAnejoSubmit = (values: AnejoFormValues) => {
+    if (editingAnejo) {
+      updateAnejo(promotionId, editingAnejo.id, values);
+      toast({ title: "Anejo actualizado", description: values.publicId });
+    } else {
+      const created = addAnejo(promotionId, values);
+      toast({ title: "Anejo añadido", description: created.publicId });
+      // Autoswitch al segmento del tipo creado si estamos en otro.
+      if (values.tipo === "parking" && segment !== "parkings") setSegment("parkings");
+      if (values.tipo === "trastero" && segment !== "trasteros") setSegment("trasteros");
+    }
+  };
+  const handleToggleVisibility = (a: Anejo) => {
+    const next = !(a.visibleToAgencies !== false);
+    updateAnejo(promotionId, a.id, { visibleToAgencies: next });
+    toast({
+      title: next ? "Visible a agencias" : "Oculto a agencias",
+      description: a.publicId,
+    });
+  };
+  const handleSetAnejoStatus = (a: Anejo, status: AnejoStatus) => {
+    updateAnejo(promotionId, a.id, { status });
+    toast({
+      title: status === "withdrawn" ? "Anejo retirado" : "Anejo reactivado",
+      description: a.publicId,
+    });
+  };
+  const handleDeleteAnejo = (a: Anejo) => {
+    const ok = typeof window !== "undefined"
+      ? window.confirm(`¿Eliminar ${a.publicId} definitivamente?`)
+      : true;
+    if (!ok) return;
+    deleteAnejo(promotionId, a.id);
+    toast({ title: "Anejo eliminado", description: a.publicId });
+  };
 
   const [filterStatus, setFilterStatus] = useState<UnitStatus | "all">("all");
   const [filterBlock, setFilterBlock] = useState<string>("all");
@@ -501,7 +561,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
   };
   const isFieldEditable = (field: EditableFieldKey) => activeEditFields.has(field);
 
-  const editableCellClass = "border-2 border-amber-500/40 bg-amber-500/10 rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all";
+  const editableCellClass = "border-2 border-warning/40 bg-warning/10 rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all";
 
   const renderEditableCell = (u: Unit, field: EditableFieldKey, readOnlyContent: React.ReactNode, editContent: React.ReactNode) => {
     const editing = isEditable(u.id);
@@ -549,6 +609,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
 
   if (segment === "parkings" || segment === "trasteros") {
     const subset = segment === "parkings" ? parkings : trasteros;
+    const currentTipo: AnejoTipo = segment === "parkings" ? "parking" : "trastero";
     return (
       <div className="space-y-5">
         <SegmentSwitcher
@@ -557,12 +618,29 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
           viviendasCount={allUnits.length}
           parkingsCount={parkings.length}
           trasterosCount={trasteros.length}
+          parkingsAgencyVisibleCount={parkings.filter((a) => a.visibleToAgencies !== false && a.status === "available").length}
+          trasterosAgencyVisibleCount={trasteros.filter((a) => a.visibleToAgencies !== false && a.status === "available").length}
+          isCollaboratorView={isCollaboratorView}
         />
         <PromotionAnejosTable
           anejos={subset}
-          tipo={segment === "parkings" ? "parking" : "trastero"}
+          tipo={currentTipo}
           isCollaboratorView={isCollaboratorView}
+          onAddAnejo={() => openNewAnejo(currentTipo)}
+          onEditAnejo={openEditAnejo}
+          onToggleVisibility={handleToggleVisibility}
+          onSetStatus={handleSetAnejoStatus}
+          onDeleteAnejo={handleDeleteAnejo}
         />
+        {!isCollaboratorView && (
+          <AnejoFormDialog
+            open={anejoDialogOpen}
+            onOpenChange={setAnejoDialogOpen}
+            defaultTipo={anejoDialogTipo}
+            initial={editingAnejo}
+            onSubmit={handleAnejoSubmit}
+          />
+        )}
       </div>
     );
   }
@@ -570,13 +648,19 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
   return (
     <div className="space-y-5">
 
-      {(parkings.length > 0 || trasteros.length > 0) && (
+      {/* El promotor ve siempre los segmentos Parkings/Trasteros (puede
+          entrar a crear aunque estén vacíos). La agencia solo los ve si
+          hay al menos uno visible disponible (filtrado abajo). */}
+      {(!isCollaboratorView || parkings.some((a) => a.visibleToAgencies !== false && a.status === "available") || trasteros.some((a) => a.visibleToAgencies !== false && a.status === "available")) && (
         <SegmentSwitcher
           segment={segment}
           setSegment={setSegment}
           viviendasCount={allUnits.length}
           parkingsCount={parkings.length}
           trasterosCount={trasteros.length}
+          parkingsAgencyVisibleCount={parkings.filter((a) => a.visibleToAgencies !== false && a.status === "available").length}
+          trasterosAgencyVisibleCount={trasteros.filter((a) => a.visibleToAgencies !== false && a.status === "available").length}
+          isCollaboratorView={isCollaboratorView}
         />
       )}
 
@@ -584,13 +668,13 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
           estén siempre visibles mientras el usuario edita en medio de una
           tabla larga. */}
       {bulkEditing && (
-        <div className="sticky top-2 z-20 border border-amber-500/30 rounded-xl bg-amber-500/10 px-4 py-2.5 flex items-center justify-between shadow-soft-lg">
+        <div className="sticky top-2 z-20 border border-warning/30 rounded-xl bg-warning/10 px-4 py-2.5 flex items-center justify-between shadow-soft-lg">
           <div className="flex items-center gap-3">
-            <Pencil className="h-4 w-4 text-amber-600" strokeWidth={1.5} />
+            <Pencil className="h-4 w-4 text-warning" strokeWidth={1.5} />
             <span className="text-xs font-semibold text-foreground">Edición masiva · {available} unidad{available !== 1 ? "es" : ""} disponible{available !== 1 ? "s" : ""}</span>
             <div className="flex items-center gap-1">
               {Array.from(activeEditFields).map(f => (
-                <span key={f} className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/20 text-amber-700">
+                <span key={f} className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-warning/20 text-warning">
                   {editableFieldOptions.find(o => o.key === f)?.label}
                 </span>
               ))}
@@ -677,9 +761,9 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                 : `¿Quieres avisar a los colaboradores de ${verbShort}?`}
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex items-start gap-3">
-            <div className="h-8 w-8 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
-              <Pencil className="h-4 w-4 text-amber-600" />
+          <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 flex items-start gap-3">
+            <div className="h-8 w-8 rounded-full bg-warning/20 flex items-center justify-center shrink-0 mt-0.5">
+              <Pencil className="h-4 w-4 text-warning" />
             </div>
             <div>
               <p className="text-sm font-medium text-foreground">
@@ -827,7 +911,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
             <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as UnitStatus | "all")}
               className="min-w-0 h-9 px-2.5 rounded-lg border border-border bg-background text-sm">
               <option value="all">Estados</option>
-              {statusOptions.map(s => <option key={s} value={s}>{statusConfig[s].label}</option>)}
+              {(isCollaboratorView ? statusOptionsCollab : statusOptions).map(s => <option key={s} value={s}>{statusConfig[s].label}</option>)}
             </select>
           </div>
 
@@ -863,7 +947,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
             { value: "available", label: "Disponibles" },
             { value: "reserved", label: "Reservadas" },
             { value: "sold", label: "Vendidas" },
-            { value: "withdrawn", label: "Retiradas" },
+            ...(isCollaboratorView ? [] : [{ value: "withdrawn", label: "Retiradas" }]),
           ]}
         />
         <MinimalSort
@@ -1038,7 +1122,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                               !bulkEditing && "cursor-pointer hover:bg-muted/30",
                               isExpanded && "bg-muted/40",
                               isSelected && !bulkEditing && "bg-primary/5",
-                              editing && "bg-amber-500/5"
+                              editing && "bg-warning/5"
                             )}
                             onClick={() => toggleExpandUnit(u.id)}
                           >
@@ -1565,18 +1649,31 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
    ══════════════════════════════════════════════════════════════════════ */
 function SegmentSwitcher({
   segment, setSegment, viviendasCount, parkingsCount, trasterosCount,
+  parkingsAgencyVisibleCount = 0, trasterosAgencyVisibleCount = 0,
+  isCollaboratorView = false,
 }: {
   segment: "viviendas" | "parkings" | "trasteros";
   setSegment: (s: "viviendas" | "parkings" | "trasteros") => void;
   viviendasCount: number;
   parkingsCount: number;
   trasterosCount: number;
+  parkingsAgencyVisibleCount?: number;
+  trasterosAgencyVisibleCount?: number;
+  isCollaboratorView?: boolean;
 }) {
+  /** Counts mostrados:
+   *   - Promotor: total de anejos (puede incluir ocultos a agencia).
+   *   - Agencia: solo visibles + disponibles. */
+  const parkingsShown = isCollaboratorView ? parkingsAgencyVisibleCount : parkingsCount;
+  const trasterosShown = isCollaboratorView ? trasterosAgencyVisibleCount : trasterosCount;
+
   const segments: { key: "viviendas" | "parkings" | "trasteros"; label: string; count: number }[] = [
     { key: "viviendas", label: "Viviendas", count: viviendasCount },
   ];
-  if (parkingsCount > 0) segments.push({ key: "parkings", label: "Parkings", count: parkingsCount });
-  if (trasterosCount > 0) segments.push({ key: "trasteros", label: "Trasteros", count: trasterosCount });
+  /* El promotor ve siempre los segmentos de anejos (puede querer
+     crear el primero). La agencia solo si hay al menos uno visible. */
+  if (!isCollaboratorView || parkingsShown > 0) segments.push({ key: "parkings", label: "Parkings", count: parkingsShown });
+  if (!isCollaboratorView || trasterosShown > 0) segments.push({ key: "trasteros", label: "Trasteros", count: trasterosShown });
 
   return (
     <div className="inline-flex items-center bg-muted rounded-full p-1 gap-0.5">

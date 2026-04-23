@@ -96,10 +96,10 @@ const estadoStyles: Record<VentaEstado, {
   },
   escriturada: {
     icon: KeyRound,
-    chip: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20",
-    dot: "bg-emerald-500",
-    column: "border-emerald-500/20 bg-emerald-500/[0.03]",
-    ring: "ring-emerald-500/20",
+    chip: "bg-success/10 text-success border-success/20",
+    dot: "bg-success",
+    column: "border-success/20 bg-success/[0.03]",
+    ring: "ring-success/20",
   },
   caida: {
     icon: XCircle,
@@ -238,7 +238,7 @@ export default function Ventas() {
               </h1>
               <p className="text-xs text-muted-foreground mt-1.5">
                 <span className="font-semibold text-foreground tnum">{sales.length}</span> operaciones ·
-                <span className="ml-1 tnum font-semibold text-emerald-600">{formatEur(revenueMesActual)}</span>{" "}
+                <span className="ml-1 tnum font-semibold text-success">{formatEur(revenueMesActual)}</span>{" "}
                 escrituradas este mes
               </p>
             </div>
@@ -291,8 +291,8 @@ export default function Ventas() {
             value={formatEurShort(kpis.escrituradoMes)}
             delta={kpis.escrituradoDelta}
             sub={`${kpis.escrituradoCount} entregas`}
-            iconTone="bg-emerald-500/10"
-            iconColor="text-emerald-600"
+            iconTone="bg-success/10"
+            iconColor="text-success"
           />
           <KpiCard
             icon={Wallet}
@@ -301,8 +301,8 @@ export default function Ventas() {
             delta={kpis.comisionPagadaCount > 0 ? `${kpis.comisionPagadaCount} al día` : undefined}
             deltaTone="neutral"
             sub={`${kpis.comisionPendienteCount} por liquidar`}
-            iconTone="bg-amber-500/10"
-            iconColor="text-amber-600"
+            iconTone="bg-warning/10"
+            iconColor="text-warning"
           />
         </div>
       </div>
@@ -505,7 +505,7 @@ function KpiCard({
         {delta && (
           <span className={cn(
             "text-[11px] font-semibold tabular-nums inline-flex items-center gap-0.5",
-            resolvedTone === "positive" && "text-emerald-600",
+            resolvedTone === "positive" && "text-success",
             resolvedTone === "negative" && "text-destructive",
             resolvedTone === "neutral" && "text-muted-foreground",
           )}>
@@ -985,7 +985,7 @@ function TablaVentas({
                         </p>
                         <p className={cn(
                           "text-[10.5px] tnum",
-                          v.comisionPagada ? "text-emerald-600" : "text-amber-600",
+                          v.comisionPagada ? "text-success" : "text-warning",
                         )}>
                           {v.comisionPct}% · {v.comisionPagada ? "Pagada" : "Pendiente"}
                         </p>
@@ -1356,7 +1356,7 @@ function Timeline({ venta }: { venta: Venta }) {
               "relative h-[22px] w-[22px] rounded-full grid place-items-center shrink-0",
               s.reached
                 ? i === steps.length - 1 && !caida
-                  ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
+                  ? "bg-success/15 text-success border border-success/30"
                   : "bg-primary/15 text-primary border border-primary/30"
                 : "bg-muted text-muted-foreground border border-border",
             )}>
@@ -1418,7 +1418,7 @@ function SummaryBox({
       <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">{label}</p>
       <p className={cn(
         "text-[15px] font-bold tnum mt-1",
-        valueTone === "amber" ? "text-amber-600" : "text-foreground",
+        valueTone === "amber" ? "text-warning" : "text-foreground",
       )}>
         {value}
       </p>
@@ -1455,7 +1455,7 @@ function ActionBtn({
   const cls = {
     primary: "bg-foreground text-background hover:bg-foreground/90 shadow-soft",
     secondary: "bg-card border border-border text-foreground hover:bg-muted",
-    success: "bg-emerald-600 text-white hover:bg-emerald-600/90 shadow-soft",
+    success: "bg-success text-white hover:bg-success/90 shadow-soft",
     destructive: "bg-destructive/10 border border-destructive/30 text-destructive hover:bg-destructive/15",
   }[variant];
   return (

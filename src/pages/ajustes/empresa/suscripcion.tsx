@@ -89,13 +89,13 @@ export default function AjustesEmpresaSuscripcion() {
                 className={cn(
                   "text-left rounded-xl border p-4 transition-colors disabled:cursor-not-allowed disabled:opacity-70",
                   isCurrent ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "border-border/40 hover:border-foreground/20",
-                  plan.featured && !isCurrent && "ring-1 ring-amber-300/40",
+                  plan.featured && !isCurrent && "ring-1 ring-warning/40/40",
                 )}
               >
                 <div className="flex items-baseline justify-between mb-1">
                   <p className="text-sm font-semibold text-foreground">{plan.name}</p>
                   {plan.featured && (
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Recomendado</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-warning">Recomendado</span>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mb-2">{plan.description}</p>
@@ -105,7 +105,7 @@ export default function AjustesEmpresaSuscripcion() {
                 <ul className="space-y-1">
                   {plan.features.map((f) => (
                     <li key={f} className="flex items-start gap-1.5 text-[12px] text-muted-foreground">
-                      <Check className="h-3 w-3 text-emerald-600 mt-0.5 shrink-0" strokeWidth={3} />
+                      <Check className="h-3 w-3 text-success mt-0.5 shrink-0" strokeWidth={3} />
                       <span>{f}</span>
                     </li>
                   ))}

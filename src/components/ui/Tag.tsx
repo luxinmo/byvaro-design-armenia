@@ -17,8 +17,8 @@ type Shape = "rounded" | "pill";
 const variantClass: Record<Variant, string> = {
   default: "bg-secondary/80 text-foreground border border-border/30",
   active: "bg-primary/10 text-primary border border-primary/20",
-  success: "bg-emerald-50 text-emerald-700 border border-emerald-200/50",
-  warning: "bg-amber-50 text-amber-700 border border-amber-200/50",
+  success: "bg-success/10 text-success border border-success/25",
+  warning: "bg-warning/10 text-warning border border-warning/25",
   danger: "bg-red-50 text-red-700 border border-red-200/50",
   muted: "bg-muted/40 text-muted-foreground border border-transparent",
   overlay: "bg-white/90 text-foreground backdrop-blur-sm border border-white/20",

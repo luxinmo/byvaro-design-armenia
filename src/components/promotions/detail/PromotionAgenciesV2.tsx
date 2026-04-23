@@ -139,8 +139,8 @@ const mockAgencies: AgencyV2[] = [
 ];
 
 const statusConfig: Record<AgencyStatus, { label: string; dot: string; text: string; bg: string }> = {
-  active:   { label: "Activa",     dot: "bg-emerald-500", text: "text-emerald-700", bg: "bg-emerald-50" },
-  pending:  { label: "Pendiente",  dot: "bg-amber-500",   text: "text-amber-700",   bg: "bg-amber-50"   },
+  active:   { label: "Activa",     dot: "bg-success", text: "text-success", bg: "bg-success/10" },
+  pending:  { label: "Pendiente",  dot: "bg-warning",   text: "text-warning",   bg: "bg-warning/10"   },
   inactive: { label: "Inactiva",   dot: "bg-muted-foreground/60", text: "text-muted-foreground", bg: "bg-muted/50" },
 };
 
@@ -250,7 +250,7 @@ export function PromotionAgenciesV2({
                       · enviada hace {dias} {dias === 1 ? "día" : "días"}
                     </p>
                   </div>
-                  <span className="text-[10px] font-medium text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full shrink-0">
+                  <span className="text-[10px] font-medium text-warning bg-warning/10 border border-warning/25 px-2 py-0.5 rounded-full shrink-0">
                     Pendiente
                   </span>
                 </li>
@@ -292,7 +292,7 @@ export function PromotionAgenciesV2({
                 label="Agencias activas"
                 value={String(kpis.active)}
                 helper={`${mockAgencies.length} colaboradoras totales`}
-                accent="bg-emerald-50 text-emerald-600"
+                accent="bg-success/10 text-success"
               />
               <HeroKpi
                 icon={Globe2}

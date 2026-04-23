@@ -1072,8 +1072,8 @@ export function SharePromotionDialog({ open, onOpenChange, promotionName, promot
               <div className="p-5 sm:p-6">
                 {/* Banner éxito */}
                 <div className="flex items-start gap-3 rounded-2xl bg-muted p-4 mb-5">
-                  <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                    <Check className="h-4 w-4 text-emerald-700" strokeWidth={2.5} />
+                  <div className="h-8 w-8 rounded-full bg-success/15 flex items-center justify-center shrink-0">
+                    <Check className="h-4 w-4 text-success" strokeWidth={2.5} />
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-foreground leading-snug">

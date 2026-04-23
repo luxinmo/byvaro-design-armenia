@@ -26,7 +26,7 @@ function getUnitDisplayId(unit: Pick<Unit, "publicId" | "floor" | "door">) {
 // Tokens Byvaro (HSL) · excepción amber para "reservada" documentada en CLAUDE.md.
 const statusConfig: Record<UnitStatus, { label: string; class: string; dotClass: string }> = {
   available: { label: "Disponible", class: "bg-primary/10 text-primary border-primary/20",            dotClass: "bg-primary" },
-  reserved:  { label: "Reservada",  class: "bg-amber-500/10 text-amber-700 border-amber-500/20",     dotClass: "bg-amber-500" },
+  reserved:  { label: "Reservada",  class: "bg-warning/10 text-warning border-warning/20",     dotClass: "bg-warning" },
   sold:      { label: "Vendida",    class: "bg-destructive/10 text-destructive border-destructive/20", dotClass: "bg-destructive" },
   withdrawn: { label: "Retirada",   class: "bg-muted text-muted-foreground border-border",            dotClass: "bg-muted-foreground/60" },
 };
@@ -195,11 +195,11 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
             {/* Edit mode banner */}
             {editMode && (
               <div className="px-5 sm:px-6 pt-4">
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5">
-                  <div className="flex items-center gap-2 text-xs text-amber-800">
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-warning/25 bg-warning/10 px-4 py-2.5">
+                  <div className="flex items-center gap-2 text-xs text-warning">
                     <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
                     <span className="font-medium">Modo edición activo</span>
-                    <span className="hidden sm:inline text-amber-700/70">· los cambios se guardan automáticamente al salir del campo</span>
+                    <span className="hidden sm:inline text-warning/70">· los cambios se guardan automáticamente al salir del campo</span>
                   </div>
                   <Button size="sm" onClick={() => setEditMode(false)} className="rounded-full h-7 text-[10px] px-3">
                     Listo
@@ -586,42 +586,42 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
 
                 {/* Status info */}
                 {unit.status === "reserved" && !isCollaboratorView && (
-                  <div className="rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs space-y-1.5">
+                  <div className="rounded-2xl bg-warning/10 border border-warning/25 px-4 py-3 text-xs space-y-1.5">
                     {editMode ? (
                       <>
                         <div className="flex items-center gap-2">
-                          <span className="text-amber-700 font-medium shrink-0">Cliente:</span>
+                          <span className="text-warning font-medium shrink-0">Cliente:</span>
                           <input
                             defaultValue={unit.clientName || ""}
                             onBlur={(e) => update({ clientName: e.target.value })}
-                            className="flex-1 bg-white/60 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-amber-300"
+                            className="flex-1 bg-white/60 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-warning/40"
                             placeholder="Nombre del cliente"
                           />
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-amber-700 font-medium shrink-0">Agencia:</span>
+                          <span className="text-warning font-medium shrink-0">Agencia:</span>
                           <input
                             defaultValue={unit.agencyName || ""}
                             onBlur={(e) => update({ agencyName: e.target.value })}
-                            className="flex-1 bg-white/60 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-amber-300"
+                            className="flex-1 bg-white/60 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-warning/40"
                             placeholder="Agencia"
                           />
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-amber-700 font-medium shrink-0">Fecha:</span>
+                          <span className="text-warning font-medium shrink-0">Fecha:</span>
                           <input
                             type="date"
                             defaultValue={unit.reservedAt || ""}
                             onBlur={(e) => update({ reservedAt: e.target.value })}
-                            className="flex-1 bg-white/60 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-amber-300"
+                            className="flex-1 bg-white/60 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-warning/40"
                           />
                         </div>
                       </>
                     ) : (
                       <>
-                        <p className="font-medium text-amber-800">Reservada por {unit.clientName}</p>
-                        {unit.agencyName && <p className="text-amber-600">vía {unit.agencyName}</p>}
-                        {unit.reservedAt && <p className="text-amber-500 inline-flex items-center gap-1"><Calendar className="h-3 w-3" /> {unit.reservedAt}</p>}
+                        <p className="font-medium text-warning">Reservada por {unit.clientName}</p>
+                        {unit.agencyName && <p className="text-warning">vía {unit.agencyName}</p>}
+                        {unit.reservedAt && <p className="text-warning inline-flex items-center gap-1"><Calendar className="h-3 w-3" /> {unit.reservedAt}</p>}
                       </>
                     )}
                   </div>

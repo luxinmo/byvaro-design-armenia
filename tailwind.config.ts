@@ -30,6 +30,19 @@ export default {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
+        /* Success · verde semántico para estados "ok" (contrato vigente,
+         * actividad reciente, exigencia cumplida). Sustituye a
+         * `emerald-*` de Tailwind — migración masiva en abril 2026. */
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        /* Warning · ámbar semántico (pendientes, por expirar, favoritos).
+         * Sustituye a `amber-*` de Tailwind. */
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",

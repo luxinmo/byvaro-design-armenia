@@ -31,8 +31,8 @@ export function DuplicateResult({ record }: { record: Registro }) {
     <div className={cn(
       "rounded-xl border p-4 space-y-3",
       isDanger  && "border-destructive/30 bg-destructive/5",
-      isWarning && "border-amber-300/40 bg-amber-50/30 dark:bg-amber-500/5",
-      isSafe    && "border-emerald-300/40 bg-emerald-50/30 dark:bg-emerald-500/5",
+      isWarning && "border-warning/30 bg-warning/30 dark:bg-warning/5",
+      isSafe    && "border-success/30 bg-success/30 dark:bg-success/5",
     )}>
       {/* Header con anillo + título */}
       <div className="flex items-center gap-3">
@@ -41,8 +41,8 @@ export function DuplicateResult({ record }: { record: Registro }) {
           <p className={cn(
             "text-sm font-bold",
             isDanger  && "text-destructive",
-            isWarning && "text-amber-700 dark:text-amber-400",
-            isSafe    && "text-emerald-700 dark:text-emerald-400",
+            isWarning && "text-warning dark:text-warning",
+            isSafe    && "text-success dark:text-success",
           )}>
             {isDanger  ? "Posible duplicado detectado" :
              isWarning ? "Coincidencia parcial" :
@@ -83,8 +83,8 @@ export function DuplicateResult({ record }: { record: Registro }) {
             </span>
             <div className="flex justify-center">
               {f.match ? (
-                <span className="h-5 w-5 rounded-full bg-emerald-500/15 grid place-items-center">
-                  <Check className="h-3 w-3 text-emerald-700 dark:text-emerald-400" strokeWidth={2.5} />
+                <span className="h-5 w-5 rounded-full bg-success/15 grid place-items-center">
+                  <Check className="h-3 w-3 text-success dark:text-success" strokeWidth={2.5} />
                 </span>
               ) : (
                 <span className="h-5 w-5 rounded-full bg-muted grid place-items-center">
@@ -101,21 +101,21 @@ export function DuplicateResult({ record }: { record: Registro }) {
         <div className={cn(
           "flex items-start gap-2 rounded-lg px-3 py-2.5",
           isDanger  ? "bg-destructive/5"   :
-          isWarning ? "bg-amber-100/40 dark:bg-amber-500/5" :
-                      "bg-emerald-100/40 dark:bg-emerald-500/5",
+          isWarning ? "bg-warning/40 dark:bg-warning/5" :
+                      "bg-success/40 dark:bg-success/5",
         )}>
           <AlertTriangle className={cn(
             "h-3.5 w-3.5 mt-0.5 shrink-0",
             isDanger  && "text-destructive",
-            isWarning && "text-amber-700 dark:text-amber-400",
-            isSafe    && "text-emerald-700 dark:text-emerald-400",
+            isWarning && "text-warning dark:text-warning",
+            isSafe    && "text-success dark:text-success",
           )} />
           <div className="flex-1 min-w-0">
             <p className={cn(
               "text-[11px] leading-relaxed font-medium",
               isDanger  && "text-destructive/90",
-              isWarning && "text-amber-800 dark:text-amber-300",
-              isSafe    && "text-emerald-800 dark:text-emerald-300",
+              isWarning && "text-warning dark:text-warning",
+              isSafe    && "text-success dark:text-success",
             )}>
               {record.recommendation}
             </p>

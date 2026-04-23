@@ -48,7 +48,17 @@ function formatPrice(n: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 }
 
-export function PromotionAvailabilitySummary({ promotionId, onViewAll }: { promotionId: string; onViewAll: () => void }) {
+export function PromotionAvailabilitySummary({
+  promotionId,
+  onViewAll,
+  isCollaboratorView = false,
+}: {
+  promotionId: string;
+  onViewAll: () => void;
+  /** En vista agencia escondemos el contador "Retiradas" — la agencia no
+   *  gestiona retiradas, son una decisión interna del promotor. */
+  isCollaboratorView?: boolean;
+}) {
   const units = unitsByPromotion[promotionId] || [];
   if (units.length === 0) return null;
 
@@ -61,9 +71,11 @@ export function PromotionAvailabilitySummary({ promotionId, onViewAll }: { promo
   // Amber conservado para "Reservadas" (warning estándar).
   const stats = [
     { label: "Disponibles", count: available.length, dot: "bg-primary" },
-    { label: "Reservadas", count: reserved.length, dot: "bg-amber-500" },
+    { label: "Reservadas", count: reserved.length, dot: "bg-warning" },
     { label: "Vendidas", count: sold.length, dot: "bg-primary" },
-    { label: "Retiradas", count: withdrawn.length, dot: "bg-destructive" },
+    ...(isCollaboratorView
+      ? []
+      : [{ label: "Retiradas", count: withdrawn.length, dot: "bg-destructive" }]),
   ];
 
   const avgPrice = available.length > 0

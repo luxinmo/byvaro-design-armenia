@@ -70,7 +70,7 @@ function Event({ event }: { event: RegistroTimelineEvent }) {
         className={cn(
           "absolute -left-7 top-0.5 h-6 w-6 rounded-full ring-2 ring-background grid place-items-center",
           tone === "primary"     && "bg-primary/15 text-primary",
-          tone === "emerald"     && "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+          tone === "emerald"     && "bg-success/15 text-success dark:text-success",
           tone === "destructive" && "bg-destructive/15 text-destructive",
           tone === "muted"       && "bg-muted text-muted-foreground/60",
           tone === "default"     && "bg-muted text-foreground",

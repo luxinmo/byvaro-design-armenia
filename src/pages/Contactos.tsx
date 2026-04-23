@@ -702,7 +702,7 @@ function ContactRow({
             </span>
           )}
           {contact.status === "converted" && (
-            <span className="text-[10px] font-semibold text-emerald-600 shrink-0">
+            <span className="text-[10px] font-semibold text-success shrink-0">
               · Cliente
             </span>
           )}
@@ -760,7 +760,7 @@ function ContactRow({
           )}
 
           {contact.hasUpcomingVisit && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600">
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-success">
               <CalendarCheck className="h-2.5 w-2.5" />
               <span className="hidden sm:inline">Visit</span>
             </span>

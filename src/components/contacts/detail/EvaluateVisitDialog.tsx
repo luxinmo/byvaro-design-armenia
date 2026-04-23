@@ -48,15 +48,15 @@ type Props = {
 };
 
 const OUTCOMES: { value: VisitOutcome; label: string; icon: typeof CheckCircle2; color: string }[] = [
-  { value: "completed",   label: "Realizada",    icon: CheckCircle2,  color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/40" },
+  { value: "completed",   label: "Realizada",    icon: CheckCircle2,  color: "bg-success/15 text-success dark:text-success border-success/40" },
   { value: "cancelled",   label: "Cancelada",    icon: XCircle,       color: "bg-destructive/15 text-destructive border-destructive/40" },
-  { value: "rescheduled", label: "Reprogramada", icon: CalendarClock, color: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/40" },
+  { value: "rescheduled", label: "Reprogramada", icon: CalendarClock, color: "bg-warning/15 text-warning dark:text-warning border-warning/40" },
 ];
 
 const INTEREST_OPTIONS: { value: NonNullable<VisitEvaluation["clientInterest"]>; label: string; color: string }[] = [
   { value: "low",    label: "Bajo",   color: "bg-muted text-muted-foreground border-border" },
-  { value: "medium", label: "Medio",  color: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/40" },
-  { value: "high",   label: "Alto",   color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/40" },
+  { value: "medium", label: "Medio",  color: "bg-warning/15 text-warning dark:text-warning border-warning/40" },
+  { value: "high",   label: "Alto",   color: "bg-success/15 text-success dark:text-success border-success/40" },
 ];
 
 export function EvaluateVisitDialog({ open, onOpenChange, contactId, visit, onSaved }: Props) {
@@ -186,7 +186,7 @@ export function EvaluateVisitDialog({ open, onOpenChange, contactId, visit, onSa
                       onClick={() => setRating(n as 1 | 2 | 3 | 4 | 5)}
                       className={cn(
                         "h-9 w-9 rounded-lg grid place-items-center transition-colors",
-                        n <= rating ? "text-amber-500" : "text-muted-foreground/30 hover:text-muted-foreground",
+                        n <= rating ? "text-warning" : "text-muted-foreground/30 hover:text-muted-foreground",
                       )}
                       aria-label={`${n} estrella${n > 1 ? "s" : ""}`}
                     >

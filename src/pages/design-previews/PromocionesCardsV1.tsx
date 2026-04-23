@@ -191,15 +191,15 @@ const formatEur = (n: number) => {
 };
 
 const statusConfig: Record<PromotionStatus, { label: string; tone: string }> = {
-  active: { label: "Activa", tone: "bg-emerald-50 text-emerald-700 border-emerald-100" },
-  "pre-sale": { label: "Pre-venta", tone: "bg-amber-50 text-amber-700 border-amber-100" },
+  active: { label: "Activa", tone: "bg-success/10 text-success border-success/15" },
+  "pre-sale": { label: "Pre-venta", tone: "bg-warning/10 text-warning border-warning/15" },
   draft: { label: "Borrador", tone: "bg-muted text-muted-foreground border-border" },
   "sold-out": { label: "Vendida", tone: "bg-primary/10 text-primary border-primary/20" },
 };
 
 const badgeConfig = {
   new: { label: "Nueva", tone: "bg-primary text-primary-foreground", icon: Sparkles },
-  "last-units": { label: "Últimas unidades", tone: "bg-amber-500 text-white", icon: Star },
+  "last-units": { label: "Últimas unidades", tone: "bg-warning text-white", icon: Star },
   hot: { label: "Top", tone: "bg-gradient-to-br from-orange-500 to-red-500 text-white", icon: TrendingUp },
 };
 
@@ -386,8 +386,8 @@ export default function PromocionesCardsV1() {
 function StatTab({ label, count, active, onClick, tone = "default" }: { label: string; count: number; active: boolean; onClick: () => void; tone?: "default" | "emerald" | "amber" | "muted" | "primary" }) {
   const toneMap = {
     default: "bg-foreground text-background",
-    emerald: "bg-emerald-600 text-white",
-    amber: "bg-amber-500 text-white",
+    emerald: "bg-success text-white",
+    amber: "bg-warning text-white",
     muted: "bg-muted-foreground text-background",
     primary: "bg-primary text-primary-foreground",
   };
@@ -546,7 +546,7 @@ function PromoCard({ promo, selected, onToggleSelect }: { promo: Promotion; sele
               <div
                 className={cn(
                   "h-full rounded-full transition-all",
-                  promo.constructionProgress === 100 ? "bg-emerald-500" : "bg-gradient-to-r from-primary to-primary/70"
+                  promo.constructionProgress === 100 ? "bg-success" : "bg-gradient-to-r from-primary to-primary/70"
                 )}
                 style={{ width: `${promo.constructionProgress}%` }}
               />
@@ -557,7 +557,7 @@ function PromoCard({ promo, selected, onToggleSelect }: { promo: Promotion; sele
         {/* Footer: commission + agencies */}
         <div className="mt-4 flex items-center justify-between gap-3">
           {promo.commission > 0 ? (
-            <div className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full">
+            <div className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-success bg-success/10 px-2 py-1 rounded-full">
               <Percent className="h-3 w-3" />
               {promo.commission}% comisión
             </div>
@@ -678,7 +678,7 @@ function PromoRow({ promo, selected, onToggleSelect }: { promo: Promotion; selec
           <span className="tnum font-semibold text-foreground">{promo.activity.reservas}</span> res
         </span>
         {promo.activity.trend > 0 && (
-          <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-emerald-600 tnum">
+          <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-success tnum">
             <TrendingUp className="h-3 w-3" /> +{promo.activity.trend}%
           </span>
         )}

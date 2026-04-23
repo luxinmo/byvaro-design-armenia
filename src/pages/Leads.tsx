@@ -398,7 +398,7 @@ function KpiChip({
     neutral:     "bg-card border-border text-foreground",
     primary:     "bg-primary/5 border-primary/20 text-primary",
     sky:         "bg-sky-50 border-sky-200 text-sky-800",
-    emerald:     "bg-emerald-50 border-emerald-200 text-emerald-800",
+    emerald:     "bg-success/10 border-success/25 text-success",
     destructive: "bg-destructive/5 border-destructive/20 text-destructive",
   }[tone];
 

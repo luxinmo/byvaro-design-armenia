@@ -445,7 +445,7 @@ function DupMatchCell({
   const cls = tone === "destructive"
     ? "bg-destructive/10 text-destructive border-destructive/25"
     : tone === "amber"
-      ? "bg-amber-50 text-amber-900 border-amber-200"
+      ? "bg-warning/10 text-warning border-warning/25"
       : "bg-muted text-muted-foreground border-border";
   const matchLabel = match === "exact" ? "Coincide" : match === "partial" ? "Parcial" : "Similar";
   return (
@@ -525,9 +525,9 @@ function Timeline({ lead }: { lead: Lead }) {
     <ol className="space-y-4">
       {events.map((e, i) => {
         const toneBg = e.tone === "primary" ? "bg-primary/10 text-primary"
-          : e.tone === "emerald" ? "bg-emerald-50 text-emerald-700"
+          : e.tone === "emerald" ? "bg-success/10 text-success"
           : e.tone === "destructive" ? "bg-destructive/10 text-destructive"
-          : e.tone === "amber" ? "bg-amber-50 text-amber-800"
+          : e.tone === "amber" ? "bg-warning/10 text-warning"
           : "bg-muted text-foreground";
         const Icon = e.icon;
         return (

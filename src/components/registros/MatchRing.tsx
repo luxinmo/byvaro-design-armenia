@@ -28,8 +28,8 @@ export function MatchRing({ pct, size = 12 }: Props) {
 
   const colorClass =
     pct >= 70 ? "text-destructive" :
-    pct >= 40 ? "text-amber-500" :
-    pct > 0   ? "text-emerald-500" :
+    pct >= 40 ? "text-warning" :
+    pct > 0   ? "text-success" :
                 "text-muted-foreground/40";
 
   const sizeClasses =

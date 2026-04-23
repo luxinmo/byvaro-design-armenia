@@ -212,7 +212,7 @@ function StatBlock({
 }) {
   const cls =
     tone === "blue"    ? "text-blue-700 dark:text-blue-400 bg-blue-500/10" :
-    tone === "emerald" ? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10" :
+    tone === "emerald" ? "text-success dark:text-success bg-success/10" :
                          "text-violet-700 dark:text-violet-400 bg-violet-500/10";
   return (
     <div className="rounded-xl border border-border/40 px-3 py-2.5">

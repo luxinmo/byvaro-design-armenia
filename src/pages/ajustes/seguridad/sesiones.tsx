@@ -89,7 +89,7 @@ export default function AjustesSesiones() {
               <div key={s.id} className="py-4 flex items-start gap-4">
                 <div className={cn(
                   "h-10 w-10 rounded-xl grid place-items-center shrink-0",
-                  s.current ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground",
+                  s.current ? "bg-success/15 text-success" : "bg-muted text-muted-foreground",
                 )}>
                   <DeviceIcon className="h-5 w-5" />
                 </div>
@@ -101,7 +101,7 @@ export default function AjustesSesiones() {
                       <span className="text-muted-foreground">{s.os}</span>
                     </p>
                     {s.current && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-success/15 text-success">
                         <ShieldCheck className="h-2.5 w-2.5" />
                         Sesión actual
                       </span>

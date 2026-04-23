@@ -39,7 +39,7 @@ export default function AjustesFacturacionUso() {
         <div className="grid grid-cols-2 gap-4">
           {METRICS.map((m) => {
             const Icon = m.delta > 0 ? TrendingUp : m.delta < 0 ? TrendingDown : Minus;
-            const trendColor = m.delta > 0 ? "text-emerald-600" : m.delta < 0 ? "text-destructive" : "text-muted-foreground";
+            const trendColor = m.delta > 0 ? "text-success" : m.delta < 0 ? "text-destructive" : "text-muted-foreground";
             return (
               <div key={m.label} className="rounded-xl border border-border/40 p-4 bg-muted/20">
                 <p className="text-xs text-muted-foreground">{m.label}</p>

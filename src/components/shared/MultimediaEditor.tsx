@@ -144,7 +144,7 @@ export function MultimediaEditor({
   return (
     <div className="flex flex-col gap-5">
       {showCollaborationWarning && (
-        <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2.5 flex gap-2 text-xs text-amber-700 leading-relaxed">
+        <div className="rounded-lg bg-warning/10 border border-warning/30 px-3 py-2.5 flex gap-2 text-xs text-warning leading-relaxed">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" strokeWidth={1.5} />
           <span>
             <strong>Importante:</strong> Si vas a compartir imágenes con agencias colaboradoras, asegúrate de no subir fotografías con marca de agua. Las imágenes bloqueadas no se exportarán.
@@ -330,7 +330,7 @@ export function MultimediaEditor({
       {/* Modal subir fotos */}
       <ModalShell open={uploadOpen} onClose={() => setUploadOpen(false)} title="Subir fotografías">
         <div className="flex flex-col gap-3">
-          <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 flex gap-2 text-xs text-amber-700 leading-relaxed">
+          <div className="rounded-lg bg-warning/10 border border-warning/30 px-3 py-2 flex gap-2 text-xs text-warning leading-relaxed">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" strokeWidth={1.5} />
             <span>No subas imágenes con marca de agua si vas a compartirlas con colaboradores.</span>
           </div>

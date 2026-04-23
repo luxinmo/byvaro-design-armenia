@@ -28,9 +28,9 @@ const STATUS_META: Record<ContactRecordEntry["status"], {
   pill: string;
   icon: typeof Clock;
 }> = {
-  pending:   { label: "Pendiente",  pill: "bg-amber-500/15 text-amber-700 dark:text-amber-400",     icon: Clock },
+  pending:   { label: "Pendiente",  pill: "bg-warning/15 text-warning dark:text-warning",     icon: Clock },
   approved:  { label: "Aprobado",   pill: "bg-blue-500/15 text-blue-700 dark:text-blue-400",        icon: CheckCircle2 },
-  converted: { label: "Convertido", pill: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", icon: Sparkles },
+  converted: { label: "Convertido", pill: "bg-success/15 text-success dark:text-success", icon: Sparkles },
   cancelled: { label: "Cancelado",  pill: "bg-muted text-muted-foreground",                          icon: XCircle },
 };
 
@@ -118,7 +118,7 @@ function RecordCard({ record }: { record: ContactRecordEntry }) {
         <div className={cn(
           "mt-3 rounded-xl px-3 py-2 text-[12px] flex items-start gap-2 border",
           record.status === "converted"
-            ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-800 dark:text-emerald-300"
+            ? "bg-success/5 border-success/20 text-success dark:text-success"
             : "bg-muted/50 border-border/40 text-muted-foreground",
         )}>
           {record.status === "converted" ? (
@@ -198,8 +198,8 @@ function Kpi({
   tone: "default" | "amber" | "emerald" | "muted";
 }) {
   const toneClass =
-    tone === "amber"   ? "text-amber-700 dark:text-amber-400" :
-    tone === "emerald" ? "text-emerald-700 dark:text-emerald-400" :
+    tone === "amber"   ? "text-warning dark:text-warning" :
+    tone === "emerald" ? "text-success dark:text-success" :
     tone === "muted"   ? "text-muted-foreground" :
                          "text-foreground";
   return (

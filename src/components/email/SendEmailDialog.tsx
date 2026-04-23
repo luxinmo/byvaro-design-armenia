@@ -612,15 +612,15 @@ export function SendEmailDialog({
                   setRecipientMode("favorites");
                   setStep("template");
                 }}
-                className="w-full bg-card border border-border hover:border-amber-500/40 hover:shadow-soft rounded-2xl p-5 text-left transition-all flex items-center gap-4 group"
+                className="w-full bg-card border border-border hover:border-warning/40 hover:shadow-soft rounded-2xl p-5 text-left transition-all flex items-center gap-4 group"
               >
-                <div className="h-12 w-12 rounded-2xl bg-amber-500/10 group-hover:bg-amber-500/20 flex items-center justify-center shrink-0 transition-colors">
-                  <Star className="h-5 w-5 text-amber-600 fill-amber-500" strokeWidth={1.5} />
+                <div className="h-12 w-12 rounded-2xl bg-warning/10 group-hover:bg-warning/20 flex items-center justify-center shrink-0 transition-colors">
+                  <Star className="h-5 w-5 text-warning fill-warning" strokeWidth={1.5} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <p className="text-sm font-semibold text-foreground">Colaboradores favoritos</p>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-warning/10 text-warning">
                       {FAVORITE_AGENCY_IDS.size}
                     </span>
                   </div>
@@ -722,7 +722,7 @@ export function SendEmailDialog({
                         <p className="text-xs font-medium truncate flex items-center gap-1.5">
                           {a.name}
                           {FAVORITE_AGENCY_IDS.has(a.id) && (
-                            <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500 shrink-0" strokeWidth={1.5} />
+                            <Star className="h-2.5 w-2.5 fill-warning text-warning shrink-0" strokeWidth={1.5} />
                           )}
                         </p>
                         <p className="text-[10px] text-muted-foreground truncate">{email}</p>
@@ -780,7 +780,7 @@ export function SendEmailDialog({
             />
 
             {recipientSearch && !inviteCandidate && (
-              <p className="text-[11px] text-amber-700 mb-3">
+              <p className="text-[11px] text-warning mb-3">
                 {recipientPool.some(r => r.email.toLowerCase() === recipientSearch.trim().toLowerCase())
                   ? "Este colaborador ya está en tu lista."
                   : "Introduce un email válido."}
@@ -1060,9 +1060,9 @@ export function SendEmailDialog({
                       ) : recipientMode === "favorites" && audience === "collaborator" ? (
                         // Etiqueta semántica: favoritos
                         <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-foreground">
-                          <Star className="h-3 w-3 text-amber-600 fill-amber-500" strokeWidth={1.5} />
+                          <Star className="h-3 w-3 text-warning fill-warning" strokeWidth={1.5} />
                           {language === "es" ? `Favoritos` : `Favorites`}
-                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-700">{recipientChips.length}</span>
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-warning/20 text-warning">{recipientChips.length}</span>
                         </span>
                       ) : recipientChips.length > 3 ? (
                         // Bulk summary cuando no hay etiqueta semántica pero son muchos.
@@ -1146,7 +1146,7 @@ export function SendEmailDialog({
                             pickerTab === "favorites" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                           )}
                         >
-                          <Star className={cn("h-3 w-3", pickerTab === "favorites" && "fill-amber-500 text-amber-500")} strokeWidth={1.5} />
+                          <Star className={cn("h-3 w-3", pickerTab === "favorites" && "fill-warning text-warning")} strokeWidth={1.5} />
                           {language === "es" ? "Favoritos" : "Favorites"}
                         </button>
                       </div>
@@ -1174,18 +1174,18 @@ export function SendEmailDialog({
                     {inviteCandidate && (
                       <button
                         onClick={handleInviteAndAdd}
-                        className="w-full flex items-center gap-2.5 p-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-colors mb-1 text-left"
+                        className="w-full flex items-center gap-2.5 p-2 rounded-lg bg-warning/10 hover:bg-warning/20 border border-warning/30 transition-colors mb-1 text-left"
                       >
-                        <div className="h-7 w-7 rounded-full bg-amber-500/20 inline-flex items-center justify-center shrink-0">
-                          <UserPlus className="h-3.5 w-3.5 text-amber-700" strokeWidth={2} />
+                        <div className="h-7 w-7 rounded-full bg-warning/20 inline-flex items-center justify-center shrink-0">
+                          <UserPlus className="h-3.5 w-3.5 text-warning" strokeWidth={2} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-medium text-amber-700 truncate">
+                          <p className="text-xs font-medium text-warning truncate">
                             {language === "es" ? "Invitar y enviar a" : "Invite & send to"}
                           </p>
-                          <p className="text-[10px] text-amber-700 truncate">{inviteCandidate}</p>
+                          <p className="text-[10px] text-warning truncate">{inviteCandidate}</p>
                         </div>
-                        <span className="text-[10px] font-semibold text-amber-700 shrink-0">
+                        <span className="text-[10px] font-semibold text-warning shrink-0">
                           {language === "es" ? "Invitación" : "Invite"}
                         </span>
                       </button>
@@ -1228,7 +1228,7 @@ export function SendEmailDialog({
                             <div className="min-w-0 flex-1">
                               <p className="text-xs font-medium truncate flex items-center gap-1.5">
                                 {r.name}
-                                {r.favorite && <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500 shrink-0" strokeWidth={1.5} />}
+                                {r.favorite && <Star className="h-2.5 w-2.5 fill-warning text-warning shrink-0" strokeWidth={1.5} />}
                               </p>
                               <p className="text-[10px] text-muted-foreground truncate">{r.email}</p>
                             </div>

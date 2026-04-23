@@ -419,7 +419,7 @@ export default function AjustesContrasena() {
                   {checks.map((c) => (
                     <li key={c.label} className="flex items-center gap-2 text-[12.5px]">
                       {c.ok
-                        ? <Check className="h-3.5 w-3.5 text-emerald-600" strokeWidth={3} />
+                        ? <Check className="h-3.5 w-3.5 text-success" strokeWidth={3} />
                         : <X className="h-3.5 w-3.5 text-muted-foreground/50" />}
                       <span className={cn(c.ok ? "text-foreground" : "text-muted-foreground")}>
                         {c.label}
@@ -432,7 +432,7 @@ export default function AjustesContrasena() {
 
             <div className="rounded-xl bg-muted/30 border border-border/40 p-3.5 flex items-start gap-3">
               {twoFactorActive ? (
-                <Smartphone className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                <Smartphone className="h-4 w-4 text-success shrink-0 mt-0.5" />
               ) : (
                 <Mail className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
               )}
@@ -472,8 +472,8 @@ export default function AjustesContrasena() {
           <div className="space-y-5">
             {/* Banner según método */}
             {verificationMethod === "totp" ? (
-              <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-4 flex items-start gap-3">
-                <Smartphone className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="rounded-xl bg-success/10 border border-success/30 p-4 flex items-start gap-3">
+                <Smartphone className="h-4 w-4 text-success shrink-0 mt-0.5" />
                 <div className="text-[13px] text-foreground leading-relaxed">
                   <p><strong>Verificación con autenticador.</strong></p>
                   <p className="text-muted-foreground mt-0.5">
@@ -482,8 +482,8 @@ export default function AjustesContrasena() {
                 </div>
               </div>
             ) : (
-              <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-4 flex items-start gap-3">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="rounded-xl bg-success/10 border border-success/30 p-4 flex items-start gap-3">
+                <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
                 <div className="text-[13px] text-foreground leading-relaxed">
                   <p><strong>Código enviado correctamente.</strong></p>
                   <p className="text-muted-foreground mt-0.5">Llega en menos de un minuto. Revisa también la carpeta de spam.</p>
@@ -572,8 +572,8 @@ export default function AjustesContrasena() {
       {step === "done" && (
         <SettingsCard>
           <div className="text-center py-8">
-            <div className="h-14 w-14 mx-auto rounded-2xl bg-emerald-500/15 grid place-items-center mb-4">
-              <CheckCircle2 className="h-7 w-7 text-emerald-600" />
+            <div className="h-14 w-14 mx-auto rounded-2xl bg-success/15 grid place-items-center mb-4">
+              <CheckCircle2 className="h-7 w-7 text-success" />
             </div>
             <p className="text-base font-semibold text-foreground">Contraseña actualizada</p>
             <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">

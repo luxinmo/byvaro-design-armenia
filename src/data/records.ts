@@ -143,6 +143,14 @@ export type Registro = {
   notas?: string;
   /** El agente marca haber obtenido el consentimiento RGPD del cliente. */
   consent: boolean;
+  /** Origen del cliente (solo promotor directo): "Idealista", "Referido",
+   *  "Web propia", etc. Undefined en flujos colaborador (el origen es la
+   *  propia agencia). */
+  origenCliente?: string;
+  /** Huella digital capturada en el momento de crear el registro — quién,
+   *  cuándo, dispositivo, zona horaria, versión de términos aceptada.
+   *  Se populará con `captureFingerprint()` (ver `src/lib/audit.ts`). */
+  audit?: import("@/lib/audit").ActionFingerprint;
 };
 
 /* ═══════════════════════════════════════════════════════════════════

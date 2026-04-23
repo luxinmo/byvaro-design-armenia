@@ -330,11 +330,11 @@ export function ColaboradoresStep({
 
         {/* Aviso si se exige email completo */}
         {state.condicionesRegistro.includes("email_completo") && (
-          <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 flex items-start gap-2.5">
-            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" strokeWidth={1.5} />
-            <div className="text-[11px] text-amber-900 leading-relaxed">
+          <div className="rounded-lg bg-warning/10 border border-warning/25 px-4 py-3 flex items-start gap-2.5">
+            <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" strokeWidth={1.5} />
+            <div className="text-[11px] text-warning leading-relaxed">
               <p className="font-medium mb-0.5">Puedes perder registros</p>
-              <p className="text-amber-800/90">
+              <p className="text-warning/90">
                 No todas las agencias están dispuestas a facilitar el email de sus clientes. Actívalo solo si es imprescindible para tu operativa.
               </p>
             </div>

@@ -15,8 +15,8 @@ function formatPrice(n: number) {
 }
 
 const statusConfig: Record<UnitStatus, { label: string; bg: string; text: string; dot: string; border: string }> = {
-  available: { label: "Disponible", bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", border: "border-emerald-200" },
-  reserved: { label: "Reservada", bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-500", border: "border-amber-200" },
+  available: { label: "Disponible", bg: "bg-success/10", text: "text-success", dot: "bg-success", border: "border-success/25" },
+  reserved: { label: "Reservada", bg: "bg-warning/10", text: "text-warning", dot: "bg-warning", border: "border-warning/25" },
   sold: { label: "Vendida", bg: "bg-blue-50", text: "text-blue-700", dot: "bg-blue-500", border: "border-blue-200" },
   withdrawn: { label: "Retirada", bg: "bg-rose-50", text: "text-rose-700", dot: "bg-rose-500", border: "border-rose-200" },
 };
@@ -75,8 +75,8 @@ export function PromotionAvailabilityFullV2({ promotionId }: { promotionId: stri
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-6 flex-1">
           {[
-            { label: "Disponibles", value: available, color: "text-emerald-600" },
-            { label: "Reservadas", value: reserved, color: "text-amber-600" },
+            { label: "Disponibles", value: available, color: "text-success" },
+            { label: "Reservadas", value: reserved, color: "text-warning" },
             { label: "Vendidas", value: sold, color: "text-blue-600" },
           ].map(s => (
             <button
@@ -232,7 +232,7 @@ export function PromotionAvailabilityFullV2({ promotionId }: { promotionId: stri
                                   {u.hasPool && <Waves className="h-3 w-3 text-blue-500" strokeWidth={1.5} />}
                                   {u.floor >= 3 && <Eye className="h-3 w-3 text-cyan-500" strokeWidth={1.5} />}
                                   {u.garden > 0 && <TreePine className="h-3 w-3 text-green-500" strokeWidth={1.5} />}
-                                  {u.terrace > 0 && <Droplets className="h-3 w-3 text-emerald-500" strokeWidth={1.5} />}
+                                  {u.terrace > 0 && <Droplets className="h-3 w-3 text-success" strokeWidth={1.5} />}
                                 </div>
                               </button>
                             );
@@ -350,7 +350,7 @@ export function PromotionAvailabilityFullV2({ promotionId }: { promotionId: stri
               <div className="grid grid-cols-2 gap-1.5">
                 {[
                   { icon: FileText, label: "Plano", color: "text-violet-600 bg-violet-50 border-violet-200" },
-                  { icon: ImageIcon, label: "Fotos (6)", color: "text-amber-600 bg-amber-50 border-amber-200" },
+                  { icon: ImageIcon, label: "Fotos (6)", color: "text-warning bg-warning/10 border-warning/25" },
                   { icon: Video, label: "Vídeo", color: "text-rose-600 bg-rose-50 border-rose-200" },
                   { icon: Eye, label: "Tour 360°", color: "text-blue-600 bg-blue-50 border-blue-200" },
                 ].map(r => (
