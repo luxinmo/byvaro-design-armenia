@@ -38,6 +38,9 @@ import {
 } from "@/data/leads";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { Building2 } from "lucide-react";
+import { UserSelect } from "@/components/ui/UserSelect";
+import { findTeamMember, memberInitials, getMemberAvatarUrl } from "@/lib/team";
+import { useLeadAssignee, setLeadAssignee } from "@/components/leads/leadAssigneeStorage";
 import { cn } from "@/lib/utils";
 
 function flagOf(code?: string): string {
@@ -225,7 +228,7 @@ export default function Leads() {
                       <th className="px-4 py-2.5 text-left font-semibold">Lead</th>
                       <th className="px-3 py-2.5 text-left font-semibold">Interés</th>
                       <th className="px-3 py-2.5 text-left font-semibold">Recibido</th>
-                      <th className="px-3 py-2.5 text-center font-semibold">Estado</th>
+                      <th className="px-3 py-2.5 text-left font-semibold">Responsable</th>
                       <th className="px-2 py-2.5" />
                     </tr>
                   </thead>
@@ -272,6 +275,16 @@ function LeadRow({
             <p className="text-sm font-semibold text-foreground truncate flex items-center gap-1.5">
               {l.nationality && <span className="text-base leading-none">{flagOf(l.nationality)}</span>}
               {l.fullName}
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 text-[9.5px] font-medium rounded-full px-1.5 py-0.5",
+                  status.badgeClass,
+                )}
+                title={status.label}
+              >
+                <span className={cn("h-1 w-1 rounded-full", status.dotClass)} />
+                {status.label}
+              </span>
               {isDup && (
                 <span
                   className="inline-flex items-center gap-0.5 text-[9.5px] font-bold text-destructive bg-destructive/10 border border-destructive/25 rounded-full px-1.5 py-0.5"
@@ -330,19 +343,11 @@ function LeadRow({
         <p className="text-[10.5px] text-muted-foreground mt-0.5">
           {leadSourceLabel[l.source]}
         </p>
-        {l.assignedTo && (
-          <p className="text-[10px] text-muted-foreground/80 mt-0.5 truncate max-w-[140px]">
-            → {l.assignedTo.name}
-          </p>
-        )}
       </td>
 
-      {/* Estado */}
-      <td className="px-3 py-3 text-center align-middle">
-        <span className={cn("inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-2 py-0.5", status.badgeClass)}>
-          <span className={cn("h-1.5 w-1.5 rounded-full", status.dotClass)} />
-          {status.label}
-        </span>
+      {/* Responsable · único · clic abre el selector de miembros */}
+      <td className="px-3 py-3 align-middle" onClick={(e) => e.stopPropagation()}>
+        <AssigneeCell lead={l} />
       </td>
 
       {/* Kebab */}
@@ -421,6 +426,96 @@ function KpiChip({
         <Icon className="h-3.5 w-3.5 opacity-70" strokeWidth={1.75} />
       </div>
       <p className="text-xl font-bold tabular-nums leading-tight mt-1">{value}</p>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CELDA RESPONSABLE · único asignado + opción de añadir/cambiar/quitar
+   ═══════════════════════════════════════════════════════════════════ */
+
+function AssigneeCell({ lead }: { lead: Lead }) {
+  // Override del usuario (localStorage) tiene prioridad sobre el seed.
+  const override = useLeadAssignee(lead.id);
+
+  // Si hay override → ese es el miembro. Si no y el seed tiene
+  // `assignedTo.email`, intentamos casarlo con TEAM_MEMBERS por email
+  // (mejor que por nombre · es único).
+  const seedMember = lead.assignedTo?.email
+    ? findTeamMember(lead.assignedTo.email) // findTeamMember acepta id o email
+    : undefined;
+  const memberId = override ?? seedMember?.id ?? null;
+  const member = memberId ? findTeamMember(memberId) : undefined;
+
+  const handleChange = (newId: string) => {
+    setLeadAssignee(lead.id, newId);
+    toast.success(`Asignado a ${findTeamMember(newId)?.name ?? "miembro"}`);
+  };
+
+  if (!member) {
+    // Sin asignar → botón "+ Asignar" que abre el selector canónico.
+    return (
+      <div className="inline-flex">
+        <UserSelect
+          value={null}
+          onChange={handleChange}
+          placeholder="+ Asignar responsable"
+          onlyActive
+        />
+      </div>
+    );
+  }
+
+  // Asignado → avatar + nombre + icono de cambio.  Al hacer click se
+  // abre el mismo UserSelect (muestra checked en el actual) permitiendo
+  // elegir otro miembro o quitar.
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      {getMemberAvatarUrl(member) ? (
+        <img src={getMemberAvatarUrl(member)!} alt="" className="h-6 w-6 rounded-full object-cover shrink-0" />
+      ) : (
+        <div className="h-6 w-6 rounded-full bg-muted grid place-items-center text-[9.5px] font-bold text-foreground shrink-0">
+          {memberInitials(member)}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="text-[11.5px] font-medium text-foreground truncate max-w-[130px]">{member.name}</p>
+        {member.jobTitle && (
+          <p className="text-[10px] text-muted-foreground truncate max-w-[130px]">{member.jobTitle}</p>
+        )}
+      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="h-6 w-6 inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors shrink-0"
+            aria-label="Cambiar responsable"
+          >
+            <MoreVertical className="h-3 w-3" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48 p-1.5">
+          <div className="px-1 pb-1.5">
+            <UserSelect
+              value={memberId}
+              onChange={(id) => {
+                handleChange(id);
+              }}
+              placeholder="Cambiar responsable"
+              onlyActive
+            />
+          </div>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => {
+              setLeadAssignee(lead.id, null);
+              toast.success("Responsable quitado");
+            }}
+            className="gap-2 text-xs text-destructive focus:text-destructive"
+          >
+            Quitar asignación
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
