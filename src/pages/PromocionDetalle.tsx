@@ -631,11 +631,39 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                       </span>
                     );
                   }
+                  /* Badge "Publicada" clicable · al pulsar permite al
+                     promotor retirar la publicación (convertir en "Solo
+                     uso interno"). Las agencias dejan de verla, pero
+                     las que tengan ventas/visitas en curso mantienen
+                     acceso hasta cerrarlas. */
                   return (
-                    <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-success/30 bg-success/10 text-success text-[11px] font-semibold">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: "¿Despublicar la promoción?",
+                          description:
+                            "Los colaboradores dejarán de verla en su listado y no podrán crear nuevos registros ni visitas. " +
+                            "Los que ya tengan ventas o visitas en curso mantendrán acceso a la ficha hasta cerrarlas. " +
+                            "Podrás volver a publicarla en cualquier momento.",
+                          confirmLabel: "Despublicar",
+                          cancelLabel: "Cancelar",
+                          variant: "destructive",
+                        });
+                        if (!ok) return;
+                        setCanShareOverride(false);
+                        toast.success("Promoción despublicada", {
+                          description: `${p.name} ya no es visible para nuevos colaboradores.`,
+                        });
+                        // TODO(backend): PATCH /api/promociones/:id { canShareWithAgencies: false }
+                      }}
+                      className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-success/30 bg-success/10 text-success text-[11px] font-semibold hover:bg-success/20 hover:border-success/50 transition-colors cursor-pointer"
+                      title="Click para despublicar la promoción"
+                    >
                       <span className="h-1.5 w-1.5 rounded-full bg-success" />
                       Publicada
-                    </span>
+                      <ChevronDown className="h-3 w-3 opacity-60" strokeWidth={2} />
+                    </button>
                   );
                 }
                 return (
