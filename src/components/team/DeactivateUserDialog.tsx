@@ -29,10 +29,11 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
-  getMemberInventory, getActiveAssignees,
+  getMemberInventory,
   type AssetCategory, type AssetInventoryItem, type HandoverPlan,
 } from "@/lib/assetOwnership";
-import type { TeamMember } from "@/lib/team";
+import { TEAM_MEMBERS, type TeamMember } from "@/lib/team";
+import { UserSelect } from "@/components/ui/UserSelect";
 import { cn } from "@/lib/utils";
 
 const ICON_BY_CATEGORY: Record<AssetCategory, React.ComponentType<{ className?: string }>> = {
@@ -58,10 +59,8 @@ export function DeactivateUserDialog({ open, onClose, member, onConfirm }: Props
     () => (member ? getMemberInventory(member.id) : []),
     [member],
   );
-  const assignees = useMemo(
-    () => (member ? getActiveAssignees(member.id) : []),
-    [member],
-  );
+  /** Ids a excluir del UserSelect: el propio miembro que se desactiva. */
+  const excludeIds = useMemo(() => (member ? [member.id] : []), [member]);
 
   const [reassignments, setReassignments] = useState<Partial<Record<AssetCategory, string>>>({});
   const [bulkTarget, setBulkTarget] = useState<string>("");
@@ -129,19 +128,17 @@ export function DeactivateUserDialog({ open, onClose, member, onConfirm }: Props
             <>
               {/* Atajo · asignar todo al mismo */}
               <div className="rounded-xl border border-border bg-muted/20 p-3">
-                <label className="block">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground inline-flex items-center gap-1.5">
-                    <UserCheck className="h-3 w-3" />
-                    Asignar todo a un miembro (atajo)
-                  </span>
-                  <AssigneeSelect
-                    value={bulkTarget}
-                    onChange={applyBulk}
-                    assignees={assignees}
-                    placeholder="Selecciona un miembro…"
-                    className="mt-2"
-                  />
-                </label>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground inline-flex items-center gap-1.5 mb-2">
+                  <UserCheck className="h-3 w-3" />
+                  Asignar todo a un miembro (atajo)
+                </p>
+                <UserSelect
+                  value={bulkTarget || null}
+                  onChange={applyBulk}
+                  placeholder="Selecciona un miembro…"
+                  excludeIds={excludeIds}
+                  onlyActive
+                />
               </div>
 
               {/* Inventario por categoría */}
@@ -154,7 +151,7 @@ export function DeactivateUserDialog({ open, onClose, member, onConfirm }: Props
                     key={item.category}
                     item={item}
                     fromMember={member}
-                    assignees={assignees}
+                    excludeIds={excludeIds}
                     value={reassignments[item.category] ?? ""}
                     onChange={(id) => setFor(item.category, id)}
                   />
@@ -213,16 +210,20 @@ export function DeactivateUserDialog({ open, onClose, member, onConfirm }: Props
    ═══════════════════════════════════════════════════════════════════ */
 
 function InventoryRow({
-  item, fromMember, assignees, value, onChange,
+  item, fromMember, excludeIds, value, onChange,
 }: {
   item: AssetInventoryItem;
   fromMember: TeamMember;
-  assignees: ReturnType<typeof getActiveAssignees>;
+  excludeIds: string[];
   value: string;
   onChange: (id: string) => void;
 }) {
   const Icon = ICON_BY_CATEGORY[item.category];
-  const assignee = assignees.find((a) => a.id === value);
+  /* Avisos post-asignación · resolvemos el nombre con findTeamMember
+   * para que sea consistente con lo que pinta el UserSelect. */
+  const assigneeName = value
+    ? TEAM_MEMBERS.find((m) => m.id === value)?.name
+    : undefined;
 
   return (
     <div className="rounded-xl border border-border bg-card p-3">
@@ -251,56 +252,27 @@ function InventoryRow({
         </div>
       </div>
       <div className="flex items-center gap-2 pl-[48px]">
-        <span className="text-[11px] text-muted-foreground truncate">
+        <span className="text-[11px] text-muted-foreground truncate shrink-0">
           {fromMember.name}
         </span>
         <ArrowRight className="h-3 w-3 text-muted-foreground/60 shrink-0" />
-        <AssigneeSelect
-          value={value}
-          onChange={onChange}
-          assignees={assignees}
-          placeholder="Elige miembro…"
-          className="flex-1 min-w-0"
-        />
+        <div className="flex-1 min-w-0">
+          <UserSelect
+            value={value || null}
+            onChange={onChange}
+            placeholder="Elige miembro…"
+            excludeIds={excludeIds}
+            onlyActive
+          />
+        </div>
       </div>
-      {assignee && (
+      {assigneeName && (
         <p className="text-[10px] text-muted-foreground/80 italic mt-1.5 pl-[48px]">
           {item.autoDelegated
-            ? `Los emails entrantes se reenvían a ${assignee.name} durante 6 meses.`
-            : `${item.count} ${item.count === 1 ? "elemento pasará" : "elementos pasarán"} a ${assignee.name} con "Heredado de ${fromMember.name}" en su historial.`}
+            ? `Los emails entrantes se reenvían a ${assigneeName} durante 6 meses.`
+            : `${item.count} ${item.count === 1 ? "elemento pasará" : "elementos pasarán"} a ${assigneeName} con "Heredado de ${fromMember.name}" en su historial.`}
         </p>
       )}
     </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   AssigneeSelect · dropdown de miembros activos
-   ═══════════════════════════════════════════════════════════════════ */
-
-function AssigneeSelect({
-  value, onChange, assignees, placeholder, className,
-}: {
-  value: string;
-  onChange: (id: string) => void;
-  assignees: ReturnType<typeof getActiveAssignees>;
-  placeholder: string;
-  className?: string;
-}) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={cn(
-        "h-9 px-3 rounded-xl border border-border bg-card text-sm outline-none focus:border-primary transition-colors",
-        !value && "text-muted-foreground",
-        className,
-      )}
-    >
-      <option value="">{placeholder}</option>
-      {assignees.map((a) => (
-        <option key={a.id} value={a.id}>{a.name}</option>
-      ))}
-    </select>
   );
 }
