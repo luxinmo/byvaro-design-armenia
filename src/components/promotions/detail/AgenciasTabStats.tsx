@@ -13,7 +13,7 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  BarChart3, ArrowUpRight, Users, MailPlus, Inbox, Plus, TrendingUp,
+  BarChart3, ArrowUpRight, Users, Inbox, Plus, TrendingUp,
   Eye, FileText, Home,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -104,13 +104,6 @@ export function AgenciasTabStats({ promotion: p, canShare, onInvitar, onOpenStat
           >
             <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.75} />
             Detalle
-          </button>
-          <button
-            onClick={() => navigate("/colaboradores/estadisticas")}
-            className="inline-flex items-center gap-1 h-8 px-3 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          >
-            Estadísticas generales
-            <ArrowUpRight className="h-3 w-3" strokeWidth={1.75} />
           </button>
           {canShare && (
             <button
