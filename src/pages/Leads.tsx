@@ -111,9 +111,16 @@ export default function Leads() {
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Comercial
               </p>
-              <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight text-foreground mt-1 leading-tight">
-                Leads
-              </h1>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-1">
+                <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight text-foreground leading-tight">
+                  Leads
+                </h1>
+                {/* Pill informativo · email único del workspace al que los
+                   portales (Idealista, Fotocasa…) pueden reenviar leads para
+                   crear entradas automáticas. Mock: hardcoded hoy · en real
+                   vendrá del endpoint /api/workspace/leads-inbox. */}
+                <LeadsInboxHint />
+              </div>
               <p className="text-sm text-muted-foreground mt-1.5 max-w-[640px] leading-relaxed">
                 Bandeja de entrada con todos los potenciales compradores · IA marca duplicados.
               </p>
@@ -517,5 +524,55 @@ function AssigneeCell({ lead }: { lead: Lead }) {
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   HINT · email del workspace para conectar portales
+   ═══════════════════════════════════════════════════════════════════
+   Los portales inmobiliarios (Idealista, Fotocasa, Habitaclia…) tienen
+   un campo para reenviar automáticamente los emails de contacto de
+   cada anuncio. Cada workspace recibe un email único que ingesta esos
+   mensajes, los parsea y crea el `Lead` correspondiente.
+
+   TODO(backend):
+     · GET /api/workspace/leads-inbox → { address, portalsConnected[] }
+     · El address se genera al crear el workspace y nunca cambia.
+     · En `/ajustes/canales/portales` se listan los portales activos y
+       su último email recibido. */
+function LeadsInboxHint() {
+  // Mock: en real esto viene del workspace actual del usuario.
+  const inbox = "leads@luxinmo.byvaro.app";
+
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(inbox);
+      toast.success("Email copiado al portapapeles");
+    } catch {
+      toast.error("No se pudo copiar · cópialo a mano");
+    }
+  };
+
+  return (
+    <button
+      onClick={onCopy}
+      className="inline-flex items-center gap-2 h-8 pl-2.5 pr-1 rounded-full border border-dashed border-border bg-muted/40 hover:bg-muted transition-colors shadow-soft group"
+      title="Haz clic para copiar · añade este email a los portales (Idealista, Fotocasa…) para recibir los leads automáticamente"
+    >
+      <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" strokeWidth={1.75} />
+      <span className="text-[11.5px] text-muted-foreground hidden md:inline">
+        Añade este email a los portales para recibir los leads automáticamente ·
+      </span>
+      <span className="text-[11.5px] text-muted-foreground md:hidden">
+        Email inbox ·
+      </span>
+      <code className="text-[11.5px] font-mono text-foreground tabular-nums">{inbox}</code>
+      <span
+        className="h-6 w-6 inline-flex items-center justify-center rounded-full bg-card border border-border shrink-0 group-hover:bg-foreground group-hover:text-background transition-colors"
+        aria-label="Copiar email"
+      >
+        <Copy className="h-3 w-3" strokeWidth={2} />
+      </span>
+    </button>
   );
 }
