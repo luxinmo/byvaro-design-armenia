@@ -1286,15 +1286,17 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                                   <DropdownMenuItem onClick={() => toggleExpandUnit(u.id)} className="gap-2 text-xs">
                                     <Eye className="h-3.5 w-3.5" /> Ver
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    disabled={u.status !== "available"}
-                                    onClick={() => onEditUnit
-                                      ? onEditUnit(u.id)
-                                      : toast({ title: "Editar unidad", description: getUnitDisplayId(u) })}
-                                    className="gap-2 text-xs"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" /> Editar
-                                  </DropdownMenuItem>
+                                  {!isCollaboratorView && (
+                                    <DropdownMenuItem
+                                      disabled={u.status !== "available"}
+                                      onClick={() => onEditUnit
+                                        ? onEditUnit(u.id)
+                                        : toast({ title: "Editar unidad", description: getUnitDisplayId(u) })}
+                                      className="gap-2 text-xs"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" /> Editar
+                                    </DropdownMenuItem>
+                                  )}
                                   <DropdownMenuItem
                                     disabled={u.status !== "available"}
                                     onClick={() => setEmailUnitId(u.id)}
@@ -1302,13 +1304,15 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                                   >
                                     <Send className="h-3.5 w-3.5" /> Enviar por email
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    disabled={u.status !== "available"}
-                                    onClick={() => toast({ title: "Iniciar compra", description: `Operación para ${getUnitDisplayId(u)}` })}
-                                    className="gap-2 text-xs"
-                                  >
-                                    <ShoppingCart className="h-3.5 w-3.5" /> Iniciar compra
-                                  </DropdownMenuItem>
+                                  {!isCollaboratorView && (
+                                    <DropdownMenuItem
+                                      disabled={u.status !== "available"}
+                                      onClick={() => toast({ title: "Iniciar compra", description: `Operación para ${getUnitDisplayId(u)}` })}
+                                      className="gap-2 text-xs"
+                                    >
+                                      <ShoppingCart className="h-3.5 w-3.5" /> Iniciar compra
+                                    </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </td>

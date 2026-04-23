@@ -28,6 +28,10 @@ export type UserProfile = {
   fullName: string;
   email: string;
   jobTitle?: string;
+  /** Departamento (Comercial, Operaciones, Admin…) */
+  department?: string;
+  /** Idiomas que habla · usado para asignar leads por idioma del cliente. */
+  languages?: string[];
   bio?: string;
   /** Data URL (png/jpg) hasta que haya storage real. */
   avatar?: string;

@@ -33,6 +33,8 @@ export type CurrentUser = {
   /** Datos editables desde `/ajustes/perfil/personal` (ver profileStorage.ts).
    *  Se sobreescriben sobre el mock base cuando el usuario los edita. */
   jobTitle?: string;
+  department?: string;
+  languages?: string[];
   bio?: string;
   avatar?: string;
 };
@@ -71,11 +73,13 @@ export function useCurrentUser(): CurrentUser {
     if (type === "agency") return buildAgencyUser(agencyId);
     return {
       ...DEVELOPER_USER,
-      name:     profile?.fullName  ?? DEVELOPER_USER.name,
-      email:    profile?.email     ?? DEVELOPER_USER.email,
-      jobTitle: profile?.jobTitle,
-      bio:      profile?.bio,
-      avatar:   profile?.avatar,
+      name:       profile?.fullName  ?? DEVELOPER_USER.name,
+      email:      profile?.email     ?? DEVELOPER_USER.email,
+      jobTitle:   profile?.jobTitle,
+      department: profile?.department,
+      languages:  profile?.languages,
+      bio:        profile?.bio,
+      avatar:     profile?.avatar,
     };
   }, [type, agencyId, profile]);
 }

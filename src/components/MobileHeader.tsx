@@ -151,9 +151,17 @@ export function MobileHeader() {
                   onClick={() => setOpen(false)}
                   className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-sidebar-accent/40 transition-colors"
                 >
-                  <div className="h-9 w-9 rounded-full bg-primary/15 text-primary grid place-items-center font-semibold text-[11px] shrink-0">
-                    {userInitials}
-                  </div>
+                  {currentUser.avatar ? (
+                    <img
+                      src={currentUser.avatar}
+                      alt=""
+                      className="h-9 w-9 rounded-full object-cover shrink-0"
+                    />
+                  ) : (
+                    <div className="h-9 w-9 rounded-full bg-primary/15 text-primary grid place-items-center font-semibold text-[11px] shrink-0">
+                      {userInitials}
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="text-[13px] font-semibold text-sidebar-foreground truncate leading-tight">
                       {currentUser.name}

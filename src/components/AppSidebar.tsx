@@ -258,14 +258,22 @@ export function AppSidebar() {
               collapsed ? "justify-center py-2" : "gap-3 px-2 py-2",
             )}
           >
-            <div className="w-8 h-8 rounded-full bg-primary/15 text-primary grid place-items-center font-semibold text-xs tnum shrink-0">
-              {currentUser.name
-                .split(" ")
-                .map((p) => p[0])
-                .slice(0, 2)
-                .join("")
-                .toUpperCase()}
-            </div>
+            {currentUser.avatar ? (
+              <img
+                src={currentUser.avatar}
+                alt=""
+                className="w-8 h-8 rounded-full object-cover shrink-0"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-primary/15 text-primary grid place-items-center font-semibold text-xs tnum shrink-0">
+                {currentUser.name
+                  .split(" ")
+                  .map((p) => p[0])
+                  .slice(0, 2)
+                  .join("")
+                  .toUpperCase()}
+              </div>
+            )}
             {!collapsed && (
               <>
                 <div className="text-left min-w-0 flex-1">
