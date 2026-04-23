@@ -91,8 +91,13 @@ export type Contact = {
   /** Idiomas que habla (códigos ISO o nombres cortos). */
   languages?: string[];
   /** Código ISO 3166-1 alpha-2 del país de nacionalidad (ES, AE, GB…).
-   *  Se renderiza con <Flag iso={nationalityIso} /> — regla CLAUDE.md §🧱. */
+   *  Se renderiza con <Flag iso={nationalityIso} /> al lado del nombre
+   *  — nunca sustituyendo al avatar. Regla CLAUDE.md §🧱. */
   nationalityIso?: string;
+  /** Avatar del contacto (foto subida por el admin). Data URL (JPEG)
+   *  vía PhotoCropModal. Si no hay, se usan iniciales. Persistido en
+   *  localStorage `byvaro.contact.<id>.avatar.v1`. */
+  avatarUrl?: string;
   /** Notas internas cortas — preview en el listado. */
   notes?: string;
   /** Propietario del contacto. Si `ownerAgencyId` está puesto, el
