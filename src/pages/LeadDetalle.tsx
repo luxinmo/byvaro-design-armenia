@@ -73,20 +73,21 @@ export default function LeadDetalle() {
 
   const lead = useMemo(() => leads.find((l) => l.id === id), [id]);
 
-  /* Tabs del cuerpo · deep-linkables vía ?tab= */
+  /* Tabs del cuerpo · deep-linkables vía ?tab=. 'actividad' es el
+     default — concentra el evento de entrada + timeline y es donde
+     vive el trabajo diario del comercial. */
   const [searchParams, setSearchParams] = useSearchParams();
   const tabs = [
-    { id: "resumen",    label: "Resumen",    icon: Sparkles },
     { id: "actividad",  label: "Actividad",  icon: HistoryIcon },
     { id: "emails",     label: "Emails",     icon: Mail },
     { id: "documentos", label: "Documentos", icon: FileText },
     { id: "registros",  label: "Registros",  icon: Receipt },
   ] as const;
   type TabId = typeof tabs[number]["id"];
-  const activeTab: TabId = (searchParams.get("tab") as TabId) ?? "resumen";
+  const activeTab: TabId = (searchParams.get("tab") as TabId) ?? "actividad";
   const setTab = (t: TabId) => {
     const next = new URLSearchParams(searchParams);
-    if (t === "resumen") next.delete("tab"); else next.set("tab", t);
+    if (t === "actividad") next.delete("tab"); else next.set("tab", t);
     setSearchParams(next, { replace: true });
   };
 
@@ -229,17 +230,10 @@ export default function LeadDetalle() {
                 </div>
               </div>
 
-              {/* CTAs */}
+              {/* CTAs · Llamar/Email/WhatsApp viven abajo del nombre
+                 como pills clicables (mismo patrón que el contacto).
+                 Aquí solo queda la acción destructiva. */}
               <div className="flex items-center gap-2 flex-wrap shrink-0">
-                <CTAPill icon={Phone} label="Llamar"
-                  onClick={() => toast.success(`Llamando a ${lead.phone}`)}
-                />
-                <CTAPill icon={Mail} label="Email"
-                  onClick={() => toast.success(`Email a ${lead.email}`)}
-                />
-                <CTAPill icon={MessageCircle} label="WhatsApp"
-                  onClick={() => toast.success(`WhatsApp a ${lead.phone}`)}
-                />
                 <CTAPill
                   icon={XCircle} label="Descartar" danger
                   disabled={lead.status === "perdida" || lead.status === "duplicate"}
@@ -290,33 +284,11 @@ export default function LeadDetalle() {
           {/* ─── Columna izquierda · 2/3 ─── */}
           <div className="lg:col-span-2 space-y-4">
 
-            {activeTab === "resumen" && (
+            {activeTab === "actividad" && (
               <>
-                {/* Resumen · vista limpia con lo esencial para el
-                   comercial. El detalle de entrada vive en el tab
-                   Actividad (foto + mensaje + preguntas del sistema). */}
-                <Section title="Resumen de la oportunidad">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <MiniFact label="Etapa" value={status.label} />
-                    <MiniFact label="Origen" value={leadSourceLabel[lead.source]} />
-                    <MiniFact label="Recibido" value={relativeTime(lead.createdAt)} />
-                  </div>
-                  {qualif && (
-                    <div className="mt-4 pt-4 border-t border-border/50">
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
-                        Cualificación del comercial
-                      </p>
-                      <p className="text-[12.5px] text-foreground">
-                        {qualif === "no" && "Marcado como no-lead."}
-                        {qualif === "yes" && "Confirmado como lead · seguir trabajando."}
-                        {qualif === "interest" && "Con interés · oportunidad viva."}
-                      </p>
-                    </div>
-                  )}
-                </Section>
-
-                {/* Match de duplicados · sigue en Resumen porque es una
-                   alerta de la IA que afecta al tratamiento del lead. */}
+                {/* Match de duplicados · alerta de la IA que se muestra
+                   arriba del todo cuando aplica. Antes vivía en el tab
+                   Resumen · Resumen se ha eliminado. */}
                 {isDup && (
                   <section className="rounded-2xl border border-destructive/25 bg-destructive/5 p-5 shadow-soft">
                     <header className="flex items-start gap-3 mb-4">
@@ -360,28 +332,26 @@ export default function LeadDetalle() {
                     </div>
                   </section>
                 )}
+
+                <Section title="Actividad">
+                  {/* Primer evento · entrada del lead. Si aún no se ha
+                     cualificado, se muestra expandido con foto 125px,
+                     mensaje y 3 botones del sistema. Al responder se
+                     colapsa: queda línea pequeña "usuario consideró que
+                     es lead" y el mensaje sigue visible. */}
+                  <LeadEntryEvent
+                    lead={lead}
+                    promo={promo}
+                    qualif={qualif}
+                    onQualif={onQualif}
+                  />
+
+                  <hr className="my-4 border-border/50" />
+
+                  {/* Timeline normal debajo */}
+                  <Timeline lead={lead} />
+                </Section>
               </>
-            )}
-
-            {activeTab === "actividad" && (
-              <Section title="Actividad">
-                {/* Primer evento · entrada del lead. Si aún no se ha
-                   cualificado, se muestra expandido con foto 125px,
-                   mensaje y 3 botones del sistema. Al responder se
-                   colapsa: queda línea pequeña "usuario consideró que
-                   es lead" y el mensaje sigue visible. */}
-                <LeadEntryEvent
-                  lead={lead}
-                  promo={promo}
-                  qualif={qualif}
-                  onQualif={onQualif}
-                />
-
-                <hr className="my-4 border-border/50" />
-
-                {/* Timeline normal debajo */}
-                <Timeline lead={lead} />
-              </Section>
             )}
 
             {activeTab === "emails" && (
