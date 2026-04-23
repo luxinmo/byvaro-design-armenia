@@ -1010,8 +1010,16 @@ export default function Promociones() {
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground/60 min-w-0">
                         {(() => {
                           const realAgencies = countAgenciesForPromotion(p.id);
-                          return realAgencies > 0 && (
-                            <span className="text-foreground/70 flex items-center gap-1">
+                          /* Se muestra siempre · 0 también es información
+                             (significa que la promoción aún no tiene
+                             colaboradores). Si es 0 se tiñe en gris
+                             para que no compita visualmente con
+                             promociones con tracción. */
+                          return (
+                            <span className={cn(
+                              "flex items-center gap-1",
+                              realAgencies > 0 ? "text-foreground/70" : "text-muted-foreground/60",
+                            )}>
                               <Users className="h-3.5 w-3.5 xl:h-3 xl:w-3" />
                               {realAgencies} {realAgencies === 1 ? "agencia" : "agencias"}
                             </span>
@@ -1562,8 +1570,14 @@ function PromoCardCompact({ promo: p, isTrending }: { promo: DevPromotion; isTre
           <span className="text-muted-foreground"><span className="font-semibold text-foreground tnum">{p.commission}%</span> com.</span>
           {(() => {
             const realAgencies = countAgenciesForPromotion(p.id);
-            return realAgencies > 0 && (
-              <span className="text-muted-foreground inline-flex items-center gap-1">
+            return (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1",
+                  realAgencies > 0 ? "text-muted-foreground" : "text-muted-foreground/60",
+                )}
+                title={`${realAgencies} ${realAgencies === 1 ? "agencia colaborando" : "agencias colaborando"}`}
+              >
                 <Users className="h-3 w-3" /> <span className="tnum">{realAgencies}</span>
               </span>
             );
