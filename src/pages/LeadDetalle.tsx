@@ -28,6 +28,8 @@ import {
   leads, leadStatusConfig, leadSourceLabel,
   type Lead, type LeadStatus,
 } from "@/data/leads";
+import { promotions } from "@/data/promotions";
+import { Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function flagOf(code?: string): string {
@@ -86,6 +88,9 @@ export default function LeadDetalle() {
 
   const status = leadStatusConfig[lead.status];
   const isDup = lead.status === "duplicate" || (lead.duplicateScore ?? 0) >= 70;
+  const promo = lead.interest.promotionId
+    ? promotions.find((p) => p.id === lead.interest.promotionId)
+    : undefined;
 
   return (
     <div className="flex flex-col min-h-full bg-background pb-12">
@@ -148,6 +153,35 @@ export default function LeadDetalle() {
                       </>
                     )}
                   </p>
+
+                  {/* Promoción/propiedad referenciada · spec §B.1
+                     "related property or promotion · image thumbnail if reference exists". */}
+                  {promo && (
+                    <Link
+                      to={`/promociones/${promo.id}`}
+                      className="mt-2 inline-flex items-center gap-2.5 rounded-xl border border-border bg-card pl-1 pr-3 py-1 hover:bg-muted transition-colors shadow-soft max-w-full"
+                      title={`Ir a la promoción · ${promo.name}`}
+                    >
+                      {/* Thumbnail · mismo tamaño que Disponibilidad
+                          (w-[80px] h-[54px]). */}
+                      <span className="w-[80px] h-[54px] rounded-md bg-muted/30 overflow-hidden shrink-0 grid place-items-center">
+                        {promo.image ? (
+                          <img src={promo.image} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <Building2 className="h-4 w-4 text-muted-foreground/60" strokeWidth={1.5} />
+                        )}
+                      </span>
+                      <span className="min-w-0">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground leading-none">
+                          Promoción referenciada
+                        </p>
+                        <p className="text-[13px] font-semibold text-foreground truncate max-w-[260px] leading-tight mt-0.5">
+                          {promo.name}
+                        </p>
+                      </span>
+                      <ExternalLink className="h-3 w-3 text-muted-foreground/60 shrink-0" strokeWidth={1.75} />
+                    </Link>
+                  )}
                 </div>
               </div>
 

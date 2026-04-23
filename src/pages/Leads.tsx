@@ -36,6 +36,8 @@ import {
   leads as allLeads, leadStatusConfig, leadSourceLabel,
   type Lead, type LeadStatus,
 } from "@/data/leads";
+import { promotions } from "@/data/promotions";
+import { Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function flagOf(code?: string): string {
@@ -110,8 +112,7 @@ export default function Leads() {
                 Leads
               </h1>
               <p className="text-sm text-muted-foreground mt-1.5 max-w-[640px] leading-relaxed">
-                Bandeja de entrada con todos los potenciales compradores antes de pasar
-                a registro. La IA marca los duplicados para que no se pierda tiempo.
+                Bandeja de entrada con todos los potenciales compradores · IA marca duplicados.
               </p>
             </div>
           </div>
@@ -288,21 +289,37 @@ function LeadRow({
         </div>
       </td>
 
-      {/* Interés · promoción + tipología + presupuesto */}
+      {/* Interés · thumbnail + promoción + tipología + presupuesto */}
       <td className="px-3 py-3 align-top">
-        <p className="text-xs font-medium text-foreground truncate max-w-[240px]">
-          {l.interest.promotionName ?? "—"}
-        </p>
-        <p className="text-[11px] text-muted-foreground truncate">
-          {[
-            l.interest.tipologia,
-            l.interest.dormitorios && `${l.interest.dormitorios} dorm.`,
-          ].filter(Boolean).join(" · ")}
-        </p>
-        <p className="text-[11px] text-muted-foreground tabular-nums">
-          {formatPrice(l.interest.presupuestoMax)}
-          {l.interest.zona && <span className="text-muted-foreground/60"> · {l.interest.zona}</span>}
-        </p>
+        <div className="flex items-start gap-2.5 min-w-0">
+          {/* Thumbnail de la promoción referenciada · mismo tamaño que las
+              miniaturas del catálogo de Disponibilidad
+              (`PromotionAvailabilityFull.tsx` · w-[80px] h-[54px]). */}
+          <div className="w-[80px] h-[54px] rounded-md bg-muted/30 grid place-items-center shrink-0 overflow-hidden">
+            {(() => {
+              const promo = promotions.find((p) => p.id === l.interest.promotionId);
+              if (promo?.image) {
+                return <img src={promo.image} alt="" className="w-full h-full object-cover" loading="lazy" />;
+              }
+              return <Building2 className="h-4 w-4 text-muted-foreground/60" strokeWidth={1.5} />;
+            })()}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-foreground truncate max-w-[220px]">
+              {l.interest.promotionName ?? "—"}
+            </p>
+            <p className="text-[11px] text-muted-foreground truncate">
+              {[
+                l.interest.tipologia,
+                l.interest.dormitorios && `${l.interest.dormitorios} dorm.`,
+              ].filter(Boolean).join(" · ")}
+            </p>
+            <p className="text-[11px] text-muted-foreground tabular-nums">
+              {formatPrice(l.interest.presupuestoMax)}
+              {l.interest.zona && <span className="text-muted-foreground/60"> · {l.interest.zona}</span>}
+            </p>
+          </div>
+        </div>
       </td>
 
       {/* Origen */}
