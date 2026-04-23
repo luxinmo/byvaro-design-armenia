@@ -30,7 +30,7 @@
 import { useMemo, useState } from "react";
 import {
   Search, MoreVertical, Eye, EyeOff, Pencil, Send, ShoppingCart, Car, Archive,
-  Plus, Trash2, PackageX, RotateCcw,
+  Trash2, PackageX, RotateCcw,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
@@ -148,16 +148,6 @@ export function PromotionAnejosTable({
               <option value="withdrawn">Retirado</option>
             </select>
           )}
-          {!isCollaboratorView && onAddAnejo && (
-            <button
-              type="button"
-              onClick={onAddAnejo}
-              className="ml-auto inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full bg-foreground text-background text-xs font-medium shadow-soft hover:opacity-90 transition-opacity"
-            >
-              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-              Añadir {tipo === "parking" ? "parking" : "trastero"}
-            </button>
-          )}
         </div>
         {/* Nota cuando hay anejos ocultos a agencias */}
         {!isCollaboratorView && totals.hiddenToAgencies > 0 && (
@@ -167,18 +157,6 @@ export function PromotionAnejosTable({
           </p>
         )}
       </div>
-
-      {/* CTA Añadir en móvil */}
-      {!isCollaboratorView && onAddAnejo && (
-        <button
-          type="button"
-          onClick={onAddAnejo}
-          className="sm:hidden w-full inline-flex items-center justify-center gap-1.5 h-10 rounded-full bg-foreground text-background text-xs font-medium shadow-soft"
-        >
-          <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-          Añadir {tipo === "parking" ? "parking" : "trastero"}
-        </button>
-      )}
 
       {/* Tabla */}
       {filtered.length === 0 ? (

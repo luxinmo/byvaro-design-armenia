@@ -38,11 +38,15 @@
  *     aparecen aquí (ej. precio medio por m², tiempo medio en mercado).
  */
 
+import { useState } from "react";
 import { unitsByPromotion } from "@/data/units"; // Mock inventory (reemplazar por API)
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Plus } from "lucide-react";
 // Button: primitiva Byvaro. Mantener el import aunque no se use directamente — se
 // conserva por paridad con el archivo original y para futuros CTAs en este panel.
 import { Button } from "@/components/ui/button";
+import { AnejoFormDialog, type AnejoFormValues } from "./AnejoFormDialog";
+import { useAnejosForPromotion, addAnejo } from "@/lib/anejosStorage";
+import { useToast } from "@/hooks/use-toast";
 
 function formatPrice(n: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
@@ -59,7 +63,21 @@ export function PromotionAvailabilitySummary({
    *  gestiona retiradas, son una decisión interna del promotor. */
   isCollaboratorView?: boolean;
 }) {
+  const { toast } = useToast();
   const units = unitsByPromotion[promotionId] || [];
+
+  /* Alta de anejo · solo promotor. El CTA vive aquí (en el bloque
+   * "Unidades y disponibilidad" de la ficha) para que el promotor
+   * tenga un único punto de acceso, sin pasar por el detalle de
+   * Disponibilidad. */
+  const [anejoDialogOpen, setAnejoDialogOpen] = useState(false);
+  const anejos = useAnejosForPromotion(promotionId);
+  const anejosVisibleCount = anejos.filter((a) => !isCollaboratorView || (a.visibleToAgencies !== false && a.status === "available")).length;
+  const handleAnejoSubmit = (values: AnejoFormValues) => {
+    const created = addAnejo(promotionId, values);
+    toast({ title: "Anejo añadido", description: created.publicId });
+  };
+
   if (units.length === 0) return null;
 
   const available = units.filter(u => u.status === "available");
@@ -120,6 +138,37 @@ export function PromotionAvailabilitySummary({
         <span className="text-muted-foreground">Ocupación</span>
         <span className="text-foreground font-medium tabular-nums">{occupancy}%</span>
       </div>
+
+      {/* Anejos sueltos · contador + CTA de alta (solo promotor).
+          Evitamos duplicar el alta en la tabla de anejos: este es el
+          único punto de entrada. */}
+      {!isCollaboratorView && (
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-border/40">
+          <div className="text-xs">
+            <span className="text-muted-foreground">Anejos sueltos</span>
+            <span className="ml-2 text-foreground font-medium tabular-nums">
+              {anejos.length === 0 ? "Ninguno" : `${anejos.length} (${anejosVisibleCount} activos)`}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAnejoDialogOpen(true)}
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-border bg-card text-foreground text-[11.5px] font-medium hover:bg-muted/50 transition-colors"
+          >
+            <Plus className="h-3 w-3" strokeWidth={2} />
+            Añadir anejo
+          </button>
+        </div>
+      )}
+
+      {!isCollaboratorView && (
+        <AnejoFormDialog
+          open={anejoDialogOpen}
+          onOpenChange={setAnejoDialogOpen}
+          defaultTipo="parking"
+          onSubmit={handleAnejoSubmit}
+        />
+      )}
     </div>
   );
 }
