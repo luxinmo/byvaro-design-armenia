@@ -224,7 +224,6 @@ export default function Leads() {
                     <tr>
                       <th className="px-4 py-2.5 text-left font-semibold">Lead</th>
                       <th className="px-3 py-2.5 text-left font-semibold">Interés</th>
-                      <th className="px-3 py-2.5 text-left font-semibold">Origen</th>
                       <th className="px-3 py-2.5 text-left font-semibold">Recibido</th>
                       <th className="px-3 py-2.5 text-center font-semibold">Estado</th>
                       <th className="px-2 py-2.5" />
@@ -322,18 +321,14 @@ function LeadRow({
         </div>
       </td>
 
-      {/* Origen */}
+      {/* Recibido · hora relativa arriba + origen (fuente) debajo */}
       <td className="px-3 py-3 align-middle">
-        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground bg-muted rounded-full px-2 py-0.5">
-          {leadSourceLabel[l.source]}
-        </span>
-      </td>
-
-      {/* Recibido */}
-      <td className="px-3 py-3 align-middle">
-        <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-          <Clock className="h-3 w-3" strokeWidth={1.75} />
+        <p className="inline-flex items-center gap-1 text-[11px] text-foreground font-medium">
+          <Clock className="h-3 w-3 text-muted-foreground" strokeWidth={1.75} />
           {relativeTime(l.createdAt)}
+        </p>
+        <p className="text-[10.5px] text-muted-foreground mt-0.5">
+          {leadSourceLabel[l.source]}
         </p>
         {l.assignedTo && (
           <p className="text-[10px] text-muted-foreground/80 mt-0.5 truncate max-w-[140px]">
