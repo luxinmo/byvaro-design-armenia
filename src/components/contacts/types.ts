@@ -86,6 +86,12 @@ export type Contact = {
   languages?: string[];
   /** Notas internas cortas — preview en el listado. */
   notes?: string;
+  /** Propietario del contacto. Si `ownerAgencyId` está puesto, el
+   *  contacto pertenece a una agencia colaboradora (y el promotor NO
+   *  lo ve cross-agency). Si falta, pertenece al promotor. Se escribe
+   *  al crear el contacto según el accountType del usuario logueado.
+   *  TODO(backend): columna `owner_agency_id` + RLS. */
+  ownerAgencyId?: string;
 };
 
 /* ══════ Tipos para la ficha de contacto (/contactos/:id) ══════

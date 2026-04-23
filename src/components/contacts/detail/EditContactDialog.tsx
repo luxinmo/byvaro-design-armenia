@@ -258,6 +258,10 @@ export function EditContactDialog({ open, onOpenChange, detail, onSaved, onCreat
         assignedTo: [],
         languages: edits.languages,
         notes: edits.notes,
+        /* Scope: si el creador es una agencia colaboradora, el
+         * contacto queda dentro de su ámbito (no visible al promotor
+         * cross-tenant ni a otras agencias). */
+        ownerAgencyId: user.accountType === "agency" ? user.agencyId : undefined,
       };
       saveCreatedContact(newContact);
       /* Persistimos también los detalles editados (multi-tlf, multi-email,

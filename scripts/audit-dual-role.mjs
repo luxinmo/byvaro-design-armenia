@@ -6,7 +6,7 @@ import { chromium } from "playwright";
 import { mkdir, writeFile } from "fs/promises";
 
 const BASE = "http://localhost:8080";
-const OUT = "/tmp/byvaro-audit";
+const OUT = "/tmp/byvaro-audit2";
 await mkdir(OUT, { recursive: true });
 
 const PROMOTOR = "Arman Rahmanov";

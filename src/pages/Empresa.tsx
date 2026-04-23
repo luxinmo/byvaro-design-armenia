@@ -20,6 +20,7 @@ import {
   Eye, AlertTriangle, CheckCircle2, Camera, Image as ImageIcon,
 } from "lucide-react";
 import { useEmpresa, useOficinas } from "@/lib/empresa";
+import { useCurrentUser } from "@/lib/currentUser";
 import { cn } from "@/lib/utils";
 import { EmpresaHomeTab } from "@/components/empresa/EmpresaHomeTab";
 import { EmpresaAboutTab } from "@/components/empresa/EmpresaAboutTab";
@@ -50,7 +51,14 @@ export default function Empresa({
   visitorSlot?: React.ReactNode;
   visitorFooter?: React.ReactNode;
 } = {}) {
-  const { empresa, update, isVisitor } = useEmpresa(tenantId);
+  /* En modo agencia sin tenantId explícito, `/empresa` muestra la
+   * ficha de la propia agencia (no la del promotor). Se carga como
+   * visitor hasta que añadamos edición multi-tenant — mejor que
+   * filtrar datos del promotor. */
+  const currentUser = useCurrentUser();
+  const isAgencyUser = currentUser.accountType === "agency";
+  const effectiveTenantId = tenantId ?? (isAgencyUser ? currentUser.agencyId : undefined);
+  const { empresa, update, isVisitor } = useEmpresa(effectiveTenantId);
   const { oficinas } = useOficinas();
   const [tab, setTab] = useState<Tab>("home");
   const [viewMode, setViewMode] = useState<"edit" | "preview">(isVisitor ? "preview" : "edit");
@@ -154,7 +162,7 @@ export default function Empresa({
               </>
             )}
           </div>
-          {!isVisitor && (
+          {!isVisitor && !isAgencyUser && (
             <button
               type="button"
               onClick={() => setViewMode(viewMode === "edit" ? "preview" : "edit")}

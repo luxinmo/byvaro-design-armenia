@@ -666,13 +666,15 @@ export default function Promociones() {
               )}
             </button>
 
-            <button
-              onClick={() => navigate("/crear-promocion")}
-              className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft shrink-0"
-            >
-              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-              <span className="hidden md:inline">Nueva promoción</span>
-            </button>
+            {!isAgencyUser && (
+              <button
+                onClick={() => navigate("/crear-promocion")}
+                className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft shrink-0"
+              >
+                <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                <span className="hidden md:inline">Nueva promoción</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

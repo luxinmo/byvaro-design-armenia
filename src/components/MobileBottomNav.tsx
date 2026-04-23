@@ -13,9 +13,10 @@
  *      (navega a # y muestra toast de "próximamente").
  */
 import { NavLink, useLocation } from "react-router-dom";
-import { Home, Tag, Activity, Handshake, FileText, Mail } from "lucide-react";
+import { Home, Tag, Activity, Handshake, FileText, Mail, Contact } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useCurrentUser } from "@/lib/currentUser";
 
 type Tab = {
   label: string;
@@ -49,6 +50,12 @@ const AVATAR_URL =
 
 export function MobileBottomNav() {
   const location = useLocation();
+  const isAgencyUser = useCurrentUser().accountType === "agency";
+  const visibleTabs = tabs.filter((t) => {
+    if (t.promotorOnly && isAgencyUser) return false;
+    if (t.agencyOnly && !isAgencyUser) return false;
+    return true;
+  });
 
   return (
     <nav
@@ -62,7 +69,7 @@ export function MobileBottomNav() {
           "grid-cols-5 md:grid-cols-7"
         )}
       >
-        {tabs.map((tab) => {
+        {visibleTabs.map((tab) => {
           const isActive =
             location.pathname === tab.url ||
             (tab.url === "/colaboradores" && location.pathname === "/contactos");

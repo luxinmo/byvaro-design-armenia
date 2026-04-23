@@ -5,6 +5,8 @@ import {
   MapPin, SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCurrentUser } from "@/lib/currentUser";
+import AgencyHome from "./AgencyHome";
 
 /* ═══════════════════════════════════════════════════════════════════
    SPARKLINE — minimal trend visualization
@@ -82,6 +84,13 @@ function Kpi({ icon: Icon, label, value, delta, deltaTone = "positive", sub, ico
    PAGE
    ═══════════════════════════════════════════════════════════════════ */
 export default function Inicio() {
+  /* Dual-role: la agencia tiene un dashboard propio (KPIs filtrados,
+   * promociones asignadas, comisiones estimadas). El promotor conserva
+   * este dashboard completo. */
+  const user = useCurrentUser();
+  if (user.accountType === "agency") {
+    return <AgencyHome />;
+  }
   return (
     <div className="flex-1 flex flex-col min-h-full bg-background">
       {/* ══════════════ PAGE HEADER ══════════════ */}
@@ -90,7 +99,7 @@ export default function Inicio() {
           <div>
             <p className="text-xs text-muted-foreground font-medium">Domingo 19 abril · Semana 16</p>
             <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight mt-1 leading-tight">
-              Hola, Arman <span className="text-muted-foreground font-medium">· resumen de tu semana</span>
+              Hola, {user.name.split(" ")[0]} <span className="text-muted-foreground font-medium">· resumen de tu semana</span>
             </h1>
           </div>
           <div className="flex items-center gap-2">

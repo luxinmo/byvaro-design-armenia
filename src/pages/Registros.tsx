@@ -539,6 +539,7 @@ export default function Registros() {
                     onApprove={() => approve(activeRecord.id)}
                     onReject={() => reject(activeRecord.id)}
                     onRevert={() => revert(activeRecord.id)}
+                    viewerIsAgency={isAgencyUser}
                     onBack={() => setActiveId(null)}
                   />
                 ) : (
@@ -560,8 +561,8 @@ export default function Registros() {
         </div>
       </div>
 
-      {/* ═══════════ Barra flotante de selección múltiple ═══════════ */}
-      {selectedIds.length > 0 && (
+      {/* ═══════════ Barra flotante de selección múltiple · solo promotor ═══════════ */}
+      {!isAgencyUser && selectedIds.length > 0 && (
         <div
           className={cn(
             "fixed left-1/2 -translate-x-1/2 z-40",
@@ -617,6 +618,7 @@ function RegistroDetail({
   onReject,
   onRevert,
   onBack,
+  viewerIsAgency = false,
 }: {
   record: Registro;
   promotionName: string;
@@ -627,9 +629,12 @@ function RegistroDetail({
   onReject: () => void;
   onRevert: () => void;
   onBack: () => void;
+  /** La agencia ve sus registros pero NO decide sobre ellos — eso
+   *  es competencia del promotor. Oculta el pie de Aprobar/Rechazar. */
+  viewerIsAgency?: boolean;
 }) {
   const level = getMatchLevel(record.matchPercentage);
-  const canDecide = record.estado === "pendiente";
+  const canDecide = !viewerIsAgency && record.estado === "pendiente";
 
   return (
     <div className="bg-card border border-border rounded-2xl shadow-soft overflow-hidden">
@@ -876,7 +881,8 @@ function RegistroDetail({
         <ActivityTimeline record={record} />
       </div>
 
-      {/* Footer de acciones */}
+      {/* Footer de acciones · oculto para agencia (solo promotor decide) */}
+      {!viewerIsAgency && (
       <div className="border-t border-border bg-card px-4 sm:px-6 py-4 flex flex-wrap items-center gap-2">
         {record.matchPercentage > 0 && (
           <button
@@ -917,6 +923,7 @@ function RegistroDetail({
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }

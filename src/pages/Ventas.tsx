@@ -34,6 +34,7 @@ import { promotions } from "@/data/promotions";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { agencies } from "@/data/agencies";
 import { cn } from "@/lib/utils";
+import { useCurrentUser } from "@/lib/currentUser";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -116,8 +117,18 @@ const ESTADOS_ORDERED: VentaEstado[] = ["reservada", "contratada", "escriturada"
    PÁGINA PRINCIPAL
    ═══════════════════════════════════════════════════════════════════ */
 export default function Ventas() {
+  const currentUser = useCurrentUser();
+  const isAgencyUser = currentUser.accountType === "agency";
+
   // Estado "vivo" sobre el mock — permite simular transiciones desde el diálogo.
-  const [sales, setSales] = useState<Venta[]>(salesMock);
+  // Para agencia: filtramos al dataset base por `agencyId` para que todos los
+  // cálculos de abajo (KPIs, filtros, kanban) ya partan de sus propias ventas.
+  const baseSales = useMemo(
+    () => (isAgencyUser ? salesMock.filter((v) => v.agencyId === currentUser.agencyId) : salesMock),
+    [isAgencyUser, currentUser.agencyId],
+  );
+  const [sales, setSales] = useState<Venta[]>(baseSales);
+  useEffect(() => { setSales(baseSales); }, [baseSales]);
   const [viewMode, setViewMode] = useState<"kanban" | "tabla">("kanban");
 
   // Filtros
