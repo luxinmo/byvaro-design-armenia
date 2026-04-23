@@ -238,14 +238,21 @@ function formatPrice(n: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 }
 
-function statusTag(status: string) {
-  const map: Record<string, { label: string; variant: "success" | "warning" | "muted" | "danger" }> = {
-    active: { label: "Activa", variant: "success" },
-    incomplete: { label: "Incompleta", variant: "warning" },
-    inactive: { label: "Inactiva", variant: "muted" },
-    "sold-out": { label: "Vendida", variant: "danger" },
-  };
-  return map[status] || map.inactive;
+/**
+ * Estado visible del tag en la card. Se deriva del estado REAL
+ * (validador + canShareWithAgencies), no del campo `status` crudo
+ * del mock, que puede contradecir los requisitos: el mock podía
+ * tener status="active" aunque le faltaran comisiones, estructura,
+ * etc. — ya no permitimos esa contradicción.
+ */
+function statusTag(
+  p: { status: string; canShareWithAgencies?: boolean } & Promotion,
+): { label: string; variant: "success" | "warning" | "muted" | "danger" } {
+  if (p.status === "sold-out") return { label: "Vendida", variant: "danger" };
+  if (p.status === "inactive") return { label: "Inactiva", variant: "muted" };
+  if (!canPublishPromotion(p)) return { label: "Sin publicar", variant: "warning" };
+  if (p.canShareWithAgencies === false) return { label: "Solo uso interno", variant: "muted" };
+  return { label: "Publicada", variant: "success" };
 }
 
 type LastUnitDetail = {
@@ -777,7 +784,7 @@ export default function Promociones() {
           ) : (
             sortedAndFiltered.map((p) => {
               const badgeLabel = p.badge === "new" ? "Nueva" : p.badge === "last-units" ? "Últimas unidades" : null;
-              const status = statusTag(p.status);
+              const status = statusTag(p);
               const { typologies, units: availableUnits, lastUnit } = getAvailableData(p.id);
               const trending = isTrending(p);
               const hasMissing = p.missingSteps && p.missingSteps.length > 0;

@@ -290,6 +290,49 @@ como `Qnueva` en `docs/open-questions.md` en el mismo PR.
 
 ---
 
+## 📊 REGLA DE ORO · KPIs en el dashboard del miembro
+
+> **Todo dato de actividad del trabajador que tenga valor para valorar
+> su desempeño DEBE reflejarse en el dashboard de estadísticas del
+> miembro** (`/equipo/:id/estadisticas`). El dueño de la agencia usa esa
+> pantalla — junto al análisis IA — para decidir cómo gestionar a su
+> equipo. Si una métrica no aparece allí, no existe para el negocio.
+
+**Qué cuenta como "KPI relevante".** Cualquier señal que responda a una
+de estas preguntas:
+
+- **¿Produce?** Ventas, comisiones, registros aprobados, visitas
+  realizadas, conversiones.
+- **¿Tiene pipeline sano?** Leads asignados, oportunidades abiertas,
+  visitas programadas, registros pendientes, promociones asignadas.
+- **¿Comunica bien?** Emails enviados + % apertura, WhatsApp, llamadas,
+  tiempo medio de respuesta a lead.
+- **¿Es constante?** Tiempo activo en CRM por día / por sesión, racha
+  de días activos, días sin conectarse, heatmap día×hora.
+- **¿Cierra bien el ciclo?** Visitas evaluadas a tiempo, tareas
+  pendientes vencidas, duplicados creados (señal de calidad de datos).
+
+**Obligaciones al añadir una feature que genere actividad:**
+
+1. **Identifica** la métrica: qué cuenta, cómo se agrega (día, semana,
+   promoción), contra qué se compara (media equipo, propio histórico).
+2. **Amplía** el tipo `MemberStats` en `src/data/memberStats.ts` con el
+   nuevo campo.
+3. **Muestra** el dato en `/equipo/:id/estadisticas` (KPI card o panel
+   relevante).
+4. **Incluye** el campo en el prompt de `POST /api/ai/analyze-member/:id`
+   para que la IA lo considere al analizar patrones.
+5. **Documenta** en `docs/plan-equipo-estadisticas.md §2` qué fuente
+   alimenta la métrica (endpoint backend).
+
+**Por qué esta regla existe.** El core del producto para el admin es
+convertir datos en decisiones — a quién promover, a quién formar, a
+quién reasignar leads. Si un KPI no llega al dashboard, la IA no lo ve,
+y el admin toma decisiones a ciegas. Spec completa de KPIs y fases
+de implementación en **`docs/plan-equipo-estadisticas.md`**.
+
+---
+
 ## 🛡️ REGLA DE ORO · Permisos y visibilidad
 
 > **El catálogo canónico de permisos vive en `docs/permissions.md`.**

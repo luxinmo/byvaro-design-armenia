@@ -32,10 +32,13 @@ import { Input } from "@/components/ui/input";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { isAdmin, useCurrentUser } from "@/lib/currentUser";
 import { TEAM_MEMBERS, type TeamMember, type TeamMemberStatus } from "@/lib/team";
+import { findLanguageByCode } from "@/lib/languages";
+import { Flag } from "@/components/ui/Flag";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-const KEY = "byvaro.organization.members.v2";
+/* v4 · alineado con src/pages/Equipo.tsx (tras catálogo canónico de jobTitles). */
+const KEY = "byvaro.organization.members.v4";
 
 function load(): TeamMember[] {
   if (typeof window === "undefined") return TEAM_MEMBERS;
@@ -476,16 +479,24 @@ function MemberRow({
             </label>
           </div>
 
-          {/* Idiomas · chips readonly (edición delegada al usuario desde su perfil) */}
+          {/* Idiomas · chips readonly con bandera SVG (edición desde /ajustes/perfil) */}
           {m.languages && m.languages.length > 0 && (
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Idiomas</p>
               <div className="flex flex-wrap gap-1.5">
-                {m.languages.map((l) => (
-                  <span key={l} className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted text-foreground">
-                    {l}
-                  </span>
-                ))}
+                {m.languages.map((l) => {
+                  const lang = findLanguageByCode(l);
+                  return (
+                    <span
+                      key={l}
+                      title={lang?.name ?? l}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-medium pl-1.5 pr-2 py-0.5 rounded-full bg-muted text-foreground"
+                    >
+                      <Flag iso={lang?.countryIso} size={13} />
+                      {l}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           )}

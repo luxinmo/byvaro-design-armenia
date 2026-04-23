@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Home, Tag, FileText, CircleDollarSign, CalendarDays,
-  Handshake, Contact, Globe, Mail, Settings,
+  Handshake, Contact, Globe, Mail, Settings, Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -22,6 +22,7 @@ const drawerGroups = [
   { label: "Red", items: [
     { title: "Colaboradores", url: "/colaboradores", icon: Handshake },
     { title: "Contactos", url: "/contactos", icon: Contact },
+    { title: "Equipo", url: "/equipo", icon: Users },
   ]},
   { label: "Contenido", items: [
     { title: "Microsites", url: "/microsites", icon: Globe },
@@ -49,7 +50,7 @@ export function MobileHeader() {
 
   // Rutas "raíz" del menú principal — fuera de ellas mostramos la
   // flecha de volver en lugar del logo.
-  const rootPaths = ["/inicio", "/promociones", "/registros", "/ventas", "/calendario", "/colaboradores", "/contactos", "/microsites", "/emails", "/ajustes", "/empresa"];
+  const rootPaths = ["/inicio", "/promociones", "/registros", "/ventas", "/calendario", "/colaboradores", "/contactos", "/equipo", "/microsites", "/emails", "/ajustes", "/empresa"];
   const isRoot = rootPaths.includes(location.pathname);
 
   return (

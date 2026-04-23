@@ -13,6 +13,8 @@ import Colaboradores from "@/pages/Colaboradores";
 import AgenciaDetalle from "@/pages/AgenciaDetalle";
 import ColaboradoresEstadisticas from "@/pages/ColaboradoresEstadisticas";
 import Contactos from "@/pages/Contactos";
+import Equipo from "@/pages/Equipo";
+import EquipoMiembroEstadisticas from "@/pages/EquipoMiembroEstadisticas";
 import ContactoDetalle from "@/pages/ContactoDetalle";
 import Microsites from "@/pages/Microsites";
 import AgenciaEntry from "@/pages/AgenciaEntry";
@@ -194,6 +196,8 @@ export default function App() {
                 <Route path="/colaboradores/:id" element={<PromotorOnly><AgenciaDetalle /></PromotorOnly>} />
                 <Route path="/contactos" element={<Contactos />} />
                 <Route path="/contactos/:id" element={<ContactoDetalle />} />
+                <Route path="/equipo" element={<PromotorOnly><Equipo /></PromotorOnly>} />
+                <Route path="/equipo/:id/estadisticas" element={<PromotorOnly><EquipoMiembroEstadisticas /></PromotorOnly>} />
                 <Route path="/microsites" element={<PromotorOnly><Microsites /></PromotorOnly>} />
                 <Route path="/emails" element={<PromotorOnly><Emails /></PromotorOnly>} />
                 {/* /ajustes/* viven fuera del AppLayout (SettingsShell propio) */}

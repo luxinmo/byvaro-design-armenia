@@ -38,6 +38,7 @@ import { useCurrentUser } from "@/lib/currentUser";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
+import { ViewToggle } from "@/components/ui/ViewToggle";
 
 /* ═══════════════════════════════════════════════════════════════════
    Lookup maps + helpers de formato
@@ -255,20 +256,15 @@ export default function Ventas() {
             </div>
 
             {/* Toggle Kanban / Tabla */}
-            <div className="sm:ml-auto inline-flex items-center bg-muted/40 border border-border rounded-full p-0.5 text-xs self-start sm:self-end">
-              <ViewToggleBtn
-                active={viewMode === "kanban"}
-                onClick={() => setViewMode("kanban")}
-                icon={LayoutGrid}
-                label="Kanban"
-              />
-              <ViewToggleBtn
-                active={viewMode === "tabla"}
-                onClick={() => setViewMode("tabla")}
-                icon={Table2}
-                label="Tabla"
-              />
-            </div>
+            <ViewToggle
+              className="sm:ml-auto self-start sm:self-end"
+              value={viewMode}
+              onChange={setViewMode}
+              options={[
+                { value: "kanban", icon: LayoutGrid, label: "Kanban" },
+                { value: "tabla",  icon: Table2,     label: "Tabla" },
+              ]}
+            />
           </div>
         </div>
       </div>
@@ -530,27 +526,6 @@ function KpiCard({
       <p className="text-[22px] sm:text-[26px] font-bold leading-none tabular-nums tracking-tight mt-1.5">{value}</p>
       {sub && <p className="text-[11px] text-muted-foreground mt-2 tnum">{sub}</p>}
     </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   Toggle btn (segmento)
-   ═══════════════════════════════════════════════════════════════════ */
-function ViewToggleBtn({
-  active, onClick, icon: Icon, label,
-}: { active: boolean; onClick: () => void; icon: LucideIcon; label: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-1.5 h-8 px-3 rounded-full transition-all text-[12.5px] font-medium",
-        active ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground",
-      )}
-      aria-pressed={active}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      <span className="hidden sm:inline">{label}</span>
-    </button>
   );
 }
 
