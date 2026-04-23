@@ -11,6 +11,8 @@ import { MapPin, Gem, Languages, X, Plus } from "lucide-react";
 import type { Empresa } from "@/lib/empresa";
 import { EditableSection } from "./EditableSection";
 import { cn } from "@/lib/utils";
+import { Flag } from "@/components/ui/Flag";
+import { findLanguageByCode } from "@/lib/languages";
 
 /* ─── Sugerencias predefinidas ────────────────────────────────────── */
 const ZONAS_SUGERIDAS = [
@@ -25,18 +27,12 @@ const ESPECIALIDADES_SUGERIDAS = [
   "Segunda residencia", "Comercial",
 ];
 
+/* Idiomas disponibles · deriva del catálogo canónico `LANGUAGES`
+ * (src/lib/languages.ts) para evitar duplicación. Nos quedamos con
+ * los 10 más habituales en el sector. */
 const IDIOMAS_DISPONIBLES = [
-  { code: "es", label: "Español", flag: "🇪🇸" },
-  { code: "en", label: "English", flag: "🇬🇧" },
-  { code: "fr", label: "Français", flag: "🇫🇷" },
-  { code: "de", label: "Deutsch", flag: "🇩🇪" },
-  { code: "pt", label: "Português", flag: "🇵🇹" },
-  { code: "it", label: "Italiano", flag: "🇮🇹" },
-  { code: "nl", label: "Nederlands", flag: "🇳🇱" },
-  { code: "ru", label: "Русский", flag: "🇷🇺" },
-  { code: "ar", label: "العربية", flag: "🇸🇦" },
-  { code: "zh", label: "中文", flag: "🇨🇳" },
-];
+  "ES", "EN", "FR", "DE", "PT", "IT", "NL", "RU", "AR", "ZH",
+].map((code) => findLanguageByCode(code)!).filter(Boolean);
 
 const inputClass = "h-8 px-3 text-[12px] bg-card border border-border rounded-full focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground/60";
 
@@ -187,13 +183,13 @@ export function ZonasEspecialidadesCard({
                 return (
                   <button key={i.code} type="button" onClick={() => toggleIdioma(i.code)}
                     className={cn(
-                      "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors",
+                      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors",
                       on
                         ? "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30"
                         : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-foreground/30",
                     )}>
-                    <span className="text-[14px]">{i.flag}</span>
-                    {i.label}
+                    <Flag iso={i.countryIso} size={14} />
+                    {i.name}
                   </button>
                 );
               })}
@@ -224,11 +220,11 @@ export function ZonasEspecialidadesCard({
               <span className="text-[11.5px] text-muted-foreground italic">Sin añadir</span>
             ) : (
               empresa.idiomasAtencion.map(code => {
-                const i = IDIOMAS_DISPONIBLES.find(x => x.code === code);
+                const i = findLanguageByCode(code);
                 return (
-                  <span key={code} className="inline-flex items-center gap-1 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-500/30 px-2.5 py-1 text-[11.5px] font-medium">
-                    <span className="text-[13px]">{i?.flag ?? "🏳️"}</span>
-                    {i?.label ?? code}
+                  <span key={code} className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-500/30 px-2.5 py-1 text-[11.5px] font-medium">
+                    <Flag iso={i?.countryIso ?? code} size={13} />
+                    {i?.name ?? code}
                   </span>
                 );
               })

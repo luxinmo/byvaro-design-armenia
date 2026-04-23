@@ -18,19 +18,22 @@ import {
 } from "@/lib/invitaciones";
 import { useEmpresa } from "@/lib/empresa";
 import { cn } from "@/lib/utils";
+import { Flag } from "@/components/ui/Flag";
 
 type Step = "datos" | "condiciones" | "preview";
 
 const inputClass = "h-10 w-full px-3 text-[13.5px] bg-card border border-border rounded-xl focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground/60";
 const textareaClass = cn(inputClass, "h-auto py-2.5 resize-y min-h-[100px]");
 
+/* Idiomas soportados por el backend de email · `code` debe encajar
+ * con `Invitacion["idiomaEmail"]`. La bandera se renderiza con <Flag>. */
 const IDIOMAS = [
-  { code: "es", label: "Español", flag: "🇪🇸" },
-  { code: "en", label: "English", flag: "🇬🇧" },
-  { code: "fr", label: "Français", flag: "🇫🇷" },
-  { code: "de", label: "Deutsch", flag: "🇩🇪" },
-  { code: "pt", label: "Português", flag: "🇵🇹" },
-  { code: "it", label: "Italiano", flag: "🇮🇹" },
+  { code: "es", label: "Español",   countryIso: "ES" },
+  { code: "en", label: "English",   countryIso: "GB" },
+  { code: "fr", label: "Français",  countryIso: "FR" },
+  { code: "de", label: "Deutsch",   countryIso: "DE" },
+  { code: "pt", label: "Português", countryIso: "PT" },
+  { code: "it", label: "Italiano",  countryIso: "IT" },
 ] as const;
 
 export function InvitarAgenciaModal({ onClose }: { onClose: () => void }) {
@@ -251,7 +254,7 @@ export function InvitarAgenciaModal({ onClose }: { onClose: () => void }) {
                             : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-foreground/30",
                         )}
                       >
-                        <span className="text-[14px]">{i.flag}</span>
+                        <Flag iso={i.countryIso} size={14} />
                         {i.label}
                       </button>
                     );

@@ -10,6 +10,7 @@ import { promotions, getBuildingTypeLabel } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion, type Comercial, type ComercialPermissions } from "@/data/developerPromotions";
 import { agencies, countAgenciesForPromotion, type Agency } from "@/data/agencies";
 import { InvitacionesPendientesPanel } from "@/components/promotions/detail/InvitacionesPendientesPanel";
+import { AgenciasPendientesDialog, useTotalAgenciasPendientes } from "@/components/promotions/detail/AgenciasPendientesDialog";
 import { FeatureCardV3 } from "@/pages/Colaboradores";
 import ColaboradoresEstadisticas from "@/pages/ColaboradoresEstadisticas";
 import {
@@ -186,6 +187,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const [priceListOpen, setPriceListOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [activateSharingOpen, setActivateSharingOpen] = useState(false);
+  const [pendientesOpen, setPendientesOpen] = useState(false);
   /** El brochure puede eliminarse desde su card. Al eliminarlo, la sección
    *  se oculta y la acción rápida "Brochure" queda deshabilitada. */
   const [brochureRemoved, setBrochureRemoved] = useState(false);
