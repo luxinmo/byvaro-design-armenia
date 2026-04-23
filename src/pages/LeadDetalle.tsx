@@ -23,7 +23,7 @@ import {
   Clock, User, UserPlus, Tag, Copy, AlertTriangle, Home, MapPin,
   Euro, Bed, Inbox, ExternalLink, Sparkles, Target, ArrowRight, X,
 } from "lucide-react";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 import {
   leads, leadStatusConfig, leadSourceLabel,
   type Lead, type LeadStatus,
@@ -94,8 +94,6 @@ export default function LeadDetalle() {
 
   return (
     <div className="flex flex-col min-h-full bg-background pb-12">
-      <Toaster position="top-center" richColors closeButton />
-
       {/* ─── Back + Header sticky ─── */}
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">

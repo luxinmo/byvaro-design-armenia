@@ -22,7 +22,7 @@ import {
   TrendingUp, CheckCircle2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
   DropdownMenuSeparator,
@@ -125,8 +125,6 @@ export default function Oportunidades() {
 
   return (
     <div className="flex flex-col min-h-full bg-background">
-      <Toaster position="top-center" richColors closeButton />
-
       {/* Header */}
       <section className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8">
         <div className="max-w-[1400px] mx-auto">

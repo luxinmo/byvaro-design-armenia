@@ -31,7 +31,7 @@ import {
   Trash2, Pencil, RotateCw, Building2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
   DropdownMenuSeparator,
@@ -102,8 +102,6 @@ export default function OportunidadDetalle() {
 
   return (
     <div className="flex flex-col min-h-full bg-background">
-      <Toaster position="top-center" richColors closeButton />
-
       {/* ══════ Header sticky ══════ */}
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-3">
