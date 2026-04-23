@@ -80,10 +80,19 @@ export type Contact = {
   totalRegistrations: number;
   /** Promociones que le interesan (nombres, derivado de records). */
   promotionsOfInterest: string[];
-  /** Asignado a (nombres de agentes de la organización). */
+  /** Ids de miembros (TEAM_MEMBERS) asignados al contacto · fuente única.
+   *  El nombre/avatar se resuelven en render vía `findTeamMember()`. */
+  assignedToUserIds?: string[];
+  /** LEGACY · snapshot de nombres cuando no hay userIds (p. ej. datos
+   *  pre-migración). Mantenido como fallback para renderizar el listado
+   *  y para filtros del menú. TODO: eliminar cuando backend devuelva
+   *  siempre `assignedToUserIds`. */
   assignedTo: string[];
   /** Idiomas que habla (códigos ISO o nombres cortos). */
   languages?: string[];
+  /** Código ISO 3166-1 alpha-2 del país de nacionalidad (ES, AE, GB…).
+   *  Se renderiza con <Flag iso={nationalityIso} /> — regla CLAUDE.md §🧱. */
+  nationalityIso?: string;
   /** Notas internas cortas — preview en el listado. */
   notes?: string;
   /** Propietario del contacto. Si `ownerAgencyId` está puesto, el
