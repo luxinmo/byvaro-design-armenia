@@ -187,8 +187,8 @@ export default function App() {
                 <Route path="/inicio" element={<Inicio />} />
                 <Route path="/promociones" element={<Promociones />} />
                 <Route path="/promociones/:id" element={<PromocionDetalle />} />
-                <Route path="/leads" element={<PromotorOnly><Leads /></PromotorOnly>} />
-                <Route path="/leads/:id" element={<PromotorOnly><LeadDetalle /></PromotorOnly>} />
+                <Route path="/oportunidades" element={<PromotorOnly><Leads /></PromotorOnly>} />
+                <Route path="/oportunidades/:id" element={<PromotorOnly><LeadDetalle /></PromotorOnly>} />
                 <Route path="/registros" element={<Registros />} />
                 <Route path="/ventas" element={<Ventas />} />
                 <Route path="/calendario" element={<Calendario />} />

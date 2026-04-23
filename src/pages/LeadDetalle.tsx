@@ -1,19 +1,20 @@
 /**
- * LeadDetalle · ficha completa de un lead (`/leads/:id`).
+ * Ficha completa de una oportunidad (`/oportunidades/:id`).
  *
  * Estructura:
- *   - Header sticky: back + identidad + status + 5 CTAs (Llamar · Email ·
- *     WhatsApp · Convertir · Descartar).
+ *   - Header sticky: back + identidad + etapa + CTAs principales.
  *   - Grid 2-col desktop:
- *       Izq  (2/3): Interés · Mensaje del lead · Timeline · Match de
+ *       Izq  (2/3): Interés · Mensaje del cliente · Timeline · Match de
  *                   duplicados (si aplica).
  *       Der  (1/3): Identidad · Asignación · Origen · Etiquetas.
  *
+ * Nota: el archivo se llama LeadDetalle.tsx por historia del repo, pero
+ * el concepto que maneja es "Oportunidad" (pipeline unificado · ADR-053).
+ *
  * TODO(backend): endpoints en `docs/backend-integration.md §7.1`
- *   - `GET /api/leads/:id` → Lead completo
- *   - `POST /api/leads/:id/convert` → promover a Registro
- *   - `PATCH /api/leads/:id { status }` → cualificar / descartar
- *   - `PATCH /api/leads/:id/assign { userId }` → reasignar
+ *   - `GET /api/opportunities/:id` → Oportunidad completa
+ *   - `PATCH /api/opportunities/:id { status }` → avanzar/retroceder etapa
+ *   - `PATCH /api/opportunities/:id/assignee { userId }` → reasignar
  */
 
 import { useMemo, useState } from "react";
@@ -72,14 +73,14 @@ export default function LeadDetalle() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
         <Inbox className="h-10 w-10 text-muted-foreground/40 mb-3" strokeWidth={1.5} />
-        <h1 className="text-base font-semibold text-foreground mb-1">Lead no encontrado</h1>
-        <p className="text-xs text-muted-foreground mb-5">El lead con id <code className="bg-muted px-1.5 rounded">{id}</code> no existe o ya fue eliminado.</p>
+        <h1 className="text-base font-semibold text-foreground mb-1">Oportunidad no encontrada</h1>
+        <p className="text-xs text-muted-foreground mb-5">La oportunidad con id <code className="bg-muted px-1.5 rounded">{id}</code> no existe o ya fue eliminada.</p>
         <button
-          onClick={() => navigate("/leads")}
+          onClick={() => navigate("/oportunidades")}
           className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-foreground text-background text-sm font-semibold hover:bg-foreground/90 shadow-soft transition-colors"
         >
           <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
-          Volver a Leads
+          Volver a oportunidades
         </button>
       </div>
     );
@@ -98,11 +99,11 @@ export default function LeadDetalle() {
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="pt-5 pb-3">
             <button
-              onClick={() => navigate("/leads")}
+              onClick={() => navigate("/oportunidades")}
               className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-3"
             >
               <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.5} />
-              Leads
+              Oportunidades
             </button>
 
             <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
@@ -196,7 +197,7 @@ export default function LeadDetalle() {
                 <CTAPill
                   icon={XCircle} label="Descartar" danger
                   disabled={lead.status === "perdida" || lead.status === "duplicate"}
-                  onClick={() => toast.success("Lead descartado")}
+                  onClick={() => toast.success("Oportunidad descartada")}
                 />
               </div>
             </div>
@@ -492,7 +493,7 @@ function Timeline({ lead }: { lead: Lead }) {
   events.push({
     iso: lead.createdAt,
     icon: Inbox,
-    title: "Lead recibido",
+    title: "Oportunidad recibida",
     body: `Entró por ${leadSourceLabel[lead.source]}${lead.interest.promotionName ? ` interesado en ${lead.interest.promotionName}` : ""}.`,
     tone: "primary",
   });
@@ -540,7 +541,7 @@ function Timeline({ lead }: { lead: Lead }) {
     events.push({
       iso: lead.createdAt,
       icon: XCircle,
-      title: "Lead perdido",
+      title: "Oportunidad perdida",
       body: "Oportunidad marcada como perdida.",
       tone: "destructive",
     });

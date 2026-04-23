@@ -1,22 +1,29 @@
 /**
- * Leads · pipeline unificado de potenciales compradores.
+ * Oportunidades · pipeline comercial unificado.
  *
- * En Byvaro no hay entidad "Oportunidad" separada: el lead entra y va
- * recorriendo las etapas (`solicitud → contactado → visita →
+ * En Byvaro NO existe el concepto "Lead" como entidad separada. Toda
+ * entrada de potencial comprador es una oportunidad desde el minuto
+ * uno y recorre el pipeline (`solicitud → contactado → visita →
  * evaluación → negociando → ganada/perdida`) dentro de la misma
  * pantalla. La IA de duplicados marca los que probablemente ya
  * existen como contacto (`duplicateScore ≥ 70`).
  *
- * Actualmente es una pantalla de listado con:
- *   - 5 KPI chips arriba (Activos · En visita · Negociando · Ganadas · Duplicados).
+ * Nota: los archivos fuente mantienen los nombres `Lead*` / `leads.ts`
+ * por compatibilidad con imports ya desplegados — el rename a
+ * "Oportunidad" es solo de UI y URL (`/oportunidades`). Se puede
+ * renombrar físicamente en un PR aparte si se quiere.
+ *
+ * La pantalla tiene:
+ *   - 5 KPI chips arriba (Solicitudes · Contactado · En visita ·
+ *     Evaluación · Negociando).
  *   - Filter bar: buscador, segmentado rápido por etapa del pipeline.
  *   - Tabla con thumbnail de promoción, responsable y etapa.
  *
- * TODO(backend): `GET /api/leads` con paginación y filtros. Ver
+ * TODO(backend): `GET /api/opportunities` con paginación y filtros. Ver
  *   `docs/backend-integration.md §7.1`. Hoy data de `src/data/leads.ts`.
- * TODO(backend): cambios de etapa → `PATCH /api/leads/:id { status }`.
+ * TODO(backend): cambios de etapa → `PATCH /api/opportunities/:id { status }`.
  * TODO(ui): filtros avanzados (origen, nacionalidad, presupuesto, asignado).
- * TODO(ui): ficha detalle `/leads/:id` con pipeline bar + matching + timeline.
+ * TODO(ui): ficha interior `/oportunidades/:id` con pipeline bar + matching + timeline.
  */
 
 import { useMemo, useState } from "react";
@@ -111,7 +118,7 @@ export default function Leads() {
               </p>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-1">
                 <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight text-foreground leading-tight">
-                  Leads
+                  Oportunidades
                 </h1>
                 {/* Pill informativo · email único del workspace al que los
                    portales (Idealista, Fotocasa…) pueden reenviar leads para
@@ -120,18 +127,28 @@ export default function Leads() {
                 <LeadsInboxHint />
               </div>
               <p className="text-sm text-muted-foreground mt-1.5 max-w-[640px] leading-relaxed">
-                Bandeja de entrada con todos los potenciales compradores · IA marca duplicados.
+                Pipeline comercial · desde que entra el cliente hasta el cierre · IA marca duplicados.
               </p>
             </div>
           </div>
 
           {/* KPIs */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 mt-5">
-            <KpiChip label="Solicitudes" value={counts.solicitud}  icon={Inbox}          tone="primary" />
-            <KpiChip label="Contactado"  value={counts.contactado} icon={UserPlus}       tone="sky" />
-            <KpiChip label="En visita"   value={counts.visita}     icon={CheckCircle2}   tone="sky" />
-            <KpiChip label="Evaluación"  value={counts.evaluacion} icon={Filter}         tone="primary" />
-            <KpiChip label="Negociando"  value={counts.negociando} icon={AlertTriangle}  tone="warning" />
+            <KpiChip label="Solicitudes" value={counts.solicitud}  icon={Inbox}         tone="primary"
+              active={quickFilter === "solicitud"}
+              onClick={() => setQuickFilter((f) => (f === "solicitud" ? "all" : "solicitud"))} />
+            <KpiChip label="Contactado"  value={counts.contactado} icon={UserPlus}      tone="sky"
+              active={quickFilter === "contactado"}
+              onClick={() => setQuickFilter((f) => (f === "contactado" ? "all" : "contactado"))} />
+            <KpiChip label="En visita"   value={counts.visita}     icon={CheckCircle2}  tone="sky"
+              active={quickFilter === "visita"}
+              onClick={() => setQuickFilter((f) => (f === "visita" ? "all" : "visita"))} />
+            <KpiChip label="Evaluación"  value={counts.evaluacion} icon={Filter}        tone="primary"
+              active={quickFilter === "evaluacion"}
+              onClick={() => setQuickFilter((f) => (f === "evaluacion" ? "all" : "evaluacion"))} />
+            <KpiChip label="Negociando"  value={counts.negociando} icon={AlertTriangle} tone="warning"
+              active={quickFilter === "negociando"}
+              onClick={() => setQuickFilter((f) => (f === "negociando" ? "all" : "negociando"))} />
           </div>
 
           {/* Toolbar */}
@@ -209,7 +226,7 @@ export default function Leads() {
         <div className="max-w-[1400px] mx-auto">
           <div className="mb-3 flex items-end justify-between gap-3">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              {filtered.length} {filtered.length === 1 ? "lead" : "leads"}
+              {filtered.length} {filtered.length === 1 ? "oportunidad" : "oportunidades"}
             </p>
             <p className="text-[11px] text-muted-foreground">
               Ordenados por entrada más reciente
@@ -219,11 +236,11 @@ export default function Leads() {
           {filtered.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
               <Inbox className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" strokeWidth={1.5} />
-              <p className="text-sm font-medium text-foreground mb-1">Sin leads</p>
+              <p className="text-sm font-medium text-foreground mb-1">Sin oportunidades</p>
               <p className="text-xs text-muted-foreground">
                 {search || quickFilter !== "all"
                   ? "Prueba con otro filtro."
-                  : "Cuando lleguen leads desde portales, microsite o agencias, aparecerán aquí."}
+                  : "Cuando lleguen clientes desde portales, microsite o agencias, aparecerán aquí."}
               </p>
             </div>
           ) : (
@@ -232,9 +249,10 @@ export default function Leads() {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
                     <tr>
-                      <th className="px-4 py-2.5 text-left font-semibold">Lead</th>
+                      <th className="px-4 py-2.5 text-left font-semibold">Cliente</th>
                       <th className="px-3 py-2.5 text-left font-semibold">Interés</th>
                       <th className="px-3 py-2.5 text-left font-semibold">Recibido</th>
+                      <th className="px-3 py-2.5 text-left font-semibold">Estado</th>
                       <th className="px-3 py-2.5 text-left font-semibold">Responsable</th>
                     </tr>
                   </thead>
@@ -281,16 +299,6 @@ function LeadRow({
             <p className="text-sm font-semibold text-foreground truncate flex items-center gap-1.5">
               {l.nationality && <span className="text-base leading-none">{flagOf(l.nationality)}</span>}
               {l.fullName}
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 text-[9.5px] font-medium rounded-full px-1.5 py-0.5",
-                  status.badgeClass,
-                )}
-                title={status.label}
-              >
-                <span className={cn("h-1 w-1 rounded-full", status.dotClass)} />
-                {status.label}
-              </span>
               {isDup && (
                 <span
                   className="inline-flex items-center gap-0.5 text-[9.5px] font-bold text-destructive bg-destructive/10 border border-destructive/25 rounded-full px-1.5 py-0.5"
@@ -351,6 +359,19 @@ function LeadRow({
         </p>
       </td>
 
+      {/* Estado · etapa del pipeline */}
+      <td className="px-3 py-3 align-middle">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 text-[10.5px] font-medium rounded-full px-2 py-0.5",
+            status.badgeClass,
+          )}
+        >
+          <span className={cn("h-1.5 w-1.5 rounded-full", status.dotClass)} />
+          {status.label}
+        </span>
+      </td>
+
       {/* Responsable · único · clic abre el selector de miembros */}
       <td className="px-3 py-3 align-middle" onClick={(e) => e.stopPropagation()}>
         <AssigneeCell lead={l} />
@@ -364,12 +385,17 @@ function LeadRow({
    ═══════════════════════════════════════════════════════════════════ */
 
 function KpiChip({
-  label, value, icon: Icon, tone,
+  label, value, icon: Icon, tone, active, onClick,
 }: {
   label: string;
   value: number;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   tone: "neutral" | "primary" | "sky" | "emerald" | "destructive" | "warning";
+  /** Si true, el chip se renderiza como seleccionado (borde foreground). */
+  active?: boolean;
+  /** Si se pasa, el chip se renderiza como `<button>` y se puede clicar
+   *  para filtrar el listado por la etapa que representa. */
+  onClick?: () => void;
 }) {
   const toneClass = {
     neutral:     "bg-card border-border text-foreground",
@@ -380,14 +406,25 @@ function KpiChip({
     warning:     "bg-warning/10 border-warning/25 text-warning",
   }[tone];
 
+  const Cmp: "button" | "div" = onClick ? "button" : "div";
+
   return (
-    <div className={cn("rounded-2xl border px-3 py-2.5 shadow-soft", toneClass)}>
+    <Cmp
+      onClick={onClick}
+      className={cn(
+        "rounded-2xl border px-3 py-2.5 shadow-soft text-left transition-all",
+        toneClass,
+        onClick && "hover:-translate-y-0.5 hover:shadow-soft-lg cursor-pointer",
+        active && "ring-2 ring-foreground ring-offset-1 ring-offset-background",
+      )}
+      {...(onClick ? { type: "button" as const } : {})}
+    >
       <div className="flex items-center justify-between">
         <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70">{label}</p>
         <Icon className="h-3.5 w-3.5 opacity-70" strokeWidth={1.75} />
       </div>
       <p className="text-xl font-bold tabular-nums leading-tight mt-1">{value}</p>
-    </div>
+    </Cmp>
   );
 }
 
