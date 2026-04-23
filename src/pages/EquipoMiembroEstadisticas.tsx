@@ -296,11 +296,11 @@ function HeroTile({
 
 function Funnel({ stats }: { stats: MemberStats }) {
   const stages = [
-    { label: "Leads asignados",       value: stats.assignedLeads,    icon: Users,        color: "hsl(var(--muted-foreground))" },
-    { label: "Registros creados",      value: stats.recordsTotal,     icon: FileText,     color: "hsl(var(--primary))" },
-    { label: "Registros aprobados",    value: stats.recordsApproved,  icon: CheckCircle2, color: "hsl(var(--primary))" },
-    { label: "Visitas realizadas",     value: stats.visitsDone,       icon: CalendarDays, color: "hsl(var(--warning))" },
-    { label: "Ventas cerradas",        value: stats.salesCount,       icon: Euro,         color: "hsl(var(--success))" },
+    { label: "Leads",       value: stats.assignedLeads,    icon: Users,        color: "hsl(var(--muted-foreground))" },
+    { label: "Registros",   value: stats.recordsTotal,     icon: FileText,     color: "hsl(var(--primary))" },
+    { label: "Aprobados",   value: stats.recordsApproved,  icon: CheckCircle2, color: "hsl(var(--primary))" },
+    { label: "Visitas",     value: stats.visitsDone,       icon: CalendarDays, color: "hsl(var(--warning))" },
+    { label: "Ventas",      value: stats.salesCount,       icon: Euro,         color: "hsl(var(--success))" },
   ];
   const max = Math.max(...stages.map((s) => s.value), 1);
 
@@ -475,7 +475,13 @@ function Heatmap({ heatmap, peakHour }: { heatmap: number[]; peakHour: number })
           Hora pico · <b className="text-foreground tnum">{String(peakHour).padStart(2, "0")}:00</b>
         </p>
       </div>
-      <div className="overflow-x-auto">
+      {/* Hint móvil: scrollea horizontal para ver el heatmap completo */}
+      <p className="sm:hidden text-[10px] text-muted-foreground/80 italic mb-2 inline-flex items-center gap-1">
+        ← Desliza para ver las 24 horas →
+      </p>
+      <div className="overflow-x-auto relative sm:static">
+        {/* Fade gradiente a la derecha · solo móvil mientras hay overflow */}
+        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-card to-transparent sm:hidden" aria-hidden />
         <div className="min-w-[600px]">
           {/* Cabecera de horas */}
           <div className="grid grid-cols-[24px_repeat(24,1fr)] gap-px mb-1">

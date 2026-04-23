@@ -74,7 +74,9 @@ export function ViewToggle<V extends string>({
             )}
           >
             <Icon className={cn(iconOnly ? "h-4 w-4" : "h-3.5 w-3.5")} />
-            {!iconOnly && <span className="hidden sm:inline">{opt.label}</span>}
+            {/* Labels siempre visibles · en mobile ayudan a entender la opción.
+             *  Solo se ocultan cuando el caller pide explícitamente iconOnly. */}
+            {!iconOnly && <span>{opt.label}</span>}
           </button>
         );
       })}

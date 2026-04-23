@@ -379,7 +379,7 @@ function ListView({
                 key={m.id}
                 onClick={() => canEdit && onOpen(m.id)}
                 className={cn(
-                  "py-3 flex items-center gap-3 transition-colors",
+                  "py-3 flex flex-wrap items-center gap-2 sm:gap-3 transition-colors",
                   canEdit && "-mx-2 px-2 rounded-lg cursor-pointer hover:bg-muted/40",
                 )}
               >
@@ -389,7 +389,7 @@ function ListView({
                   <p className="text-xs text-muted-foreground truncate">{m.email}</p>
                 </div>
                 <span className={cn(
-                  "text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider",
+                  "text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0",
                   m.status === "pending"
                     ? "bg-warning/15 text-warning"
                     : "bg-primary/10 text-primary",
@@ -397,7 +397,10 @@ function ListView({
                   {m.status === "pending" ? "Pendiente" : "Invitado"}
                 </span>
                 {canEdit && (
-                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <div
+                    className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {m.status === "pending" ? (
                       <>
                         <Button size="sm" variant="outline" className="rounded-full" onClick={() => onReject(m.id)}>
@@ -546,8 +549,8 @@ function ListRow({
         </p>
       </div>
 
-      {/* Señales de estado compactas */}
-      <div className="flex items-center gap-1.5 shrink-0">
+      {/* Señales de estado compactas · ocultas en móvil para no saturar */}
+      <div className="hidden md:flex items-center gap-1.5 shrink-0">
         {m.twoFactorEnabled && (
           <span title="2FA activa" className="text-muted-foreground/60">
             <KeyRound className="h-3.5 w-3.5" />
@@ -565,13 +568,14 @@ function ListRow({
         )}
       </div>
 
-      <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider bg-success/10 text-success">
+      {/* Estado Activo · se oculta <sm para dar espacio al nombre */}
+      <span className="hidden sm:inline-flex text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider bg-success/10 text-success">
         Activo
       </span>
 
       <span
         className={cn(
-          "inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[11px] font-semibold",
+          "inline-flex items-center gap-1 sm:gap-1.5 h-6 sm:h-7 px-2 sm:px-3 rounded-full text-[10px] sm:text-[11px] font-semibold shrink-0",
           m.role === "admin" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
         )}
       >
@@ -657,11 +661,11 @@ function MemberCard({
         <div className="min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h3 className="text-sm font-bold text-foreground truncate leading-snug">
+              <h3 className="text-sm font-bold text-foreground leading-snug line-clamp-2">
                 {member.name}
               </h3>
               {member.jobTitle && (
-                <p className="text-[11px] text-muted-foreground truncate">
+                <p className="text-[11px] text-muted-foreground line-clamp-1">
                   {member.jobTitle}
                   {member.department && (
                     <span className="text-muted-foreground/50 mx-1">·</span>
