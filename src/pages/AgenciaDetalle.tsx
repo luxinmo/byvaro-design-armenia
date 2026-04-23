@@ -179,9 +179,33 @@ export default function AgenciaDetalle() {
     </footer>
   );
 
+  /* ─── Slot superior con el historial confidencial (solo admin) ───
+     El componente se auto-protege con useCanViewCompanyHistory y
+     no renderiza datos si el viewer no es admin del promotor. */
+  const visitorSlot = (
+    <section
+      id="historial-confidencial"
+      className="mb-5 rounded-2xl border border-border bg-card p-5 shadow-soft"
+      aria-label="Historial cross-empresa"
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Historial de la colaboración
+          </p>
+          <h2 className="text-base font-semibold text-foreground mt-0.5">
+            Todo lo que ha pasado entre tu empresa y {a.name}
+          </h2>
+        </div>
+      </div>
+      <CompanyActivityTimeline agencyId={a.id} agencyName={a.name} />
+    </section>
+  );
+
   return (
     <Empresa
       tenantId={id}
+      visitorSlot={visitorSlot}
       visitorFooter={visitorFooter}
     />
   );
