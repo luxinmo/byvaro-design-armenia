@@ -19,7 +19,7 @@
  *   - Solo ve anejos con `visibleToAgencies !== false` y
  *     `status === "available"` — igual patrón que Viviendas.
  *   - KPIs Reservados/Retirados ocultos.
- *   - Kebab reducido (Ver · Enviar · Iniciar compra).
+ *   - Kebab reducido (Ver · Enviar por email).
  *
  * TODO(backend): consume `GET /api/promociones/:id/anejos` (ver
  * `docs/backend-integration.md §3.1`). Hoy los datos vienen del mock
@@ -298,13 +298,15 @@ export function PromotionAnejosTable({
                             >
                               <Send className="h-3.5 w-3.5" /> Enviar por email
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              disabled={a.status !== "available"}
-                              onClick={() => toast({ title: "Iniciar compra", description: `Operación para ${a.publicId}` })}
-                              className="gap-2 text-xs"
-                            >
-                              <ShoppingCart className="h-3.5 w-3.5" /> Iniciar compra
-                            </DropdownMenuItem>
+                            {!isCollaboratorView && (
+                              <DropdownMenuItem
+                                disabled={a.status !== "available"}
+                                onClick={() => toast({ title: "Iniciar compra", description: `Operación para ${a.publicId}` })}
+                                className="gap-2 text-xs"
+                              >
+                                <ShoppingCart className="h-3.5 w-3.5" /> Iniciar compra
+                              </DropdownMenuItem>
+                            )}
                             {!isCollaboratorView && (
                               <>
                                 <DropdownMenuSeparator />
