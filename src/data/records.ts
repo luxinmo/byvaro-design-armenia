@@ -132,8 +132,14 @@ export type Registro = {
   visitTime?: string;        // HH:mm
   /** Tiempo de respuesta del promotor (ej. "1h 24min") · derivado por backend. */
   responseTime?: string;
-  /** Quién decidió + nota libre del promotor cuando aprueba/rechaza. */
+  /** Id del miembro (TEAM_MEMBERS) que tomó la decisión · fuente única.
+   *  El nombre/cargo se resuelven en render vía `findTeamMember()`. */
+  decidedByUserId?: string;
+  /** LEGACY · snapshot del nombre cuando se decidió. Se mantiene como
+   *  fallback histórico cuando el miembro original ha sido eliminado
+   *  o cuando no hay id (registros antiguos, decisiones automáticas). */
   decidedBy?: string;
+  /** LEGACY · snapshot del cargo. Mismo motivo que `decidedBy`. */
   decidedByRole?: string;
   decisionNote?: string;
   /** ISO · cuándo se decidió. Sirve para el GracePeriodBanner (5min). */
@@ -481,6 +487,7 @@ export const registros: Registro[] = [
     estado: "aprobado",
     matchPercentage: 0,
     responseTime: "1h 24min",
+    decidedByUserId: "u1",
     decidedBy: "Arman Rahmanov",
     decidedByRole: "Admin",
     consent: true,
@@ -502,6 +509,7 @@ export const registros: Registro[] = [
     estado: "aprobado",
     matchPercentage: 15,
     responseTime: "3h 12min",
+    decidedByUserId: "u2",
     decidedBy: "Laura Gómez",
     decidedByRole: "Comercial senior",
     matchWith: "Contacto parecido (nombre frecuente)",

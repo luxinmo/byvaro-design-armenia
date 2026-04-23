@@ -182,7 +182,12 @@ export type ContactOpportunityEntry = {
   /** Agencia que abrió la oportunidad (puede ser null si la abre el
    *  promotor en directo). */
   agencyName?: string;
-  /** Agente que la trabaja. */
+  /** Id del miembro (TEAM_MEMBERS) que trabaja la oportunidad · fuente única.
+   *  El nombre se resuelve en render vía `findTeamMember()`. */
+  agentUserId?: string;
+  /** LEGACY · snapshot del nombre del agente en el momento de crear la
+   *  oportunidad. Se mantiene como fallback (agente externo de agencia,
+   *  miembro desactivado). */
   agentName: string;
   status: "active" | "won" | "archived";
   createdAt: string;

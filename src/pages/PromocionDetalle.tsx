@@ -63,6 +63,7 @@ import { toast } from "sonner"; // feedback tras publicar · Toaster global en A
 import { useCurrentUser } from "@/lib/currentUser";
 import { Flag } from "@/components/ui/Flag";
 import { findLanguageByCode } from "@/lib/languages";
+import { TEAM_MEMBERS, type TeamMember } from "@/lib/team";
 
 function formatPrice(n: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
@@ -122,18 +123,67 @@ const conditionLabels: Record<string, string> = {
   email_completo: "Email completo",
 };
 
-// Mock contacts for the footer
-const contacts = [
-  { name: "Arman Yeghiazaryan", role: "Founder & Director Comercial", avatar: "https://i.pravatar.cc/80?img=33", phone: "+34 612 345 678", email: "arman@byvaro.com", languages: ["ES", "FR", "EN"] },
-  { name: "María López", role: "Responsable de Ventas", avatar: "https://i.pravatar.cc/80?img=12", phone: "+34 678 901 234", email: "maria@byvaro.com", languages: ["ES", "EN"] },
-  { name: "Thomas Müller", role: "International Sales", avatar: "https://i.pravatar.cc/80?img=23", phone: "+49 170 123 456", email: "thomas@byvaro.com", languages: ["DE", "EN", "ES"] },
-];
+/**
+ * Los contactos comerciales del footer ahora se derivan de TEAM_MEMBERS
+ * (ver ADR-050) · se filtran los miembros activos con
+ * `visibleOnProfile === true` (la misma regla que /empresa). Reactivo
+ * al localStorage `byvaro.organization.members.v4`.
+ *
+ * La función `buildContactsFromTeam` vive fuera del componente para
+ * que sea pura y fácil de testear.
+ */
+function buildContactsFromTeam(members: TeamMember[]): ContactPerson[] {
+  return members
+    .filter((m) => (!m.status || m.status === "active") && m.visibleOnProfile)
+    .map((m) => ({
+      name: m.name,
+      role: m.jobTitle ?? m.department ?? "",
+      avatar: m.avatarUrl ?? "",
+      phone: m.phone ?? "",
+      email: m.email,
+      languages: m.languages ?? [],
+    }));
+}
+
+/** Hook reactivo · lee TEAM_MEMBERS de localStorage y se actualiza
+ *  cuando el admin modifica algún miembro desde /equipo o /ajustes/perfil. */
+function useTeamMembersReactive(): TeamMember[] {
+  const [list, setList] = useState<TeamMember[]>(() => {
+    if (typeof window === "undefined") return TEAM_MEMBERS;
+    try {
+      const raw = window.localStorage.getItem("byvaro.organization.members.v4");
+      return raw ? JSON.parse(raw) : TEAM_MEMBERS;
+    } catch { return TEAM_MEMBERS; }
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const reload = () => {
+      try {
+        const raw = window.localStorage.getItem("byvaro.organization.members.v4");
+        setList(raw ? JSON.parse(raw) : TEAM_MEMBERS);
+      } catch { setList(TEAM_MEMBERS); }
+    };
+    window.addEventListener("byvaro:members-change", reload);
+    window.addEventListener("byvaro:me-change", reload);
+    window.addEventListener("storage", reload);
+    return () => {
+      window.removeEventListener("byvaro:members-change", reload);
+      window.removeEventListener("byvaro:me-change", reload);
+      window.removeEventListener("storage", reload);
+    };
+  }, []);
+  return list;
+}
 
 export default function DeveloperPromotionDetail({ agentMode = false }: { agentMode?: boolean } = {}) {
   const { id } = useParams();
   const navigate = useNavigate();
   const confirm = useConfirm();
   const [activeTab, setActiveTab] = useState(0);
+  /* Contactos comerciales del footer · derivados de TEAM_MEMBERS reactivo.
+   * Filtro idéntico al que usa /empresa (visibleOnProfile + active). */
+  const teamMembers = useTeamMembersReactive();
+  const contacts = useMemo(() => buildContactsFromTeam(teamMembers), [teamMembers]);
   const [_availabilityVersion, _setAvailabilityVersion] = useState<"v1" | "v2">("v2");
   /* `viewAsCollaborator` tiene dos entradas:
    *   · el usuario global es agencia → siempre vista colaborador.

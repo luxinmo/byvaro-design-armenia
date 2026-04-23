@@ -209,13 +209,19 @@ export default function Registros() {
     setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, estado } : r)));
   };
 
-  /** Aprobar/Rechazar marca `decidedAt` para activar el GracePeriodBanner.
+  /** Aprobar/Rechazar marca `decidedAt` para activar el GracePeriodBanner
+   *  + guarda el `decidedByUserId` del usuario actual (fuente única de la
+   *  autoría · el nombre se resuelve en render vía TEAM_MEMBERS).
    *  TODO(backend): POST /api/records/:id/approve|reject programa la
    *  notificación con delay 5min y la cancela si llega /revert antes. */
   const approve = (id: string) => {
     const now = new Date().toISOString();
     setRecords((prev) => prev.map((r) => r.id === id ? {
       ...r, estado: "aprobado", decidedAt: now,
+      decidedByUserId: currentUser.id,
+      /* Snapshot legacy para fallback si el miembro es eliminado más adelante. */
+      decidedBy: currentUser.name,
+      decidedByRole: currentUser.jobTitle,
     } : r));
     toast.success("Registro aprobado", { description: "Tienes 5 min para revertir antes de notificar a la agencia." });
   };
@@ -223,6 +229,9 @@ export default function Registros() {
     const now = new Date().toISOString();
     setRecords((prev) => prev.map((r) => r.id === id ? {
       ...r, estado: "rechazado", decidedAt: now,
+      decidedByUserId: currentUser.id,
+      decidedBy: currentUser.name,
+      decidedByRole: currentUser.jobTitle,
     } : r));
     toast.error("Registro rechazado", { description: "Tienes 5 min para revertir antes de notificar a la agencia." });
   };
