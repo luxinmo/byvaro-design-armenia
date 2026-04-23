@@ -13,9 +13,10 @@
  *      (navega a # y muestra toast de "próximamente").
  */
 import { NavLink, useLocation } from "react-router-dom";
-import { Home, Tag, Activity, Handshake, FileText, Mail } from "lucide-react";
+import { Home, Tag, Activity, Handshake, FileText, Mail, Contact } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useCurrentUser } from "@/lib/currentUser";
 
 type Tab = {
   label: string;
@@ -27,6 +28,10 @@ type Tab = {
   avatar?: boolean;
   /** Ruta aún no implementada → toast informativo. */
   pending?: boolean;
+  /** Solo para cuenta promotor. */
+  promotorOnly?: boolean;
+  /** Solo para cuenta agencia. */
+  agencyOnly?: boolean;
 };
 
 const tabs: Tab[] = [
@@ -34,8 +39,9 @@ const tabs: Tab[] = [
   { label: "Promociones", url: "/promociones", icon: Tag },
   { label: "Registros", url: "/registros", icon: FileText, tabletOnly: true },
   { label: "Actividades", url: "#actividades", icon: Activity, pending: true },
-  { label: "Red", url: "/colaboradores", icon: Handshake },
-  { label: "Emails", url: "/emails", icon: Mail, tabletOnly: true },
+  { label: "Red", url: "/colaboradores", icon: Handshake, promotorOnly: true },
+  { label: "Contactos", url: "/contactos", icon: Contact, agencyOnly: true },
+  { label: "Emails", url: "/emails", icon: Mail, tabletOnly: true, promotorOnly: true },
   { label: "Perfil", url: "/empresa", avatar: true },
 ];
 
@@ -44,6 +50,12 @@ const AVATAR_URL =
 
 export function MobileBottomNav() {
   const location = useLocation();
+  const isAgencyUser = useCurrentUser().accountType === "agency";
+  const visibleTabs = tabs.filter((t) => {
+    if (t.promotorOnly && isAgencyUser) return false;
+    if (t.agencyOnly && !isAgencyUser) return false;
+    return true;
+  });
 
   return (
     <nav
@@ -57,7 +69,7 @@ export function MobileBottomNav() {
           "grid-cols-5 md:grid-cols-7"
         )}
       >
-        {tabs.map((tab) => {
+        {visibleTabs.map((tab) => {
           const isActive =
             location.pathname === tab.url ||
             (tab.url === "/colaboradores" && location.pathname === "/contactos");

@@ -31,7 +31,7 @@ function StarRating({ value, onChange, readonly = false }: { value: number; onCh
           aria-label={`${n} estrella${n > 1 ? "s" : ""}`}
         >
           <Star
-            className={cn("h-3.5 w-3.5", n <= value ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30")}
+            className={cn("h-3.5 w-3.5", n <= value ? "fill-warning text-warning" : "text-muted-foreground/30")}
             strokeWidth={2}
           />
         </button>

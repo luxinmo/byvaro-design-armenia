@@ -151,7 +151,7 @@ function SettingsShellInner({ children }: Props) {
                             </span>
                             {SHOW_DONE_TICKS && l.done && (
                               <Check
-                                className="h-3 w-3 text-emerald-600 shrink-0 ml-auto"
+                                className="h-3 w-3 text-success shrink-0 ml-auto"
                                 strokeWidth={3}
                                 aria-label="Confirmado"
                               />

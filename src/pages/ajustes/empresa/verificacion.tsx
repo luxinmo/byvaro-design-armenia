@@ -26,8 +26,8 @@ const DEFAULT: State = { cif: "verified", realEstateLicense: "uploaded", insuran
 
 const STATUS_META: Record<DocStatus, { label: string; cls: string; icon: typeof Check }> = {
   pending: { label: "Pendiente", cls: "bg-muted text-muted-foreground", icon: Clock },
-  uploaded: { label: "En revisión", cls: "bg-amber-100 text-amber-700", icon: Clock },
-  verified: { label: "Verificado", cls: "bg-emerald-100 text-emerald-700", icon: Check },
+  uploaded: { label: "En revisión", cls: "bg-warning/15 text-warning", icon: Clock },
+  verified: { label: "Verificado", cls: "bg-success/15 text-success", icon: Check },
 };
 
 const DOCS = [
@@ -76,7 +76,7 @@ export default function AjustesEmpresaVerificacion() {
       <SettingsCard>
         <div className="flex items-start gap-4">
           <div className={cn("h-12 w-12 rounded-2xl grid place-items-center shrink-0",
-            allVerified ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
+            allVerified ? "bg-success/15 text-success" : "bg-warning/15 text-warning")}>
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div className="flex-1">

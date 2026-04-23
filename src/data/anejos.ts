@@ -32,6 +32,11 @@ export type Anejo = {
   agencyName?: string;
   reservedAt?: string;
   soldAt?: string;
+  /** Si es `false`, el anejo existe para el promotor pero NO se muestra
+   *  a agencias colaboradoras (no aparece en tabla ni KPIs). Por
+   *  defecto `true` (visible). Se controla desde el kebab "Visible
+   *  para agencias" en la ficha de promoción. */
+  visibleToAgencies?: boolean;
 };
 
 /**
@@ -55,7 +60,7 @@ export const anejosByPromotion: Record<string, Anejo[]> = {
     { id: "anejo-dev3-P1", promotionId: "dev-3", publicId: "P1", tipo: "parking",  precio: 22000, status: "reserved",  clientName: "Ana Martín", reservedAt: "2026-04-15" },
     { id: "anejo-dev3-P2", promotionId: "dev-3", publicId: "P2", tipo: "parking",  precio: 22000, status: "available" },
     { id: "anejo-dev3-T1", promotionId: "dev-3", publicId: "T1", tipo: "trastero", precio: 7000,  status: "available" },
-    { id: "anejo-dev3-T2", promotionId: "dev-3", publicId: "T2", tipo: "trastero", precio: 7000,  status: "available" },
+    { id: "anejo-dev3-T2", promotionId: "dev-3", publicId: "T2", tipo: "trastero", precio: 7000,  status: "available", visibleToAgencies: false },
     { id: "anejo-dev3-T3", promotionId: "dev-3", publicId: "T3", tipo: "trastero", precio: 7000,  status: "withdrawn" },
   ],
   "dev-4": [
@@ -76,8 +81,8 @@ export const anejosByPromotion: Record<string, Anejo[]> = {
 };
 
 export const anejoStatusConfig: Record<AnejoStatus, { label: string; dotClass: string; badgeClass: string }> = {
-  available: { label: "Disponible",   dotClass: "bg-emerald-500",    badgeClass: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
-  reserved:  { label: "Reservado",    dotClass: "bg-amber-500",      badgeClass: "bg-amber-50 text-amber-800 border border-amber-200" },
+  available: { label: "Disponible",   dotClass: "bg-success",    badgeClass: "bg-success/10 text-success border border-success/25" },
+  reserved:  { label: "Reservado",    dotClass: "bg-warning",      badgeClass: "bg-warning/10 text-warning border border-warning/25" },
   sold:      { label: "Vendido",      dotClass: "bg-muted-foreground",badgeClass: "bg-muted text-foreground border border-border" },
   withdrawn: { label: "Retirado",     dotClass: "bg-destructive/70", badgeClass: "bg-destructive/5 text-destructive border border-destructive/25" },
 };

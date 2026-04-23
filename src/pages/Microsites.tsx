@@ -232,9 +232,9 @@ export default function Microsites() {
               value={`${kpis.conversion.toLocaleString("es-ES")}%`}
               delta="+0,4 pts"
               deltaTone="positive"
-              iconTone="bg-emerald-500/10"
-              iconColor="text-emerald-600"
-              sparkColor="text-emerald-500"
+              iconTone="bg-success/10"
+              iconColor="text-success"
+              sparkColor="text-success"
               trend={[2.1, 2.3, 2.4, 2.5, 2.7, 2.9, kpis.conversion]}
             />
             <KpiCard
@@ -243,9 +243,9 @@ export default function Microsites() {
               value={formatNumber(kpis.domains)}
               delta={`${kpis.active - kpis.domains} con subdominio`}
               deltaTone="neutral"
-              iconTone="bg-amber-500/10"
-              iconColor="text-amber-600"
-              sparkColor="text-amber-500"
+              iconTone="bg-warning/10"
+              iconColor="text-warning"
+              sparkColor="text-warning"
               trend={[1, 1, 2, 2, 3, 3, kpis.domains]}
             />
           </section>
@@ -331,7 +331,7 @@ function KpiCard({
         {delta && (
           <span className={cn(
             "text-[11px] font-semibold tabular-nums inline-flex items-center gap-0.5",
-            deltaTone === "positive" && "text-emerald-600",
+            deltaTone === "positive" && "text-success",
             deltaTone === "neutral"  && "text-muted-foreground",
             deltaTone === "primary"  && "text-primary"
           )}>
@@ -402,8 +402,8 @@ function MicrositeCard({
           <Tag variant={status.variant} size="sm" shape="pill" className="shadow-soft">
             <span className={cn(
               "h-1.5 w-1.5 rounded-full",
-              site.status === "active"  && "bg-emerald-500",
-              site.status === "draft"   && "bg-amber-500",
+              site.status === "active"  && "bg-success",
+              site.status === "draft"   && "bg-warning",
               site.status === "offline" && "bg-muted-foreground/60",
             )} />
             {status.label}
@@ -443,7 +443,7 @@ function MicrositeCard({
           <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <span className="truncate">{url}</span>
           {copied ? (
-            <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" strokeWidth={2.5} />
+            <Check className="h-3.5 w-3.5 shrink-0 text-success" strokeWidth={2.5} />
           ) : (
             <Copy className="h-3.5 w-3.5 shrink-0 opacity-40 group-hover/url:opacity-100 transition-opacity" />
           )}
@@ -494,7 +494,7 @@ function MiniKpi({ label, value, tone }: { label: string; value: string; tone?: 
   return (
     <div>
       <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">{label}</p>
-      <p className={cn("text-sm font-bold tabular-nums mt-0.5", tone === "emerald" && "text-emerald-600")}>
+      <p className={cn("text-sm font-bold tabular-nums mt-0.5", tone === "emerald" && "text-success")}>
         {value}
       </p>
     </div>
@@ -760,7 +760,7 @@ function SeoTab({ site, onPatch }: { site: Microsite; onPatch: (p: Partial<Micro
       <div className="rounded-xl border border-border bg-muted/20 p-4">
         <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">Previsualización Google</p>
         <div className="bg-background rounded-lg p-3 border border-border/40">
-          <p className="text-[12px] text-emerald-700 truncate">
+          <p className="text-[12px] text-success truncate">
             https://{site.customDomain ?? `byvaro.com/${site.slug}`}
           </p>
           <p className="text-[15px] text-[#1a0dab] hover:underline cursor-pointer truncate mt-0.5">
@@ -868,11 +868,11 @@ function DomainTab({ site, onPatch }: { site: Microsite; onPatch: (p: Partial<Mi
         </div>
 
         {connected && (
-          <div className="mt-4 rounded-xl border border-amber-200/60 bg-amber-50/60 p-3.5">
+          <div className="mt-4 rounded-xl border border-warning/30 bg-warning/10 p-3.5">
             <div className="flex items-start gap-2.5">
-              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
               <div className="min-w-0 flex-1">
-                <p className="text-[12.5px] font-semibold text-amber-700 mb-1">Configura los DNS en tu proveedor</p>
+                <p className="text-[12.5px] font-semibold text-warning mb-1">Configura los DNS en tu proveedor</p>
                 <p className="text-[11.5px] text-muted-foreground leading-snug">
                   Añade el siguiente registro para validar y servir el microsite:
                 </p>
@@ -961,7 +961,7 @@ function AnalyticsNumber({ label, value, tone }: { label: string; value: string;
       <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">{label}</p>
       <p className={cn(
         "text-[18px] font-bold tabular-nums mt-1",
-        tone === "emerald" && "text-emerald-600"
+        tone === "emerald" && "text-success"
       )}>
         {value}
       </p>

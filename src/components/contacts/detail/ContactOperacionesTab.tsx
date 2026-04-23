@@ -96,18 +96,18 @@ export function ContactOperacionesTab({ detail }: { detail: ContactDetail }) {
 
 function ActiveOperationBanner({ op }: { op: ContactActiveOperation }) {
   return (
-    <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 sm:p-5">
+    <div className="rounded-2xl border border-success/30 bg-success/5 p-4 sm:p-5">
       <div className="flex items-start gap-3 mb-4">
-        <div className="h-10 w-10 rounded-xl bg-emerald-500/15 grid place-items-center text-emerald-700 dark:text-emerald-400 shrink-0">
+        <div className="h-10 w-10 rounded-xl bg-success/15 grid place-items-center text-success dark:text-success shrink-0">
           <Briefcase className="h-4 w-4" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-foreground">{op.title}</p>
-          <p className="text-[12px] text-emerald-700 dark:text-emerald-400 font-medium mt-0.5">
+          <p className="text-[12px] text-success dark:text-success font-medium mt-0.5">
             {op.unit ? `${op.unit} · ` : ""}{op.promotionName}
           </p>
         </div>
-        <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-500/15 rounded-full px-2.5 py-0.5 shrink-0">
+        <span className="text-[10px] uppercase tracking-wider font-semibold text-success dark:text-success bg-success/15 rounded-full px-2.5 py-0.5 shrink-0">
           En curso
         </span>
       </div>
@@ -117,10 +117,10 @@ function ActiveOperationBanner({ op }: { op: ContactActiveOperation }) {
         <KpiBlock label="Fecha de inicio" value={formatDateShort(op.startDate)} />
       </div>
       {/* CTA — ir al detalle de la venta (pantalla por crear). */}
-      <div className="mt-4 pt-3 border-t border-emerald-500/20 flex justify-end">
+      <div className="mt-4 pt-3 border-t border-success/20 flex justify-end">
         <Link
           to={`/ventas/${op.id}`}
-          className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:underline"
+          className="inline-flex items-center gap-1 text-[11px] font-semibold text-success dark:text-success hover:underline"
         >
           Ver venta <ArrowRight className="h-3 w-3" />
         </Link>
@@ -185,8 +185,8 @@ function LeadRow({ lead }: { lead: ContactRecordEntry }) {
 
 function leadStatusMeta(s: ContactRecordEntry["status"]): { label: string; cls: string } {
   switch (s) {
-    case "converted": return { label: "Convertido", cls: "text-emerald-700 bg-emerald-500/10 border-emerald-500/30" };
-    case "approved":  return { label: "Abierto",    cls: "text-amber-700 bg-amber-500/10 border-amber-500/30" };
+    case "converted": return { label: "Convertido", cls: "text-success bg-success/10 border-success/30" };
+    case "approved":  return { label: "Abierto",    cls: "text-warning bg-warning/10 border-warning/30" };
     case "pending":   return { label: "Pendiente",  cls: "text-blue-700 bg-blue-500/10 border-blue-500/30" };
     case "cancelled": return { label: "Cancelado",  cls: "text-muted-foreground bg-muted border-border" };
   }
@@ -260,7 +260,7 @@ function OpportunityRow({ opportunity }: { opportunity: ContactOpportunityEntry 
 function opportunityStatusMeta(s: ContactOpportunityEntry["status"]): { label: string; cls: string } {
   switch (s) {
     case "active":   return { label: "Activa",    cls: "text-blue-700 bg-blue-500/10" };
-    case "won":      return { label: "Ganada",    cls: "text-emerald-700 bg-emerald-500/15" };
+    case "won":      return { label: "Ganada",    cls: "text-success bg-success/15" };
     case "archived": return { label: "Archivada", cls: "text-muted-foreground bg-muted" };
   }
 }

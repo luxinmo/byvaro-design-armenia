@@ -47,8 +47,8 @@ const CATEGORY_META: Record<ContactDocumentEntry["category"], {
   color: string;
 }> = {
   id:         { label: "Identidad",  icon: IdCard,    color: "bg-violet-500/15 text-violet-700 dark:text-violet-400" },
-  legal:      { label: "Legal",      icon: FileText,  color: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
-  commercial: { label: "Comercial",  icon: Briefcase, color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
+  legal:      { label: "Legal",      icon: FileText,  color: "bg-warning/15 text-warning dark:text-warning" },
+  commercial: { label: "Comercial",  icon: Briefcase, color: "bg-success/15 text-success dark:text-success" },
   other:      { label: "Otros",      icon: Folder,    color: "bg-muted text-muted-foreground" },
 };
 

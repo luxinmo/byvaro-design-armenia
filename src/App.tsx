@@ -13,6 +13,8 @@ import Colaboradores from "@/pages/Colaboradores";
 import AgenciaDetalle from "@/pages/AgenciaDetalle";
 import ColaboradoresEstadisticas from "@/pages/ColaboradoresEstadisticas";
 import Contactos from "@/pages/Contactos";
+import Equipo from "@/pages/Equipo";
+import EquipoMiembroEstadisticas from "@/pages/EquipoMiembroEstadisticas";
 import ContactoDetalle from "@/pages/ContactoDetalle";
 import Microsites from "@/pages/Microsites";
 import AgenciaEntry from "@/pages/AgenciaEntry";
@@ -75,6 +77,16 @@ import PromocionDetalle from "@/pages/PromocionDetalle";
 import PromocionesCardsV1 from "@/pages/design-previews/PromocionesCardsV1";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
+import { useCurrentUser } from "@/lib/currentUser";
+
+/** Rutas promotor-only · si una agencia entra por URL directa la
+ *  redirigimos a /inicio (el sidebar ya las oculta, pero no podemos
+ *  confiar solo en eso para GDPR). */
+function PromotorOnly({ children }: { children: JSX.Element }) {
+  const isAgencyUser = useCurrentUser().accountType === "agency";
+  if (isAgencyUser) return <Navigate to="/inicio" replace />;
+  return children;
+}
 
 export default function App() {
   return (
@@ -174,18 +186,20 @@ export default function App() {
                 <Route path="/inicio" element={<Inicio />} />
                 <Route path="/promociones" element={<Promociones />} />
                 <Route path="/promociones/:id" element={<PromocionDetalle />} />
-                <Route path="/leads" element={<Leads />} />
-                <Route path="/leads/:id" element={<LeadDetalle />} />
+                <Route path="/leads" element={<PromotorOnly><Leads /></PromotorOnly>} />
+                <Route path="/leads/:id" element={<PromotorOnly><LeadDetalle /></PromotorOnly>} />
                 <Route path="/registros" element={<Registros />} />
                 <Route path="/ventas" element={<Ventas />} />
                 <Route path="/calendario" element={<Calendario />} />
-                <Route path="/colaboradores" element={<Colaboradores />} />
-                <Route path="/colaboradores/estadisticas" element={<ColaboradoresEstadisticas />} />
-                <Route path="/colaboradores/:id" element={<AgenciaDetalle />} />
+                <Route path="/colaboradores" element={<PromotorOnly><Colaboradores /></PromotorOnly>} />
+                <Route path="/colaboradores/estadisticas" element={<PromotorOnly><ColaboradoresEstadisticas /></PromotorOnly>} />
+                <Route path="/colaboradores/:id" element={<PromotorOnly><AgenciaDetalle /></PromotorOnly>} />
                 <Route path="/contactos" element={<Contactos />} />
                 <Route path="/contactos/:id" element={<ContactoDetalle />} />
-                <Route path="/microsites" element={<Microsites />} />
-                <Route path="/emails" element={<Emails />} />
+                <Route path="/equipo" element={<PromotorOnly><Equipo /></PromotorOnly>} />
+                <Route path="/equipo/:id/estadisticas" element={<PromotorOnly><EquipoMiembroEstadisticas /></PromotorOnly>} />
+                <Route path="/microsites" element={<PromotorOnly><Microsites /></PromotorOnly>} />
+                <Route path="/emails" element={<PromotorOnly><Emails /></PromotorOnly>} />
                 {/* /ajustes/* viven fuera del AppLayout (SettingsShell propio) */}
                 {/* Empresa (administración) — una sola página con tabs internos */}
                 <Route path="/empresa" element={<Empresa />} />

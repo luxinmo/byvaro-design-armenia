@@ -101,7 +101,8 @@ Todos combinables. Se aplican en cascada.
 | Búsqueda texto | input | Nombre, email, teléfono, DNI, nacionalidad, promoción, agencia |
 | Estado | tabs single-select | `todos`, `pendiente`, `aprobado`, `rechazado`, `duplicado` |
 | Promoción | multi-select pill | Todas las promociones del promotor |
-| Agencia | multi-select pill | Todas las agencias conocidas |
+| **Origen** | multi-select pill | `direct` (registro propio del promotor) / `collaborator` (enviado por agencia) — ver ADR-046 |
+| Agencia | multi-select pill | Todas las agencias conocidas · **excluye los directos** automáticamente cuando hay selección |
 | Solo duplicados | switch | Solo registros con `matchPercentage >= 30` |
 
 ## Acciones del usuario
@@ -133,20 +134,66 @@ registro entrante y candidato duplicado. La ponderación de campos (40 %
 teléfono, 30 % nombre, 20 % email, 10 % nacionalidad) vive del lado
 backend y no se recalcula en el cliente.
 
+## Origen del registro (ADR-046)
+
+Todo `Registro` tiene un campo `origen: "direct" | "collaborator"` que
+decide el flujo, la visibilidad de datos y la presentación:
+
+| Aspecto | `collaborator` | `direct` |
+|---|---|---|
+| Quién lo crea | Agencia colaboradora | El propio promotor desde su CRM |
+| `agencyId` | Obligatorio | Undefined |
+| Campos del cliente | Solo 3 canónicos (nombre, nacionalidad, últimos 4 del teléfono) | Perfil completo (email, tel, DNI, etc.) |
+| Flujo de aprobación | `pendiente` → promotor decide | Puede arrancar directamente en `aprobado` |
+| IA de duplicados | Siempre corre | Siempre corre |
+
+**UI:**
+
+- **List card**: badge `Directo` (verde, icono `UserCheck`) vs `Colab.`
+  (gris, icono `Handshake`). Si es directo no se pinta el nombre de
+  agencia (no hay).
+- **Detalle · bloque "Origen"**: tarjeta distinta según `origen`.
+  Directo → card verde "Registro directo · captado por el promotor".
+  Colaborador → card con nombre + localización de la agencia.
+- **CompareCard** del lado-a-lado muestra "Registro directo · promotor"
+  en lugar del nombre de agencia cuando aplica.
+- **ActivityTimeline**: el primer evento (`submitted`) cambia a
+  "Registro creado por el promotor" con `actor = Promotor` en directos.
+
+## Grace period de decisión
+
+Al aprobar o rechazar se marca `decidedAt` (ISO). Durante los 5 min
+siguientes se muestra el `GracePeriodBanner` con countdown MM:SS y un
+botón "Revertir" que devuelve el registro a `pendiente`. Una vez
+expirado el banner desaparece y la notificación a la agencia se envía.
+
+- `POST /api/records/:id/approve|reject` programa la notificación con
+  delay 5 min.
+- `POST /api/records/:id/revert` cancela el job si llega antes del
+  disparo.
+
 ## Endpoints esperados (contract-first)
 
 ```http
 # Lista
-GET /api/records?status=&promotion=&agency=&onlyDuplicates=&q=
+GET /api/records?status=&promotion=&agency=&origen=&onlyDuplicates=&q=
   → Registro[]
 
 # Detalle (si se quiere fetch lazy al abrir)
 GET /api/records/:id
   → Registro
 
+# Alta (desde ClientRegistrationDialog)
+POST /api/records
+  body: {
+    origen: "direct" | "collaborator",
+    promotionId, agencyId?, cliente, tipo?, visitDate?, visitTime?
+  }
+
 # Decisiones individuales
 POST /api/records/:id/approve
 POST /api/records/:id/reject   body: { reason?: string }
+POST /api/records/:id/revert   // solo dentro del grace period
 
 # Decisiones en lote
 POST /api/records/bulk-approve  body: { ids: string[] }
@@ -177,3 +224,8 @@ calculados por el servicio de IA (ver `docs/open-questions.md#Q1`).
 - **2026-04-20** · Primera implementación funcional con mocks. Reemplaza
   el `PlaceholderPage` original. Componentes, filtros, selección múltiple,
   comparación lado-a-lado y toasts listos.
+- **2026-04-23** · Añadido `origen` (direct / collaborator) en el modelo
+  + badge en la lista + filtro pill + card en el detalle. `agencyId`
+  pasa a ser opcional. Añadido `GracePeriodBanner` de 5 min sobre
+  `decidedAt` y `ActivityTimeline` en el detalle (colapsado en v2).
+  Ver ADR-046.

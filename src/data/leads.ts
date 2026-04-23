@@ -96,10 +96,10 @@ export const leadSourceLabel: Record<LeadSource, string> = {
 export const leadStatusConfig: Record<LeadStatus, { label: string; badgeClass: string; dotClass: string }> = {
   new:        { label: "Nuevo",       badgeClass: "bg-primary/10 text-primary border border-primary/25",             dotClass: "bg-primary" },
   qualified:  { label: "Cualificado", badgeClass: "bg-sky-50 text-sky-800 border border-sky-200",                    dotClass: "bg-sky-500" },
-  contacted:  { label: "Contactado",  badgeClass: "bg-amber-50 text-amber-800 border border-amber-200",              dotClass: "bg-amber-500" },
+  contacted:  { label: "Contactado",  badgeClass: "bg-warning/10 text-warning border border-warning/25",              dotClass: "bg-warning" },
   duplicate:  { label: "Duplicado",   badgeClass: "bg-destructive/5 text-destructive border border-destructive/25",  dotClass: "bg-destructive" },
   rejected:   { label: "Descartado",  badgeClass: "bg-muted text-muted-foreground border border-border",             dotClass: "bg-muted-foreground" },
-  converted:  { label: "Convertido",  badgeClass: "bg-emerald-50 text-emerald-800 border border-emerald-200",        dotClass: "bg-emerald-500" },
+  converted:  { label: "Convertido",  badgeClass: "bg-success/10 text-success border border-success/25",        dotClass: "bg-success" },
 };
 
 /* ═══════════════════════════════════════════════════════════════════

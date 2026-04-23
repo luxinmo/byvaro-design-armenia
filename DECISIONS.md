@@ -1172,3 +1172,290 @@ Ver: `src/components/contacts/detail/ContactEmailsTab.tsx`,
 `src/components/contacts/contactEventsStorage.ts`
 (`recordEmailDelivered/Opened/Received`),
 `docs/screens/contactos-ficha.md` §Tabs · Emails.
+
+---
+
+## 2026-04-23 · ADR-046 · Asimetría de datos entre registro `direct` y `collaborator`
+
+**Contexto:** Un registro puede entrar por dos caminos: lo crea una
+agencia colaboradora (caso clásico que exige IA de duplicados) o lo
+crea el propio promotor desde su CRM para reservar un cliente "suyo".
+Hasta ahora el modelo `Registro` tenía `agencyId` obligatorio y trataba
+los dos casos igual.
+
+**Decisión:** Introducir `RegistroOrigen = "direct" | "collaborator"`
+como eje canónico del flujo. `agencyId` pasa a ser opcional (requerido
+solo para `collaborator`). La visibilidad de datos es asimétrica:
+
+- **`collaborator`** — la agencia solo envía 3 campos canónicos:
+  `nombre` completo, `nacionalidad`, `phoneLast4`. Email, DNI y teléfono
+  completo quedan **bloqueados con candado** en el detalle hasta que el
+  promotor apruebe. Backend debe ignorar/rechazar esos campos si llegan
+  en el `POST /api/records`.
+- **`direct`** — el promotor tiene todos los datos del cliente desde el
+  minuto cero (es su propio CRM). Se muestran sin restricción.
+
+UI:
+- List card → badge `Directo` (verde) vs `Colab.` (gris).
+- Detalle → card "Origen" distinta; CompareCard reetiquetada en directo.
+- ActivityTimeline → primer evento con actor = promotor en directos.
+- Filtro pill "Origen" en el toolbar de `/registros`.
+- Filtro "Agencia" excluye directos automáticamente cuando hay selección.
+
+**Alternativas:**
+
+- Mantener un solo tipo y convertir "direct" en un colaborador especial
+  con `agencyId = promotorId`. → Contamina las queries de comisiones y
+  rompe la semántica del panel "Colaboradores".
+- Dos entidades separadas (`DirectRecord` y `AgencyRecord`). → Duplica
+  IA de duplicados, endpoints, filtros y la pantalla. Peor para el
+  promotor que los quiere ver mezclados en una bandeja única.
+
+**Razón:** Un solo eje (`origen`) modela la diferencia sin duplicar
+nada. La asimetría de datos refleja una restricción real de privacidad
+cross-agencia: una agencia colaboradora **no puede** compartir el email
+de su cliente a otra agencia ni al promotor antes de la aprobación
+(riesgo legal + competitivo). La UI debe mostrar ese candado de forma
+explícita para que el promotor entienda por qué faltan campos.
+
+**Pregunta abierta** (ver `docs/open-questions.md`):
+¿Al aprobar, los campos bloqueados se desbloquean automáticamente, o
+nunca se comparten y quedan solo en el CRM de la agencia?
+
+Ver: `src/data/records.ts` (`RegistroOrigen` + mocks directos),
+`src/pages/Registros.tsx` (badge + filtro + detalle),
+`src/components/promotions/detail/ClientRegistrationDialog.tsx:260`
+(alta con origen correcto según `accountType`),
+`docs/data-model.md §Registro`,
+`docs/backend-integration.md §7.2 · Registros`,
+`docs/screens/registros.md §Origen del registro`,
+`preview/registros-clean.html` (mockup con candado).
+
+---
+
+## 2026-04-23 · ADR-047 · Perfil del usuario desacoplado del mock, con store único
+
+**Contexto:** `/ajustes/perfil/personal` permitía editar el perfil, pero
+el resultado quedaba huérfano: `useCurrentUser()` seguía devolviendo el
+`DEVELOPER_USER` hardcoded y los 93 consumers del hook (sidebar, emails,
+historial de contactos, permisos) ignoraban los cambios. El usuario
+editaba su nombre, pulsaba Guardar… y seguía apareciendo como "Arman
+Rahmanov" en todas partes.
+
+**Decisión:** Crear `src/lib/profileStorage.ts` como store único del
+perfil editable, con el mismo patrón que `registrosStorage.ts`
+(get/save + hook reactivo con `CustomEvent`). Reescribir
+`useCurrentUser()` para fusionar el perfil persistido sobre el mock
+base cuando la cuenta es promotor. El modo "ver como agencia" sigue
+recibiendo la identidad desde el mock de la agencia (es una simulación
+demo, no un perfil de usuario).
+
+Paralelamente, `logout()` limpia ahora `byvaro.user.profile.v1` y
+`byvaro.user.phones.v1` para que no se hereden datos entre sesiones.
+
+**Alternativas:**
+
+- Contexto global (React Context + Provider) para el perfil. →
+  Requiere envolver la app y añadir más re-renders. El hook + evento
+  custom es más ligero y compatible con el patrón de `registrosStorage`.
+- Leer directamente `localStorage` desde `useCurrentUser()`. → Pierde
+  reactividad entre pestañas y esconde la persistencia.
+
+**Razón:** Un único hook (`useCurrentUser`) como punto de verdad para
+la identidad. Cualquier consumer hoy o mañana se beneficia del cambio
+sin tocar su código. Al portar al backend, sustituir la implementación
+del hook para que lea del `AuthProvider`/JWT es la única pieza a cambiar
+— los 93 consumers no se tocan. La separación `profileStorage.ts`
+también hace obvio qué persistir en el servidor cuando llegue el
+`PATCH /api/me`.
+
+Ver: `src/lib/profileStorage.ts`,
+`src/lib/currentUser.ts:58-80` (fusión),
+`src/lib/accountType.ts:75-88` (logout amplía su scope),
+`src/pages/ajustes/perfil/personal.tsx` (consume los helpers),
+`src/components/MobileHeader.tsx` (drawer muestra identidad + logout),
+`docs/backend-integration.md §1 · Auth & usuarios` (nuevos endpoints
+`GET/PATCH /api/me` + `POST /api/auth/logout`).
+
+---
+
+## 2026-04-23 · ADR-048 · Permisos granulares por miembro, desacoplados del rol
+
+**Contexto:** Hasta ahora `TeamMember` tenía sólo `role: "admin" |
+"member"` como eje de permisos. Esto no cubre casos reales que aparecen
+en cuanto el equipo crece más allá de 3-4 personas:
+
+- Un agente senior **puede aprobar registros** pero **no es admin**
+  (no gestiona facturación ni miembros).
+- Un administrativo **es admin** para gestionar miembros e integraciones
+  pero **no debe firmar contratos** (ni tiene representación legal).
+- Parte del equipo aparece **en el microsite público** del promotor
+  (las caras comerciales), otra parte **no** (gente de backoffice).
+
+**Decisión:** Añadir tres flags booleanos independientes al
+`TeamMember`, que se combinan con `role` para decidir capacidad:
+
+- `canAcceptRegistrations` — gate en los botones Aprobar/Rechazar de
+  `/registros` (y en las acciones bulk).
+- `canSign` — gate en el flujo de cierre/activación de colaboraciones
+  con agencias (contratos, condiciones comerciales).
+- `visibleOnProfile` — filtro aplicado en `/empresa` y en los templates
+  del microsite de cada promoción para decidir qué miembros se
+  muestran al público.
+
+La UI de edición vive en `/ajustes/usuarios/miembros` · cada card es
+expandible y permite al admin editar cargo, departamento y los tres
+toggles inline.
+
+**Alternativas:**
+
+- **Rol con más valores** (`admin | senior | agent | accountant`). →
+  Combinatoria explota · tres ejes independientes cuelgan mejor de
+  flags booleanos que de un único string.
+- **Sistema de permisos totalmente libre** (catálogo de ~50 keys como
+  `docs/permissions.md` define para el largo plazo). → Correcto pero
+  excesivo para el MVP · introducir los 3 flags hoy desbloquea los
+  casos de negocio reales sin parálisis del diseño.
+- **Heredar de `role`** (admin ⇒ todo). → Rompe el caso "admin
+  técnico sin firma" que es el más frecuente en promotores pequeños.
+
+**Razón:** Tres ejes ortogonales (admin técnico / representación
+legal / cara comercial) son ejes reales del negocio que el usuario
+identifica fácilmente. Un flag booleano es más legible que un rol
+compuesto, tanto para el admin al configurarlos como para el backend
+al validarlos (middleware simple: `if (!user.canAcceptRegistrations)
+return 403`).
+
+El catálogo completo de permisos (`docs/permissions.md`) queda
+intacto — cuando se implemente, los 3 flags mapean directamente a
+keys `records.decide`, `contracts.sign`, `profile.visible` y la UI
+pasa a leer de allí sin tocar esta pantalla.
+
+**Impacto backend:** `PATCH /api/organization/members/:id` acepta los
+tres flags en el body · RLS/middleware comprueba cada uno en su
+endpoint correspondiente. Un endpoint que requiera `canAcceptRegistrations`
+y no lo tenga devuelve 403 aunque el usuario sea admin.
+
+Ver: `src/lib/team.ts` (tipo + mocks),
+`src/pages/ajustes/usuarios/miembros.tsx` (UI de edición),
+`docs/screens/ajustes-miembros.md` (spec funcional),
+`docs/backend-integration.md §1 · Auth & usuarios` (endpoints),
+`docs/data-model.md §Usuario / TeamMember`.
+
+---
+
+## 2026-04-23 · ADR-049 · Dashboard de rendimiento del miembro + 2 flows de alta
+
+**Contexto:** El admin necesitaba dos capacidades que hasta ahora no
+estaban en el producto:
+
+1. **Dar de alta** nuevos miembros de forma ágil. Invitar por email es
+   lo estándar, pero en onboarding presencial (p. ej. el admin está
+   con el nuevo agente en la oficina) no sirve — se necesita poder
+   crear la cuenta en el momento y entregar una contraseña temporal.
+2. **Medir el desempeño** de cada miembro con datos accionables. Las
+   decisiones de gestión (a quién promover, formar, reasignar leads,
+   o incluso despedir) se hacían sin datos consistentes.
+
+También había un problema colateral: un mismo email podía acabar
+ligado a varias organizaciones si el admin no tenía cuidado, creando
+una confusión grave sobre propiedad de datos (¿de quién son los
+registros creados por ese email?).
+
+**Decisión:**
+
+### 1. Dos flows de alta con una regla dura de unicidad
+
+- **Flow A · Invitar por email** (recomendado).
+  `POST /api/organization/invitations { email, role, personalMessage? }`.
+  Backend envía email con token 7 días. Plantilla canónica en
+  `src/lib/teamInvitationEmail.ts` (es/en). El dialog del admin
+  muestra **preview HTML del email** antes de enviar (iframe).
+- **Flow B · Crear con contraseña temporal**.
+  `POST /api/organization/members { ..., generateTempPassword: true }`.
+  Devuelve `{ member, tempPassword }`. Admin copia y comparte por
+  canal seguro. `mustChangePassword = true` al primer login.
+- **Regla fuerte**: `409 EMAIL_TAKEN` si el email ya está en cualquier
+  otra organización. La respuesta incluye `existingWorkspace` para que
+  el frontend muestre "Este email ya pertenece a Prime Properties".
+
+### 2. Dashboard `/equipo/:id/estadisticas` con 4 bloques canónicos
+
+- **Resultados comerciales** · ventas €, count, comisión, registros
+  aprobados, tasa aprobación, visitas realizadas, conversión visita→venta.
+- **Pipeline** · leads asignados, oportunidades abiertas, visitas
+  próximas 7d, registros pendientes.
+- **Comunicación** · emails + % apertura, WhatsApp, llamadas, tiempo
+  medio respuesta a lead.
+- **Actividad CRM** · tiempo activo diario, tiempo/sesión, hora pico,
+  heatmap día×hora (168 celdas), racha, duplicados, visitas sin evaluar.
+
+Benchmarks contra la media del equipo en los KPIs principales
+(↑34% vs equipo) para dar contexto inmediato.
+
+### 3. Plan de comisiones opcional
+
+Dos campos `commissionCapturePct` (0-100) y `commissionSalePct` (0-100)
+en el `TeamMember`. `undefined` = hereda plan del workspace. Expuestos
+en un pill del header del dashboard del miembro cuando tienen valor.
+
+### 4. Resumen de rendimiento en el popup de edición
+
+`MemberFormDialog` incluye una sección "Rendimiento · últimos 30 días"
+con 6 KPI tiles y un link "Ver estadísticas completas →" al dashboard.
+Esto evita hacer un popup gigante y mantiene el dialog centrado en
+edición de perfil, dejando el análisis profundo para su pantalla.
+
+**Alternativas:**
+
+- **Un único flow de alta (solo invitación)**. → Bloquea el caso
+  onboarding presencial, que es real en agencias pequeñas.
+- **Crear siempre con contraseña temporal y nunca invitar**. → Peor
+  UX para casos remotos (mucha agencia es distribuida).
+- **Dashboard dentro del popup** sin página dedicada. → 15 campos en
+  un popup rompe el foco · un dashboard completo merece su pantalla.
+- **Mostrar stats solo al admin**. → Lo hacemos inicialmente, pero
+  cuando haya privacy granular, el miembro debería ver sus propias
+  stats también (pendiente · TODO en la pantalla).
+
+**Razón:**
+
+- La regla de un email único por organización es **estructural**: evita
+  datos huérfanos, facilita RLS backend, y alinea con cómo funcionan
+  SaaS estándar (Slack, Linear, Notion — todos lo hacen así).
+- Los 4 bloques de KPIs corresponden a preguntas reales del dueño de
+  agencia: ¿produce?, ¿tiene pipeline?, ¿comunica?, ¿es constante?.
+- El plan de comisiones a nivel de miembro habilita configuraciones
+  heterogéneas (junior 10%, senior 20%) sin tocar el plan global.
+
+**Preparación para IA (sin implementar todavía):**
+
+- El shape de `MemberStats` está diseñado para ser el INPUT directo
+  de `POST /api/ai/analyze-member/:id`. El output `AIMemberReport` ya
+  está especificado en `docs/plan-equipo-estadisticas.md §3`.
+- La golden rule de CLAUDE.md (§📊 KPIs en el dashboard del miembro)
+  obliga a que cualquier señal nueva de actividad se añada al
+  `MemberStats` y se muestre en la pantalla, manteniendo sincronizado
+  lo que ve el admin con lo que procesa la IA.
+
+**Impacto:**
+
+- Frontend: 4 archivos nuevos (`Equipo.tsx`, `EquipoMiembroEstadisticas.tsx`,
+  `MemberFormDialog.tsx`, `InviteMemberDialog.tsx`), 4 helpers
+  (`memberStats.ts`, `jobTitles.ts`, `teamInvitationEmail.ts`,
+  `flags.ts`), 2 components reutilizables (`Flag.tsx`, `ViewToggle.tsx`).
+- Backend: 7 endpoints nuevos listados en
+  `docs/backend-integration.md §1` y `§1.9`.
+- Regla de oro nueva en CLAUDE.md (§📊 KPIs en el dashboard del miembro).
+- 250 SVGs de banderas en `public/flags/` · reemplazan emojis en
+  nacionalidades, idiomas y prefijos telefónicos.
+
+Ver:
+- `src/pages/Equipo.tsx` · `src/pages/EquipoMiembroEstadisticas.tsx`,
+- `src/components/team/{MemberFormDialog,InviteMemberDialog,JobTitlePicker}.tsx`,
+- `src/data/{memberStats,jobTitles}.ts`,
+- `src/lib/{teamInvitationEmail,flags}.ts`,
+- `docs/screens/{equipo,equipo-estadisticas}.md`,
+- `docs/plan-equipo-estadisticas.md`,
+- `docs/backend-integration.md §1.9`,
+- CLAUDE.md §📊 KPIs en el dashboard del miembro.

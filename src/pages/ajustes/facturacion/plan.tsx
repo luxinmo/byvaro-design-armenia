@@ -73,13 +73,13 @@ export default function AjustesFacturacionPlan() {
                     {!unlimited && (
                       <> / <span className="text-muted-foreground/60">{u.limit?.toLocaleString("es-ES")}{u.unit && ` ${u.unit}`}</span></>
                     )}
-                    {unlimited && <span className="text-emerald-600 ml-1.5">· Ilimitado</span>}
+                    {unlimited && <span className="text-success ml-1.5">· Ilimitado</span>}
                   </span>
                 </div>
                 {!unlimited && (
                   <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${pct > 80 ? "bg-amber-500" : "bg-primary"}`}
+                      className={`h-full rounded-full transition-all ${pct > 80 ? "bg-warning" : "bg-primary"}`}
                       style={{ width: `${pct}%` }}
                     />
                   </div>

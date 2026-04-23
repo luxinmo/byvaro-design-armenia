@@ -5,6 +5,8 @@ import {
   MapPin, SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCurrentUser } from "@/lib/currentUser";
+import AgencyHome from "./AgencyHome";
 
 /* ═══════════════════════════════════════════════════════════════════
    SPARKLINE — minimal trend visualization
@@ -64,7 +66,7 @@ function Kpi({ icon: Icon, label, value, delta, deltaTone = "positive", sub, ico
         {delta && (
           <span className={cn(
             "text-[11px] font-semibold tabular-nums inline-flex items-center gap-0.5",
-            deltaTone === "positive" && "text-emerald-600",
+            deltaTone === "positive" && "text-success",
             deltaTone === "neutral" && "text-muted-foreground",
             deltaTone === "primary" && "text-primary"
           )}>
@@ -82,6 +84,13 @@ function Kpi({ icon: Icon, label, value, delta, deltaTone = "positive", sub, ico
    PAGE
    ═══════════════════════════════════════════════════════════════════ */
 export default function Inicio() {
+  /* Dual-role: la agencia tiene un dashboard propio (KPIs filtrados,
+   * promociones asignadas, comisiones estimadas). El promotor conserva
+   * este dashboard completo. */
+  const user = useCurrentUser();
+  if (user.accountType === "agency") {
+    return <AgencyHome />;
+  }
   return (
     <div className="flex-1 flex flex-col min-h-full bg-background">
       {/* ══════════════ PAGE HEADER ══════════════ */}
@@ -90,7 +99,7 @@ export default function Inicio() {
           <div>
             <p className="text-xs text-muted-foreground font-medium">Domingo 19 abril · Semana 16</p>
             <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight mt-1 leading-tight">
-              Hola, Arman <span className="text-muted-foreground font-medium">· resumen de tu semana</span>
+              Hola, {user.name.split(" ")[0]} <span className="text-muted-foreground font-medium">· resumen de tu semana</span>
             </h1>
           </div>
           <div className="flex items-center gap-2">
@@ -129,9 +138,9 @@ export default function Inicio() {
               value="€3,2M"
               delta="+24%"
               sub="9 operaciones · ticket medio €355K"
-              iconTone="bg-emerald-500/10"
-              iconColor="text-emerald-600"
-              sparkColor="text-emerald-500"
+              iconTone="bg-success/10"
+              iconColor="text-success"
+              sparkColor="text-success"
               trend={[1, 1.4, 1.8, 2.2, 2.5, 2.8, 3.2]}
             />
             <Kpi
@@ -153,9 +162,9 @@ export default function Inicio() {
               delta="+2 nuevos"
               deltaTone="primary"
               sub="2 solicitudes pendientes"
-              iconTone="bg-amber-500/10"
-              iconColor="text-amber-600"
-              sparkColor="text-amber-500"
+              iconTone="bg-warning/10"
+              iconColor="text-warning"
+              sparkColor="text-warning"
               trend={[10, 11, 13, 13, 14, 15, 17]}
             />
           </section>
@@ -209,7 +218,7 @@ export default function Inicio() {
                 <ul className="divide-y divide-border">
                   <ActivityItem
                     icon={<Check className="h-4 w-4" />}
-                    iconTone="bg-emerald-500/10 text-emerald-600"
+                    iconTone="bg-success/10 text-success"
                     title={<><span className="font-semibold">Venta cerrada</span> — <span className="text-muted-foreground">Dmitri Volkov</span> 🇷🇺 ha comprado el ático 4º-B en <span className="font-medium">Los Arqueros</span></>}
                     meta={<><span className="inline-flex items-center gap-1"><span className="w-4 h-4 rounded-full bg-primary/15" />Engel & Völkers</span><span>·</span><span>€ 512.000</span><span>·</span><span>hace 2 h</span></>}
                   />
@@ -217,7 +226,7 @@ export default function Inicio() {
                     icon={<FileText className="h-4 w-4" />}
                     iconTone="bg-primary/10 text-primary"
                     title={<><span className="font-semibold">Registro pendiente</span> — Ahmed Al-Rashid 🇸🇦 en <span className="font-medium">Residencial Costa Brava</span></>}
-                    meta={<><span className="inline-flex items-center gap-1 text-amber-700"><AlertTriangle className="h-3 w-3" /> Coincidencia 85% con registro previo</span><span>·</span><span>hace 3 h</span></>}
+                    meta={<><span className="inline-flex items-center gap-1 text-warning"><AlertTriangle className="h-3 w-3" /> Coincidencia 85% con registro previo</span><span>·</span><span>hace 3 h</span></>}
                     action="Revisar"
                   />
                   <ActivityItem
@@ -228,7 +237,7 @@ export default function Inicio() {
                   />
                   <ActivityItem
                     icon={<Handshake className="h-4 w-4" />}
-                    iconTone="bg-amber-500/10 text-amber-600"
+                    iconTone="bg-warning/10 text-warning"
                     title={<><span className="font-semibold">Nueva solicitud</span> — Iberia Luxury Homes 🇵🇹 quiere colaborar en <span className="font-medium">2 promociones</span></>}
                     meta={<><span>Lisboa, Porto</span><span>·</span><span>hace 1 día</span></>}
                     primaryAction="Aprobar"
@@ -254,11 +263,11 @@ export default function Inicio() {
                     name="Los Arqueros"
                     location="Marbella, Costa del Sol"
                     status="Activa"
-                    statusTone="bg-emerald-50 text-emerald-700"
+                    statusTone="bg-success/10 text-success"
                     reservas="28/36"
                     registros="480"
                     conversion="8,3%"
-                    conversionTone="text-emerald-600"
+                    conversionTone="text-success"
                     volumen="€24,1M"
                     progress={78}
                   />
@@ -267,11 +276,11 @@ export default function Inicio() {
                     name="Villas del Pinar"
                     location="Jávea, Alicante"
                     status="Activa"
-                    statusTone="bg-emerald-50 text-emerald-700"
+                    statusTone="bg-success/10 text-success"
                     reservas="14/24"
                     registros="328"
                     conversion="4,3%"
-                    conversionTone="text-amber-600"
+                    conversionTone="text-warning"
                     volumen="€12,8M"
                     progress={58}
                   />
@@ -280,7 +289,7 @@ export default function Inicio() {
                     name="Residencial Aurora"
                     location="Finestrat, Alicante"
                     status="Pre-venta"
-                    statusTone="bg-amber-50 text-amber-700"
+                    statusTone="bg-warning/10 text-warning"
                     reservas="9/48"
                     registros="272"
                     conversion="3,3%"
@@ -293,11 +302,11 @@ export default function Inicio() {
                     name="Terrazas del Golf"
                     location="Mijas, Málaga"
                     status="Activa"
-                    statusTone="bg-emerald-50 text-emerald-700"
+                    statusTone="bg-success/10 text-success"
                     reservas="17/22"
                     registros="238"
                     conversion="7,1%"
-                    conversionTone="text-emerald-600"
+                    conversionTone="text-success"
                     volumen="€16,2M"
                     progress={77}
                   />
@@ -337,8 +346,8 @@ export default function Inicio() {
                 </header>
                 <ul className="p-2 space-y-0.5">
                   <CollabRow rank={1} initials="EV" iconBg="bg-primary/15" iconText="text-primary" name="Engel & Völkers" meta="3 ventas · 61% cuota 🇷🇺" amount="€1,2M" />
-                  <CollabRow rank={2} initials="NH" iconBg="bg-emerald-500/15" iconText="text-emerald-600" name="Nordic Home Finders" meta="2 ventas · 74% cuota 🇸🇪🇳🇴" amount="€0,9M" />
-                  <CollabRow rank={3} initials="DB" iconBg="bg-amber-500/15" iconText="text-amber-700" name="Dutch & Belgian Realty" meta="2 ventas · 68% cuota 🇧🇪🇳🇱" amount="€0,7M" />
+                  <CollabRow rank={2} initials="NH" iconBg="bg-success/15" iconText="text-success" name="Nordic Home Finders" meta="2 ventas · 74% cuota 🇸🇪🇳🇴" amount="€0,9M" />
+                  <CollabRow rank={3} initials="DB" iconBg="bg-warning/15" iconText="text-warning" name="Dutch & Belgian Realty" meta="2 ventas · 68% cuota 🇧🇪🇳🇱" amount="€0,7M" />
                 </ul>
               </section>
 
@@ -347,9 +356,9 @@ export default function Inicio() {
                 <h3 className="text-sm font-semibold mb-3">Acciones rápidas</h3>
                 <div className="grid grid-cols-2 gap-2">
                   <QuickAction icon={<Plus className="h-4 w-4" />} iconBg="bg-primary/10" iconText="text-primary" label="Nueva" sub="promoción" />
-                  <QuickAction icon={<UserPlus className="h-4 w-4" />} iconBg="bg-emerald-500/10" iconText="text-emerald-600" label="Registrar" sub="cliente" />
+                  <QuickAction icon={<UserPlus className="h-4 w-4" />} iconBg="bg-success/10" iconText="text-success" label="Registrar" sub="cliente" />
                   <QuickAction icon={<CalendarPlus className="h-4 w-4" />} iconBg="bg-violet-500/10" iconText="text-violet-600" label="Programar" sub="visita" />
-                  <QuickAction icon={<Mail className="h-4 w-4" />} iconBg="bg-amber-500/10" iconText="text-amber-600" label="Enviar" sub="campaña" />
+                  <QuickAction icon={<Mail className="h-4 w-4" />} iconBg="bg-warning/10" iconText="text-warning" label="Enviar" sub="campaña" />
                 </div>
               </section>
             </div>
@@ -466,7 +475,7 @@ function CollabRow({ rank, initials, iconBg, iconText, name, meta, amount }: {
   rank: 1 | 2 | 3; initials: string; iconBg: string; iconText: string; name: string; meta: string; amount: string;
 }) {
   const medal =
-    rank === 1 ? "bg-gradient-to-br from-amber-400 to-amber-500" :
+    rank === 1 ? "bg-gradient-to-br from-warning/80 to-warning" :
     rank === 2 ? "bg-gradient-to-br from-zinc-300 to-zinc-400" :
                  "bg-gradient-to-br from-orange-400 to-orange-600";
   return (

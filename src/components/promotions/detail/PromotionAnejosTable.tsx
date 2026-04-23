@@ -7,17 +7,34 @@
  * viviendas: filtros arriba, filas con kebab de acciones, estado
  * coloreado.
  *
+ * Diferencias por rol
+ * -------------------
+ * Promotor
+ *   - Ve todo (available / reserved / sold / withdrawn).
+ *   - Tiene CTA "Añadir anejo" arriba y, en cada fila, kebab con
+ *     Editar · Visibilidad · Retirar/Reactivar · Eliminar.
+ *   - Icono Ojo en la columna ID indicando si el anejo es visible a
+ *     agencias. Click para alternar.
+ * Agencia (isCollaboratorView)
+ *   - Solo ve anejos con `visibleToAgencies !== false` y
+ *     `status === "available"` — igual patrón que Viviendas.
+ *   - KPIs Reservados/Retirados ocultos.
+ *   - Kebab reducido (Ver · Enviar por email).
+ *
  * TODO(backend): consume `GET /api/promociones/:id/anejos` (ver
- * `docs/backend-integration.md §3`). Hoy los datos vienen del mock
- * `anejosByPromotion`.
+ * `docs/backend-integration.md §3.1`). Hoy los datos vienen del mock
+ * `anejosByPromotion` + overrides en localStorage via
+ * `src/lib/anejosStorage.ts`.
  */
 
 import { useMemo, useState } from "react";
 import {
-  Search, MoreVertical, Eye, Pencil, Send, ShoppingCart, Car, Archive,
+  Search, MoreVertical, Eye, EyeOff, Pencil, Send, ShoppingCart, Car, Archive,
+  Trash2, PackageX, RotateCcw,
 } from "lucide-react";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -32,23 +49,38 @@ function formatPrice(n: number) {
   }).format(n);
 }
 
-export function PromotionAnejosTable({
-  anejos, tipo, isCollaboratorView = false,
-}: {
+interface Props {
   anejos: Anejo[];
   /** Tipo fijo · la tabla solo renderiza anejos de este tipo. */
   tipo: AnejoTipo;
   isCollaboratorView?: boolean;
-}) {
+  onAddAnejo?: () => void;
+  onEditAnejo?: (a: Anejo) => void;
+  onToggleVisibility?: (a: Anejo) => void;
+  onSetStatus?: (a: Anejo, status: AnejoStatus) => void;
+  onDeleteAnejo?: (a: Anejo) => void;
+}
+
+export function PromotionAnejosTable({
+  anejos, tipo, isCollaboratorView = false,
+  onAddAnejo, onEditAnejo, onToggleVisibility, onSetStatus, onDeleteAnejo,
+}: Props) {
   const { toast } = useToast();
   const [filterStatus, setFilterStatus] = useState<AnejoStatus | "all">("all");
   const [search, setSearch] = useState("");
 
   const searchPlaceholder = tipo === "parking" ? "Buscar plaza o cliente..." : "Buscar trastero o cliente...";
 
+  /** Vista agencia: filtra por visibilidad + solo disponibles (igual
+   *  patrón que en la tabla de Viviendas). */
+  const scoped = useMemo(() => {
+    if (!isCollaboratorView) return anejos;
+    return anejos.filter((a) => a.visibleToAgencies !== false && a.status === "available");
+  }, [anejos, isCollaboratorView]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return anejos.filter((a) => {
+    return scoped.filter((a) => {
       if (filterStatus !== "all" && a.status !== filterStatus) return false;
       if (q) {
         const hay =
@@ -58,31 +90,36 @@ export function PromotionAnejosTable({
       }
       return true;
     });
-  }, [anejos, filterStatus, search]);
+  }, [scoped, filterStatus, search]);
 
   const totals = useMemo(() => {
-    const byStatus = anejos.reduce((acc, a) => {
+    const byStatus = scoped.reduce((acc, a) => {
       acc[a.status] = (acc[a.status] ?? 0) + 1;
       return acc;
     }, {} as Record<AnejoStatus, number>);
     return {
-      total: anejos.length,
+      total: scoped.length,
       available: byStatus.available ?? 0,
       reserved:  byStatus.reserved ?? 0,
       sold:      byStatus.sold ?? 0,
       withdrawn: byStatus.withdrawn ?? 0,
+      hiddenToAgencies: anejos.filter((a) => a.visibleToAgencies === false).length,
     };
-  }, [anejos]);
+  }, [scoped, anejos]);
 
   return (
     <div className="space-y-4">
       {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-        <KpiChip label="Total"      value={totals.total}     tone="neutral" />
+      <div className={cn("grid gap-2", isCollaboratorView ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-5")}>
+        <KpiChip label="Total"       value={totals.total}     tone="neutral" />
         <KpiChip label="Disponibles" value={totals.available} tone="emerald" />
-        <KpiChip label="Reservados"  value={totals.reserved}  tone="amber" />
-        <KpiChip label="Vendidos"    value={totals.sold}      tone="muted" />
-        <KpiChip label="Retirados"   value={totals.withdrawn} tone="destructive" />
+        {!isCollaboratorView && (
+          <>
+            <KpiChip label="Reservados" value={totals.reserved}  tone="amber" />
+            <KpiChip label="Vendidos"   value={totals.sold}      tone="muted" />
+            <KpiChip label="Retirados"  value={totals.withdrawn} tone="destructive" />
+          </>
+        )}
       </div>
 
       {/* Toolbar */}
@@ -98,18 +135,27 @@ export function PromotionAnejosTable({
               className="w-full h-9 pl-9 pr-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as AnejoStatus | "all")}
-            className="min-w-0 h-9 px-2.5 rounded-lg border border-border bg-background text-sm"
-          >
-            <option value="all">Estados</option>
-            <option value="available">Disponible</option>
-            <option value="reserved">Reservado</option>
-            <option value="sold">Vendido</option>
-            <option value="withdrawn">Retirado</option>
-          </select>
+          {!isCollaboratorView && (
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as AnejoStatus | "all")}
+              className="min-w-0 h-9 px-2.5 rounded-lg border border-border bg-background text-sm"
+            >
+              <option value="all">Estados</option>
+              <option value="available">Disponible</option>
+              <option value="reserved">Reservado</option>
+              <option value="sold">Vendido</option>
+              <option value="withdrawn">Retirado</option>
+            </select>
+          )}
         </div>
+        {/* Nota cuando hay anejos ocultos a agencias */}
+        {!isCollaboratorView && totals.hiddenToAgencies > 0 && (
+          <p className="mt-3 text-[11px] text-muted-foreground inline-flex items-center gap-1.5">
+            <EyeOff className="h-3 w-3" strokeWidth={1.5} />
+            {totals.hiddenToAgencies} {totals.hiddenToAgencies === 1 ? "anejo oculto" : "anejos ocultos"} a agencias colaboradoras
+          </p>
+        )}
       </div>
 
       {/* Tabla */}
@@ -119,7 +165,7 @@ export function PromotionAnejosTable({
             {tipo === "parking" ? "Sin plazas de parking" : "Sin trasteros"}
           </p>
           <p className="text-xs text-muted-foreground/70 mt-0.5">
-            {anejos.length === 0
+            {scoped.length === 0
               ? (tipo === "parking"
                   ? "Esta promoción no tiene plazas sueltas."
                   : "Esta promoción no tiene trasteros sueltos.")
@@ -136,6 +182,9 @@ export function PromotionAnejosTable({
                   <th className="px-3 py-2.5 text-right font-semibold">Precio</th>
                   <th className="px-3 py-2.5 text-left font-semibold">Cliente</th>
                   <th className="px-3 py-2.5 text-center font-semibold">Estado</th>
+                  {!isCollaboratorView && (
+                    <th className="px-3 py-2.5 text-center font-semibold">Visible</th>
+                  )}
                   <th className="px-2 py-2.5" />
                 </tr>
               </thead>
@@ -143,8 +192,16 @@ export function PromotionAnejosTable({
                 {filtered.map((a) => {
                   const sc = anejoStatusConfig[a.status];
                   const TipoIcon = a.tipo === "parking" ? Car : Archive;
+                  const visible = a.visibleToAgencies !== false;
+                  const isWithdrawn = a.status === "withdrawn";
                   return (
-                    <tr key={a.id} className="border-t border-border/60 hover:bg-muted/20 transition-colors">
+                    <tr
+                      key={a.id}
+                      className={cn(
+                        "border-t border-border/60 hover:bg-muted/20 transition-colors",
+                        !visible && !isCollaboratorView && "bg-muted/20",
+                      )}
+                    >
                       <td className="px-3 py-2.5">
                         <span className="inline-flex items-center gap-2">
                           <TipoIcon className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
@@ -163,6 +220,23 @@ export function PromotionAnejosTable({
                           {sc.label}
                         </span>
                       </td>
+                      {!isCollaboratorView && (
+                        <td className="px-3 py-2.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => onToggleVisibility?.(a)}
+                            title={visible ? "Oculta este anejo a agencias" : "Muestra este anejo a agencias"}
+                            className={cn(
+                              "inline-flex items-center justify-center h-6 w-6 rounded-full transition-colors",
+                              visible
+                                ? "text-success hover:bg-success/10"
+                                : "text-muted-foreground hover:bg-muted/60",
+                            )}
+                          >
+                            {visible ? <Eye className="h-3.5 w-3.5" strokeWidth={1.5} /> : <EyeOff className="h-3.5 w-3.5" strokeWidth={1.5} />}
+                          </button>
+                        </td>
+                      )}
                       <td className="px-2 py-2.5 text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -170,7 +244,7 @@ export function PromotionAnejosTable({
                               <MoreVertical className="h-3.5 w-3.5" />
                             </button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuContent align="end" className="w-52">
                             <DropdownMenuItem
                               onClick={() => toast({ title: "Ver anejo", description: a.publicId })}
                               className="gap-2 text-xs"
@@ -180,10 +254,19 @@ export function PromotionAnejosTable({
                             {!isCollaboratorView && (
                               <DropdownMenuItem
                                 disabled={a.status !== "available"}
-                                onClick={() => toast({ title: "Editar anejo", description: a.publicId })}
+                                onClick={() => onEditAnejo?.(a)}
                                 className="gap-2 text-xs"
                               >
                                 <Pencil className="h-3.5 w-3.5" /> Editar
+                              </DropdownMenuItem>
+                            )}
+                            {!isCollaboratorView && (
+                              <DropdownMenuItem
+                                onClick={() => onToggleVisibility?.(a)}
+                                className="gap-2 text-xs"
+                              >
+                                {visible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                {visible ? "Ocultar a agencias" : "Mostrar a agencias"}
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuItem
@@ -193,13 +276,42 @@ export function PromotionAnejosTable({
                             >
                               <Send className="h-3.5 w-3.5" /> Enviar por email
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              disabled={a.status !== "available"}
-                              onClick={() => toast({ title: "Iniciar compra", description: `Operación para ${a.publicId}` })}
-                              className="gap-2 text-xs"
-                            >
-                              <ShoppingCart className="h-3.5 w-3.5" /> Iniciar compra
-                            </DropdownMenuItem>
+                            {!isCollaboratorView && (
+                              <DropdownMenuItem
+                                disabled={a.status !== "available"}
+                                onClick={() => toast({ title: "Iniciar compra", description: `Operación para ${a.publicId}` })}
+                                className="gap-2 text-xs"
+                              >
+                                <ShoppingCart className="h-3.5 w-3.5" /> Iniciar compra
+                              </DropdownMenuItem>
+                            )}
+                            {!isCollaboratorView && (
+                              <>
+                                <DropdownMenuSeparator />
+                                {isWithdrawn ? (
+                                  <DropdownMenuItem
+                                    onClick={() => onSetStatus?.(a, "available")}
+                                    className="gap-2 text-xs"
+                                  >
+                                    <RotateCcw className="h-3.5 w-3.5" /> Reactivar
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem
+                                    disabled={a.status !== "available"}
+                                    onClick={() => onSetStatus?.(a, "withdrawn")}
+                                    className="gap-2 text-xs"
+                                  >
+                                    <PackageX className="h-3.5 w-3.5" /> Retirar
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem
+                                  onClick={() => onDeleteAnejo?.(a)}
+                                  className="gap-2 text-xs text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" /> Eliminar
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </td>
@@ -224,8 +336,8 @@ function KpiChip({
 }) {
   const toneClass = {
     neutral:    "bg-card border-border text-foreground",
-    emerald:    "bg-emerald-50 border-emerald-200 text-emerald-800",
-    amber:      "bg-amber-50 border-amber-200 text-amber-900",
+    emerald:    "bg-success/10 border-success/25 text-success",
+    amber:      "bg-warning/10 border-warning/25 text-warning",
     muted:      "bg-muted/50 border-border text-foreground",
     destructive:"bg-destructive/5 border-destructive/20 text-destructive",
   }[tone];

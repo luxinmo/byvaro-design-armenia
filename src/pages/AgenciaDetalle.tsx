@@ -27,6 +27,13 @@ import { Toaster, toast } from "sonner";
 import Empresa from "./Empresa";
 import { agencies, type Agency } from "@/data/agencies";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { CompanyActivityTimeline } from "@/components/collaborators/CompanyActivityTimeline";
+import {
+  recordRequestApproved, recordRequestRejected,
+  recordCollaborationPaused, recordCollaborationResumed,
+  recordCompanyAny,
+} from "@/lib/companyEvents";
+import { useCurrentUser } from "@/lib/currentUser";
 
 function getEstado(a: Agency): "activa" | "contrato-pendiente" | "pausada" {
   if (a.estadoColaboracion) return a.estadoColaboracion;
@@ -63,8 +70,11 @@ export default function AgenciaDetalle() {
   const a = agency;
   const estado = getEstado(a);
   const isPending = !!(a.solicitudPendiente || a.isNewRequest);
+  const currentUser = useCurrentUser();
+  const actor = { name: currentUser.name, email: currentUser.email };
 
   const handleAprobar = () => {
+    recordRequestApproved(a.id, actor);
     toast.success("Solicitud aprobada", { description: `${a.name} ya puede colaborar en tus promociones.` });
     setTimeout(() => navigate("/colaboradores"), 700);
   };
@@ -76,10 +86,16 @@ export default function AgenciaDetalle() {
       destructive: true,
     });
     if (!ok) return;
+    recordRequestRejected(a.id, actor);
     toast.success("Solicitud descartada");
     navigate("/colaboradores");
   };
   const handlePausar = () => {
+    if (estado === "pausada") {
+      recordCollaborationResumed(a.id, actor);
+    } else {
+      recordCollaborationPaused(a.id, actor);
+    }
     toast.success(estado === "pausada" ? "Colaboración reanudada" : "Colaboración pausada");
   };
   const handleEliminar = async () => {
@@ -90,6 +106,8 @@ export default function AgenciaDetalle() {
       destructive: true,
     });
     if (!ok) return;
+    recordCompanyAny(a.id, "collaboration_ended", "Colaboración eliminada",
+      "El promotor eliminó la agencia de su red.", actor);
     toast.success("Colaboración eliminada");
     navigate("/colaboradores");
   };

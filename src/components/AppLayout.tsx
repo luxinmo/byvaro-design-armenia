@@ -91,8 +91,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           />
           <div className="relative w-full max-w-[440px] bg-card border border-border rounded-2xl shadow-soft-lg p-6 animate-in zoom-in-95 fade-in duration-200">
             <div className="flex items-start gap-3 mb-4">
-              <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0">
-                <AlertTriangle className="h-5 w-5 text-amber-600" strokeWidth={1.75} />
+              <div className="h-10 w-10 rounded-xl bg-warning/10 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-5 w-5 text-warning" strokeWidth={1.75} />
               </div>
               <div className="flex-1 min-w-0">
                 <h2 className="text-[15px] font-semibold text-foreground leading-tight">

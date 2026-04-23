@@ -140,7 +140,7 @@ export default function ContactoDetalle() {
             <span>{initials}</span>
           )}
           {isHot && (
-            <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-amber-500 text-white grid place-items-center shadow-soft ring-2 ring-background" title={`Lead caliente · ${detail.leadScore}/100`}>
+            <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-warning text-white grid place-items-center shadow-soft ring-2 ring-background" title={`Lead caliente · ${detail.leadScore}/100`}>
               <Flame className="h-2.5 w-2.5" strokeWidth={2.5} />
             </span>
           )}
@@ -155,8 +155,8 @@ export default function ContactoDetalle() {
             {!isHot && (
               <span className={cn(
                 "inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-full shrink-0",
-                detail.status === "active"    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" :
-                detail.status === "pending"   ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" :
+                detail.status === "active"    ? "bg-success/15 text-success dark:text-success" :
+                detail.status === "pending"   ? "bg-warning/15 text-warning dark:text-warning" :
                 detail.status === "converted" ? "bg-violet-500/15 text-violet-700 dark:text-violet-400" :
                                                 "bg-muted text-muted-foreground",
               )}>
@@ -177,7 +177,7 @@ export default function ContactoDetalle() {
             )}
             {typeof detail.leadScore === "number" && (
               <>
-                <span className={cn("tnum font-semibold", isHot ? "text-amber-600" : "text-foreground")}>
+                <span className={cn("tnum font-semibold", isHot ? "text-warning" : "text-foreground")}>
                   Score {detail.leadScore}
                 </span>
                 <span aria-hidden>·</span>
@@ -352,7 +352,7 @@ function ReferenceChip({ reference }: { reference: string }) {
       <Hash className="h-3 w-3" />
       <span className="tnum">{reference}</span>
       {copied
-        ? <Check className="h-3 w-3 text-emerald-600" />
+        ? <Check className="h-3 w-3 text-success" />
         : <Copy className="h-3 w-3 opacity-50" />}
     </button>
   );

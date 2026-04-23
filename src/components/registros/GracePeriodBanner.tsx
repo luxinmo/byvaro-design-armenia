@@ -47,15 +47,15 @@ export function GracePeriodBanner({
   const mmss = `${minutes}:${String(seconds).padStart(2, "0")}`;
 
   return (
-    <div className="rounded-xl border border-amber-300/40 bg-amber-50/40 dark:bg-amber-500/5 p-3 sm:p-4 flex items-center gap-3">
-      <div className="h-9 w-9 rounded-xl bg-amber-500/15 grid place-items-center text-amber-700 dark:text-amber-400 shrink-0">
+    <div className="rounded-xl border border-warning/30 bg-warning/40 dark:bg-warning/5 p-3 sm:p-4 flex items-center gap-3">
+      <div className="h-9 w-9 rounded-xl bg-warning/15 grid place-items-center text-warning dark:text-warning shrink-0">
         <Clock className="h-4 w-4" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 leading-tight">
+        <p className="text-xs font-semibold text-warning dark:text-warning leading-tight">
           La agencia será notificada en <span className="tnum">{mmss}</span>
         </p>
-        <p className="text-[10.5px] text-amber-700/80 dark:text-amber-400/80 mt-0.5">
+        <p className="text-[10.5px] text-warning/80 dark:text-warning/80 mt-0.5">
           Puedes revertir tu decisión antes de que se envíe la notificación.
         </p>
       </div>
@@ -63,7 +63,7 @@ export function GracePeriodBanner({
         size="sm"
         variant="outline"
         onClick={onRevert}
-        className="rounded-full h-8 border-amber-400/60 text-amber-800 hover:bg-amber-100/60 dark:text-amber-300 dark:hover:bg-amber-500/10"
+        className="rounded-full h-8 border-warning/50 text-warning hover:bg-warning/60 dark:text-warning dark:hover:bg-warning/10"
       >
         <RotateCcw className="h-3.5 w-3.5" /> Revertir
       </Button>

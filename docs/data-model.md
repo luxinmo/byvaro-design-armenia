@@ -45,25 +45,132 @@ interface Company {
 
 Relaciones: 1 Company → N Users, N Promociones.
 
-### Usuario
+### Usuario / Miembro del equipo (TeamMember)
 
-Miembro del equipo de una empresa.
+Miembro del equipo de una empresa. Tipo canónico en
+`src/lib/team.ts` → `TeamMember`. Lo consumen `useCurrentUser()` (para el
+usuario logueado) y todos los selectores (`UserSelect`, asignaciones de
+registros/visitas, autor de eventos en historial de contactos, etc.).
 
 ```ts
-interface User {
+type TeamMemberStatus = "active" | "invited" | "pending" | "deactive";
+
+interface TeamMember {
   id: string;
-  companyId: string;
-  email: string;
   name: string;
-  role: "owner" | "comercial" | "asistente";
-  avatar?: string;
-  permissions: {
-    canRegister: boolean;
-    canShareWithAgencies: boolean;
-    canEdit: boolean;
-  };
+  email: string;
+  role: "admin" | "member";
+  jobTitle?: string;
+  department?: string;
+  languages?: string[];           // idiomas que habla · asignación de leads
+  phone?: string;                 // "+34 600 000 000"
+  avatarUrl?: string;             // fallback = iniciales
+  status?: TeamMemberStatus;
+  /* ─── Permisos granulares (ADR-048) ─── */
+  visibleOnProfile?: boolean;     // aparece en microsite + ficha empresa
+  canSign?: boolean;              // puede firmar contratos con agencias
+  canAcceptRegistrations?: boolean; // puede aprobar registros entrantes
+  joinedAt?: string;              // ISO
+  lastActiveAt?: string;          // ISO
 }
 ```
+
+**Estados (`status`):**
+
+| Status | Significado | UI |
+|---|---|---|
+| `active` | Cuenta operativa · puede entrar | Badge verde "Activo" |
+| `invited` | Invitación enviada, aún sin aceptar | Badge azul "Invitado" · revocable |
+| `pending` | Ha solicitado unirse por dominio de email · espera aprobación del admin | Badge ámbar "Pendiente" · aprobar/rechazar |
+| `deactive` | Antiguo miembro desactivado · sin acceso pero datos conservados | Opacidad reducida · reactivar |
+
+**Permisos granulares** — se combinan con `role` para decidir visibilidad
+y capacidad. Un `member` puede tener `canAcceptRegistrations = true` sin
+ser `admin`. Ver §6 de `docs/permissions.md` y ADR-048.
+
+**Mock inicial:** `TEAM_MEMBERS` en `src/lib/team.ts` (8 miembros que
+cubren todos los estados). Se persisten cambios de admin en
+`byvaro.organization.members.v4` (bump tras catálogo de jobTitles +
+avatars SVG).
+
+**Campos añadidos en abril 2026 (ver ADR-048 y ADR-049):**
+
+- Permisos granulares: `visibleOnProfile`, `canSign`,
+  `canAcceptRegistrations`.
+- Señales de estado (para el dashboard del admin): `emailAccountsCount`,
+  `emailsSentLast30d`, `whatsappLinked`, `twoFactorEnabled`,
+  `recordsDecidedLast30d`, `lastActiveAt`.
+- Plan de comisiones opcional: `commissionCapturePct` (% por captar un
+  lead) y `commissionSalePct` (% al cerrar la venta). `undefined` →
+  hereda plan por defecto del workspace.
+
+### MemberStats (dashboard de rendimiento)
+
+Fuente canónica: `src/data/memberStats.ts`. Consumido por el
+`MemberFormDialog` (resumen con 6 KPIs) y la página
+`/equipo/:id/estadisticas` (dashboard completo).
+
+> ⚠️ **Regla de oro de CLAUDE.md** (§📊 KPIs en el dashboard del miembro):
+> cualquier señal de actividad del trabajador con valor para valorar
+> desempeño debe añadirse aquí + mostrarse en la pantalla de stats.
+
+```ts
+type StatsWindow = "7d" | "30d" | "90d" | "year";
+
+interface MemberStats {
+  memberId: string;
+  window: StatsWindow;
+
+  /* ─── Resultados comerciales ─── */
+  salesCount: number;
+  salesValue: number;             // €
+  commissionValue: number;        // €
+  recordsApproved: number;
+  recordsTotal: number;
+  recordsDeclined: number;
+  visitsDone: number;
+  visitsScheduled: number;
+  conversionRate: number;         // 0-1 (visitas hechas / registros aprobados)
+
+  /* ─── Pipeline ─── */
+  openOpportunities: number;
+  assignedLeads: number;
+  pendingRecords: number;
+  assignedPromotions: number;
+  visitsUpcoming: number;         // próximas 7d
+
+  /* ─── Comunicación ─── */
+  emailsSent: number;
+  emailsOpenRate: number;         // 0-1
+  whatsappSent: number;
+  callsLogged: number;
+  avgLeadResponseMin: number;
+
+  /* ─── Actividad CRM (para IA) ─── */
+  avgDailyActiveMin: number;
+  avgSessionMin: number;
+  peakHour: number;               // 0-23
+  hourlyHeatmap: number[];        // 168 celdas · [día 0=Lun...6=Dom] × [hora 0...23]
+  daysWithoutLogin: number;
+  activeStreakDays: number;
+  actionsPerSession: number;
+  overduePendingTasks: number;
+  duplicatesCreated: number;
+  visitsUnevaluated: number;
+}
+```
+
+**Agregaciones disponibles:**
+
+- `getMemberStats(memberId, window)` · stats de un miembro.
+- `getTeamAverages(window)` · media del equipo (para benchmarks `↑34%`
+  vs media en `HeroKpis`).
+
+**Helpers de formato:** `formatEur`, `formatPct`, `formatMinutes`.
+
+**Próximo paso (IA):** `POST /api/ai/analyze-member/:id?window=30d`
+recibirá este mismo shape + medias del equipo y devolverá un informe
+`AIMemberReport` (ver `docs/plan-equipo-estadisticas.md §3`).
 
 ### Promoción (Promotion)
 
@@ -338,11 +445,18 @@ Datos: `src/data/leads.ts` → `leads: Lead[]`.
 
 ### Registro (Record / Client Registration)
 
-Solicitud de una agencia para "apartarse" un cliente potencial en una promo.
+Solicitud de apartar un cliente potencial sobre una promo. Puede venir de
+dos orígenes (`origen`) con flujo y privacidad muy distintas — ver
+**ADR-046** para el rationale completo.
 
 ```ts
+type RegistroOrigen = "direct" | "collaborator";
+
 interface RegistrationRecord {
   id: string;
+  /** Origen del registro. Determina el flujo de aprobación y qué campos
+   *  son visibles/compartidos. */
+  origen: RegistroOrigen;
   type: "registration" | "registration_visit";  // con visita o sin
   contactName: string;
   contactPhoneLast4?: string;  // últimos 4 dígitos (duplicate check)
@@ -350,8 +464,10 @@ interface RegistrationRecord {
   contactFlag?: string;        // "🇷🇺"
   contactEmail?: string;
   promotion: string;           // nombre de la promoción
-  agencyName: string;
-  agentName: string;
+  /** Obligatorio si origen === "collaborator", undefined si es direct. */
+  agencyId?: string;
+  agencyName?: string;
+  agentName?: string;
   status: "pending" | "approved" | "declined" | "expired";
   date: string;
   relativeDate: string;
@@ -372,20 +488,31 @@ interface RegistrationRecord {
   decidedBy?: string;
   decidedByRole?: string;
   decisionNote?: string;
+  /** ISO · cuándo se decidió. Dispara el GracePeriodBanner (5 min). */
+  decidedAt?: string;
 }
 ```
 
-Datos: `src/components/records/data.ts`, tipos en `types.ts`.
+Datos: `src/data/records.ts` (seed + tipos), UI en `src/pages/Registros.tsx`.
 
 **Reglas críticas:**
 - `matchPercentage >= 70` → se muestra warning de duplicado y se sugiere
-  rechazar
+  rechazar.
 - Si se aprueba, la agencia tiene derecho preferente sobre ese cliente
-  durante `validezRegistroDias` (configurable por promoción)
-- Si expira sin visita, se libera automáticamente
-- Los datos sensibles (cliente completo, otra agencia) NO se muestran a otras
-  agencias que intenten registrar al mismo cliente — solo se indica "cliente
-  ya registrado" genéricamente
+  durante `validezRegistroDias` (configurable por promoción).
+- Si expira sin visita, se libera automáticamente.
+- **Asimetría por `origen` (ADR-046):**
+  - `collaborator` — la agencia solo envía 3 campos canónicos (nombre,
+    nacionalidad, últimos 4 del teléfono). Email / teléfono completo / DNI
+    **no se comparten** hasta que el promotor apruebe.
+  - `direct` — lo mete el propio promotor desde su CRM, tiene todos los
+    datos del cliente desde el minuto cero.
+- Los datos sensibles del `existingClient` tampoco se muestran a otras
+  agencias que intenten registrar al mismo cliente — solo se indica
+  "cliente ya registrado" genéricamente.
+- Tras aprobar/rechazar hay un **grace period de 5 min** (`decidedAt`)
+  durante el cual el promotor puede revertir la decisión antes de que se
+  envíe la notificación a la agencia.
 
 ### Contacto (Contact / Lead)
 

@@ -92,13 +92,13 @@ export default function AjustesWhatsAppNumero() {
           ) : undefined}
         >
           <div className="flex items-start gap-4">
-            <div className="h-12 w-12 rounded-2xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 grid place-items-center shrink-0">
+            <div className="h-12 w-12 rounded-2xl bg-success/15 text-success dark:text-success grid place-items-center shrink-0">
               {setup.method === "businessApi" ? <Building2 className="h-5 w-5" /> : <Smartphone className="h-5 w-5" />}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-foreground inline-flex items-center gap-2 flex-wrap">
                 {setup.method === "businessApi" ? "WhatsApp Business API" : "WhatsApp Web"}
-                <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-full px-2 py-0.5">
+                <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold bg-success/15 text-success dark:text-success rounded-full px-2 py-0.5">
                   <CheckCircle2 className="h-2.5 w-2.5" /> Conectado
                 </span>
               </p>
@@ -300,8 +300,8 @@ function WebQrWizard({
         </>
       ) : (
         <div className="text-center py-2">
-          <div className="h-12 w-12 mx-auto rounded-2xl bg-emerald-500/15 grid place-items-center mb-3">
-            <Sparkles className="h-5 w-5 text-emerald-600" />
+          <div className="h-12 w-12 mx-auto rounded-2xl bg-success/15 grid place-items-center mb-3">
+            <Sparkles className="h-5 w-5 text-success" />
           </div>
           <p className="text-sm font-semibold text-foreground">¿Cómo quieres llamar a este dispositivo?</p>
           <input

@@ -269,7 +269,7 @@ export default function InlineReply({
                   className={cn(
                     "inline-flex items-center gap-1 h-6 pl-2 pr-1 rounded-full text-xs max-w-full",
                     external
-                      ? "bg-amber-100 text-amber-900 border border-amber-200"
+                      ? "bg-warning/15 text-warning border border-warning/25"
                       : "bg-muted text-foreground border border-border",
                   )}
                   title={external ? "Destinatario externo a tu organización" : undefined}
@@ -477,7 +477,7 @@ export default function InlineReply({
         {/* Warning confidencial — fila amarilla tipo Gmail. Padding lateral
          * alineado con el resto del editor (px-4). */}
         {showConfidentialWarning && (
-          <div className="mx-4 mb-2 flex items-center gap-2 px-3 py-2 bg-amber-100 text-amber-900 border border-amber-200 rounded-lg text-xs">
+          <div className="mx-4 mb-2 flex items-center gap-2 px-3 py-2 bg-warning/15 text-warning border border-warning/25 rounded-lg text-xs">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <p className="flex-1 leading-snug">
               <strong>Ten cuidado si vas a compartir información confidencial.</strong>{" "}
@@ -486,7 +486,7 @@ export default function InlineReply({
             <button
               onClick={() => setConfidentialDismissed(true)}
               title="Ocultar aviso"
-              className="h-6 w-6 rounded-full hover:bg-amber-200 flex items-center justify-center shrink-0"
+              className="h-6 w-6 rounded-full hover:bg-warning/20 flex items-center justify-center shrink-0"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -577,7 +577,7 @@ export default function InlineReply({
                 >
                   <span className="flex-1 truncate">{s.name}</span>
                   {activeSignatureId === s.id && (
-                    <span className="text-[10px] text-emerald-600 font-semibold">ACTIVA</span>
+                    <span className="text-[10px] text-success font-semibold">ACTIVA</span>
                   )}
                 </button>
               ))}

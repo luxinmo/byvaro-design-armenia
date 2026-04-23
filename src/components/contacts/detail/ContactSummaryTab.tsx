@@ -172,7 +172,7 @@ export function ContactSummaryTab({ detail, onRefresh, onOpenWhatsApp }: Props) 
                   <button
                     type="button"
                     onClick={() => onOpenWhatsApp?.()}
-                    className="h-8 w-8 rounded-full grid place-items-center text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+                    className="h-8 w-8 rounded-full grid place-items-center text-success hover:bg-success/10 transition-colors"
                     title="Abrir conversación de WhatsApp"
                   >
                     <WhatsAppIcon className="h-4 w-4" />
@@ -442,7 +442,7 @@ function CurrentStatusCard({
     /* Más rojizo cuanto más tiempo haya pasado. */
     const urgencyClass = daysAgo >= 7 ? "text-destructive font-semibold"
                         : daysAgo >= 3 ? "text-destructive"
-                        : "text-amber-600 dark:text-amber-400";
+                        : "text-warning dark:text-warning";
 
     rows.push(
       <StatusRow
@@ -541,8 +541,8 @@ function StatusRow({
       <div className={cn(
         "h-9 w-9 rounded-xl grid place-items-center shrink-0",
         accent === "amber"
-          ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
-          : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+          ? "bg-warning/15 text-warning dark:text-warning"
+          : "bg-success/15 text-success dark:text-success",
       )}>
         {icon}
       </div>
@@ -704,7 +704,7 @@ function ContactTagsEditor({
                         personal
                       </span>
                     )}
-                    {isSelected && <span className="text-[10px] text-emerald-600 shrink-0">✓</span>}
+                    {isSelected && <span className="text-[10px] text-success shrink-0">✓</span>}
                   </button>
                 );
               })}
@@ -786,7 +786,7 @@ function ConsentItem({ label, granted, signed }: { label: string; granted: boole
       <span className={cn("text-xs", signed ? "text-foreground" : "text-muted-foreground")}>{label}</span>
       <span className={cn(
         "inline-flex h-4 w-7 rounded-full transition-colors items-center px-0.5 shrink-0",
-        granted ? "bg-emerald-500" : "bg-muted-foreground/30",
+        granted ? "bg-success" : "bg-muted-foreground/30",
         !signed && "opacity-50",
       )}>
         <span className={cn(

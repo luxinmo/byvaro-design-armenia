@@ -259,7 +259,7 @@ export default function AjustesDos2FA() {
         <div className="flex items-start gap-4">
           <div className={cn(
             "h-12 w-12 rounded-2xl grid place-items-center shrink-0",
-            state.enabled ? "bg-emerald-500/15 text-emerald-700" : "bg-muted text-muted-foreground",
+            state.enabled ? "bg-success/15 text-success" : "bg-muted text-muted-foreground",
           )}>
             <Shield className="h-5 w-5" strokeWidth={1.75} />
           </div>
@@ -428,7 +428,7 @@ export default function AjustesDos2FA() {
               </code>
             ))}
           </div>
-          <div className="mt-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 p-3 flex items-start gap-2 text-[12px] text-amber-700 dark:text-amber-300">
+          <div className="mt-4 rounded-xl bg-warning/10 dark:bg-warning/15 border border-warning/30 dark:border-warning/40 p-3 flex items-start gap-2 text-[12px] text-warning dark:text-warning">
             <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
             <p>Quedan <strong className="tnum">{state.backupCodes.length}</strong> códigos. Cuando bajen de 3, te pediremos regenerarlos.</p>
           </div>

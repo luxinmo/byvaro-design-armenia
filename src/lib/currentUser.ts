@@ -15,6 +15,7 @@
 import { useMemo } from "react";
 import { agencies } from "@/data/agencies";
 import { useAccountType, type AccountType } from "./accountType";
+import { usePersistedProfile } from "./profileStorage";
 
 export type UserRole = "admin" | "member";
 
@@ -29,6 +30,13 @@ export type CurrentUser = {
   /** Solo presente cuando accountType === "agency". */
   agencyId?: string;
   agencyName?: string;
+  /** Datos editables desde `/ajustes/perfil/personal` (ver profileStorage.ts).
+   *  Se sobreescriben sobre el mock base cuando el usuario los edita. */
+  jobTitle?: string;
+  department?: string;
+  languages?: string[];
+  bio?: string;
+  avatar?: string;
 };
 
 const DEVELOPER_USER: CurrentUser = {
@@ -57,10 +65,23 @@ function buildAgencyUser(agencyId: string): CurrentUser {
 
 export function useCurrentUser(): CurrentUser {
   const { type, agencyId } = useAccountType();
+  /* El perfil editable vive en localStorage (mock) y se fusiona sobre el
+   * usuario base. Solo aplica a la cuenta "developer" — cuando el usuario
+   * ha cambiado a "ver como agencia", la identidad la manda la agencia. */
+  const profile = usePersistedProfile();
   return useMemo(() => {
     if (type === "agency") return buildAgencyUser(agencyId);
-    return DEVELOPER_USER;
-  }, [type, agencyId]);
+    return {
+      ...DEVELOPER_USER,
+      name:       profile?.fullName  ?? DEVELOPER_USER.name,
+      email:      profile?.email     ?? DEVELOPER_USER.email,
+      jobTitle:   profile?.jobTitle,
+      department: profile?.department,
+      languages:  profile?.languages,
+      bio:        profile?.bio,
+      avatar:     profile?.avatar,
+    };
+  }, [type, agencyId, profile]);
 }
 
 export function isAdmin(user: CurrentUser): boolean {

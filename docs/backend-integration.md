@@ -63,7 +63,11 @@ ambas cosas en un único tipo `Agency`. Al implementar backend, separar:
 | `POST /api/v1/auth/login` | login email+password | `src/pages/Login.tsx:32,86` |
 | `POST /api/v1/companies/join-request` | usuario se une a empresa ya existente | `src/pages/Register.tsx:52,195` |
 | `GET  /api/v1/companies/lookup?domain=x` | resolver empresa por dominio email | `src/pages/Register.tsx:54` |
+| `POST /api/auth/logout` | cerrar sesión actual (invalida cookie) | `src/lib/accountType.ts:75` (`logout()`), `src/components/AccountSwitcher.tsx:155`, `src/components/MobileHeader.tsx` |
 | `POST /api/auth/sign-out-everywhere` | cerrar sesión global | `src/pages/ajustes/zona-critica/cerrar-sesion.tsx:23` |
+| `GET /api/me` → `UserProfile` | leer perfil del usuario actual | `src/lib/profileStorage.ts` (`getStoredProfile()` / `usePersistedProfile()`), `src/lib/currentUser.ts:58` |
+| `PATCH /api/me { fullName, email, jobTitle, bio, avatar }` | actualizar perfil | `src/pages/ajustes/perfil/personal.tsx:save()`, `src/lib/profileStorage.ts` (`saveStoredProfile()`) |
+| `GET/PUT /api/me/phones` | CRUD de teléfonos del usuario | `src/pages/ajustes/perfil/contacto.tsx:15` (`byvaro.user.phones.v1`) |
 | `POST /api/me/change-password/request` | pedir código 2FA para cambio password | `src/pages/ajustes/seguridad/contrasena.tsx:176` |
 | `POST /api/me/change-password/verify` | confirmar cambio password | `src/pages/ajustes/seguridad/contrasena.tsx:323` |
 | `POST /api/me/2fa/setup` | generar secret TOTP + QR | `src/pages/ajustes/seguridad/dos-fa.tsx:102` |
@@ -71,7 +75,19 @@ ambas cosas en un único tipo `Agency`. Al implementar backend, separar:
 | `POST /api/me/2fa/verify` | validar código 2FA en login | `src/lib/twoFactor.ts:87` |
 | `POST /api/me/2fa/disable` | desactivar 2FA | `src/pages/ajustes/seguridad/dos-fa.tsx:166` |
 | `POST /api/me/2fa/backup-codes/regenerate` | regenerar backup codes | `src/pages/ajustes/seguridad/dos-fa.tsx:182` |
-| `POST /api/organization/invitations` | invitar miembro a la cuenta (con rol) | `src/pages/ajustes/usuarios/miembros.tsx:59` |
+| `GET /api/organization/members` → `TeamMember[]` | listado del equipo (reemplaza `TEAM_MEMBERS`) | `src/lib/team.ts:23`, `src/pages/ajustes/usuarios/miembros.tsx:36`, `src/pages/Equipo.tsx` |
+| `PATCH /api/organization/members/:id` | editar campos del miembro (role, jobTitle, department, permisos granulares, commissionCapturePct, commissionSalePct, avatarUrl) | `src/pages/ajustes/usuarios/miembros.tsx`, `src/components/team/MemberFormDialog.tsx:handleSave` |
+| `POST /api/organization/members` body: `{ email, fullName, jobTitle?, department?, languages?, role, phone?, commissionCapturePct?, commissionSalePct?, generateTempPassword?: boolean }` → `201 { member, tempPassword? }` · `409 EMAIL_TAKEN { existingWorkspace: string }` | crear miembro **directamente** (flow B · onboarding presencial con contraseña temporal) | `src/components/team/InviteMemberDialog.tsx:handleCreate`, `src/pages/Equipo.tsx:onCreate` |
+| `POST /api/organization/members/:id/deactivate` · `/reactivate` | desactivar / reactivar sin borrar datos | `src/pages/ajustes/usuarios/miembros.tsx:toggleActive`, `src/pages/Equipo.tsx` |
+| `DELETE /api/organization/members/:id` | eliminar miembro del workspace | `src/pages/ajustes/usuarios/miembros.tsx:removeMember` |
+| `POST /api/organization/invitations` body: `{ email, role, personalMessage? }` | invitar miembro (flow A · email con token 7d). **El backend genera el email** con `renderTeamInvitation()` de `src/lib/teamInvitationEmail.ts` (plantilla ya diseñada · es/en). Responde `409 EMAIL_TAKEN` si el email pertenece a otra org. | `src/components/team/InviteMemberDialog.tsx:handleInvite`, `src/pages/Equipo.tsx:onInvite` |
+| `DELETE /api/organization/invitations/:id` | revocar invitación enviada | `src/pages/ajustes/usuarios/miembros.tsx:revokeInvite`, `src/pages/Equipo.tsx:revokeInvite` |
+| `GET /api/members/:id/stats?window=7d\|30d\|90d\|year` → `MemberStats` (shape en `src/data/memberStats.ts`) | dashboard de rendimiento del miembro · 4 bloques (resultados / pipeline / comunicación / actividad CRM con heatmap 168 celdas) | `src/data/memberStats.ts:getMemberStats`, `src/pages/EquipoMiembroEstadisticas.tsx` |
+| `GET /api/members/:id/stats/averages?window=30d` → `Partial<MemberStats>` | media del equipo para benchmarks `↑34% vs equipo` | `src/data/memberStats.ts:getTeamAverages`, `src/pages/EquipoMiembroEstadisticas.tsx:HeroKpis` |
+| `POST /api/ai/analyze-member/:id?window=30d` → `AIMemberReport` (ver `docs/plan-equipo-estadisticas.md §3`) | informe IA con score efectividad, fortalezas, áreas de mejora, patrones | `src/pages/EquipoMiembroEstadisticas.tsx` (botón "Análisis IA" · TODO) |
+| `GET /api/organization/join-requests` | solicitudes entrantes por dominio | `src/pages/ajustes/usuarios/miembros.tsx:pendingReqs` |
+| `POST /api/organization/join-requests/:id/approve` | aprobar solicitud pendiente | idem:approveRequest |
+| `POST /api/organization/join-requests/:id/reject` | rechazar solicitud (cooldown 30 días) | idem:rejectRequest |
 | `POST /api/workspace/roles/:role/permissions` | editar permisos de rol | `src/pages/ajustes/usuarios/roles.tsx:13` |
 | `DELETE /api/me` | eliminar cuenta propia (anonimizar) | `src/pages/ajustes/zona-critica/eliminar-cuenta.tsx:32` |
 | `DELETE /api/organization` | borrar workspace completo | `src/pages/ajustes/zona-critica/eliminar-workspace.tsx:48` |
@@ -355,6 +371,92 @@ necesita 3 fuentes de eventos:
 **Plantillas (envío saliente)**:
 - Inline pixel: `<img src="https://api.byvaro.com/api/email-pixel/{trackingId}.gif" width="1" height="1" />`.
 - Headers: `X-Byvaro-MessageId: <uuid>` para correlacionar con webhooks.
+
+---
+
+## 1.9 · Equipo · flujos de alta y stats
+
+**Ver también**:
+- `docs/plan-equipo-estadisticas.md` — plan comercial + KPIs + IA.
+- `docs/screens/equipo.md` — spec pantalla `/equipo`.
+- `docs/screens/equipo-estadisticas.md` — spec dashboard del miembro.
+- **ADR-049** — rationale de los 2 flows + dashboard + plan de comisiones.
+
+### Regla fuerte · unicidad de email
+
+> **Un email solo puede pertenecer a una única organización.** El backend
+> valida y responde `409 EMAIL_TAKEN` con el nombre del workspace origen
+> para que el frontend muestre aviso descriptivo al admin que intenta
+> invitar/crear.
+
+```json
+// 409 EMAIL_TAKEN
+{
+  "error": "EMAIL_TAKEN",
+  "existingWorkspace": "Prime Properties"
+}
+```
+
+### Flow A · Invitar por email (`POST /api/organization/invitations`)
+
+- Payload: `{ email, role: "admin"|"member", personalMessage?: string }`.
+- El backend persiste la invitación con token único (expira 7 días).
+- Envía el email usando `renderTeamInvitation()` de
+  `src/lib/teamInvitationEmail.ts`. La plantilla devuelve
+  `{ subject, plainText, html }` en es/en con botón CTA al link
+  `https://app.byvaro.com/activate?token=<TOKEN>`.
+- El frontend ya **previsualiza** el HTML antes de enviar (iframe en
+  el dialog). El backend y el frontend usan la MISMA función para que
+  el preview coincida con lo que recibe el destinatario.
+
+### Flow B · Crear con contraseña temporal (`POST /api/organization/members`)
+
+- Payload completo de `TeamMember` (sin `id`) + flag `generateTempPassword: true`.
+- El backend genera contraseña 12 chars alfanuméricos + símbolo (sin
+  ambiguos `0O1lI`) o acepta la que venga del frontend (el form genera
+  en cliente para mostrar al admin antes).
+- Respuesta `201`: `{ member, tempPassword: string }`.
+- Al guardar el miembro, `member.mustChangePassword = true` se establece
+  automáticamente (forzar cambio al primer login).
+
+### Plan de comisiones
+
+Campos opcionales `commissionCapturePct` y `commissionSalePct` (0-100).
+`undefined` = hereda plan por defecto del workspace (futuro endpoint
+`GET /api/organization/commission-defaults`). `0` es valor válido
+explícito (no hay comisión).
+
+### Dashboard de stats · `GET /api/members/:id/stats`
+
+Query: `?window=7d|30d|90d|year` (default `30d`).
+
+Respuesta: `MemberStats` (shape canónico en `src/data/memberStats.ts`).
+Ver `docs/data-model.md §MemberStats` para el tipo completo.
+
+**Caching sugerido:**
+- Resultados comerciales · 5 min (cambian al cerrar venta).
+- Actividad CRM · 15 min (heatmap, tiempo activo).
+- Invalidación inmediata al insertar venta/registro/visita.
+
+**Rate limiting sugerido:**
+- 60 req/min por admin.
+- 10 req/min por miembro que consulta sus propias stats.
+
+### `GET /api/members/:id/stats/averages?window=30d`
+
+Medias del equipo para los campos numéricos principales (`salesValue`,
+`recordsApproved`, `visitsDone`, `conversionRate`, `emailsSent`,
+`avgDailyActiveMin`, `avgLeadResponseMin`). El frontend calcula deltas
+`↑34% vs equipo` en las hero cards.
+
+### `POST /api/ai/analyze-member/:id?window=30d` (futuro)
+
+Ver `docs/plan-equipo-estadisticas.md §3`:
+- Modelo: Claude Haiku 4.5 o GPT-4o-mini (decisión pendiente).
+- Input: `MemberStats` + `getTeamAverages()`.
+- Output: `AIMemberReport` con `effectivenessScore`, `status`,
+  `strengths`, `areasForImprovement`, `patterns`, `adminActions`.
+- Caché 24h + rate limit 5 informes/día/admin.
 
 ---
 
@@ -832,17 +934,41 @@ backend, sustituir el import por `useQuery(["leads", filters], ...)`.
 
 | Endpoint | TODO |
 |---|---|
-| `GET /api/records?status=&promotion=&agency=` | `src/pages/Registros.tsx:25` |
-| `POST /api/records/:id/approve` | idem:26 |
-| `POST /api/records/:id/reject` | idem:26 |
-| `POST /api/records/bulk-approve { ids:[] }` | idem:27 |
-| `POST /api/records/bulk-reject { ids:[] }` | idem:27 |
+| `GET /api/records?status=&promotion=&agency=&origen=` | `src/pages/Registros.tsx:25` |
+| `POST /api/records { origen, promotionId, agencyId?, cliente }` | `src/components/promotions/detail/ClientRegistrationDialog.tsx:260` |
+| `POST /api/records/:id/approve` | `Registros.tsx:26` |
+| `POST /api/records/:id/reject` | idem |
+| `POST /api/records/:id/revert` (**grace period 5 min**) | `Registros.tsx:185`, `src/components/registros/GracePeriodBanner.tsx` |
+| `POST /api/records/bulk-approve { ids:[] }` | `Registros.tsx:27` |
+| `POST /api/records/bulk-reject { ids:[] }` | idem |
 | `GET /api/records` paginado server-side | `src/data/records.ts:25` |
 
 **Diferencia con Lead**: un Registro es un lead **ya cualificado** y
 vinculado a un cliente + promoción concreta. Se crea desde el flujo
 `POST /api/leads/:id/convert` o directamente por una agencia al
 registrar un cliente sobre una promoción.
+
+**Campos canónicos en `POST /api/records` (ver ADR-046):**
+
+- `origen: "direct" | "collaborator"` — eje crítico que decide el flujo
+  y los campos obligatorios.
+- `agencyId?` — **obligatorio** si `origen === "collaborator"`,
+  **prohibido** si `origen === "direct"` (backend debe rechazar 400).
+- `cliente` — para `collaborator` solo se aceptan 3 campos (`nombre`,
+  `nacionalidad`, `phoneLast4`); cualquier email/DNI/phone completo del
+  payload debe ser ignorado silenciosamente o rechazado. Para `direct`
+  se acepta el perfil completo.
+- `decidedAt` — lo pone el backend al ejecutar `/approve` o `/reject`.
+- El job de notificación a la agencia se **programa con 5 min de delay**
+  y debe cancelarse si llega un `/revert` antes del disparo.
+
+**Reglas de visibilidad (vista promotor):**
+
+- Los registros con `origen === "direct"` **no se muestran** al
+  destinatario agencia (su RLS debe filtrarlos por `agencyId`).
+- Los campos adicionales del cliente (`email`, `telefono` completo,
+  `dni`) de un `collaborator` solo son visibles al promotor tras
+  aprobar — antes devuelve `null`/`masked` o simplemente se excluye.
 
 ### 7.3 · Ventas
 

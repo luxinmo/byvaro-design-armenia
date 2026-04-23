@@ -171,7 +171,7 @@ export default function SignatureManagerDialog({ open, onOpenChange, onSignature
                 >
                   <span className="flex-1 truncate">{s.name}</span>
                   {defaultId === s.id && (
-                    <span className="text-[10px] uppercase tracking-wide text-emerald-600 font-semibold">Default</span>
+                    <span className="text-[10px] uppercase tracking-wide text-success font-semibold">Default</span>
                   )}
                 </button>
               ))}

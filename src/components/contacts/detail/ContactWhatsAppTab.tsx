@@ -124,7 +124,7 @@ function SetupView({ onConnected, mode }: { onConnected: (s: WhatsAppSetup) => v
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="h-14 w-14 mx-auto rounded-2xl bg-emerald-500/10 grid place-items-center text-emerald-700 dark:text-emerald-400 mb-4">
+          <div className="h-14 w-14 mx-auto rounded-2xl bg-success/10 grid place-items-center text-success dark:text-success mb-4">
             <MessageCircle className="h-6 w-6" />
           </div>
           <h2 className="text-lg font-bold text-foreground">Conecta WhatsApp</h2>
@@ -318,8 +318,8 @@ function SetupWizard({
           </>
         ) : (
           <div className="text-center py-6">
-            <div className="h-12 w-12 mx-auto rounded-2xl bg-emerald-500/15 grid place-items-center mb-3">
-              <Sparkles className="h-5 w-5 text-emerald-600" />
+            <div className="h-12 w-12 mx-auto rounded-2xl bg-success/15 grid place-items-center mb-3">
+              <Sparkles className="h-5 w-5 text-success" />
             </div>
             <p className="text-sm font-semibold text-foreground">¿Cómo quieres llamar a este dispositivo?</p>
             <input
@@ -597,10 +597,10 @@ function ChatView({
             <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground truncate">{detail.name}</p>
               <p className="text-[11px] text-muted-foreground truncate inline-flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <span className="h-1.5 w-1.5 rounded-full bg-success" />
                 {detail.phones.find((p) => p.hasWhatsapp)?.number ?? detail.phone ?? "Sin número"}
                 <span aria-hidden>·</span>
-                <span className="text-emerald-600">Conectado vía {setup.method === "businessApi" ? "Business API" : "WhatsApp Web"}</span>
+                <span className="text-success">Conectado vía {setup.method === "businessApi" ? "Business API" : "WhatsApp Web"}</span>
               </p>
             </div>
           </div>
@@ -619,9 +619,9 @@ function ChatView({
         {/* Banner de mensajes nuevos pendientes (entrantes del cliente
          *  desde el último saliente del agente activo). */}
         {newMessagesInActiveChat > 0 && (
-          <div className="px-4 py-2 bg-emerald-500/10 border-b border-emerald-500/30 flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <p className="text-[11.5px] text-emerald-700 dark:text-emerald-400 font-medium">
+          <div className="px-4 py-2 bg-success/10 border-b border-success/30 flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
+            <p className="text-[11.5px] text-success dark:text-success font-medium">
               {newMessagesInActiveChat} {newMessagesInActiveChat === 1 ? "mensaje nuevo del cliente" : "mensajes nuevos del cliente"}
             </p>
           </div>
@@ -789,7 +789,7 @@ function AgentsPanel({
               <div className="h-9 w-9 rounded-full bg-foreground/10 grid place-items-center text-foreground font-semibold text-xs shrink-0 relative">
                 {initials}
                 {hasNew && (
-                  <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 border-2 border-muted/20" />
+                  <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-success border-2 border-muted/20" />
                 )}
               </div>
               <div className="flex-1 min-w-0">
@@ -802,7 +802,7 @@ function AgentsPanel({
                 </p>
               </div>
               {hasNew && (
-                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-emerald-500 text-white text-[10px] font-bold tnum px-1 shrink-0">
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-success text-white text-[10px] font-bold tnum px-1 shrink-0">
                   {a.newMessages}
                 </span>
               )}
@@ -1048,8 +1048,8 @@ function RecordingBar({
         <X className="h-4 w-4" />
       </button>
 
-      <div className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/30">
-        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+      <div className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2 rounded-full bg-success/10 border border-success/30">
+        <span className="h-2 w-2 rounded-full bg-success animate-pulse shrink-0" />
         <p className="text-xs font-medium text-foreground tnum shrink-0">
           {formatDuration(seconds)}
         </p>
@@ -1058,7 +1058,7 @@ function RecordingBar({
           {Array.from({ length: 32 }).map((_, i) => (
             <span
               key={i}
-              className="flex-1 bg-emerald-500/60 rounded-full"
+              className="flex-1 bg-success/60 rounded-full"
               style={{
                 height: `${20 + Math.abs(Math.sin((i + seconds) * 0.5)) * 80}%`,
                 opacity: i > (seconds % 32) ? 0.3 : 1,
@@ -1123,14 +1123,14 @@ function Bubble({ msg, isMine }: { msg: WhatsAppMessage; isMine: boolean }) {
         incoming
           ? "bg-card border border-border/40 rounded-tl-sm"
           : isMine
-            ? "bg-emerald-100 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-900/60 rounded-tr-sm"
+            ? "bg-success/15 dark:bg-success/15 border border-success/30 dark:border-success/40 rounded-tr-sm"
             : "bg-foreground/5 border border-border/40 rounded-tr-sm",
       )}>
         {/* Firma del agente (solo outgoing) */}
         {!incoming && msg.authorName && (
           <p className={cn(
             "text-[10px] font-semibold mb-0.5",
-            isMine ? "text-emerald-700 dark:text-emerald-400" : "text-foreground/70",
+            isMine ? "text-success dark:text-success" : "text-foreground/70",
           )}>
             {msg.authorName}{isMine && " · tú"}
           </p>
@@ -1141,7 +1141,7 @@ function Bubble({ msg, isMine }: { msg: WhatsAppMessage; isMine: boolean }) {
 
         <div className="flex items-center justify-end gap-1 mt-0.5">
           <p className="text-[10px] text-muted-foreground/70 tnum">{time}</p>
-          {!incoming && msg.read && <CheckCheck className="h-3 w-3 text-emerald-600" />}
+          {!incoming && msg.read && <CheckCheck className="h-3 w-3 text-success" />}
         </div>
       </div>
     </div>
@@ -1155,14 +1155,14 @@ function BubbleContent({ msg }: { msg: WhatsAppMessage }) {
     const dur = Number(msg.meta?.durationSec ?? 0);
     return (
       <div className="flex items-center gap-2 min-w-[180px] py-1">
-        <button className="h-8 w-8 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 grid place-items-center shrink-0">
+        <button className="h-8 w-8 rounded-full bg-success/20 text-success dark:text-success grid place-items-center shrink-0">
           <Mic className="h-3.5 w-3.5" />
         </button>
         <div className="flex-1 flex items-center gap-0.5 h-5">
           {Array.from({ length: 24 }).map((_, i) => (
             <span
               key={i}
-              className="flex-1 bg-emerald-500/40 rounded-full"
+              className="flex-1 bg-success/40 rounded-full"
               style={{ height: `${30 + Math.abs(Math.sin((i + 1) * 0.7)) * 70}%` }}
             />
           ))}
@@ -1217,7 +1217,7 @@ function BubbleContent({ msg }: { msg: WhatsAppMessage }) {
   if (kind === "location") {
     return (
       <div>
-        <div className="h-24 w-48 rounded-xl bg-gradient-to-br from-emerald-500/20 via-emerald-500/10 to-emerald-500/30 grid place-items-center text-emerald-700 dark:text-emerald-400 mb-1">
+        <div className="h-24 w-48 rounded-xl bg-gradient-to-br from-success/20 via-success/10 to-success/30 grid place-items-center text-success dark:text-success mb-1">
           <MapPin className="h-5 w-5" />
         </div>
         <p className="text-xs font-semibold text-foreground">{msg.meta?.label ?? "Ubicación"}</p>
@@ -1245,7 +1245,7 @@ function BubbleContent({ msg }: { msg: WhatsAppMessage }) {
   if (kind === "template") {
     return (
       <div>
-        <p className="text-[9px] uppercase tracking-wider font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5 inline-flex items-center gap-1">
+        <p className="text-[9px] uppercase tracking-wider font-semibold text-success dark:text-success mb-0.5 inline-flex items-center gap-1">
           <Sparkles className="h-2.5 w-2.5" /> Plantilla · {msg.meta?.templateName}
         </p>
         <p className="text-sm text-foreground whitespace-pre-wrap break-words">{msg.text}</p>

@@ -90,7 +90,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
     <>
       {parts.map((part, i) =>
         part.toLowerCase() === q.toLowerCase() ? (
-          <mark key={i} className="bg-amber-200 text-foreground rounded-sm px-0.5">{part}</mark>
+          <mark key={i} className="bg-warning/20 text-foreground rounded-sm px-0.5">{part}</mark>
         ) : (
           <span key={i}>{part}</span>
         )
@@ -394,7 +394,7 @@ export default function Colaboradores() {
               onClick={() => setRequestsOpen(true)}
               className="w-full group flex items-center gap-3 rounded-full border border-border bg-card px-4 py-2.5 text-left hover:bg-muted transition-colors"
             >
-              <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />
+              <span className="h-2 w-2 rounded-full bg-warning shrink-0" />
               <span className="text-xs text-foreground min-w-0 flex-1 truncate">
                 <span className="font-semibold">{pendientes.length}</span>
                 {pendientes.length === 1 ? " solicitud pendiente" : " solicitudes pendientes"}
@@ -567,7 +567,7 @@ export default function Colaboradores() {
 
                         {/* Mensaje */}
                         {a.mensajeSolicitud && (
-                          <div className="mt-3 rounded-xl bg-muted/50 p-3 border-l-2 border-amber-400">
+                          <div className="mt-3 rounded-xl bg-muted/50 p-3 border-l-2 border-warning/50">
                             <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
                               Mensaje
                             </p>
@@ -808,9 +808,9 @@ function ContractChip({ agency: a, size = "sm" }: { agency: Agency; size?: "sm" 
   if (c.state === "sin-contrato") return null;
   const cls =
     c.state === "vigente"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+      ? "bg-success/10 text-success border-success/25"
       : c.state === "por-expirar"
-        ? "bg-amber-50 text-amber-800 border-amber-200"
+        ? "bg-warning/10 text-warning border-warning/25"
         : "bg-destructive/5 text-destructive border-destructive/25";
   const label =
     c.state === "vigente"
@@ -841,7 +841,7 @@ function RatingStars({ value, size = "xs" }: { value: number; size?: "xs" | "sm"
         return (
           <Star
             key={i}
-            className={cn(s, filled ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30")}
+            className={cn(s, filled ? "fill-warning text-warning" : "text-muted-foreground/30")}
             strokeWidth={1.5}
           />
         );
@@ -879,7 +879,7 @@ function GoogleRatingBadge({
         </span>
       </span>
       <span className="font-semibold text-foreground tabular-nums">{a.googleRating.toFixed(1)}</span>
-      <Star className={cn(starSize, "fill-amber-400 text-amber-400")} strokeWidth={1.5} />
+      <Star className={cn(starSize, "fill-warning text-warning")} strokeWidth={1.5} />
       <span className="text-muted-foreground tabular-nums">
         ({a.googleRatingsTotal?.toLocaleString("es-ES")})
       </span>
@@ -923,7 +923,7 @@ function ActivityChip({ iso, size = "xs" }: { iso?: string; size?: "xs" | "sm" }
   const { label, tone } = relativeActivity(iso);
   const cls =
     tone === "fresh"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+      ? "bg-success/10 text-success border-success/25"
       : tone === "ok"
         ? "bg-muted text-foreground border-border"
         : "bg-muted/60 text-muted-foreground border-border";
@@ -1036,8 +1036,8 @@ export function FeatureCardV3({
 
         {/* Chips de estado */}
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-emerald-50 border border-emerald-200 text-[10px] font-semibold text-emerald-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-success/10 border border-success/25 text-[10px] font-semibold text-success">
+            <span className="h-1.5 w-1.5 rounded-full bg-success" />
             {a.promotionsCollaborating.length}/{a.totalPromotionsAvailable} compartidos
           </span>
           <ContractChip agency={a} size="xs" />

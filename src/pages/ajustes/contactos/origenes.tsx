@@ -174,7 +174,7 @@ export default function AjustesContactosOrigenes() {
               />
               <button
                 onClick={submitCreate}
-                className="h-7 w-7 rounded-full hover:bg-muted flex items-center justify-center text-emerald-600"
+                className="h-7 w-7 rounded-full hover:bg-muted flex items-center justify-center text-success"
               >
                 <Check className="h-4 w-4" />
               </button>
@@ -326,8 +326,8 @@ function DeleteSourceDialog({
     <Dialog open onOpenChange={(open) => { if (!open) onCancel(); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <div className="h-10 w-10 rounded-xl bg-amber-100 grid place-items-center mb-3">
-            <AlertTriangle className="h-5 w-5 text-amber-700" strokeWidth={1.75} />
+          <div className="h-10 w-10 rounded-xl bg-warning/15 grid place-items-center mb-3">
+            <AlertTriangle className="h-5 w-5 text-warning" strokeWidth={1.75} />
           </div>
           <DialogTitle>Eliminar origen "{source.label}"</DialogTitle>
           <DialogDescription className="leading-relaxed">

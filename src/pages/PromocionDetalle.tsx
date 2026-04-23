@@ -57,7 +57,7 @@ import {
   DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { RefreshCw, Trash2 } from "lucide-react";
-import { toast, Toaster } from "sonner"; // feedback tras publicar
+import { toast } from "sonner"; // feedback tras publicar · Toaster global en App.tsx
 import { useCurrentUser } from "@/lib/currentUser";
 
 function formatPrice(n: number) {
@@ -188,6 +188,28 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   /** El brochure puede eliminarse desde su card. Al eliminarlo, la sección
    *  se oculta y la acción rápida "Brochure" queda deshabilitada. */
   const [brochureRemoved, setBrochureRemoved] = useState(false);
+
+  /** Dispara la descarga del brochure (mock · usa el PDF de ejemplo en
+   *  /public). El `id` fijo del toast evita el doble "Descarga iniciada"
+   *  cuando el mismo click pasa por dos elementos (rail + dropdown). */
+  const downloadBrochure = () => {
+    if (brochureRemoved) return;
+    // TODO(backend): sustituir URL por la firmada del storage real.
+    const url = "/REF-3348-ficha.pdf";
+    const filename = `${(p?.name ?? "brochure").replace(/\s+/g, "-").toLowerCase()}-brochure.pdf`;
+    try {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      toast.success("Descarga iniciada", { id: "brochure-download" });
+    } catch {
+      toast.error("No se pudo iniciar la descarga", { id: "brochure-download" });
+    }
+  };
   /** Overlay fullscreen con las estadísticas de agencias de esta promoción
    *  (ColaboradoresEstadisticas con `lockedPromotionId`). Se abre desde
    *  el tab Agencias y se cierra con X. */
@@ -319,33 +341,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   // Requisitos mínimos para publicar (fotos, unidades, plan pagos, ubicación,
   // entrega, estado construcción, comisiones si colabora). Fuente única de
   // verdad en src/lib/publicationRequirements.ts.
-  const publishMissing = useMemo(() => {
-    const validator = getMissingForPromotion(p);
-    // Mock data puede declarar `missingSteps` con stepNames que el
-    // validador no detecta (p. ej. "Payment plan" aunque reservationCost>0).
-    // Fusionamos ambas fuentes y de-duplicamos por label.
-    const metaSteps = (p.missingSteps ?? []).map((stepName) => {
-      const wizardStep = stepConfig[stepName]?.wizardStep;
-      const fichaMap: Record<string, "multimedia" | "units" | "collaborators" | "paymentPlan" | "location" | "delivery" | "estado"> = {
-        multimedia: "multimedia",
-        crear_unidades: "units",
-        colaboradores: "collaborators",
-        plan_pagos: "paymentPlan",
-        info_basica: "location",
-        detalles: "delivery",
-        estado: "estado",
-      };
-      return {
-        key: `meta-${stepName}`,
-        label: stepName,
-        ficha: wizardStep ? fichaMap[wizardStep] : undefined,
-      };
-    });
-    // De-dup: si el validador ya flaggeó el mismo ficha, preferimos su label descriptivo.
-    const existingFichas = new Set(validator.map((m) => m.ficha));
-    const extras = metaSteps.filter((m) => !m.ficha || !existingFichas.has(m.ficha));
-    return [...validator, ...extras];
-  }, [p]);
+  /* El validador (src/lib/publicationRequirements.ts) ya incluye los
+   * missingSteps declarativos del mock + filtra los que no aplican en
+   * modo uso interno (Collaborators cuando canShareWithAgencies=false).
+   * No duplicamos la lógica aquí. */
+  const publishMissing = useMemo(() => getMissingForPromotion(p), [p]);
   const isIncomplete = publishMissing.length > 0 || p.status === "incomplete";
   /** Si la promo tiene explícitamente canShareWithAgencies=false, está
    *  desactivada. undefined cuenta como activada (legacy). El override local
@@ -378,7 +378,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           icon: FileText,
           label: "Brochure",
           hint: brochureRemoved ? "No hay brochure subido" : "Descargar brochure",
-          onClick: brochureRemoved ? undefined : () => toast.success("Descarga iniciada"),
+          onClick: brochureRemoved ? undefined : downloadBrochure,
           disabled: brochureRemoved,
         },
         { icon: Download, label: "Listado de precios", hint: "Descargar en PDF", onClick: () => setPriceListOpen(true) },
@@ -480,10 +480,6 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     publishMissing.map((m) => m.ficha).filter(Boolean) as string[],
   );
 
-  const baseStatus = statusConfig(p.status);
-  const status = isIncomplete
-    ? { label: "Incompleta", variant: "warning" as const }
-    : baseStatus;
   const hasMissing = p.missingSteps && p.missingSteps.length > 0;
   const missingSet = new Set(p.missingSteps || []);
   const completedSteps = allSteps.filter(s => !missingSet.has(s));
@@ -528,7 +524,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const allKpis = [
     { icon: Euro, label: "Rango de precios", value: priceRangeValue, detail: priceRangeDetail, color: "text-primary bg-primary/10", empty: p.priceMin === 0 },
     { icon: Home, label: "Disponibilidad", value: availabilityValue, detail: availabilityDetail, color: "text-primary bg-primary/10", progress: p.totalUnits > 0 ? occupancy : 0, empty: p.totalUnits === 0 },
-    { icon: TrendingUp, label: "Comisión", value: p.commission > 0 ? `${p.commission}%` : "—", detail: p.commission > 0 ? (p.priceMin > 0 ? `~${formatPrice(p.priceMin * p.commission / 100)}` : "—") : "Sin configurar", color: "text-amber-600 bg-amber-500/10", onClick: () => setActiveTab(visibleTabs.indexOf("Comisiones")), empty: p.commission === 0 },
+    { icon: TrendingUp, label: "Comisión", value: p.commission > 0 ? `${p.commission}%` : "—", detail: p.commission > 0 ? (p.priceMin > 0 ? `~${formatPrice(p.priceMin * p.commission / 100)}` : "—") : "Sin configurar", color: "text-warning bg-warning/10", onClick: () => setActiveTab(visibleTabs.indexOf("Comisiones")), empty: p.commission === 0 },
     { icon: Calendar, label: "Entrega", value: p.delivery || "Por definir", detail: p.delivery ? "Estimada" : "Añádela en Información básica", color: "text-accent-foreground bg-accent/10", empty: !p.delivery },
     { icon: HardHat, label: "Construcción", value: p.constructionProgress !== undefined ? `${p.constructionProgress}%` : "—", detail: constructionPhaseLabel || "Sin configurar", color: "text-destructive bg-destructive/10", empty: p.constructionProgress === undefined },
     ...(!viewAsCollaborator ? [{ icon: Users, label: "Agencias", value: `${p.agencies}`, detail: p.agencies > 0 ? "Colaborando" : "Ninguna aún", color: "text-primary bg-primary/10", onClick: () => setShareOpen(true), empty: false }] : []),
@@ -574,7 +570,6 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           - Tabs con subrayado (mismo patrón que /empresa) en vez de pills
             con fondo. El <Separator> desaparece porque el borde inferior
             del <nav> hace de separador visual. */}
-      <Toaster position="top-center" richColors closeButton />
       <header className="px-3 sm:px-8 lg:px-10 pt-4 sm:pt-6 pb-0">
         {/* Breadcrumb / eyebrow · sólo desde sm+. En móvil el back
             arrow del MobileHeader sustituye esta ruta. */}
@@ -596,10 +591,88 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               <h1 className="text-[20px] sm:text-[28px] font-bold tracking-tight text-foreground leading-tight">
                 {p.name}
               </h1>
-              {/* Chips de estado y tipo · ocultos en móvil (se muestran
-                  los KPIs y estado más abajo). */}
-              <Tag variant={status.variant} size="sm" className="hidden sm:inline-flex">{status.label}</Tag>
-              {typeLabel && <Tag variant="default" size="sm" className="hidden sm:inline-flex">{typeLabel}</Tag>}
+              {/* Badge de estado de publicación · visible para promotor.
+                  Ayuda a responder de un vistazo la pregunta "¿esto
+                  está publicada o no?". */}
+              {!viewAsCollaborator && (() => {
+                if (isDraft) {
+                  return (
+                    <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-dashed border-primary/50 bg-primary/5 text-primary text-[11px] font-semibold">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      Borrador
+                    </span>
+                  );
+                }
+                if (p.status === "sold-out") {
+                  return (
+                    <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-border bg-muted text-foreground text-[11px] font-semibold">
+                      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+                      Agotada
+                    </span>
+                  );
+                }
+                if (isIncomplete) {
+                  return (
+                    <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-warning/30 bg-warning/10 text-warning text-[11px] font-semibold">
+                      <span className="h-1.5 w-1.5 rounded-full bg-warning" />
+                      Sin publicar · faltan {publishMissing.length} {publishMissing.length === 1 ? "campo" : "campos"}
+                    </span>
+                  );
+                }
+                if (p.status === "active") {
+                  /* "Solo uso interno" · promoción completa pero con
+                   *  canShareWithAgencies=false. No se publica al
+                   *  marketplace de agencias; solo el equipo la ve. */
+                  if (!sharingEnabledForPromo) {
+                    return (
+                      <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-border bg-muted/50 text-muted-foreground text-[11px] font-semibold">
+                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+                        Solo uso interno
+                      </span>
+                    );
+                  }
+                  /* Badge "Publicada" clicable · al pulsar permite al
+                     promotor retirar la publicación (convertir en "Solo
+                     uso interno"). Las agencias dejan de verla, pero
+                     las que tengan ventas/visitas en curso mantienen
+                     acceso hasta cerrarlas. */
+                  return (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: "¿Despublicar la promoción?",
+                          description:
+                            "Los colaboradores dejarán de verla en su listado y no podrán crear nuevos registros ni visitas. " +
+                            "Los que ya tengan ventas o visitas en curso mantendrán acceso a la ficha hasta cerrarlas. " +
+                            "Podrás volver a publicarla en cualquier momento.",
+                          confirmLabel: "Despublicar",
+                          cancelLabel: "Cancelar",
+                          variant: "destructive",
+                        });
+                        if (!ok) return;
+                        setCanShareOverride(false);
+                        toast.success("Promoción despublicada", {
+                          description: `${p.name} ya no es visible para nuevos colaboradores.`,
+                        });
+                        // TODO(backend): PATCH /api/promociones/:id { canShareWithAgencies: false }
+                      }}
+                      className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-success/30 bg-success/10 text-success text-[11px] font-semibold hover:bg-success/20 hover:border-success/50 transition-colors cursor-pointer"
+                      title="Click para despublicar la promoción"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                      Publicada
+                      <ChevronDown className="h-3 w-3 opacity-60" strokeWidth={2} />
+                    </button>
+                  );
+                }
+                return (
+                  <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-border bg-muted/40 text-muted-foreground text-[11px] font-semibold">
+                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+                    Sin publicar
+                  </span>
+                );
+              })()}
             </div>
             <div className="flex items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1.5 flex-wrap">
               {/* Ubicación · oculta en móvil (menos ruido). */}
@@ -725,6 +798,24 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 </TooltipProvider>
               )}
 
+              {/* Pill "Solo uso interno" · cuando la promoción está activa
+                  pero el promotor marcó No compartir. Reemplaza el lugar
+                  donde iría Publicar (ya no aplica, ya está activa) y
+                  recuerda visualmente que NO aparece en el marketplace.
+                  Click abre el dialog de activar compartir. */}
+              {p.status === "active" && !isIncomplete && !sharingEnabledForPromo && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setActivateSharingOpen(true)}
+                  className="gap-1.5 hidden sm:inline-flex"
+                  title="Activar compartir con agencias"
+                >
+                  <Handshake className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  Solo uso interno
+                </Button>
+              )}
+
               {/* Registrar cliente · también requiere promoción publicada. */}
               {p.status === "active" && !isIncomplete && (
                 <Button size="sm" onClick={() => setRegisterClientOpen(true)} className="gap-1.5 hidden sm:inline-flex">
@@ -844,6 +935,38 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 </div>
               );
             })()}
+
+            {/* Aviso "Solo uso interno" · la promoción está completa
+                y activa, pero el promotor marcó "No compartir" → no
+                aparece para agencias. Ofrecemos el atajo para
+                activar compartir (abre ActivateSharingDialog y
+                configura comisiones). */}
+            {!viewAsCollaborator && p.status === "active" && !isIncomplete && !sharingEnabledForPromo && (
+              <div className="mb-5 rounded-2xl border border-border bg-muted/30 p-5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    <Handshake className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" strokeWidth={1.5} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-foreground">
+                        Solo uso interno
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Esta promoción está activa para tu equipo pero no se comparte con agencias
+                        colaboradoras. Para publicarla en el marketplace, configura la comisión y
+                        activa la compartición.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => setActivateSharingOpen(true)}
+                    className="rounded-full text-xs h-9 px-4 shrink-0 w-full sm:w-auto"
+                  >
+                    <Handshake className="h-3.5 w-3.5 mr-1.5" strokeWidth={1.75} />
+                    Activar compartir
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* Two-column layout: main content left, narrow icon rail right.
              *  Mismo shape en vista promotor y agencia — el rail aquí no cambia
@@ -1004,7 +1127,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             {/* ── 2. PAGO Y DISPONIBILIDAD (Unidades + Plan de pagos) ── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <SectionCard title="Unidades y disponibilidad" stepName="Units" missing={missingSet.has("Units") || realMissing.has("units")} onEdit={() => setEditOpen("inventory")} hideEdit={viewAsCollaborator}>
-                <PromotionAvailabilitySummary promotionId={p.id} onViewAll={() => setActiveTab(visibleTabs.indexOf("Availability"))} />
+                <PromotionAvailabilitySummary promotionId={p.id} onViewAll={() => setActiveTab(visibleTabs.indexOf("Availability"))} isCollaboratorView={viewAsCollaborator} />
               </SectionCard>
 
               <SectionCard title="Plan de pagos" stepName="Payment plan" missing={missingSet.has("Payment plan") || realMissing.has("paymentPlan")} onEdit={() => setEditOpen("paymentPlan")} hideEdit={viewAsCollaborator}>
@@ -1112,7 +1235,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                         <DropdownMenuItem onClick={() => setEditOpen("memoria")}>
                           <RefreshCw className="h-3.5 w-3.5 mr-2" /> Reemplazar archivo
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toast.success("Descarga iniciada")}>
+                        <DropdownMenuItem onClick={downloadBrochure}>
                           <Download className="h-3.5 w-3.5 mr-2" /> Descargar
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
@@ -1215,7 +1338,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                         <DropdownMenuItem onClick={() => setEditOpen("brochure")}>
                           <RefreshCw className="h-3.5 w-3.5 mr-2" /> Reemplazar archivo
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toast.success("Descarga iniciada")}>
+                        <DropdownMenuItem onClick={downloadBrochure}>
                           <Download className="h-3.5 w-3.5 mr-2" /> Descargar
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
@@ -1254,6 +1377,32 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   <MapPin className="h-6 w-6 text-muted-foreground/30 mx-auto mb-2" />
                   <p className="text-xs text-muted-foreground">{p.location || "Sin ubicación"}, España</p>
                 </div>
+              </div>
+              {/* Puntos de interés cercanos · mismo bloque que usa la ficha de
+                  unidad (ver UnitDetailDialog.tsx §Ubicación). Distancias hoy
+                  son placeholder — las pintará Google Places en backend. */}
+              <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-4 mt-3">
+                <p className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground mb-2">
+                  Puntos de interés cercanos
+                </p>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                  {[
+                    { label: "Playa" },
+                    { label: "Centro" },
+                    { label: "Aeropuerto" },
+                    { label: "Golf" },
+                    { label: "Montaña" },
+                    { label: "Supermercado" },
+                  ].map((poi) => (
+                    <div key={poi.label} className="flex flex-col items-center gap-1 rounded-lg bg-card border border-border/40 px-2 py-2">
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{poi.label}</span>
+                      <span className="text-xs font-medium text-muted-foreground/60">—</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-muted-foreground/70 mt-2 italic">
+                  Próximamente · distancias calculadas automáticamente con Google Maps
+                </p>
               </div>
             </SectionCard>
 
@@ -1517,13 +1666,13 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           <div className="space-y-5">
             {/* Aviso · compartir desactivado */}
             {!viewAsCollaborator && !sharingEnabledForPromo && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 flex items-start gap-3">
-                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" strokeWidth={1.5} />
+              <div className="rounded-2xl border border-warning/25 bg-warning/10 p-4 flex items-start gap-3">
+                <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" strokeWidth={1.5} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-amber-900 mb-0.5">
+                  <p className="text-sm font-semibold text-warning mb-0.5">
                     Compartir con agencias está desactivado
                   </p>
-                  <p className="text-xs text-amber-900/80 leading-relaxed">
+                  <p className="text-xs text-warning/80 leading-relaxed">
                     Mientras esté desactivado, no puedes invitar ni compartir esta
                     promoción con colaboradores. Actívalo para empezar a invitar —
                     podrás ajustar condiciones en cada envío.
@@ -1701,7 +1850,9 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       </div>
 
       {/* Client Registration dialog — en vista agencia arrancamos en flujo
-          directo (no hay modo colaborador cuando tú misma eres la agencia). */}
+          directo (no hay modo colaborador cuando tú misma eres la agencia).
+          `registrationRequirements` puede definirlas el promotor en el
+          wizard (hoy no se persiste por promoción, se usa default). */}
       <ClientRegistrationDialog
         open={registerClientOpen}
         onOpenChange={setRegisterClientOpen}
@@ -1709,6 +1860,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         promotionId={p.id}
         validezDias={p.collaboration?.validezRegistroDias}
         isCollaboratorView={viewAsCollaborator}
+        registrationRequirements={p.collaboration?.registrationRequirements}
       />
 
       {/* Visor fullscreen de la galería multimedia */}
@@ -2207,7 +2359,7 @@ function TopPerformers({ list }: { list: Agency[] }) {
   const top = list.slice(0, 3);
   const maxSales = Math.max(...top.map((a) => a.salesVolume), 1);
   const medals = [
-    { ring: "ring-amber-400/40", bg: "bg-gradient-to-br from-amber-400 to-amber-500", text: "text-white" },
+    { ring: "ring-warning/40", bg: "bg-gradient-to-br from-warning/80 to-warning", text: "text-white" },
     { ring: "ring-zinc-300/60", bg: "bg-gradient-to-br from-zinc-300 to-zinc-400", text: "text-white" },
     { ring: "ring-orange-400/40", bg: "bg-gradient-to-br from-orange-400 to-orange-600", text: "text-white" },
   ];
@@ -2215,8 +2367,8 @@ function TopPerformers({ list }: { list: Agency[] }) {
     <div className="rounded-2xl bg-card border border-border shadow-soft p-4 sm:p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
-          <div className="h-7 w-7 rounded-lg bg-amber-500/10 flex items-center justify-center">
-            <Trophy className="h-3.5 w-3.5 text-amber-500" strokeWidth={2} />
+          <div className="h-7 w-7 rounded-lg bg-warning/10 flex items-center justify-center">
+            <Trophy className="h-3.5 w-3.5 text-warning" strokeWidth={2} />
           </div>
           <h3 className="text-sm font-semibold text-foreground">Mejores colaboradores</h3>
           <span className="text-[10px] text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full font-medium">En esta promoción</span>
@@ -2333,7 +2485,7 @@ function AgenciesTab({ promotionId, navigate, onInvite, canShare = true, onActiv
           <AgencyKPI icon={Building2} label="Agencias colaborando" value={`${totals.active}`} delta={totals.active > 0 ? "+1" : undefined} accent="bg-primary/10" trend={[1, 1, 2, 2, 2, 3, totals.active]} trendColor="text-primary" />
           <AgencyKPI icon={Eye} label="Visitas a esta promoción" value={`${totals.visits}`} delta="+18%" accent="bg-accent/10" trend={[20, 28, 35, 42, 50, 58, totals.visits]} trendColor="text-accent-foreground" />
           <AgencyKPI icon={FileCheck2} label="Registros" value={`${totals.registrations}`} delta="+9%" accent="bg-primary/10" trend={[5, 8, 10, 12, 15, 18, totals.registrations]} trendColor="text-primary" />
-          <AgencyKPI icon={Euro} label="Volumen ventas" value={`${formatCompact(totals.sales)}€`} delta="+24%" accent="bg-amber-500/10" trend={[1, 2, 3, 4, 5, 6, 7]} trendColor="text-amber-500" />
+          <AgencyKPI icon={Euro} label="Volumen ventas" value={`${formatCompact(totals.sales)}€`} delta="+24%" accent="bg-warning/10" trend={[1, 2, 3, 4, 5, 6, 7]} trendColor="text-warning" />
         </div>
       )}
 
@@ -2411,9 +2563,9 @@ function AgenciesTab({ promotionId, navigate, onInvite, canShare = true, onActiv
         {hasSidebar && (
           <div className="w-full lg:w-[300px] lg:shrink-0 order-1 lg:order-2">
             <div className="lg:sticky lg:top-4 space-y-4">
-              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/10 p-4">
+              <div className="rounded-2xl border border-warning/30 bg-warning/10 dark:bg-warning/10 p-4">
                 <div className="flex items-center gap-2 mb-1.5">
-                  <Info className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                  <Info className="h-3.5 w-3.5 text-warning shrink-0" />
                   <h3 className="text-xs font-semibold text-foreground leading-snug">No colaboran en esta promoción</h3>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">
@@ -2496,7 +2648,7 @@ function AgencyCard({ agency: ag, promotionId, selected, onToggleSelect }: { age
           </div>
           <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full",
             ag.status === "active" ? "bg-primary/10 text-primary dark:bg-primary/10" :
-              ag.status === "pending" ? "bg-amber-500/10 text-amber-600 dark:bg-amber-500/10" :
+              ag.status === "pending" ? "bg-warning/10 text-warning dark:bg-warning/10" :
                 ag.status === "expired" ? "bg-destructive/10 text-destructive dark:bg-destructive/10" :
                   "bg-muted text-muted-foreground"
           )}>
@@ -2940,8 +3092,8 @@ function DocumentsTab({ openFolder, onOpenFolder, blockedAgencies, onToggleBlock
                 </div>
                 {!readOnly && isShareable && !isLocked && (
                   <div className="mt-3 pt-3 border-t border-border/20 flex items-center gap-1.5">
-                    <Share2 className="h-2.5 w-2.5 text-amber-500" strokeWidth={1.5} />
-                    <p className="text-[10px] text-amber-600">Compartido con {totalCollaborators} agencias</p>
+                    <Share2 className="h-2.5 w-2.5 text-warning" strokeWidth={1.5} />
+                    <p className="text-[10px] text-warning">Compartido con {totalCollaborators} agencias</p>
                   </div>
                 )}
                 {!readOnly && isLocked && (
@@ -3011,10 +3163,10 @@ function CollaborationStatusBanner({ isIncomplete, isShared, agencyCount, activi
 }) {
   if (isIncomplete) {
     return (
-      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 overflow-hidden">
+      <div className="rounded-2xl border border-warning/20 bg-warning/10 overflow-hidden">
         <div className="p-4 2xl:p-5 flex items-start gap-3">
-          <div className="h-7 w-7 2xl:h-9 2xl:w-9 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0 mt-0.5">
-            <Lock className="h-3.5 w-3.5 2xl:h-4 2xl:w-4 text-amber-600" />
+          <div className="h-7 w-7 2xl:h-9 2xl:w-9 rounded-lg bg-warning/15 flex items-center justify-center shrink-0 mt-0.5">
+            <Lock className="h-3.5 w-3.5 2xl:h-4 2xl:w-4 text-warning" />
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground leading-tight">Todavía no se puede compartir</p>

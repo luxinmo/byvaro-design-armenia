@@ -155,8 +155,8 @@ function StatusBadge({ status }: { status: RegistrationRecord["status"] }) {
   }
 
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700">
-      <span className="h-1.5 w-1.5 rounded-full animate-pulse bg-amber-500" />
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-warning">
+      <span className="h-1.5 w-1.5 rounded-full animate-pulse bg-warning" />
       Pendiente
     </span>
   );
@@ -184,8 +184,8 @@ function MatchCircle({ percentage }: { percentage: number }) {
   const radius = 24;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (percentage / 100) * circumference;
-  const color = percentage >= 80 ? "text-destructive" : percentage >= 50 ? "text-amber-700" : "text-primary";
-  const bgColor = percentage >= 80 ? "bg-destructive/10" : percentage >= 50 ? "bg-amber-500/10" : "bg-primary/10";
+  const color = percentage >= 80 ? "text-destructive" : percentage >= 50 ? "text-warning" : "text-primary";
+  const bgColor = percentage >= 80 ? "bg-destructive/10" : percentage >= 50 ? "bg-warning/10" : "bg-primary/10";
 
   return (
     <div className={cn("relative h-16 w-16 shrink-0 rounded-full flex items-center justify-center", bgColor)}>
@@ -326,9 +326,9 @@ function RecordRow({ record, isPending }: { record: RegistrationRecord; isPendin
 
             {record.recommendation && (
               <div className="flex items-start gap-2.5 pt-3 border-t border-border/30">
-                <AlertTriangle className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+                <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-xs font-semibold text-amber-700">Recomendación sugerida:</p>
+                  <p className="text-xs font-semibold text-warning">Recomendación sugerida:</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{record.recommendation}</p>
                 </div>
               </div>
@@ -373,8 +373,8 @@ function RecordRow({ record, isPending }: { record: RegistrationRecord; isPendin
                 </div>
                 <div className="text-center">
                   <p className="text-xs font-semibold text-foreground">{record.contactName}</p>
-                  <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-amber-700">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-warning">
+                    <span className="h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
                     Registro pendiente
                   </span>
                 </div>

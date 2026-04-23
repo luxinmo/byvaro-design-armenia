@@ -258,6 +258,10 @@ export function EditContactDialog({ open, onOpenChange, detail, onSaved, onCreat
         assignedTo: [],
         languages: edits.languages,
         notes: edits.notes,
+        /* Scope: si el creador es una agencia colaboradora, el
+         * contacto queda dentro de su ámbito (no visible al promotor
+         * cross-tenant ni a otras agencias). */
+        ownerAgencyId: user.accountType === "agency" ? user.agencyId : undefined,
       };
       saveCreatedContact(newContact);
       /* Persistimos también los detalles editados (multi-tlf, multi-email,
@@ -762,7 +766,7 @@ function SourceSelect({
               )}
             >
               <span className="truncate">{o}</span>
-              {value === o && <Check className="h-3 w-3 text-emerald-600 shrink-0" />}
+              {value === o && <Check className="h-3 w-3 text-success shrink-0" />}
             </button>
           ))}
         </div>
@@ -846,7 +850,7 @@ function NationalityPicker({
               >
                 <span className="text-base leading-none shrink-0">{c.flag}</span>
                 <span className="flex-1 text-xs truncate">{c.name}</span>
-                {isSelected && <Check className="h-3 w-3 text-emerald-600 shrink-0" />}
+                {isSelected && <Check className="h-3 w-3 text-success shrink-0" />}
               </button>
             );
           })}
@@ -937,7 +941,7 @@ function LanguagesPicker({
               >
                 <span className="text-base leading-none shrink-0">{l.flag}</span>
                 <span className="flex-1 text-xs truncate">{l.name}</span>
-                {isSelected && <Check className="h-3 w-3 text-emerald-600 shrink-0" />}
+                {isSelected && <Check className="h-3 w-3 text-success shrink-0" />}
               </button>
             );
           })}

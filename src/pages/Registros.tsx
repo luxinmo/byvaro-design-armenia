@@ -85,8 +85,8 @@ function relativeDate(iso: string): string {
 function matchBadgeClasses(pct: number): string {
   const level = getMatchLevel(pct);
   if (level === "high") return "bg-destructive/10 text-destructive border-destructive/20";
-  if (level === "medium") return "bg-amber-50 text-amber-700 border-amber-200/60";
-  if (level === "low") return "bg-emerald-50 text-emerald-700 border-emerald-200/60";
+  if (level === "medium") return "bg-warning/10 text-warning border-warning/30";
+  if (level === "low") return "bg-success/10 text-success border-success/30";
   return "bg-muted/50 text-muted-foreground border-border";
 }
 
@@ -482,7 +482,7 @@ export default function Registros() {
                             className={cn(
                               "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase shrink-0 border",
                               isDirect
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
+                                ? "bg-success/10 text-success border-success/30"
                                 : "bg-muted/60 text-muted-foreground border-border",
                             )}
                             title={isDirect ? "Registro directo (sin agencia)" : "A través de agencia colaboradora"}
@@ -503,7 +503,7 @@ export default function Registros() {
 
                         <div className="flex items-center justify-between gap-2 mt-2">
                           <span className="text-[11px] text-muted-foreground/80 inline-flex items-center gap-1">
-                            {r.estado === "pendiente" && <Clock className="h-3 w-3 text-amber-500" />}
+                            {r.estado === "pendiente" && <Clock className="h-3 w-3 text-warning" />}
                             {relativeDate(r.fecha)}
                             {r.responseTime && r.estado !== "pendiente" && (
                               <span className="text-muted-foreground/50 inline-flex items-center gap-0.5 ml-1">
@@ -539,6 +539,7 @@ export default function Registros() {
                     onApprove={() => approve(activeRecord.id)}
                     onReject={() => reject(activeRecord.id)}
                     onRevert={() => revert(activeRecord.id)}
+                    viewerIsAgency={isAgencyUser}
                     onBack={() => setActiveId(null)}
                   />
                 ) : (
@@ -560,8 +561,8 @@ export default function Registros() {
         </div>
       </div>
 
-      {/* ═══════════ Barra flotante de selección múltiple ═══════════ */}
-      {selectedIds.length > 0 && (
+      {/* ═══════════ Barra flotante de selección múltiple · solo promotor ═══════════ */}
+      {!isAgencyUser && selectedIds.length > 0 && (
         <div
           className={cn(
             "fixed left-1/2 -translate-x-1/2 z-40",
@@ -617,6 +618,7 @@ function RegistroDetail({
   onReject,
   onRevert,
   onBack,
+  viewerIsAgency = false,
 }: {
   record: Registro;
   promotionName: string;
@@ -627,9 +629,12 @@ function RegistroDetail({
   onReject: () => void;
   onRevert: () => void;
   onBack: () => void;
+  /** La agencia ve sus registros pero NO decide sobre ellos — eso
+   *  es competencia del promotor. Oculta el pie de Aprobar/Rechazar. */
+  viewerIsAgency?: boolean;
 }) {
   const level = getMatchLevel(record.matchPercentage);
-  const canDecide = record.estado === "pendiente";
+  const canDecide = !viewerIsAgency && record.estado === "pendiente";
 
   return (
     <div className="bg-card border border-border rounded-2xl shadow-soft overflow-hidden">
@@ -723,9 +728,9 @@ function RegistroDetail({
             </p>
             {record.origen === "direct" ? (
               /* Directo · lo metió el propio promotor: sin agencia intermediaria */
-              <div className="p-3 rounded-xl border border-emerald-200/50 bg-emerald-50/40 dark:bg-emerald-500/5">
+              <div className="p-3 rounded-xl border border-success/25 bg-success/40 dark:bg-success/5">
                 <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 grid place-items-center shrink-0">
+                  <div className="h-8 w-8 rounded-lg bg-success/15 text-success dark:text-success grid place-items-center shrink-0">
                     <UserCheck className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -762,7 +767,7 @@ function RegistroDetail({
               className={cn(
                 "flex items-center gap-2 px-3 py-2 rounded-xl border text-sm",
                 record.consent
-                  ? "border-emerald-200/60 bg-emerald-50/60 text-emerald-700"
+                  ? "border-success/30 bg-success/10 text-success"
                   : "border-destructive/20 bg-destructive/5 text-destructive",
               )}
             >
@@ -783,6 +788,53 @@ function RegistroDetail({
           </p>
           <div className="p-3 rounded-xl border border-border bg-muted/20 text-sm text-foreground">
             {record.notas}
+          </div>
+        </div>
+      )}
+
+      {/* Huella digital · datos de auditoría capturados al enviar.
+          Solo aparecen cuando el registro trae `audit` (los nuevos
+          registros creados desde el ClientRegistrationDialog). */}
+      {record.audit && (
+        <div className="px-4 sm:px-6 pb-5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2 inline-flex items-center gap-1.5">
+            <Shield className="h-3 w-3" strokeWidth={2} />
+            Huella digital
+          </p>
+          <div className="p-3 rounded-xl border border-border bg-muted/20 space-y-1.5">
+            <AuditRow label="Enviado por" value={`${record.audit.actor.name} · ${record.audit.actor.email}`} />
+            <AuditRow
+              label="Rol"
+              value={record.audit.actor.role === "agency"
+                ? `Agencia${record.audit.actor.agencyId ? ` (${record.audit.actor.agencyId})` : ""}`
+                : "Promotor"}
+            />
+            <AuditRow
+              label="Dispositivo"
+              value={summarizeDevice(record.audit.userAgent)}
+            />
+            <AuditRow
+              label="Zona horaria"
+              value={`${record.audit.timezone} · ${record.audit.language}`}
+            />
+            <AuditRow
+              label="Capturado"
+              value={new Date(record.audit.capturedAt).toLocaleString("es-ES", {
+                day: "2-digit", month: "short", year: "numeric",
+                hour: "2-digit", minute: "2-digit",
+              })}
+            />
+            {record.audit.termsVersion && (
+              <AuditRow
+                label="Términos aceptados"
+                value={`${record.audit.termsVersion}${record.audit.termsAcceptedAt
+                  ? ` · ${new Date(record.audit.termsAcceptedAt).toLocaleString("es-ES", {
+                      day: "2-digit", month: "short", year: "numeric",
+                      hour: "2-digit", minute: "2-digit",
+                    })}`
+                  : ""}`}
+              />
+            )}
           </div>
         </div>
       )}
@@ -829,7 +881,8 @@ function RegistroDetail({
         <ActivityTimeline record={record} />
       </div>
 
-      {/* Footer de acciones */}
+      {/* Footer de acciones · oculto para agencia (solo promotor decide) */}
+      {!viewerIsAgency && (
       <div className="border-t border-border bg-card px-4 sm:px-6 py-4 flex flex-wrap items-center gap-2">
         {record.matchPercentage > 0 && (
           <button
@@ -870,6 +923,7 @@ function RegistroDetail({
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -899,7 +953,7 @@ function DetailRow({
           className={cn(
             "text-sm text-foreground break-words leading-snug mt-0.5",
             mono && "tnum",
-            highlight && "bg-amber-100/60 px-1.5 -mx-1.5 rounded font-semibold",
+            highlight && "bg-warning/60 px-1.5 -mx-1.5 rounded font-semibold",
           )}
         >
           {value}
@@ -924,8 +978,8 @@ function CompareCard({
   self?: boolean;
 }) {
   const borderTone =
-    accent === "primary" ? "border-primary/30 bg-primary/5" : "border-amber-200/60 bg-amber-50/40";
-  const labelTone = accent === "primary" ? "text-primary" : "text-amber-700";
+    accent === "primary" ? "border-primary/30 bg-primary/5" : "border-warning/30 bg-warning/40";
+  const labelTone = accent === "primary" ? "text-primary" : "text-warning";
 
   const Line = ({ label, value, otherValue }: { label: string; value?: string; otherValue?: string }) => {
     const matches = !!value && !!otherValue && value === otherValue;
@@ -935,7 +989,7 @@ function CompareCard({
         <p
           className={cn(
             "text-sm text-foreground break-words leading-snug mt-0.5",
-            matches && "bg-amber-100/60 px-1.5 -mx-1.5 rounded font-semibold inline-block",
+            matches && "bg-warning/60 px-1.5 -mx-1.5 rounded font-semibold inline-block",
           )}
         >
           {value || <span className="text-muted-foreground italic">—</span>}
@@ -1078,4 +1132,34 @@ function EmptyState({ hasFilters, onReset }: { hasFilters: boolean; onReset: () 
       )}
     </div>
   );
+}
+
+/** Fila compacta de atributo huella — label a la izquierda, valor a la
+ *  derecha, separados visualmente. */
+function AuditRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3 text-[11px]">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span className="font-medium text-foreground text-right break-all">{value}</span>
+    </div>
+  );
+}
+
+/** Resume el user-agent en una línea humana: "Chrome · macOS". */
+function summarizeDevice(ua: string): string {
+  const lc = (ua || "").toLowerCase();
+  const os =
+    lc.includes("mac") ? "macOS"
+    : lc.includes("windows") ? "Windows"
+    : lc.includes("android") ? "Android"
+    : lc.includes("iphone") || lc.includes("ipad") ? "iOS"
+    : lc.includes("linux") ? "Linux"
+    : "Desconocido";
+  const browser =
+    lc.includes("edg/") ? "Edge"
+    : lc.includes("chrome/") ? "Chrome"
+    : lc.includes("safari/") && !lc.includes("chrome/") ? "Safari"
+    : lc.includes("firefox/") ? "Firefox"
+    : "Navegador";
+  return `${browser} · ${os}`;
 }

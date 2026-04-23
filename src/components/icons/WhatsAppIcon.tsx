@@ -3,7 +3,7 @@
  *
  * lucide-react no incluye el logo oficial (trademark de Meta), así que
  * lo dibujamos a mano. Hereda `currentColor`, así puedes pintarlo del
- * color que quieras desde el className padre (ej. text-emerald-600).
+ * color que quieras desde el className padre (ej. text-success).
  */
 
 import { type SVGProps } from "react";

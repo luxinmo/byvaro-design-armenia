@@ -490,9 +490,9 @@ function TabRegistros({ visibleAgencies, fNations, fPromos }: {
                       <span
                         className={cn(
                           "h-6 w-6 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0",
-                          i === 0 && "bg-amber-100 text-amber-900",
+                          i === 0 && "bg-warning/15 text-warning",
                           i === 1 && "bg-muted text-foreground",
-                          i === 2 && "bg-amber-50 text-amber-800",
+                          i === 2 && "bg-warning/10 text-warning",
                           i > 2 && "bg-muted text-muted-foreground",
                         )}
                       >
@@ -511,8 +511,8 @@ function TabRegistros({ visibleAgencies, fNations, fPromos }: {
                     <span
                       className={cn(
                         "inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full border tabular-nums",
-                        r.aprobacion >= 90 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                        r.aprobacion >= 80 ? "bg-amber-50 text-amber-800 border-amber-200" :
+                        r.aprobacion >= 90 ? "bg-success/10 text-success border-success/25" :
+                        r.aprobacion >= 80 ? "bg-warning/10 text-warning border-warning/25" :
                         "bg-destructive/5 text-destructive border-destructive/25",
                       )}
                     >
@@ -524,7 +524,7 @@ function TabRegistros({ visibleAgencies, fNations, fPromos }: {
                       className={cn(
                         "inline-block text-[11px] font-medium px-2 py-0.5 rounded-full border tabular-nums",
                         r.duplicados <= 20 ? "bg-muted text-muted-foreground border-border" :
-                        r.duplicados <= 40 ? "bg-amber-50 text-amber-800 border-amber-200" :
+                        r.duplicados <= 40 ? "bg-warning/10 text-warning border-warning/25" :
                         "bg-destructive/5 text-destructive border-destructive/25",
                       )}
                     >
@@ -619,9 +619,9 @@ function TabVentas({ visibleAgencies, fNations, fPromos }: {
                       <span
                         className={cn(
                           "h-6 w-6 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0",
-                          i === 0 && "bg-amber-100 text-amber-900",
+                          i === 0 && "bg-warning/15 text-warning",
                           i === 1 && "bg-muted text-foreground",
-                          i === 2 && "bg-amber-50 text-amber-800",
+                          i === 2 && "bg-warning/10 text-warning",
                           i > 2 && "bg-muted text-muted-foreground",
                         )}
                       >
@@ -640,8 +640,8 @@ function TabVentas({ visibleAgencies, fNations, fPromos }: {
                     <span
                       className={cn(
                         "inline-block text-[11px] font-medium px-2 py-0.5 rounded-full border tabular-nums",
-                        r.conv >= 7 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                        r.conv >= 5 ? "bg-amber-50 text-amber-800 border-amber-200" :
+                        r.conv >= 7 ? "bg-success/10 text-success border-success/25" :
+                        r.conv >= 5 ? "bg-warning/10 text-warning border-warning/25" :
                         "bg-destructive/5 text-destructive border-destructive/25",
                       )}
                     >
@@ -720,9 +720,9 @@ function TabEficiencia({ visibleAgencies, fNations, fPromos }: {
                         <span
                           className={cn(
                             "h-6 w-6 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0",
-                            i === 0 && "bg-amber-100 text-amber-900",
+                            i === 0 && "bg-warning/15 text-warning",
                             i === 1 && "bg-muted text-foreground",
-                            i === 2 && "bg-amber-50 text-amber-800",
+                            i === 2 && "bg-warning/10 text-warning",
                             i > 2 && "bg-muted text-muted-foreground",
                           )}
                         >
@@ -740,8 +740,8 @@ function TabEficiencia({ visibleAgencies, fNations, fPromos }: {
                       <span
                         className={cn(
                           "inline-block text-[11px] font-medium px-2 py-0.5 rounded-full border tabular-nums",
-                          r.conv >= 7 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                          r.conv >= 5 ? "bg-amber-50 text-amber-800 border-amber-200" :
+                          r.conv >= 7 ? "bg-success/10 text-success border-success/25" :
+                          r.conv >= 5 ? "bg-warning/10 text-warning border-warning/25" :
                           "bg-destructive/5 text-destructive border-destructive/25",
                         )}
                       >
@@ -766,9 +766,9 @@ function TabEficiencia({ visibleAgencies, fNations, fPromos }: {
                   <div
                     className={cn(
                       "h-7 w-7 rounded-lg flex items-center justify-center shrink-0 font-semibold text-xs",
-                      o.tone === "ok" && "bg-emerald-50 text-emerald-700",
+                      o.tone === "ok" && "bg-success/10 text-success",
                       o.tone === "info" && "bg-primary/10 text-primary",
-                      o.tone === "warn" && "bg-amber-50 text-amber-800",
+                      o.tone === "warn" && "bg-warning/10 text-warning",
                     )}
                   >
                     {i + 1}
@@ -1082,17 +1082,17 @@ function InsightsBlock({ insights }: { insights: Insight[] }) {
               key={i}
               className={cn(
                 "rounded-xl border p-3 flex items-start gap-2.5",
-                ins.tone === "pos" && "bg-emerald-50/40 border-emerald-200",
+                ins.tone === "pos" && "bg-success/40 border-success/25",
                 ins.tone === "neu" && "bg-primary/5 border-primary/20",
-                ins.tone === "neg" && "bg-amber-50/40 border-amber-200",
+                ins.tone === "neg" && "bg-warning/40 border-warning/25",
               )}
             >
               <div
                 className={cn(
                   "h-7 w-7 rounded-lg flex items-center justify-center shrink-0",
-                  ins.tone === "pos" && "bg-emerald-100 text-emerald-700",
+                  ins.tone === "pos" && "bg-success/15 text-success",
                   ins.tone === "neu" && "bg-primary/10 text-primary",
-                  ins.tone === "neg" && "bg-amber-100 text-amber-700",
+                  ins.tone === "neg" && "bg-warning/15 text-warning",
                 )}
               >
                 <Icon className="h-3.5 w-3.5" strokeWidth={2} />
@@ -1159,18 +1159,18 @@ function Heatmap({
     if (v === 0) return "bg-muted text-muted-foreground/40";
     if (tone === "diverging") {
       if (v < 3)  return "bg-destructive/10 text-destructive";
-      if (v < 5)  return "bg-amber-100 text-amber-900";
-      if (v < 7)  return "bg-amber-50 text-amber-800";
-      if (v < 10) return "bg-emerald-100 text-emerald-800";
-      return "bg-emerald-500 text-white";
+      if (v < 5)  return "bg-warning/15 text-warning";
+      if (v < 7)  return "bg-warning/10 text-warning";
+      if (v < 10) return "bg-success/15 text-success";
+      return "bg-success text-white";
     }
     const t = Math.min(v / Math.max(max, 1), 1);
     if (tone === "green") {
-      if (t < 0.15) return "bg-emerald-50 text-emerald-900";
-      if (t < 0.35) return "bg-emerald-100 text-emerald-900";
-      if (t < 0.55) return "bg-emerald-200 text-emerald-900";
-      if (t < 0.75) return "bg-emerald-400 text-white";
-      return "bg-emerald-600 text-white";
+      if (t < 0.15) return "bg-success/10 text-success";
+      if (t < 0.35) return "bg-success/15 text-success";
+      if (t < 0.55) return "bg-success/20 text-success";
+      if (t < 0.75) return "bg-success text-white";
+      return "bg-success text-white";
     }
     if (t < 0.15) return "bg-primary/5  text-foreground";
     if (t < 0.35) return "bg-primary/15 text-foreground";

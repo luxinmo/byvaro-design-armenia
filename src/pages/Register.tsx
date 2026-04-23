@@ -576,7 +576,7 @@ export default function Register() {
                                     ? strength.score <= 1
                                       ? "bg-destructive"
                                       : strength.score === 2
-                                        ? "bg-amber-500"
+                                        ? "bg-warning"
                                         : "bg-primary"
                                     : "bg-border"
                                 )}

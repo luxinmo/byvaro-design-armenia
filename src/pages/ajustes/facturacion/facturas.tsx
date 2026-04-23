@@ -27,8 +27,8 @@ const MOCK: Invoice[] = [
 ];
 
 const STATUS = {
-  paid: { label: "Pagada", cls: "bg-emerald-100 text-emerald-700" },
-  pending: { label: "Pendiente", cls: "bg-amber-100 text-amber-700" },
+  paid: { label: "Pagada", cls: "bg-success/15 text-success" },
+  pending: { label: "Pendiente", cls: "bg-warning/15 text-warning" },
   failed: { label: "Fallida", cls: "bg-destructive/10 text-destructive" },
 } as const;
 

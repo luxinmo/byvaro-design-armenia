@@ -222,7 +222,7 @@ function RoleGroup({
             </td>
             {/* Admin · siempre activo, no editable */}
             <td className="text-center align-middle">
-              <Check className="h-4 w-4 text-emerald-600 inline-block" strokeWidth={3} />
+              <Check className="h-4 w-4 text-success inline-block" strokeWidth={3} />
             </td>
             {/* Member · editable si es live + el usuario puede */}
             <td className="text-center align-middle">
@@ -232,7 +232,7 @@ function RoleGroup({
                   onClick={() => onToggle("member", p.key!)}
                   className={cn(
                     "inline-flex h-5 w-9 rounded-full transition-colors items-center px-0.5",
-                    memberActive ? "bg-emerald-500" : "bg-muted-foreground/30",
+                    memberActive ? "bg-success" : "bg-muted-foreground/30",
                     !canEdit && "opacity-60 cursor-not-allowed",
                   )}
                   aria-label={memberActive ? "Desactivar" : "Activar"}
@@ -243,7 +243,7 @@ function RoleGroup({
                   )} />
                 </button>
               ) : memberActive ? (
-                <Check className="h-4 w-4 text-emerald-600 inline-block" strokeWidth={3} />
+                <Check className="h-4 w-4 text-success inline-block" strokeWidth={3} />
               ) : (
                 <X className="h-4 w-4 text-muted-foreground/40 inline-block" />
               )}

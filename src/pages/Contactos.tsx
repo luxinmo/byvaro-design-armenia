@@ -102,16 +102,6 @@ export default function Contactos() {
   const [createVersion, setCreateVersion] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
 
-  /* Universo de contactos = creados (más recientes arriba) + importados
-   * por CSV/Excel + mocks del seed, FILTRANDO los marcados como
-   * eliminados localmente (mientras no haya backend que lo borre). */
-  const allContacts = useMemo<Contact[]>(() => {
-    const deleted = loadDeletedContactIds();
-    return [...loadCreatedContacts(), ...loadImportedContacts(), ...MOCK_CONTACTS]
-      .filter((c) => !deleted.has(c.id));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createVersion]);
-
   /* Tags por scope:
    *   - orgTags: las define el admin de la organización; visibles a todos
    *   - personalTags: las del usuario actual; solo él las ve
@@ -120,6 +110,28 @@ export default function Contactos() {
    */
   const currentUser = useCurrentUser();
   const userIsAdmin = isAdmin(currentUser);
+  const viewerIsAgency = currentUser.accountType === "agency";
+
+  /* Universo de contactos = creados (más recientes arriba) + importados
+   * por CSV/Excel + mocks del seed, FILTRANDO los marcados como
+   * eliminados localmente (mientras no haya backend que lo borre).
+   *
+   * Scope por rol:
+   *   - Promotor: ve los que son del promotor (sin `ownerAgencyId`).
+   *   - Agencia:  ve únicamente los que creó ella (`ownerAgencyId`
+   *               === agencia actual). NO ve los del promotor ni los de
+   *               otras agencias.
+   *   Sin backend, nos basta un filtrado sobre el universo agregado. */
+  const allContacts = useMemo<Contact[]>(() => {
+    const deleted = loadDeletedContactIds();
+    return [...loadCreatedContacts(), ...loadImportedContacts(), ...MOCK_CONTACTS]
+      .filter((c) => !deleted.has(c.id))
+      .filter((c) => {
+        if (viewerIsAgency) return c.ownerAgencyId === currentUser.agencyId;
+        return !c.ownerAgencyId;
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createVersion, viewerIsAgency, currentUser.agencyId]);
 
   const [orgTags, setOrgTagsState] = useState<ContactTag[]>(() => loadOrgTags());
   const setOrgTags = (next: ContactTag[] | ((prev: ContactTag[]) => ContactTag[])) => {
@@ -702,7 +714,7 @@ function ContactRow({
             </span>
           )}
           {contact.status === "converted" && (
-            <span className="text-[10px] font-semibold text-emerald-600 shrink-0">
+            <span className="text-[10px] font-semibold text-success shrink-0">
               · Cliente
             </span>
           )}
@@ -760,7 +772,7 @@ function ContactRow({
           )}
 
           {contact.hasUpcomingVisit && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600">
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-success">
               <CalendarCheck className="h-2.5 w-2.5" />
               <span className="hidden sm:inline">Visit</span>
             </span>

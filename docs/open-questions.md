@@ -38,6 +38,33 @@ registros previos a la misma promoción y recomienda aprobar/rechazar.
 **Impacto de no decidir:** Claude Code implementaría una heurística simple
 no-IA, desaprovechando el diferencial.
 
+### Q24 · Desbloqueo de datos tras aprobar un registro colaborador
+
+**Contexto.** Un `Registro` con `origen: "collaborator"` solo trae 3
+campos canónicos (nombre, nacionalidad, últimos 4 del teléfono). Email,
+DNI y teléfono completo aparecen bloqueados con candado en la UI con
+copy "Se desbloquean al aprobar". Ver **ADR-046**.
+
+**No decidido:**
+
+- Al aprobar, ¿el backend **revela** los campos completos al promotor
+  automáticamente, los solicita a la agencia con otra petición, o
+  **nunca** se comparten y quedan solo en el CRM de la agencia (el
+  promotor solo ve la reserva del cliente)?
+- Si se revelan, ¿con qué ventana temporal? ¿Mientras dure la validez
+  del registro (30 días default), indefinidamente, o hasta la venta?
+- ¿Qué pasa si la agencia **rechaza** compartir más datos tras la
+  aprobación? ¿El registro queda parcialmente inutilizable para el
+  promotor?
+- ¿El match IA puede incluir email como peso (`20%` en `data-model.md`)
+  si la agencia decide compartirlo voluntariamente en el `POST`?
+
+**Impacto de no decidir:** el copy "Se desbloquean al aprobar" promete
+algo que el backend puede no cumplir. Riesgo de UX rota si la promesa
+no se respeta.
+
+**Relacionado:** ADR-046, `docs/screens/registros.md §Origen del registro`.
+
 ### Q2 · Microsites (30% del valor) — sin spec de pantalla
 
 **Contexto.** Cada promoción activa genera un microsite público.

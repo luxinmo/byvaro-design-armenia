@@ -63,8 +63,8 @@ export function savePersonalTags(userId: string, tags: ContactTag[]) {
 /* ── Helpers comunes ── */
 
 export const TAG_COLOR_PALETTE = [
-  "bg-amber-500",
-  "bg-emerald-500",
+  "bg-warning",
+  "bg-success",
   "bg-sky-500",
   "bg-rose-500",
   "bg-violet-500",

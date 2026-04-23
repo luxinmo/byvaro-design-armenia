@@ -85,7 +85,7 @@ function getUnitDisplayId(unit: Pick<Unit, "publicId" | "floor" | "door">) {
 // Excepción amber para "reservada" — warning estándar del sistema.
 const statusConfig: Record<UnitStatus, { label: string; class: string; dotClass: string }> = {
   available: { label: "Disponible", class: "bg-primary/10 text-primary border-primary/20", dotClass: "bg-primary" },
-  reserved: { label: "Reservada", class: "bg-amber-500/10 text-amber-700 border-amber-500/20", dotClass: "bg-amber-500" },
+  reserved: { label: "Reservada", class: "bg-warning/10 text-warning border-warning/20", dotClass: "bg-warning" },
   sold: { label: "Vendida", class: "bg-destructive/10 text-destructive border-destructive/20", dotClass: "bg-destructive" },
   withdrawn: { label: "Retirada", class: "bg-muted text-muted-foreground border-border", dotClass: "bg-muted-foreground" },
 };
@@ -218,7 +218,7 @@ export function UnitDetailPanel({ unit, onUpdateUnit, isCollaboratorView = false
                   // Recursos con tokens Byvaro (violet/amber/rose/blue → primary/accent/destructive).
                   // Amber se mantiene en "Fotos" como warning estándar Byvaro.
                   { icon: FileText, label: "Plano", color: "text-accent-foreground bg-accent/10 border-accent/20" },
-                  { icon: ImageIcon, label: "Fotos (6)", color: "text-amber-700 bg-amber-500/10 border-amber-500/20" },
+                  { icon: ImageIcon, label: "Fotos (6)", color: "text-warning bg-warning/10 border-warning/20" },
                   { icon: Video, label: "Vídeo", color: "text-destructive bg-destructive/10 border-destructive/20" },
                   { icon: Eye, label: "Tour 360°", color: "text-primary bg-primary/10 border-primary/20" },
                 ].map(r => (
@@ -287,10 +287,10 @@ export function UnitDetailPanel({ unit, onUpdateUnit, isCollaboratorView = false
 
               {!isCollaboratorView && unit.status === "reserved" && (
                 <div className="space-y-1.5">
-                  <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 px-3.5 py-2.5 text-xs">
-                    <p className="font-medium text-amber-700">Reservada por {unit.clientName}</p>
-                    {unit.agencyName && <p className="text-amber-700/80 mt-0.5">vía {unit.agencyName}</p>}
-                    {unit.reservedAt && <p className="text-amber-700/70 mt-0.5">{unit.reservedAt}</p>}
+                  <div className="rounded-xl bg-warning/10 border border-warning/30 px-3.5 py-2.5 text-xs">
+                    <p className="font-medium text-warning">Reservada por {unit.clientName}</p>
+                    {unit.agencyName && <p className="text-warning/80 mt-0.5">vía {unit.agencyName}</p>}
+                    {unit.reservedAt && <p className="text-warning/70 mt-0.5">{unit.reservedAt}</p>}
                   </div>
                   <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs w-full rounded-xl">
                     <Send className="h-3 w-3" strokeWidth={1.5} /> Avisar colaboradores

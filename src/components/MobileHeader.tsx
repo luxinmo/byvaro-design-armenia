@@ -1,13 +1,15 @@
-import { Menu, X, ArrowLeft } from "lucide-react";
+import { Menu, X, ArrowLeft, LogOut } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Home, Tag, FileText, CircleDollarSign, CalendarDays,
-  Handshake, Contact, Globe, Mail, Settings,
+  Handshake, Contact, Globe, Mail, Settings, Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/BrandLogo";
+import { useCurrentUser } from "@/lib/currentUser";
+import { logout } from "@/lib/accountType";
 
 const drawerGroups = [
   { label: "General", items: [{ title: "Inicio", url: "/inicio", icon: Home }] },
@@ -20,6 +22,7 @@ const drawerGroups = [
   { label: "Red", items: [
     { title: "Colaboradores", url: "/colaboradores", icon: Handshake },
     { title: "Contactos", url: "/contactos", icon: Contact },
+    { title: "Equipo", url: "/equipo", icon: Users },
   ]},
   { label: "Contenido", items: [
     { title: "Microsites", url: "/microsites", icon: Globe },
@@ -31,10 +34,23 @@ export function MobileHeader() {
   const location = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const currentUser = useCurrentUser();
+  const userInitials =
+    currentUser.name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase() || "?";
+  const userSubtitle =
+    currentUser.accountType === "agency"
+      ? `${currentUser.agencyName ?? "Agencia"} · Agencia`
+      : "Promotor";
 
   // Rutas "raíz" del menú principal — fuera de ellas mostramos la
   // flecha de volver en lugar del logo.
-  const rootPaths = ["/inicio", "/promociones", "/registros", "/ventas", "/calendario", "/colaboradores", "/contactos", "/microsites", "/emails", "/ajustes", "/empresa"];
+  const rootPaths = ["/inicio", "/promociones", "/registros", "/ventas", "/calendario", "/colaboradores", "/contactos", "/equipo", "/microsites", "/emails", "/ajustes", "/empresa"];
   const isRoot = rootPaths.includes(location.pathname);
 
   return (
@@ -128,7 +144,34 @@ export function MobileHeader() {
                   </div>
                 ))}
               </nav>
-              <div className="border-t border-sidebar-border p-4">
+              <div className="border-t border-sidebar-border p-4 space-y-1">
+                {/* Identidad del usuario · refleja cualquier cambio hecho en
+                    /ajustes/perfil/personal gracias a useCurrentUser(). */}
+                <NavLink
+                  to="/ajustes/perfil/personal"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-sidebar-accent/40 transition-colors"
+                >
+                  {currentUser.avatar ? (
+                    <img
+                      src={currentUser.avatar}
+                      alt=""
+                      className="h-9 w-9 rounded-full object-cover shrink-0"
+                    />
+                  ) : (
+                    <div className="h-9 w-9 rounded-full bg-primary/15 text-primary grid place-items-center font-semibold text-[11px] shrink-0">
+                      {userInitials}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-semibold text-sidebar-foreground truncate leading-tight">
+                      {currentUser.name}
+                    </div>
+                    <div className="text-[11px] text-sidebar-foreground/60 truncate">
+                      {userSubtitle}
+                    </div>
+                  </div>
+                </NavLink>
                 <NavLink
                   to="/ajustes"
                   onClick={() => setOpen(false)}
@@ -136,6 +179,17 @@ export function MobileHeader() {
                 >
                   <Settings className="h-[18px] w-[18px]" /> Ajustes
                 </NavLink>
+                <button
+                  type="button"
+                  onClick={() => {
+                    logout();
+                    setOpen(false);
+                    navigate("/login", { replace: true });
+                  }}
+                  className="w-full flex items-center gap-3 px-2 py-2 text-sm text-destructive rounded-lg hover:bg-destructive/10 transition-colors"
+                >
+                  <LogOut className="h-[18px] w-[18px]" /> Cerrar sesión
+                </button>
               </div>
             </motion.aside>
           </div>

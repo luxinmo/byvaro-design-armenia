@@ -202,7 +202,7 @@ export function LinkContactDialog({ open, onOpenChange, contactId, current, onSa
                   >
                     <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
                     <span className="flex-1 text-sm text-foreground">{o.label}</span>
-                    {active && <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />}
+                    {active && <Check className="h-3.5 w-3.5 text-success shrink-0" />}
                   </button>
                 );
               })}

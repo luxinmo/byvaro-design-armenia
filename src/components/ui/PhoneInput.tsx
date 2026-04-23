@@ -1,58 +1,137 @@
 /**
- * PhoneInput · selector de país (bandera + prefijo) + número local.
+ * PhoneInput · campo único con bandera clicable + número internacional.
  *
- * - Por defecto España (+34).
- * - El selector de país abre un popover con buscador (por nombre,
- *   prefijo o ISO).
- * - El input solo permite dígitos y espacios para el número local.
- * - El valor expuesto al padre es el teléfono completo formateado:
- *   `+34 600 000 000`.
+ * UX:
+ * - Un SOLO campo visual (contenedor) con:
+ *     · izquierda · botón flag/globo clicable (abre dropdown).
+ *     · derecha · input de texto donde el usuario escribe el teléfono
+ *       completo con prefijo (ej. `+34 600 000 000` · también acepta
+ *       `0034…`).
+ * - Flag auto-detectada a partir del prefijo que escribe el usuario.
+ * - Si borra el prefijo → flag desaparece y aparece el globo 🌐.
+ * - Al clicar el flag/globo → popover con buscador para elegir país.
+ *   Resuelve la ambigüedad de prefijos compartidos (Canadá/USA +1,
+ *   Kazajistán/Rusia +7) — el país elegido queda "pineado" hasta que
+ *   el usuario vuelva a cambiar los dígitos del prefijo.
  *
- * Si recibes un valor inicial con prefijo, lo detectamos y separamos
- * automáticamente para que el dropdown se posicione correctamente.
+ * Valor expuesto (prop `onChange`):
+ *   string · el teléfono tal y como lo escribe el usuario,
+ *   normalizado: "+34 600 000 000" (con `+` y espacio tras el prefijo
+ *   si hay prefijo reconocido · si no, el texto raw).
  */
 
-import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Search } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { Flag } from "@/components/ui/Flag";
 import {
-  PHONE_COUNTRIES, DEFAULT_PHONE_COUNTRY_ISO,
-  detectCountryFromPhone, findCountryByIso, stripPrefix, buildPhone,
+  PHONE_COUNTRIES, detectCountryFromPhone, findCountryByIso,
   type PhoneCountry,
 } from "@/lib/phoneCountries";
+import { cn } from "@/lib/utils";
 
 type Props = {
   value: string;
   onChange: (next: string) => void;
   placeholder?: string;
   autoFocus?: boolean;
+  /** Opcional · fija una bandera inicial cuando el value viene vacío.
+   *  Default: sin bandera (globo). */
+  defaultIso?: string;
+  className?: string;
 };
 
-export function PhoneInput({ value, onChange, placeholder = "600 000 000", autoFocus }: Props) {
-  /* Detecta el país a partir del valor inicial. Si no se reconoce,
-   * cae al país por defecto (España). */
-  const initialCountry = useMemo(
-    () => (value ? detectCountryFromPhone(value) : undefined)
-        ?? findCountryByIso(DEFAULT_PHONE_COUNTRY_ISO)
-        ?? PHONE_COUNTRIES[0],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [], // solo en mount; cambios posteriores los gestiona el state
-  );
+/* Normaliza lo que escribe el usuario a un raw digito-string.
+ * Si empieza con "00", lo tratamos como "+". Mantenemos el `+` inicial. */
+function toRawWithPlus(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  const stripped = trimmed.replace(/[^\d+]/g, "");
+  /* "0034…" → "+34…" */
+  if (stripped.startsWith("00")) return "+" + stripped.slice(2);
+  if (stripped.startsWith("+")) return "+" + stripped.slice(1).replace(/\+/g, "");
+  return stripped; // sin + · no forzamos prefijo hasta que el usuario lo ponga
+}
 
-  const [country, setCountry] = useState<PhoneCountry>(initialCountry);
-  const [local, setLocal] = useState<string>(() =>
-    value ? stripPrefix(value, initialCountry) : "",
-  );
+/* Formatea raw → display "+PPP NNNNNNN" si detectamos prefijo. */
+function formatDisplay(raw: string, country?: PhoneCountry): string {
+  if (!raw) return "";
+  if (!country) return raw;
+  const digits = raw.replace(/\D/g, "");
+  const local = digits.startsWith(country.prefix)
+    ? digits.slice(country.prefix.length)
+    : digits;
+  return local ? `+${country.prefix} ${local}` : `+${country.prefix}`;
+}
+
+export function PhoneInput({
+  value, onChange, placeholder = "+34 600 000 000", autoFocus, defaultIso, className,
+}: Props) {
+  /* ─── Estado local de texto · controla lo que se ve escrito. ─── */
+  const [text, setText] = useState<string>(value);
+  /* País "pinneado" por el usuario (override a la detección automática).
+   * Se resetea cuando el usuario cambia los dígitos del prefijo. */
+  const [pinnedIso, setPinnedIso] = useState<string | null>(defaultIso ?? null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  /* Sincroniza el valor expuesto cada vez que cambian country o local. */
+  /* ─── Sincroniza desde la prop `value` cuando cambia desde fuera. ─── */
   useEffect(() => {
-    onChange(buildPhone(country, local));
+    if (value !== text) setText(value);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [country, local]);
+  }, [value]);
 
+  /* ─── País actual (pinned > detectado > undefined) ─── */
+  const detected = useMemo(() => detectCountryFromPhone(text), [text]);
+  const country = useMemo(() => {
+    if (pinnedIso) {
+      const c = findCountryByIso(pinnedIso);
+      if (c) {
+        /* Si el usuario borra el prefijo o escribe otro distinto, el
+         * pinned deja de aplicar — el detectado manda. */
+        const digits = text.replace(/\D/g, "");
+        if (digits.startsWith(c.prefix)) return c;
+      }
+    }
+    return detected;
+  }, [pinnedIso, detected, text]);
+
+  /* ─── Cambios de texto del usuario ─── */
+  const handleTextChange = (v: string) => {
+    const raw = toRawWithPlus(v);
+    setText(raw);
+    onChange(raw);
+    /* Si los dígitos del prefijo cambian, limpiamos el pinned. */
+    if (pinnedIso) {
+      const pinned = findCountryByIso(pinnedIso);
+      const digits = raw.replace(/\D/g, "");
+      if (pinned && !digits.startsWith(pinned.prefix)) {
+        setPinnedIso(null);
+      }
+    }
+  };
+
+  /* ─── Usuario elige un país del dropdown ─── */
+  const pickCountry = (c: PhoneCountry) => {
+    setPinnedIso(c.iso);
+    setOpen(false);
+    setQuery("");
+    /* Reescribimos el prefijo del texto manteniendo el número local. */
+    const current = text.replace(/\D/g, "");
+    /* Detectamos el prefijo anterior (si lo había) para poder quitarlo. */
+    const prev = detected;
+    const local = prev && current.startsWith(prev.prefix)
+      ? current.slice(prev.prefix.length)
+      : current;
+    const next = local ? `+${c.prefix} ${local}` : `+${c.prefix}`;
+    setText(next);
+    onChange(next);
+    /* Devolvemos el foco al input para que siga escribiendo cómodo. */
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  /* ─── Filtro del dropdown ─── */
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return PHONE_COUNTRIES;
@@ -66,28 +145,33 @@ export function PhoneInput({ value, onChange, placeholder = "600 000 000", autoF
     );
   }, [query]);
 
-  const pickCountry = (c: PhoneCountry) => {
-    setCountry(c);
-    setOpen(false);
-    setQuery("");
-  };
+  /* ─── Display · si hay país detectado, formateamos con "+PP …". ─── */
+  const display = country ? formatDisplay(text, country) : text;
 
   return (
-    <div className="flex items-stretch gap-1.5">
-      {/* Selector de país */}
+    <div
+      className={cn(
+        "flex items-stretch h-10 rounded-xl border border-border bg-card overflow-hidden transition-colors",
+        "focus-within:border-primary",
+        className,
+      )}
+    >
+      {/* Botón flag/globo · abre dropdown */}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 h-9 px-2.5 rounded-xl border border-border bg-card text-sm hover:border-foreground/30 transition-colors shrink-0"
-            aria-label={`País: ${country.name}`}
+            aria-label={country ? `País: ${country.name}` : "Elegir país"}
+            className="inline-flex items-center gap-1.5 px-2.5 border-r border-border/70 hover:bg-muted/40 transition-colors shrink-0"
           >
-            <span className="text-base leading-none">{country.flag}</span>
-            <span className="text-xs font-medium text-foreground tnum">+{country.prefix}</span>
-            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            <Flag iso={country?.iso ?? null} size={20} title={country?.name} />
+            {/* Flecha minimalista para indicar que es clicable */}
+            <svg className="h-3 w-3 text-muted-foreground shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-[280px] p-0 rounded-xl border-border shadow-soft-lg overflow-hidden">
+        <PopoverContent align="start" className="w-[300px] p-0 rounded-xl border-border shadow-soft-lg overflow-hidden">
           <div className="border-b border-border/60 px-3 py-2">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/60" />
@@ -100,41 +184,52 @@ export function PhoneInput({ value, onChange, placeholder = "600 000 000", autoF
               />
             </div>
           </div>
-          <div className="max-h-[280px] overflow-y-auto py-1">
+          <div className="max-h-[300px] overflow-y-auto py-1">
             {filtered.length === 0 ? (
               <p className="text-[11px] text-muted-foreground italic text-center py-3">
                 Sin coincidencias
               </p>
-            ) : filtered.map((c) => (
-              <button
-                key={c.iso}
-                type="button"
-                onClick={() => pickCountry(c)}
-                className={cn(
-                  "w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors",
-                  country.iso === c.iso
-                    ? "bg-muted text-foreground"
-                    : "text-foreground hover:bg-muted/40",
-                )}
-              >
-                <span className="text-base leading-none shrink-0">{c.flag}</span>
-                <span className="flex-1 text-xs truncate">{c.name}</span>
-                <span className="text-[10px] text-muted-foreground tnum shrink-0">+{c.prefix}</span>
-              </button>
-            ))}
+            ) : filtered.map((c) => {
+              const ambiguous = PHONE_COUNTRIES.filter((x) => x.prefix === c.prefix).length > 1;
+              return (
+                <button
+                  key={c.iso}
+                  type="button"
+                  onClick={() => pickCountry(c)}
+                  className={cn(
+                    "w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors",
+                    country?.iso === c.iso
+                      ? "bg-muted text-foreground"
+                      : "text-foreground hover:bg-muted/40",
+                  )}
+                >
+                  <Flag iso={c.iso} size={18} />
+                  <span className="flex-1 text-xs truncate">
+                    {c.name}
+                    {ambiguous && (
+                      <span className="text-[9px] text-warning font-semibold ml-1.5 uppercase tracking-wider">
+                        (comparte prefijo)
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground tnum shrink-0">+{c.prefix}</span>
+                </button>
+              );
+            })}
           </div>
         </PopoverContent>
       </Popover>
 
-      {/* Número local */}
+      {/* Input unificado · el usuario ve "+34 600 000 000" o lo que escribió */}
       <input
+        ref={inputRef}
         type="tel"
         inputMode="tel"
-        value={local}
-        onChange={(e) => setLocal(e.target.value.replace(/[^\d\s]/g, ""))}
+        value={display}
+        onChange={(e) => handleTextChange(e.target.value)}
         placeholder={placeholder}
         autoFocus={autoFocus}
-        className="flex-1 min-w-0 h-9 px-3 text-sm rounded-xl border border-border bg-card outline-none focus:border-primary tnum"
+        className="flex-1 min-w-0 px-3 text-sm bg-transparent outline-none tnum placeholder:text-muted-foreground/60"
       />
     </div>
   );

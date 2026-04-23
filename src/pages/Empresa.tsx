@@ -20,6 +20,7 @@ import {
   Eye, AlertTriangle, CheckCircle2, Camera, Image as ImageIcon,
 } from "lucide-react";
 import { useEmpresa, useOficinas } from "@/lib/empresa";
+import { useCurrentUser } from "@/lib/currentUser";
 import { cn } from "@/lib/utils";
 import { EmpresaHomeTab } from "@/components/empresa/EmpresaHomeTab";
 import { EmpresaAboutTab } from "@/components/empresa/EmpresaAboutTab";
@@ -50,7 +51,14 @@ export default function Empresa({
   visitorSlot?: React.ReactNode;
   visitorFooter?: React.ReactNode;
 } = {}) {
-  const { empresa, update, isVisitor } = useEmpresa(tenantId);
+  /* En modo agencia sin tenantId explícito, `/empresa` muestra la
+   * ficha de la propia agencia (no la del promotor). Se carga como
+   * visitor hasta que añadamos edición multi-tenant — mejor que
+   * filtrar datos del promotor. */
+  const currentUser = useCurrentUser();
+  const isAgencyUser = currentUser.accountType === "agency";
+  const effectiveTenantId = tenantId ?? (isAgencyUser ? currentUser.agencyId : undefined);
+  const { empresa, update, isVisitor } = useEmpresa(effectiveTenantId);
   const { oficinas } = useOficinas();
   const [tab, setTab] = useState<Tab>("home");
   const [viewMode, setViewMode] = useState<"edit" | "preview">(isVisitor ? "preview" : "edit");
@@ -106,17 +114,17 @@ export default function Empresa({
 
       {/* ═════ Banner onboarding (solo dueño, no visitor) ═════ */}
       {!isVisitor && isIncomplete && viewMode === "edit" && (
-        <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 sm:px-6 lg:px-10 py-3 flex items-center gap-3 flex-wrap">
-          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0" />
+        <div className="bg-warning/10 border-b border-warning/30 px-4 sm:px-6 lg:px-10 py-3 flex items-center gap-3 flex-wrap">
+          <AlertTriangle className="h-4 w-4 text-warning dark:text-warning shrink-0" />
           <p className="text-[11.5px] text-foreground flex-1 min-w-0">
             <span className="font-semibold">Tu perfil de empresa está al {completionPercent}%.</span>{" "}
             Completa todas las secciones para que agencias y promotores puedan encontrarte.
           </p>
           <div className="flex items-center gap-2 shrink-0">
-            <div className="w-24 h-1.5 bg-amber-500/20 rounded-full overflow-hidden">
-              <div className="h-full bg-amber-500/70 rounded-full transition-all" style={{ width: `${completionPercent}%` }} />
+            <div className="w-24 h-1.5 bg-warning/20 rounded-full overflow-hidden">
+              <div className="h-full bg-warning/70 rounded-full transition-all" style={{ width: `${completionPercent}%` }} />
             </div>
-            <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-500 tnum">{completionPercent}%</span>
+            <span className="text-[10px] font-semibold text-warning dark:text-warning tnum">{completionPercent}%</span>
           </div>
         </div>
       )}
@@ -154,7 +162,7 @@ export default function Empresa({
               </>
             )}
           </div>
-          {!isVisitor && (
+          {!isVisitor && !isAgencyUser && (
             <button
               type="button"
               onClick={() => setViewMode(viewMode === "edit" ? "preview" : "edit")}

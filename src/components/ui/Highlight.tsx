@@ -20,7 +20,7 @@ interface Props {
 export function Highlight({
   text,
   query,
-  className = "bg-amber-200 text-foreground rounded-sm px-0.5 font-semibold",
+  className = "bg-warning/20 text-foreground rounded-sm px-0.5 font-semibold",
 }: Props) {
   const q = query.trim();
   if (!q) return <>{text}</>;

@@ -209,7 +209,7 @@ export function PromocionesMap({ promotions: promos }: { promotions: DevPromotio
                   key={promo.id}
                   className={cn(
                     "group flex items-center gap-3 p-3 hover:bg-muted/30 transition-colors cursor-pointer",
-                    trending && "bg-amber-50/30"
+                    trending && "bg-warning/30"
                   )}
                 >
                   <div

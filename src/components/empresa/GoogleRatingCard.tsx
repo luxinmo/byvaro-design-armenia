@@ -78,7 +78,7 @@ export function GoogleRatingCard({ empresa, viewMode, update }: Props) {
                         key={i}
                         className={cn(
                           "h-4 w-4",
-                          filled ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30",
+                          filled ? "fill-warning text-warning" : "text-muted-foreground/30",
                         )}
                         strokeWidth={1.5}
                       />

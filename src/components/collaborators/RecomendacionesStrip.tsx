@@ -87,7 +87,7 @@ function Card({ rec, onInvitar }: { rec: RecommendedAgency; onInvitar: () => voi
         </div>
         {rec.googleRating != null && (
           <span className="inline-flex items-center gap-0.5 shrink-0 text-[11px] font-semibold text-foreground bg-muted rounded-full px-2 py-0.5 tabular-nums">
-            <Star className="h-3 w-3 fill-amber-500 text-amber-500" strokeWidth={0} />
+            <Star className="h-3 w-3 fill-warning text-warning" strokeWidth={0} />
             {rec.googleRating.toFixed(1)}
           </span>
         )}

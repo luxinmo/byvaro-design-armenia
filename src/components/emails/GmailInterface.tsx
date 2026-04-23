@@ -127,8 +127,8 @@ type EmailItem = {
 
 /** Paleta rotativa para asignar color a etiquetas nuevas. */
 const LABEL_COLORS = [
-  "bg-amber-500",
-  "bg-emerald-500",
+  "bg-warning",
+  "bg-success",
   "bg-violet-500",
   "bg-sky-500",
   "bg-rose-500",
@@ -165,7 +165,7 @@ function TrackingBadges({ tracking }: { tracking?: EmailTracking }) {
     return (
       <span
         title={`Abierto ${tracking.openCount ?? 1} ${(tracking.openCount ?? 1) === 1 ? "vez" : "veces"}`}
-        className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600"
+        className="inline-flex items-center gap-1 text-[10px] font-medium text-success"
       >
         <Eye className="h-3 w-3" />
         Abierto
@@ -268,8 +268,8 @@ function TrackingStat({
   state: "ok" | "warn" | "error" | "muted";
 }) {
   const colorMap = {
-    ok: "text-emerald-600",
-    warn: "text-amber-600",
+    ok: "text-success",
+    warn: "text-warning",
     error: "text-destructive",
     muted: "text-muted-foreground",
   } as const;
@@ -314,7 +314,7 @@ function SearchField({
 /* Color por cuenta para el dot en bandeja unificada. Mapea por posición
  * en el array de cuentas, con palette rotativa. */
 const ACCOUNT_DOT_COLORS = [
-  "bg-primary", "bg-emerald-500", "bg-amber-500", "bg-violet-500",
+  "bg-primary", "bg-success", "bg-warning", "bg-violet-500",
   "bg-rose-500", "bg-cyan-500", "bg-indigo-500", "bg-orange-500",
 ];
 const dotColorFor = (accountId: string, accounts: EmailAccount[]) => {
@@ -489,8 +489,8 @@ const SIDEBAR_ITEMS: FolderDef[] = [
 ];
 
 const INITIAL_LABELS: Label[] = [
-  { name: "Visitas", color: "bg-amber-500" },
-  { name: "Ofertas", color: "bg-emerald-500" },
+  { name: "Visitas", color: "bg-warning" },
+  { name: "Ofertas", color: "bg-success" },
   { name: "Clientes VIP", color: "bg-violet-500" },
   { name: "Proveedores", color: "bg-sky-500" },
 ];
@@ -1056,7 +1056,7 @@ export default function GmailInterface({
       .toUpperCase();
 
   const avatarColors = [
-    "bg-primary", "bg-orange-500", "bg-amber-500", "bg-emerald-500",
+    "bg-primary", "bg-orange-500", "bg-warning", "bg-success",
     "bg-sky-500", "bg-indigo-500", "bg-violet-500", "bg-rose-500",
   ];
   const colorFor = (s: string) => avatarColors[s.charCodeAt(0) % avatarColors.length];
@@ -1492,7 +1492,7 @@ export default function GmailInterface({
                               <span className={cn("h-2 w-2 rounded-full shrink-0", l.color)} />
                               <span className="flex-1 truncate">{l.name}</span>
                               {allHave ? (
-                                <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                <Check className="h-3.5 w-3.5 text-success shrink-0" />
                               ) : someHave ? (
                                 <span className="h-3.5 w-3.5 shrink-0 flex items-center justify-center">
                                   <span className="h-0.5 w-2 bg-muted-foreground rounded-full" />
@@ -1672,7 +1672,7 @@ export default function GmailInterface({
                         <Star
                           className={cn(
                             "h-[18px] w-[18px]",
-                            email.starred ? "fill-amber-400 text-amber-400" : "text-muted-foreground",
+                            email.starred ? "fill-warning text-warning" : "text-muted-foreground",
                           )}
                         />
                       </button>
@@ -1681,7 +1681,7 @@ export default function GmailInterface({
                           viewBox="0 0 20 20"
                           className={cn(
                             "h-[18px] w-[18px]",
-                            email.important ? "fill-amber-400 text-amber-400" : "text-muted-foreground fill-none",
+                            email.important ? "fill-warning text-warning" : "text-muted-foreground fill-none",
                           )}
                           stroke="currentColor"
                           strokeWidth="1.5"
@@ -1776,7 +1776,7 @@ export default function GmailInterface({
                             <Star
                               className={cn(
                                 "h-[18px] w-[18px]",
-                                email.starred ? "fill-amber-400 text-amber-400" : "text-muted-foreground/60",
+                                email.starred ? "fill-warning text-warning" : "text-muted-foreground/60",
                               )}
                             />
                           </button>
@@ -2153,7 +2153,7 @@ function EmailDetail({
               <Star
                 className={cn(
                   "h-4 w-4",
-                  email.starred ? "fill-amber-400 text-amber-400" : "text-muted-foreground",
+                  email.starred ? "fill-warning text-warning" : "text-muted-foreground",
                 )}
               />
               {email.starred ? "Quitar destacado" : "Destacar"}
@@ -2165,7 +2165,7 @@ function EmailDetail({
               <Flag
                 className={cn(
                   "h-4 w-4",
-                  email.important ? "fill-amber-400 text-amber-400" : "text-muted-foreground",
+                  email.important ? "fill-warning text-warning" : "text-muted-foreground",
                 )}
               />
               {email.important ? "Marcar no importante" : "Marcar importante"}
@@ -2236,7 +2236,7 @@ function EmailDetail({
                     >
                       <span className={cn("h-2 w-2 rounded-full shrink-0", l.color)} />
                       <span className="flex-1 truncate">{l.name}</span>
-                      {active && <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />}
+                      {active && <Check className="h-3.5 w-3.5 text-success shrink-0" />}
                     </button>
                   );
                 })}
@@ -2269,7 +2269,7 @@ function EmailDetail({
                 <Star
                   className={cn(
                     "h-4 w-4",
-                    email.starred ? "fill-amber-400 text-amber-400" : "text-muted-foreground",
+                    email.starred ? "fill-warning text-warning" : "text-muted-foreground",
                   )}
                 />
               </button>
@@ -2633,7 +2633,7 @@ function Compose({
                           Default
                         </span>
                       )}
-                      {fromAccountId === a.id && <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />}
+                      {fromAccountId === a.id && <Check className="h-3.5 w-3.5 text-success shrink-0" />}
                     </button>
                   ))}
               </PopoverContent>
@@ -2651,7 +2651,7 @@ function Compose({
               className={cn(
                 "inline-flex items-center gap-1 h-6 pl-2 pr-1 rounded-full text-xs max-w-full",
                 external
-                  ? "bg-amber-100 text-amber-900 border border-amber-200"
+                  ? "bg-warning/15 text-warning border border-warning/25"
                   : "bg-muted text-foreground border border-border",
               )}
               title={external ? "Destinatario externo a tu organización" : undefined}
@@ -2708,7 +2708,7 @@ function Compose({
 
       {/* Aviso confidencial */}
       {showConfidentialWarning && (
-        <div className="mx-4 mb-2 flex items-center gap-2 px-3 py-2 bg-amber-100 text-amber-900 border border-amber-200 rounded-lg text-xs">
+        <div className="mx-4 mb-2 flex items-center gap-2 px-3 py-2 bg-warning/15 text-warning border border-warning/25 rounded-lg text-xs">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p className="flex-1 leading-snug">
             <strong>Ten cuidado si vas a compartir información confidencial.</strong>{" "}
@@ -2717,7 +2717,7 @@ function Compose({
           <button
             onClick={() => setConfidentialDismissed(true)}
             title="Ocultar aviso"
-            className="h-6 w-6 rounded-full hover:bg-amber-200 flex items-center justify-center shrink-0"
+            className="h-6 w-6 rounded-full hover:bg-warning/20 flex items-center justify-center shrink-0"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -2787,10 +2787,10 @@ function Compose({
           {prefilledAttachments?.map((a, i) => (
             <div
               key={`pre-${i}`}
-              className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 rounded-full pl-3 pr-1 py-1 text-xs"
+              className="flex items-center gap-2 bg-success/10 border border-success/30 rounded-full pl-3 pr-1 py-1 text-xs"
               title="Adjunto cargado desde Documentos"
             >
-              <Paperclip className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
+              <Paperclip className="h-3 w-3 text-success dark:text-success shrink-0" />
               <span className="truncate max-w-[180px] text-foreground">{a.name}</span>
               <span className="text-muted-foreground tnum">{formatSize(a.size)}</span>
               {onRemovePrefilledAttachment && (
@@ -2954,7 +2954,7 @@ function Compose({
               >
                 <span className="flex-1 truncate">{s.name}</span>
                 {activeSignatureId === s.id && (
-                  <span className="text-[10px] text-emerald-600 font-semibold">ACTIVA</span>
+                  <span className="text-[10px] text-success font-semibold">ACTIVA</span>
                 )}
               </button>
             ))}

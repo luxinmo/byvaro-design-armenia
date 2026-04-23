@@ -36,9 +36,9 @@ export function RegistrosKpis({ records }: Props) {
           <div key={it.label} className="flex items-center gap-2 shrink-0">
             <div className={cn(
               "h-9 w-9 rounded-xl grid place-items-center shrink-0",
-              it.tone === "amber"       && "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+              it.tone === "amber"       && "bg-warning/15 text-warning dark:text-warning",
               it.tone === "primary"     && "bg-primary/10 text-primary",
-              it.tone === "emerald"     && "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+              it.tone === "emerald"     && "bg-success/15 text-success dark:text-success",
               it.tone === "destructive" && "bg-destructive/10 text-destructive",
               it.tone === "muted"       && "bg-muted text-muted-foreground",
             )}>
@@ -48,9 +48,9 @@ export function RegistrosKpis({ records }: Props) {
               <p className={cn(
                 "font-bold leading-none tnum truncate",
                 it.isText ? "text-sm" : "text-lg",
-                it.tone === "amber"       && "text-amber-700 dark:text-amber-400",
+                it.tone === "amber"       && "text-warning dark:text-warning",
                 it.tone === "primary"     && "text-primary",
-                it.tone === "emerald"     && "text-emerald-700 dark:text-emerald-400",
+                it.tone === "emerald"     && "text-success dark:text-success",
                 it.tone === "destructive" && "text-destructive",
                 it.tone === "muted"       && "text-foreground",
               )}>

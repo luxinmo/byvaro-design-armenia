@@ -34,9 +34,11 @@ import { promotions } from "@/data/promotions";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { agencies } from "@/data/agencies";
 import { cn } from "@/lib/utils";
+import { useCurrentUser } from "@/lib/currentUser";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
+import { ViewToggle } from "@/components/ui/ViewToggle";
 
 /* ═══════════════════════════════════════════════════════════════════
    Lookup maps + helpers de formato
@@ -96,10 +98,10 @@ const estadoStyles: Record<VentaEstado, {
   },
   escriturada: {
     icon: KeyRound,
-    chip: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20",
-    dot: "bg-emerald-500",
-    column: "border-emerald-500/20 bg-emerald-500/[0.03]",
-    ring: "ring-emerald-500/20",
+    chip: "bg-success/10 text-success border-success/20",
+    dot: "bg-success",
+    column: "border-success/20 bg-success/[0.03]",
+    ring: "ring-success/20",
   },
   caida: {
     icon: XCircle,
@@ -116,8 +118,18 @@ const ESTADOS_ORDERED: VentaEstado[] = ["reservada", "contratada", "escriturada"
    PÁGINA PRINCIPAL
    ═══════════════════════════════════════════════════════════════════ */
 export default function Ventas() {
+  const currentUser = useCurrentUser();
+  const isAgencyUser = currentUser.accountType === "agency";
+
   // Estado "vivo" sobre el mock — permite simular transiciones desde el diálogo.
-  const [sales, setSales] = useState<Venta[]>(salesMock);
+  // Para agencia: filtramos al dataset base por `agencyId` para que todos los
+  // cálculos de abajo (KPIs, filtros, kanban) ya partan de sus propias ventas.
+  const baseSales = useMemo(
+    () => (isAgencyUser ? salesMock.filter((v) => v.agencyId === currentUser.agencyId) : salesMock),
+    [isAgencyUser, currentUser.agencyId],
+  );
+  const [sales, setSales] = useState<Venta[]>(baseSales);
+  useEffect(() => { setSales(baseSales); }, [baseSales]);
   const [viewMode, setViewMode] = useState<"kanban" | "tabla">("kanban");
 
   // Filtros
@@ -238,26 +250,21 @@ export default function Ventas() {
               </h1>
               <p className="text-xs text-muted-foreground mt-1.5">
                 <span className="font-semibold text-foreground tnum">{sales.length}</span> operaciones ·
-                <span className="ml-1 tnum font-semibold text-emerald-600">{formatEur(revenueMesActual)}</span>{" "}
+                <span className="ml-1 tnum font-semibold text-success">{formatEur(revenueMesActual)}</span>{" "}
                 escrituradas este mes
               </p>
             </div>
 
             {/* Toggle Kanban / Tabla */}
-            <div className="sm:ml-auto inline-flex items-center bg-muted/40 border border-border rounded-full p-0.5 text-xs self-start sm:self-end">
-              <ViewToggleBtn
-                active={viewMode === "kanban"}
-                onClick={() => setViewMode("kanban")}
-                icon={LayoutGrid}
-                label="Kanban"
-              />
-              <ViewToggleBtn
-                active={viewMode === "tabla"}
-                onClick={() => setViewMode("tabla")}
-                icon={Table2}
-                label="Tabla"
-              />
-            </div>
+            <ViewToggle
+              className="sm:ml-auto self-start sm:self-end"
+              value={viewMode}
+              onChange={setViewMode}
+              options={[
+                { value: "kanban", icon: LayoutGrid, label: "Kanban" },
+                { value: "tabla",  icon: Table2,     label: "Tabla" },
+              ]}
+            />
           </div>
         </div>
       </div>
@@ -291,8 +298,8 @@ export default function Ventas() {
             value={formatEurShort(kpis.escrituradoMes)}
             delta={kpis.escrituradoDelta}
             sub={`${kpis.escrituradoCount} entregas`}
-            iconTone="bg-emerald-500/10"
-            iconColor="text-emerald-600"
+            iconTone="bg-success/10"
+            iconColor="text-success"
           />
           <KpiCard
             icon={Wallet}
@@ -301,8 +308,8 @@ export default function Ventas() {
             delta={kpis.comisionPagadaCount > 0 ? `${kpis.comisionPagadaCount} al día` : undefined}
             deltaTone="neutral"
             sub={`${kpis.comisionPendienteCount} por liquidar`}
-            iconTone="bg-amber-500/10"
-            iconColor="text-amber-600"
+            iconTone="bg-warning/10"
+            iconColor="text-warning"
           />
         </div>
       </div>
@@ -505,7 +512,7 @@ function KpiCard({
         {delta && (
           <span className={cn(
             "text-[11px] font-semibold tabular-nums inline-flex items-center gap-0.5",
-            resolvedTone === "positive" && "text-emerald-600",
+            resolvedTone === "positive" && "text-success",
             resolvedTone === "negative" && "text-destructive",
             resolvedTone === "neutral" && "text-muted-foreground",
           )}>
@@ -519,27 +526,6 @@ function KpiCard({
       <p className="text-[22px] sm:text-[26px] font-bold leading-none tabular-nums tracking-tight mt-1.5">{value}</p>
       {sub && <p className="text-[11px] text-muted-foreground mt-2 tnum">{sub}</p>}
     </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   Toggle btn (segmento)
-   ═══════════════════════════════════════════════════════════════════ */
-function ViewToggleBtn({
-  active, onClick, icon: Icon, label,
-}: { active: boolean; onClick: () => void; icon: LucideIcon; label: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-1.5 h-8 px-3 rounded-full transition-all text-[12.5px] font-medium",
-        active ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground",
-      )}
-      aria-pressed={active}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      <span className="hidden sm:inline">{label}</span>
-    </button>
   );
 }
 
@@ -985,7 +971,7 @@ function TablaVentas({
                         </p>
                         <p className={cn(
                           "text-[10.5px] tnum",
-                          v.comisionPagada ? "text-emerald-600" : "text-amber-600",
+                          v.comisionPagada ? "text-success" : "text-warning",
                         )}>
                           {v.comisionPct}% · {v.comisionPagada ? "Pagada" : "Pendiente"}
                         </p>
@@ -1356,7 +1342,7 @@ function Timeline({ venta }: { venta: Venta }) {
               "relative h-[22px] w-[22px] rounded-full grid place-items-center shrink-0",
               s.reached
                 ? i === steps.length - 1 && !caida
-                  ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
+                  ? "bg-success/15 text-success border border-success/30"
                   : "bg-primary/15 text-primary border border-primary/30"
                 : "bg-muted text-muted-foreground border border-border",
             )}>
@@ -1418,7 +1404,7 @@ function SummaryBox({
       <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">{label}</p>
       <p className={cn(
         "text-[15px] font-bold tnum mt-1",
-        valueTone === "amber" ? "text-amber-600" : "text-foreground",
+        valueTone === "amber" ? "text-warning" : "text-foreground",
       )}>
         {value}
       </p>
@@ -1455,7 +1441,7 @@ function ActionBtn({
   const cls = {
     primary: "bg-foreground text-background hover:bg-foreground/90 shadow-soft",
     secondary: "bg-card border border-border text-foreground hover:bg-muted",
-    success: "bg-emerald-600 text-white hover:bg-emerald-600/90 shadow-soft",
+    success: "bg-success text-white hover:bg-success/90 shadow-soft",
     destructive: "bg-destructive/10 border border-destructive/30 text-destructive hover:bg-destructive/15",
   }[variant];
   return (

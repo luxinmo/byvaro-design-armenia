@@ -55,7 +55,7 @@ export default function AjustesZonaCriticaTransferir() {
     >
       <SettingsCard>
         <div className="flex items-start gap-4">
-          <div className="h-12 w-12 rounded-2xl bg-amber-100 grid place-items-center text-amber-700 shrink-0">
+          <div className="h-12 w-12 rounded-2xl bg-warning/15 grid place-items-center text-warning shrink-0">
             <Crown className="h-5 w-5" />
           </div>
           <div className="flex-1 min-w-0">
@@ -88,7 +88,7 @@ export default function AjustesZonaCriticaTransferir() {
                 <p className="text-[11.5px] text-destructive mt-1">No hay un miembro con ese email</p>
               )}
               {target && (
-                <p className="text-[11.5px] text-emerald-600 mt-1">✓ Miembro encontrado: {target.name}</p>
+                <p className="text-[11.5px] text-success mt-1">✓ Miembro encontrado: {target.name}</p>
               )}
             </SettingsField>
 

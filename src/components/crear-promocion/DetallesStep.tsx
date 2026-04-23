@@ -429,7 +429,7 @@ export function DetallesStep({
 
           {/* Aviso si tras_licencia */}
           {state.tipoEntrega === "tras_licencia" && (
-            <div className="rounded-xl bg-amber-500/5 border border-amber-500/30 p-3 text-[11.5px] text-foreground leading-relaxed">
+            <div className="rounded-xl bg-warning/5 border border-warning/30 p-3 text-[11.5px] text-foreground leading-relaxed">
               La entrega se estimará automáticamente desde la fecha en que consigas la licencia. Puedes actualizarla cuando la tengas.
             </div>
           )}

@@ -170,7 +170,7 @@ export default function EmailSetup({ onConfigured, onCancel }: Props) {
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted hover:bg-muted/70 font-mono text-[11px] font-medium text-foreground transition-colors"
                   >
                     {SYSTEM_EMAIL}
-                    {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                    {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
                   </button>
                   . Cuando configures tu email podrás importar todos los correos enviados y recibidos
                   desde {SYSTEM_EMAIL}.

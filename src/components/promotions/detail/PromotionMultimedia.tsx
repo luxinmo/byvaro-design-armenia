@@ -22,7 +22,7 @@
  *   - `bg-primary/10 text-primary` → tinte para tour y catálogo.
  *   - `bg-destructive/10 text-destructive` → tinte para vídeos (acción
  *     "reproducir" / recurso consumible).
- *   - `bg-amber-500/10 ... text-amber-700` → warning Byvaro estándar
+ *   - `bg-warning/10 ... text-warning` → warning Byvaro estándar
  *     (galería = contenido sin revisar / pendiente de curar).
  *   - `bg-accent/10 text-accent-foreground` → tinte para planos.
  *   - `bg-muted text-muted-foreground` → tinte neutro para documentos
@@ -52,7 +52,7 @@ import { Compass, Video, BookOpen, FileText, Image as ImageIcon } from "lucide-r
 const resources = [
   { icon: Compass, label: "Tour virtual 360°", count: 3, color: "text-primary bg-primary/10" },
   { icon: Video, label: "Vídeos", count: 2, color: "text-destructive bg-destructive/10" },
-  { icon: ImageIcon, label: "Galería", count: 24, color: "text-amber-700 bg-amber-500/10" },
+  { icon: ImageIcon, label: "Galería", count: 24, color: "text-warning bg-warning/10" },
   { icon: BookOpen, label: "Catálogo PDF", count: 1, color: "text-primary bg-primary/10" },
   { icon: FileText, label: "Planos", count: 8, color: "text-accent-foreground bg-accent/10" },
   { icon: FileText, label: "Documentos legales", count: 4, color: "text-muted-foreground bg-muted" },

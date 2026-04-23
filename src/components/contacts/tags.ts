@@ -10,8 +10,8 @@
 import type { ContactTag } from "./types";
 
 export const DEFAULT_ORG_TAGS: ContactTag[] = [
-  { id: "vip", label: "VIP", color: "bg-amber-500", scope: "organization" },
-  { id: "investor", label: "Investor", color: "bg-emerald-500", scope: "organization" },
+  { id: "vip", label: "VIP", color: "bg-warning", scope: "organization" },
+  { id: "investor", label: "Investor", color: "bg-success", scope: "organization" },
   { id: "first-home", label: "First home", color: "bg-sky-500", scope: "organization" },
   { id: "urgent", label: "Urgent", color: "bg-rose-500", scope: "organization" },
   { id: "international", label: "International", color: "bg-violet-500", scope: "organization" },

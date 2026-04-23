@@ -13,7 +13,7 @@
 
 export type Label = {
   name: string;
-  color: string; // clase tailwind (bg-amber-500, bg-emerald-500, …)
+  color: string; // clase tailwind (bg-warning, bg-success, …)
 };
 
 const KEY = "byvaro.emailLabels.v1";

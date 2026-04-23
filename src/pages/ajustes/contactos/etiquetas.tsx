@@ -145,7 +145,7 @@ export default function AjustesContactosEtiquetas() {
               />
               <button
                 onClick={submitCreate}
-                className="h-7 w-7 rounded-full hover:bg-muted flex items-center justify-center text-emerald-600"
+                className="h-7 w-7 rounded-full hover:bg-muted flex items-center justify-center text-success"
               >
                 <Check className="h-4 w-4" />
               </button>

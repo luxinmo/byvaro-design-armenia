@@ -107,7 +107,7 @@ export function EmpresaSidebar({
                   cx="20" cy="20" r="17" fill="none"
                   stroke="currentColor" strokeWidth="3" strokeLinecap="round"
                   strokeDasharray={`${(percent / 100) * (2 * Math.PI * 17)} ${2 * Math.PI * 17}`}
-                  className={cn(percent >= 80 ? "text-emerald-500" : percent >= 50 ? "text-amber-500" : "text-primary")}
+                  className={cn(percent >= 80 ? "text-success" : percent >= 50 ? "text-warning" : "text-primary")}
                 />
               </svg>
               <div className="absolute inset-0 grid place-items-center">
@@ -129,7 +129,7 @@ export function EmpresaSidebar({
             {checklist.map((c) => (
               <li key={c.key} className="flex items-center gap-2">
                 {c.done ? (
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                  <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
                 ) : (
                   <Circle className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
                 )}

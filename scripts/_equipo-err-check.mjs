@@ -1,0 +1,16 @@
+import { chromium } from "playwright";
+const browser = await chromium.launch();
+const page = await browser.newContext().then(c => c.newPage());
+const errs = [];
+page.on("pageerror", e => errs.push(String(e)));
+page.on("console", m => { if (m.type() === "error") errs.push(m.text()); });
+await page.setViewportSize({ width: 1440, height: 900 });
+await page.goto("http://localhost:8080/equipo", { waitUntil: "networkidle" });
+await page.waitForTimeout(1000);
+console.log("errors on initial load:", errs.length);
+errs.forEach(e => console.log(" - " + e.slice(0,150)));
+await page.locator("button:has-text(\"Añadir miembro\")").first().click();
+await page.waitForTimeout(800);
+console.log("errors after opening invite dialog:", errs.length);
+errs.slice(errs.length-5).forEach(e => console.log(" - " + e.slice(0,150)));
+await browser.close();

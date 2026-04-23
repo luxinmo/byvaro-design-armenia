@@ -22,11 +22,13 @@ import { Tag } from "@/components/ui/Tag";
 import { PromocionesMap } from "@/components/promociones/PromocionesMap";
 import { cn } from "@/lib/utils";
 import { MinimalSort } from "@/components/ui/MinimalSort";
+import { ViewToggle } from "@/components/ui/ViewToggle";
 import { listDrafts, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
 import { Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
 import { useCurrentUser } from "@/lib/currentUser";
+import { canPublishPromotion } from "@/lib/publicationRequirements";
 
 /* ═══════════════════════════════════════════════════════════════════
    Opciones estáticas (las dinámicas se derivan de los datos en el componente)
@@ -236,14 +238,21 @@ function formatPrice(n: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 }
 
-function statusTag(status: string) {
-  const map: Record<string, { label: string; variant: "success" | "warning" | "muted" | "danger" }> = {
-    active: { label: "Activa", variant: "success" },
-    incomplete: { label: "Incompleta", variant: "warning" },
-    inactive: { label: "Inactiva", variant: "muted" },
-    "sold-out": { label: "Vendida", variant: "danger" },
-  };
-  return map[status] || map.inactive;
+/**
+ * Estado visible del tag en la card. Se deriva del estado REAL
+ * (validador + canShareWithAgencies), no del campo `status` crudo
+ * del mock, que puede contradecir los requisitos: el mock podía
+ * tener status="active" aunque le faltaran comisiones, estructura,
+ * etc. — ya no permitimos esa contradicción.
+ */
+function statusTag(
+  p: { status: string; canShareWithAgencies?: boolean } & Promotion,
+): { label: string; variant: "success" | "warning" | "muted" | "danger" } {
+  if (p.status === "sold-out") return { label: "Vendida", variant: "danger" };
+  if (p.status === "inactive") return { label: "Inactiva", variant: "muted" };
+  if (!canPublishPromotion(p)) return { label: "Sin publicar", variant: "warning" };
+  if (p.canShareWithAgencies === false) return { label: "Solo uso interno", variant: "muted" };
+  return { label: "Publicada", variant: "success" };
 }
 
 type LastUnitDetail = {
@@ -413,13 +422,24 @@ export default function Promociones() {
       /* Agencia: une promociones públicas + developerOnly (hay agencias
        * invitadas a colaborar en ambas) y filtra por los IDs que figuran
        * en `promotionsCollaborating` de la agencia activa. Los borradores
-       * del promotor nunca son visibles. */
+       * del promotor nunca son visibles. Además:
+       *   · status === "active" (publicada, no archivada/incompleta)
+       *   · canPublishPromotion(p) (todos los campos obligatorios OK)
+       *   · canShareWithAgencies !== false (el promotor no desactivó la
+       *     compartición)
+       * Si una promo falla cualquiera de estos, no existe para la agencia. */
       const collaboratingIds = new Set(activeAgency?.promotionsCollaborating ?? []);
       const pool: DevPromotion[] = [
         ...developerOnlyPromotions,
         ...promotions.map((p) => ({ ...p } as DevPromotion)),
       ];
-      return pool.filter((p) => collaboratingIds.has(p.id));
+      return pool.filter((p) => {
+        if (!collaboratingIds.has(p.id)) return false;
+        if (p.status !== "active") return false;
+        if (!canPublishPromotion(p as unknown as Promotion)) return false;
+        if ((p as DevPromotion).canShareWithAgencies === false) return false;
+        return true;
+      });
     }
     return [...draftPromotions, ...developerOnlyPromotions, ...promotions.map((p) => ({ ...p } as DevPromotion))];
   }, [draftPromotions, isAgencyUser, activeAgency]);
@@ -666,13 +686,15 @@ export default function Promociones() {
               )}
             </button>
 
-            <button
-              onClick={() => navigate("/crear-promocion")}
-              className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft shrink-0"
-            >
-              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-              <span className="hidden md:inline">Nueva promoción</span>
-            </button>
+            {!isAgencyUser && (
+              <button
+                onClick={() => navigate("/crear-promocion")}
+                className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft shrink-0"
+              >
+                <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                <span className="hidden md:inline">Nueva promoción</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -712,11 +734,17 @@ export default function Promociones() {
 
             {/* Toggle Lista / Cuadrícula / Mapa — sólo desde sm+. En
                 móvil mostramos una sola vista (lista) para simplificar. */}
-            <div className="hidden sm:inline-flex items-center bg-muted/40 border border-border rounded-full p-0.5 text-xs">
-              <ViewToggleBtn active={viewMode === "list"} onClick={() => setViewMode("list")} icon={List} label="Lista" />
-              <ViewToggleBtn active={viewMode === "grid"} onClick={() => setViewMode("grid")} icon={LayoutGrid} label="Cuadrícula" />
-              <ViewToggleBtn active={viewMode === "map"} onClick={() => setViewMode("map")} icon={MapIcon} label="Mapa" />
-            </div>
+            <ViewToggle
+              value={viewMode}
+              onChange={setViewMode}
+              iconOnly
+              hiddenOnMobile
+              options={[
+                { value: "list", icon: List,       label: "Lista" },
+                { value: "grid", icon: LayoutGrid, label: "Cuadrícula" },
+                { value: "map",  icon: MapIcon,    label: "Mapa" },
+              ]}
+            />
           </div>
         </div>
       </div>
@@ -756,7 +784,7 @@ export default function Promociones() {
           ) : (
             sortedAndFiltered.map((p) => {
               const badgeLabel = p.badge === "new" ? "Nueva" : p.badge === "last-units" ? "Últimas unidades" : null;
-              const status = statusTag(p.status);
+              const status = statusTag(p);
               const { typologies, units: availableUnits, lastUnit } = getAvailableData(p.id);
               const trending = isTrending(p);
               const hasMissing = p.missingSteps && p.missingSteps.length > 0;
@@ -777,9 +805,9 @@ export default function Promociones() {
                     isDraft
                       ? "border-dashed border-primary/40"
                       : hasMissing
-                      ? "border-destructive/30 ring-1 ring-destructive/10"
+                      ? "border-border"
                       : trending
-                      ? "border-border ring-1 ring-amber-300/50"
+                      ? "border-border ring-1 ring-warning/40"
                       : "border-border"
                   )}
                 >
@@ -867,12 +895,16 @@ export default function Promociones() {
                       )}
                     </div>
 
-                    {/* Missing steps warning */}
+                    {/* Missing steps · aviso neutral (gris). En el listado es
+                        información, no un error — una promoción recién creada
+                        naturalmente tiene pasos pendientes. El tono rojo se
+                        reserva para dentro de la ficha cuando el promotor la
+                        abre para publicar. */}
                     {hasMissing && (
-                      <div className="flex items-start gap-2.5 mb-3 px-3 py-2.5 rounded-xl bg-destructive/5 border border-destructive/20">
-                        <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                      <div className="flex items-start gap-2.5 mb-3 px-3 py-2.5 rounded-xl bg-muted/40 border border-border">
+                        <AlertTriangle className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" strokeWidth={1.5} />
                         <div>
-                          <p className="text-sm xl:text-xs font-semibold text-destructive mb-0.5">Pasos pendientes para publicar</p>
+                          <p className="text-sm xl:text-xs font-semibold text-foreground mb-0.5">Pasos pendientes para publicar</p>
                           <p className="text-sm xl:text-xs text-muted-foreground">{p.missingSteps!.join(" · ")}</p>
                         </div>
                       </div>
@@ -880,10 +912,10 @@ export default function Promociones() {
 
                     {/* Cannot share warning */}
                     {p.canShareWithAgencies === false && !hasMissing && (
-                      <div className="flex items-start gap-2.5 mb-3 px-3 py-2.5 rounded-xl bg-amber-50/60 border border-amber-200/40">
-                        <Ban className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="flex items-start gap-2.5 mb-3 px-3 py-2.5 rounded-xl bg-warning/10 border border-warning/20">
+                        <Ban className="h-4 w-4 text-warning shrink-0 mt-0.5" />
                         <div>
-                          <p className="text-sm xl:text-xs font-semibold text-amber-700 mb-0.5">No se puede compartir con agencias</p>
+                          <p className="text-sm xl:text-xs font-semibold text-warning mb-0.5">No se puede compartir con agencias</p>
                           <p className="text-sm xl:text-xs text-muted-foreground">Configura comisiones en Colaboradores para habilitar el share</p>
                         </div>
                       </div>
@@ -900,8 +932,8 @@ export default function Promociones() {
 
                     {/* Trending activity box */}
                     {p.activity && trending && (
-                      <div className="hidden sm:flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 px-3 py-2 rounded-xl bg-amber-50/60 border border-amber-200/40">
-                        <div className="flex items-center gap-1 text-amber-600">
+                      <div className="hidden sm:flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 px-3 py-2 rounded-xl bg-warning/10 border border-warning/20">
+                        <div className="flex items-center gap-1 text-warning">
                           <TrendingUp className="h-3.5 w-3.5" />
                           <span className="text-xs font-semibold">+{p.activity.trend}%</span>
                         </div>
@@ -1226,28 +1258,6 @@ function FilterGroup({
    Sub-componentes
    ═══════════════════════════════════════════════════════════════════ */
 /* ═══════════════════════════════════════════════════════════════════
-   ViewToggleBtn · botón de segmento del toggle Lista/Cuadrícula/Mapa
-   ═══════════════════════════════════════════════════════════════════ */
-function ViewToggleBtn({
-  active, onClick, icon: Icon, label,
-}: { active: boolean; onClick: () => void; icon: LucideIcon; label: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center justify-center h-8 w-8 rounded-full transition-all",
-        active ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
-      )}
-      aria-label={`Vista ${label.toLowerCase()}`}
-      title={label}
-      aria-pressed={active}
-    >
-      <Icon className="h-4 w-4" />
-    </button>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
    SearchableFilterGroup · chips con buscador arriba (para listas largas)
    Se usa para Ubicación (muchas zonas posibles).
    ═══════════════════════════════════════════════════════════════════ */
@@ -1519,7 +1529,7 @@ function PromoCardCompact({ promo: p, isTrending }: { promo: DevPromotion; isTre
   return (
     <article className={cn(
       "group bg-card border rounded-2xl overflow-hidden shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer",
-      isTrending ? "border-border ring-1 ring-amber-300/50" : "border-border"
+      isTrending ? "border-border ring-1 ring-warning/40" : "border-border"
     )}>
       <div className="relative aspect-[16/10] overflow-hidden bg-muted">
         {p.image && <img src={p.image} alt={p.name} className="h-full w-full object-cover group-hover:scale-[1.02] transition-transform duration-500" loading="lazy" />}

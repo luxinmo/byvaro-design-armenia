@@ -58,8 +58,8 @@ export default function AjustesActividad() {
       {failedCount > 0 && (
         <SettingsCard>
           <div className="flex items-start gap-3">
-            <div className="h-9 w-9 rounded-xl bg-amber-100 grid place-items-center shrink-0">
-              <X className="h-4 w-4 text-amber-700" />
+            <div className="h-9 w-9 rounded-xl bg-warning/15 grid place-items-center shrink-0">
+              <X className="h-4 w-4 text-warning" />
             </div>
             <div>
               <p className="text-sm font-medium text-foreground">
@@ -108,7 +108,7 @@ export default function AjustesActividad() {
           ) : filtered.map((a) => (
             <div key={a.id} className="py-3 flex items-center gap-3">
               <div className={`h-7 w-7 rounded-full grid place-items-center shrink-0 ${
-                a.success ? "bg-emerald-100 text-emerald-700" : "bg-destructive/10 text-destructive"
+                a.success ? "bg-success/15 text-success" : "bg-destructive/10 text-destructive"
               }`}>
                 {a.success ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
               </div>

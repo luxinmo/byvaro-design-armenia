@@ -174,7 +174,7 @@ export function AssignMembersDialog({ open, onOpenChange, contactId, current, on
                     className={cn(
                       "h-7 w-7 rounded-lg grid place-items-center transition-colors shrink-0",
                       assignment?.permissions.canEdit
-                        ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                        ? "bg-success/15 text-success dark:text-success"
                         : "text-muted-foreground hover:text-foreground hover:bg-muted",
                     )}
                   >
@@ -185,7 +185,7 @@ export function AssignMembersDialog({ open, onOpenChange, contactId, current, on
                 )}
                 {selected && assigned[0]?.userId === m.id && (
                   <span title="Owner — primer asignado" className="shrink-0">
-                    <Star className="h-3 w-3 text-amber-500 fill-current" />
+                    <Star className="h-3 w-3 text-warning fill-current" />
                   </span>
                 )}
               </div>
