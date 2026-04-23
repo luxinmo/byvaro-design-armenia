@@ -200,7 +200,13 @@ export function canPublishWizard(state: WizardState): boolean {
   return getMissingForWizard(state).length === 0;
 }
 
-/** ¿Está una promoción completa para publicar? */
+/** ¿Está una promoción completa para publicar?
+ *  Regla de negocio: una promoción solo puede considerarse activa si
+ *  pasa TODOS los requisitos. Si está marcada como `incomplete` o
+ *  declara `missingSteps`, no se considera publicable aunque la
+ *  intención del mock diga "active". */
 export function canPublishPromotion(p: Promotion): boolean {
+  if (p.status === "incomplete") return false;
+  if (p.missingSteps && p.missingSteps.length > 0) return false;
   return getMissingForPromotion(p).length === 0;
 }
