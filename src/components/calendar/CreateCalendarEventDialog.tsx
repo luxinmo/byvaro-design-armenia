@@ -63,6 +63,7 @@ import {
   groupPromotionsByRegistration,
   type PromotionWithRegistrationStatus,
 } from "@/lib/registrationMatcher";
+import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { MOCK_CONTACTS } from "@/components/contacts/data";
 import { cn } from "@/lib/utils";
 
@@ -713,19 +714,14 @@ function PromotionPicker({
   );
 
   // Si no hay cliente, pintamos todo el catálogo en "others".
-  let fallbackAll: PromotionWithRegistrationStatus[] = [];
-  if (!groups) {
-    // Import diferido para evitar ciclo · pero simplificamos: usamos
-    // el módulo a través del registro. Aquí cargamos el módulo once.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { developerOnlyPromotions } = require("@/data/developerPromotions");
-    fallbackAll = developerOnlyPromotions.map((p: any) => ({
-      promotion: p,
-      acceptedRegistration: undefined,
-      pendingRegistration: undefined,
-      rejectedRegistration: undefined,
-    })) as PromotionWithRegistrationStatus[];
-  }
+  const fallbackAll: PromotionWithRegistrationStatus[] = !groups
+    ? developerOnlyPromotions.map((p) => ({
+        promotion: p,
+        acceptedRegistration: undefined,
+        pendingRegistration: undefined,
+        rejectedRegistration: undefined,
+      }))
+    : [];
   const othersDisplay = groups ? othersList : filter(fallbackAll);
 
   return (
