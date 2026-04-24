@@ -111,3 +111,64 @@ export function useMarketingProhibitions(promotionId: string): string[] {
 export function isChannelProhibited(promotionId: string, channelId: string): boolean {
   return getMarketingProhibitions(promotionId).includes(channelId);
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Flag "ya configuró las reglas" · se usa para apagar la animación
+   de atención en el sidebar card tras la primera interacción explícita
+   (Guardar · Permitir todos · Prohibir todos).
+
+   Se guarda POR PROMOCIÓN. Una vez true, nunca vuelve a false salvo
+   que alguien llame resetMarketingConfigured() (no expuesto en UI).
+   ═══════════════════════════════════════════════════════════════════ */
+
+const CONFIGURED_KEY_PREFIX = "byvaro.promotion.marketingConfigured.v1:";
+const CONFIGURED_EVENT = "byvaro:marketing-configured-change";
+
+function configuredKeyFor(id: string): string {
+  return `${CONFIGURED_KEY_PREFIX}${id}`;
+}
+
+export function getMarketingConfigured(promotionId: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(configuredKeyFor(promotionId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setMarketingConfigured(promotionId: string, value: boolean = true): void {
+  if (typeof window === "undefined") return;
+  if (value) {
+    window.localStorage.setItem(configuredKeyFor(promotionId), "1");
+  } else {
+    window.localStorage.removeItem(configuredKeyFor(promotionId));
+  }
+  window.dispatchEvent(new CustomEvent(CONFIGURED_EVENT, { detail: { promotionId } }));
+}
+
+export function useMarketingConfigured(promotionId: string): boolean {
+  const [v, setV] = useState<boolean>(() => getMarketingConfigured(promotionId));
+
+  useEffect(() => {
+    const read = () => setV(getMarketingConfigured(promotionId));
+    read();
+
+    const onChange = (e: Event) => {
+      const detail = (e as CustomEvent<{ promotionId: string }>).detail;
+      if (!detail || detail.promotionId === promotionId) read();
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === configuredKeyFor(promotionId)) read();
+    };
+
+    window.addEventListener(CONFIGURED_EVENT, onChange);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(CONFIGURED_EVENT, onChange);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [promotionId]);
+
+  return v;
+}

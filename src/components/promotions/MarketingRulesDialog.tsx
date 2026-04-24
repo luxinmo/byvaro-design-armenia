@@ -3,15 +3,19 @@
  * promoción. Solo accesible al PROMOTOR (la agencia la ve en
  * `MarketingRulesCard` en modo read-only).
  *
- * UI · lista de canales del catálogo (`marketingChannels.ts`) agrupada
- * por categoría (portales · redes sociales · publicidad). Cada fila
- * tiene un Switch: ON = prohibido, OFF = permitido. Cuando prohibido
- * se pinta con tinte rojo + icono Ban para comunicar la prohibición
- * de forma inequívoca.
+ * UI · dos secciones:
+ *   1. Permitidos (arriba)   · todos los canales sin prohibir
+ *   2. No permitidos (abajo) · los prohibidos con icono Ban
+ *
+ * Estilo neutro · no tintamos filas con fondos rojos. Los iconos del
+ * canal (favicon) y sus nombres se muestran en color normal
+ * independientemente del estado · la única señal visual de prohibición
+ * es el icono `Ban` en la columna del Switch.
  *
  * Persistencia · optimista vía `saveMarketingProhibitions` al pulsar
- * "Guardar cambios" (no auto-save para dar chance al promotor a
- * cancelar un click accidental).
+ * "Guardar cambios". Cualquier clic en "Permitir todos" / "Prohibir
+ * todos" / "Guardar" marca también la promoción como configurada
+ * (flag que apaga la animación de "llama-atención" en el sidebar).
  *
  * TODO(backend): ver `src/lib/marketingRulesStorage.ts` · enchufar
  *   PATCH /api/promociones/:id { marketingProhibitions }.
@@ -23,20 +27,21 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/Switch";
-import { Megaphone, ShieldAlert, Info, Search, X } from "lucide-react";
+import { Megaphone, ShieldAlert, Info, Search, X, Ban, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ChannelAvatar } from "./ChannelAvatar";
 import {
   MARKETING_CHANNELS,
   CATEGORY_LABEL,
-  CATEGORY_DESCRIPTION,
   groupMarketingChannels,
+  type MarketingChannel,
   type MarketingChannelCategory,
 } from "@/lib/marketingChannels";
 import {
   getMarketingProhibitions,
   saveMarketingProhibitions,
+  setMarketingConfigured,
 } from "@/lib/marketingRulesStorage";
 
 interface Props {
@@ -62,26 +67,35 @@ export function MarketingRulesDialog({ open, onOpenChange, promotionId, promotio
     }
   }, [open, initial]);
 
-  const groupedAll = useMemo(() => groupMarketingChannels(), []);
   const total = MARKETING_CHANNELS.length;
   const prohibCount = prohibited.size;
 
-  /* Filtro por query · busca en label, hint y domain (todos case-insensitive).
-   * Agrupa el resultado por categoría manteniendo el orden declarado. */
-  const grouped = useMemo(() => {
+  /* Particiona el catálogo en permitidos / prohibidos y aplica la
+   * query de búsqueda a ambos bloques de forma consistente. */
+  const { allowed, deniedList, filteredTotal } = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return groupedAll;
-    const matches = (text?: string) => !!text && text.toLowerCase().includes(q);
-    const out: typeof groupedAll = { portales: [], internacionales: [], redes: [], publicidad: [] };
-    for (const cat of CATEGORY_ORDER) {
-      out[cat] = groupedAll[cat].filter(
-        (c) => matches(c.label) || matches(c.hint) || matches(c.domain),
-      );
-    }
-    return out;
-  }, [groupedAll, query]);
+    const matches = (c: MarketingChannel) =>
+      !q ||
+      c.label.toLowerCase().includes(q) ||
+      (c.hint?.toLowerCase().includes(q) ?? false) ||
+      (c.domain?.toLowerCase().includes(q) ?? false);
 
-  const filteredTotal = CATEGORY_ORDER.reduce((acc, cat) => acc + grouped[cat].length, 0);
+    const allowedL: MarketingChannel[] = [];
+    const deniedL: MarketingChannel[] = [];
+    for (const cat of CATEGORY_ORDER) {
+      const bucket = groupMarketingChannels()[cat];
+      for (const c of bucket) {
+        if (!matches(c)) continue;
+        if (prohibited.has(c.id)) deniedL.push(c);
+        else allowedL.push(c);
+      }
+    }
+    return {
+      allowed: allowedL,
+      deniedList: deniedL,
+      filteredTotal: allowedL.length + deniedL.length,
+    };
+  }, [prohibited, query]);
 
   const dirty = useMemo(() => {
     if (prohibited.size !== initial.size) return true;
@@ -100,14 +114,23 @@ export function MarketingRulesDialog({ open, onOpenChange, promotionId, promotio
 
   const handleSave = () => {
     saveMarketingProhibitions(promotionId, Array.from(prohibited));
+    setMarketingConfigured(promotionId, true);
     onOpenChange(false);
     toast.success(prohibCount === 0
       ? "Publicación permitida en todos los canales"
+      : prohibCount === total
+      ? "Solo uso interno · publicación prohibida en todos los canales"
       : `${prohibCount} canal${prohibCount === 1 ? "" : "es"} prohibido${prohibCount === 1 ? "" : "s"}`);
   };
 
-  const handleProhibitAll = () => setProhibited(new Set(MARKETING_CHANNELS.map((c) => c.id)));
-  const handleAllowAll = () => setProhibited(new Set());
+  const handleProhibitAll = () => {
+    setProhibited(new Set(MARKETING_CHANNELS.map((c) => c.id)));
+    setMarketingConfigured(promotionId, true);
+  };
+  const handleAllowAll = () => {
+    setProhibited(new Set());
+    setMarketingConfigured(promotionId, true);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -150,12 +173,11 @@ export function MarketingRulesDialog({ open, onOpenChange, promotionId, promotio
             )}
           </div>
 
-          {/* Toolbar · contador + atajos */}
+          {/* Toolbar · atajos a la derecha · contador a la izquierda */}
           <div className="flex items-center justify-between gap-3">
             <p className="text-[12px] text-muted-foreground">
-              <span className="font-semibold text-foreground tabular-nums">{prohibCount}</span>
-              {" / "}
-              <span className="tabular-nums">{total}</span> canales prohibidos
+              <span className="font-semibold text-foreground tabular-nums">{allowed.length}</span> permitidos ·{" "}
+              <span className="font-semibold text-foreground tabular-nums">{prohibCount}</span> prohibidos
               {query && filteredTotal !== total && (
                 <span className="ml-1.5">
                   · <span className="font-semibold text-foreground tabular-nums">{filteredTotal}</span> en resultado
@@ -176,7 +198,7 @@ export function MarketingRulesDialog({ open, onOpenChange, promotionId, promotio
                 type="button"
                 onClick={handleProhibitAll}
                 disabled={prohibCount === total}
-                className="text-[11.5px] font-medium text-destructive hover:text-destructive/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="text-[11.5px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 Prohibir todo
               </button>
@@ -201,80 +223,36 @@ export function MarketingRulesDialog({ open, onOpenChange, promotionId, promotio
             </div>
           )}
 
-          {/* Grupos */}
-          {CATEGORY_ORDER.map((cat) => {
-            const channels = grouped[cat];
-            if (channels.length === 0) return null;
-            return (
-              <section key={cat}>
-                <div className="mb-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                    {CATEGORY_LABEL[cat]}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground/70 mt-0.5">
-                    {CATEGORY_DESCRIPTION[cat]}
-                  </p>
-                </div>
-                <ul className="flex flex-col gap-1.5">
-                  {channels.map((c) => {
-                    const isProhibited = prohibited.has(c.id);
-                    return (
-                      <li
-                        key={c.id}
-                        className={cn(
-                          "flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors cursor-pointer",
-                          isProhibited
-                            ? "border-destructive/40 bg-destructive/[0.04]"
-                            : "border-border bg-card hover:bg-muted/40",
-                        )}
-                        onClick={() => toggle(c.id)}
-                        role="button"
-                        aria-pressed={isProhibited}
-                      >
-                        <ChannelAvatar channel={c} prohibited={isProhibited} size="md" />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <p className={cn(
-                              "text-[13px] font-semibold leading-tight",
-                              isProhibited ? "text-destructive" : "text-foreground",
-                            )}>
-                              {c.label}
-                            </p>
-                            {c.hint && (
-                              <span className="text-[10px] font-medium text-muted-foreground rounded-full bg-muted px-1.5 py-0.5">
-                                {c.hint}
-                              </span>
-                            )}
-                          </div>
-                          {c.domain && (
-                            <p className="text-[10.5px] text-muted-foreground mt-0.5 truncate">{c.domain}</p>
-                          )}
-                        </div>
-                        {/* Wrapper con stopPropagation · si no, el click
-                            en el Switch burbuja al <li> y dispara
-                            toggle() dos veces → net effect sin cambio.
-                            Con esto, Switch.onCheckedChange es el único
-                            que dispara al clicar el switch; clicar en el
-                            resto de la fila delega al <li>.onClick. */}
-                        <div onClick={(e) => e.stopPropagation()}>
-                          <Switch
-                            checked={isProhibited}
-                            onCheckedChange={() => toggle(c.id)}
-                            ariaLabel={`${isProhibited ? "Permitir" : "Prohibir"} ${c.label}`}
-                          />
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            );
-          })}
+          {/* ═════ Sección 1 · PERMITIDOS ═════ */}
+          {allowed.length > 0 && (
+            <Section
+              title="Permitidos"
+              description="Las agencias colaboradoras pueden publicar en estos canales."
+              icon={CheckCircle2}
+              iconTone="muted"
+              count={allowed.length}
+            >
+              <ChannelList channels={allowed} prohibited={prohibited} toggle={toggle} />
+            </Section>
+          )}
 
-          {/* Aviso legal interno */}
-          <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 flex items-start gap-2.5">
-            <ShieldAlert className="h-4 w-4 text-warning mt-0.5 shrink-0" strokeWidth={1.75} />
-            <div className="text-[11.5px] leading-relaxed text-foreground">
+          {/* ═════ Sección 2 · NO PERMITIDOS ═════ */}
+          {deniedList.length > 0 && (
+            <Section
+              title="No permitidos"
+              description="Las agencias no pueden publicar en estos canales."
+              icon={Ban}
+              iconTone="muted"
+              count={deniedList.length}
+            >
+              <ChannelList channels={deniedList} prohibited={prohibited} toggle={toggle} />
+            </Section>
+          )}
+
+          {/* Aviso legal interno · sobrio · sin fondo ámbar intenso */}
+          <div className="rounded-xl border border-border bg-muted/20 p-3 flex items-start gap-2.5">
+            <ShieldAlert className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" strokeWidth={1.75} />
+            <div className="text-[11.5px] leading-relaxed text-muted-foreground">
               Esta restricción se incluirá en la cláusula de marketing del
               contrato de colaboración. La agencia que infrinja la regla
               puede ser sancionada o ver rescindido su contrato.
@@ -282,7 +260,7 @@ export function MarketingRulesDialog({ open, onOpenChange, promotionId, promotio
           </div>
 
           {/* Nota sobre integración futura */}
-          <div className="rounded-xl border border-border bg-muted/30 p-3 flex items-start gap-2.5">
+          <div className="rounded-xl border border-border bg-muted/20 p-3 flex items-start gap-2.5">
             <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" strokeWidth={1.75} />
             <div className="text-[11px] leading-relaxed text-muted-foreground">
               Cuando se conecten los portales en <span className="font-medium text-foreground">Ajustes → Integraciones</span>,
@@ -306,5 +284,104 @@ export function MarketingRulesDialog({ open, onOpenChange, promotionId, promotio
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Section · encabezado de bloque (Permitidos / No permitidos)
+   ═══════════════════════════════════════════════════════════════════ */
+
+function Section({
+  title, description, icon: Icon, iconTone, count, children,
+}: {
+  title: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  iconTone: "muted" | "success" | "destructive";
+  count: number;
+  children: React.ReactNode;
+}) {
+  const iconCls =
+    iconTone === "success" ? "text-success" :
+    iconTone === "destructive" ? "text-destructive" :
+    "text-muted-foreground";
+
+  return (
+    <section>
+      <div className="mb-2 flex items-center gap-2">
+        <Icon className={cn("h-3.5 w-3.5", iconCls)} strokeWidth={2} />
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-foreground">
+          {title}
+        </p>
+        <span className="text-[10px] font-semibold text-muted-foreground tabular-nums rounded-full bg-muted px-1.5 py-0.5">
+          {count}
+        </span>
+      </div>
+      <p className="text-[11px] text-muted-foreground/80 mb-2">
+        {description}
+      </p>
+      {children}
+    </section>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ChannelList · filas neutrales · icono Ban solo cuando está prohibido
+   ═══════════════════════════════════════════════════════════════════ */
+
+function ChannelList({
+  channels, prohibited, toggle,
+}: {
+  channels: MarketingChannel[];
+  prohibited: Set<string>;
+  toggle: (id: string) => void;
+}) {
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {channels.map((c) => {
+        const isProhibited = prohibited.has(c.id);
+        const categoryLabel = CATEGORY_LABEL[c.category];
+        return (
+          <li
+            key={c.id}
+            className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5 transition-colors cursor-pointer hover:bg-muted/30"
+            onClick={() => toggle(c.id)}
+            role="button"
+            aria-pressed={isProhibited}
+          >
+            <ChannelAvatar channel={c} prohibited={false} size="md" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <p className="text-[13px] font-semibold leading-tight text-foreground">
+                  {c.label}
+                </p>
+                {isProhibited && (
+                  <Ban className="h-3 w-3 text-destructive shrink-0" strokeWidth={2.5} aria-label="Prohibido" />
+                )}
+                <span className="text-[10px] font-medium text-muted-foreground rounded-full bg-muted px-1.5 py-0.5">
+                  {categoryLabel}
+                </span>
+              </div>
+              <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap text-[10.5px] text-muted-foreground mt-0.5">
+                {c.domain && <span className="truncate">{c.domain}</span>}
+                {c.hint && (
+                  <>
+                    {c.domain && <span className="text-muted-foreground/40">·</span>}
+                    <span className="truncate">{c.hint}</span>
+                  </>
+                )}
+              </div>
+            </div>
+            <div onClick={(e) => e.stopPropagation()}>
+              <Switch
+                checked={isProhibited}
+                onCheckedChange={() => toggle(c.id)}
+                ariaLabel={`${isProhibited ? "Permitir" : "Prohibir"} ${c.label}`}
+              />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

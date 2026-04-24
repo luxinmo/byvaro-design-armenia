@@ -44,8 +44,7 @@ import { PromotionRecords } from "@/components/promotions/detail/PromotionRecord
 import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
 import { MarketingRulesDialog } from "@/components/promotions/MarketingRulesDialog";
 import { MarketingRulesCard } from "@/components/promotions/MarketingRulesCard";
-import { MarketingRulesBanner } from "@/components/promotions/MarketingRulesBanner";
-import { MarketingRulesPill } from "@/components/promotions/MarketingRulesPill";
+import { MarketingRulesSidebarCard } from "@/components/promotions/MarketingRulesSidebarCard";
 import { ImageLightbox } from "@/components/promotions/detail/ImageLightbox";
 import { ActivateSharingDialog } from "@/components/promotions/ActivateSharingDialog";
 import {
@@ -445,9 +444,9 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
    * con tooltips + labeled card en 2xl). Los items reflejan el estado
    * actual (promoción publicada, brochure eliminado, permisos de share).
    */
-  const renderQuickActionsRail = () => {
+  const renderQuickActionsRail = (extras?: React.ReactNode) => {
     const isPublished = p.status === "active" && !isIncomplete;
-    const items: { icon: typeof Users; label: string; hint?: string; onClick?: () => void; danger?: boolean; info?: boolean; disabled?: boolean }[] = [
+    const items: { icon: typeof Users; label: string; hint?: string; onClick?: () => void; danger?: boolean; info?: boolean; disabled?: boolean; compactOnly?: boolean }[] = [
       ...(!viewAsCollaborator && isPublished ? [
         {
           icon: Users,
@@ -456,12 +455,15 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           onClick: canShare ? () => setShareOpen(true) : undefined,
           disabled: !canShare,
         },
-        {
+        // Visible solo en el dock compacto (md/lg) · en 2xl+ la
+        // MarketingRulesSidebarCard hace el mismo trabajo debajo.
+        ...(sharingEnabledForPromo ? [{
           icon: Megaphone,
           label: "Reglas de marketing",
           hint: "Dónde puede (o no) promocionarse esta promoción",
           onClick: () => setMarketingRulesOpen(true),
-        },
+          compactOnly: true,
+        }] : []),
       ] : []),
       ...(isPublished ? [
         {
@@ -478,7 +480,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     return (
       <TooltipProvider delayDuration={150}>
         <aside className="hidden lg:block w-full lg:w-12 2xl:w-[260px] lg:shrink-0 order-1 lg:order-2 lg:self-start lg:sticky lg:top-4">
-          <div className="lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto no-scrollbar">
+          <div className="lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto no-scrollbar space-y-3">
             {/* Compact dock — visible md/lg, hidden on 2xl */}
             <div className="2xl:hidden flex lg:flex-col gap-1.5 rounded-2xl bg-card border border-border shadow-soft p-1.5">
               {items.map((item, i) => (
@@ -505,7 +507,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Acciones rápidas</p>
               </div>
               <div className="px-2 pb-2 flex flex-col gap-0.5">
-                {items.filter(i => !i.info && !i.danger).map((item, i) => (
+                {items.filter(i => !i.info && !i.danger && !i.compactOnly).map((item, i) => (
                   <button
                     key={i}
                     onClick={item.onClick}
@@ -558,6 +560,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 </>
               )}
             </div>
+
+            {/* Extras opcionales debajo del dock · p. ej. MarketingRulesSidebarCard
+                · visible solo en 2xl (igual que el labeled dock) para que en
+                md/lg no ensucien las filas de iconos compactos. */}
+            {extras && <div className="hidden 2xl:block">{extras}</div>}
           </div>
         </aside>
       </TooltipProvider>
@@ -780,18 +787,6 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   </span>
                 );
               })()}
-
-              {/* ── VARIANTE B · PILL compacto en el header ──
-                   Siempre visible junto al estado · verde si permite
-                   todo, ámbar si hay prohibiciones. Promotor lo clicka
-                   para abrir dialog, agencia lo ve read-only. */}
-              {sharingEnabledForPromo && p.status === "active" && !isIncomplete && (
-                <MarketingRulesPill
-                  promotionId={p.id}
-                  readOnly={viewAsCollaborator}
-                  onClick={() => setMarketingRulesOpen(true)}
-                />
-              )}
             </div>
             <div className="flex items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1.5 flex-wrap">
               {/* Ubicación · oculta en móvil (menos ruido). */}
@@ -1108,16 +1103,6 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             <div className="flex gap-4 lg:flex-row flex-col w-full max-w-[1570px] min-w-0">
               {/* ── LEFT: Main content ── */}
               <div className="flex-1 min-w-0 space-y-5 order-2 lg:order-1">
-
-            {/* ── VARIANTE A · BANNER PROMINENTE arriba ──
-                 Nudge visual para descubrir la feature. Solo promotor +
-                 solo cuando la promoción se comparte con agencias. */}
-            {sharingEnabledForPromo && !viewAsCollaborator && (
-              <MarketingRulesBanner
-                promotionId={p.id}
-                onEdit={() => setMarketingRulesOpen(true)}
-              />
-            )}
 
             {/* ── 1. GALLERY ── */}
             <SectionCard title="Multimedia" stepName="Multimedia" missing={missingSet.has("Multimedia") || realMissing.has("multimedia")} onEdit={() => setEditOpen("multimedia")} hideEdit={viewAsCollaborator} flush>
@@ -1684,8 +1669,17 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               {/* ── END LEFT COLUMN ── */}
 
               {/* ── RIGHT RAIL: dock de acciones rápidas (compartido con
-                   la tab Disponibilidad para UX consistente). */}
-              {renderQuickActionsRail()}
+                   la tab Disponibilidad para UX consistente) + tarjeta
+                   de reglas de marketing debajo (2xl+ · animada la
+                   primera vez, se apaga al configurar). */}
+              {renderQuickActionsRail(
+                sharingEnabledForPromo && !viewAsCollaborator ? (
+                  <MarketingRulesSidebarCard
+                    promotionId={p.id}
+                    onEdit={() => setMarketingRulesOpen(true)}
+                  />
+                ) : undefined
+              )}
             </div>
 
           </>
@@ -1737,8 +1731,15 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               />
             </div>
 
-            {/* Right rail · mismo dock de acciones rápidas que en Vista general */}
-            {renderQuickActionsRail()}
+            {/* Right rail · mismo dock + SidebarCard que en Vista general */}
+            {renderQuickActionsRail(
+              sharingEnabledForPromo && !viewAsCollaborator ? (
+                <MarketingRulesSidebarCard
+                  promotionId={p.id}
+                  onEdit={() => setMarketingRulesOpen(true)}
+                />
+              ) : undefined
+            )}
           </div>
         )}
 

@@ -1,7 +1,7 @@
 /**
  * ChannelAvatar · avatar de un canal de marketing con favicon real +
  * fallback al icono Lucide del catálogo. Se usa en MarketingRulesDialog,
- * MarketingRulesCard y MarketingRulesBanner.
+ * MarketingRulesCard y MarketingRulesSidebarCard.
  *
  * Estados visuales:
  *   · prohibited=false · fondo muted, favicon en color original.
