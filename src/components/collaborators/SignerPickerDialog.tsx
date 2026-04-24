@@ -141,6 +141,10 @@ interface Props {
   /** IDs/emails de firmantes ya incluidos · los filtramos de la lista
    *  para no duplicar. Se pasa como Set de emails (lower-case). */
   excludeEmails?: Set<string>;
+  /** Modo laxo · cuando el caller solo necesita registrar quién firmó
+   *  (archivar un contrato ya firmado), solo exigimos nombre. Email,
+   *  NIF y teléfono son opcionales · notificaciones irrelevantes. */
+  lax?: boolean;
   onAdd: (signer: ContractSigner) => void;
 }
 
@@ -152,7 +156,7 @@ const EMPTY_DRAFT: ContractSigner & { juridica?: boolean } = {
 };
 
 export function SignerPickerDialog({
-  open, onOpenChange, agency, excludeEmails, onAdd,
+  open, onOpenChange, agency, excludeEmails, lax, onAdd,
 }: Props) {
   const [step, setStep] = useState<Step>("pick");
   const [query, setQuery] = useState("");
@@ -201,13 +205,18 @@ export function SignerPickerDialog({
     setStep("form");
   };
 
-  /* Validación del form. */
+  /* Validación del form. En modo laxo (archivar firmado) solo
+     exigimos nombre · los demás campos son opcionales. Si el usuario
+     introduce un valor, validamos su FORMATO pero no su presencia. */
   const nombreOk = draft.nombre.trim().length > 0;
-  const emailOk  = isValidEmail(draft.email);
-  const nifOk    = isValidNif(draft.nif);
-  const phoneOk  = draft.notifications === "email"
-    ? true
-    : isValidPhone(draft.telefono);
+  const emailFilled = draft.email.trim().length > 0;
+  const nifFilled = draft.nif.trim().length > 0;
+  const phoneFilled = draft.telefono.trim().length > 0;
+  const emailOk = lax ? (!emailFilled || isValidEmail(draft.email)) : isValidEmail(draft.email);
+  const nifOk   = lax ? (!nifFilled   || isValidNif(draft.nif))     : isValidNif(draft.nif);
+  const phoneOk = lax
+    ? (!phoneFilled || isValidPhone(draft.telefono))
+    : (draft.notifications === "email" ? true : isValidPhone(draft.telefono));
   const formValid = nombreOk && emailOk && nifOk && phoneOk;
 
   const handleConfirm = () => {
@@ -225,6 +234,10 @@ export function SignerPickerDialog({
     onOpenChange(false);
   };
 
+  /* Placeholders/labels cambian en modo laxo para dejar claro qué es
+     opcional · también ocultamos el bloque de notificaciones porque
+     no enviamos emails en este flujo. */
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[92vh] overflow-y-auto">
@@ -236,7 +249,9 @@ export function SignerPickerDialog({
             {step === "pick"
               ? <>Elige una persona conocida o crea una nueva.
                   Si seleccionas una existente, se <span className="text-foreground font-medium">rellenan todos los datos automáticamente</span>.</>
-              : <>Revisa los datos · puedes editarlos antes de añadir.</>
+              : lax
+                ? <>Solo el <span className="text-foreground font-medium">nombre</span> es obligatorio · el resto de datos son opcionales.</>
+                : <>Revisa los datos · puedes editarlos antes de añadir.</>
             }
           </DialogDescription>
         </DialogHeader>
@@ -358,7 +373,7 @@ export function SignerPickerDialog({
                 <input
                   value={draft.nif}
                   onChange={(e) => setDraft({ ...draft, nif: e.target.value.toUpperCase() })}
-                  placeholder="NIF / NIE"
+                  placeholder={lax ? "NIF (opcional)" : "NIF / NIE"}
                   className={cn(
                     "h-10 w-full pl-8 pr-3 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20",
                     draft.nif.length > 0 && !nifOk ? "border-destructive/40" : "border-border",
@@ -375,7 +390,7 @@ export function SignerPickerDialog({
                   type="email"
                   value={draft.email}
                   onChange={(e) => setDraft({ ...draft, email: e.target.value })}
-                  placeholder="email@agencia.com"
+                  placeholder={lax ? "email (opcional)" : "email@agencia.com"}
                   className={cn(
                     "h-10 w-full pl-8 pr-3 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20",
                     draft.email.length > 0 && !emailOk ? "border-destructive/40" : "border-border",
@@ -387,7 +402,7 @@ export function SignerPickerDialog({
                 <input
                   value={draft.telefono}
                   onChange={(e) => setDraft({ ...draft, telefono: e.target.value })}
-                  placeholder="+34 600 000 000"
+                  placeholder={lax ? "teléfono (opcional)" : "+34 600 000 000"}
                   className={cn(
                     "h-10 w-full pl-8 pr-3 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20",
                     draft.telefono.length > 0 && !phoneOk ? "border-destructive/40" : "border-border",
@@ -404,27 +419,30 @@ export function SignerPickerDialog({
               className="h-10 w-full px-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
 
-            {/* Notificaciones */}
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-muted-foreground">Notificación</span>
-              <div className="inline-flex items-center gap-0.5 rounded-full bg-muted/40 border border-border p-0.5">
-                {(["email", "sms", "email,sms"] as const).map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => setDraft({ ...draft, notifications: opt })}
-                    className={cn(
-                      "h-6 px-2.5 rounded-full text-[11px] font-medium transition-colors",
-                      draft.notifications === opt
-                        ? "bg-background text-foreground shadow-soft"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {opt === "email" ? "Email" : opt === "sms" ? "SMS" : "Ambos"}
-                  </button>
-                ))}
+            {/* Notificaciones · solo en flujo Firmafy · en modo laxo
+                (archivar firmado) no hay email que enviar. */}
+            {!lax && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground">Notificación</span>
+                <div className="inline-flex items-center gap-0.5 rounded-full bg-muted/40 border border-border p-0.5">
+                  {(["email", "sms", "email,sms"] as const).map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setDraft({ ...draft, notifications: opt })}
+                      className={cn(
+                        "h-6 px-2.5 rounded-full text-[11px] font-medium transition-colors",
+                        draft.notifications === opt
+                          ? "bg-background text-foreground shadow-soft"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {opt === "email" ? "Email" : opt === "sms" ? "SMS" : "Ambos"}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Persona jurídica · colapsable */}
             <button

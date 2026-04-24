@@ -196,7 +196,17 @@ export function PhoneInput({
               />
             </div>
           </div>
-          <div className="max-h-[300px] overflow-y-auto py-1">
+          <div
+            className="max-h-[300px] overflow-y-auto overscroll-contain py-1"
+            /* Fix scroll · cuando el Popover está dentro de un Dialog,
+               Radix aplica scroll-lock global (react-remove-scroll) y
+               los wheel/touch events no llegan al elemento con
+               overflow del popover. Stop-propagation para que el
+               scroll de ESTE contenedor funcione aunque el body esté
+               bloqueado. */
+            onWheel={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+          >
             {filtered.length === 0 ? (
               <p className="text-[11px] text-muted-foreground italic text-center py-3">
                 Sin coincidencias

@@ -91,6 +91,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       { id: "company", title: "Empresa", icon: Building2, links: [
         { label: "Datos de la empresa", to: "/ajustes/empresa/datos", live: true },
         { label: "Oficinas", to: "/ajustes/empresa/oficinas", live: true },
+        { label: "Departamentos", to: "/ajustes/empresa/departamentos", live: true },
         { label: "Verificación", to: "/ajustes/empresa/verificacion", live: true },
         { label: "Suscripción", to: "/ajustes/empresa/suscripcion", live: true },
       ]},

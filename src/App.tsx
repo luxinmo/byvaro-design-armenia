@@ -45,6 +45,7 @@ import AjustesEmpresaDatos from "@/pages/ajustes/empresa/datos";
 import AjustesEmpresaOficinas from "@/pages/ajustes/empresa/oficinas";
 import AjustesEmpresaVerificacion from "@/pages/ajustes/empresa/verificacion";
 import AjustesEmpresaSuscripcion from "@/pages/ajustes/empresa/suscripcion";
+import AjustesEmpresaDepartamentos from "@/pages/ajustes/empresa/departamentos";
 import AjustesUsuariosMiembros from "@/pages/ajustes/usuarios/miembros";
 import AjustesUsuariosRoles from "@/pages/ajustes/usuarios/roles";
 import AjustesUsuariosInvitaciones from "@/pages/ajustes/usuarios/invitaciones";
@@ -132,6 +133,7 @@ export default function App() {
                 <Route path="empresa/oficinas" element={<AjustesEmpresaOficinas />} />
                 <Route path="empresa/verificacion" element={<AjustesEmpresaVerificacion />} />
                 <Route path="empresa/suscripcion" element={<AjustesEmpresaSuscripcion />} />
+                <Route path="empresa/departamentos" element={<AjustesEmpresaDepartamentos />} />
                 <Route path="usuarios/miembros" element={<AjustesUsuariosMiembros />} />
                 <Route path="usuarios/roles" element={<AjustesUsuariosRoles />} />
                 <Route path="usuarios/invitaciones" element={<AjustesUsuariosInvitaciones />} />

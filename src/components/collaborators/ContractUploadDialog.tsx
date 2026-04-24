@@ -32,9 +32,8 @@ import {
   uploadContract, sendContractToSign,
   type ContractSigner, type CollaborationContract,
 } from "@/lib/collaborationContracts";
-import { recordContractSent, recordCompanyAny, recordContractSigned } from "@/lib/companyEvents";
+import { recordContractSent, recordCompanyAny } from "@/lib/companyEvents";
 import { SignerPickerDialog } from "./SignerPickerDialog";
-import { ContractSendChoiceDialog } from "./ContractSendChoiceDialog";
 
 /* ═════════════ Validaciones ═════════════ */
 
@@ -166,7 +165,6 @@ export function ContractUploadDialog({ open, onOpenChange, agency, actor }: Prop
   const [signerPriority, setSignerPriority] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
-  const [choiceOpen, setChoiceOpen] = useState(false);
 
   /* Paso 3 · Envío */
   const [language, setLanguage] = useState<Lang>("es");
@@ -311,31 +309,6 @@ export function ContractUploadDialog({ open, onOpenChange, agency, actor }: Prop
     onOpenChange(false);
   };
 
-  /* ─── B · Archivar como ya firmado (sin Firmafy) ─── */
-  const handleArchiveSigned = (data: { signedAt: number; signedSignerIndices: number[] }) => {
-    if (!file) return;
-    const finalSigners = buildFinalSigners();
-    const ct = uploadContract({
-      agencyId: agency.id,
-      title: title.trim(),
-      pdfFilename: file.name,
-      pdfSize: file.size,
-      signers: finalSigners,
-      comision: comision ? Number(comision) : undefined,
-      duracionMeses: duracionMeses ? Number(duracionMeses) : undefined,
-      expiresAt: expiresAtMs ?? undefined,
-      alreadySignedAt: data.signedAt,
-      alreadySignedSignerIndices: data.signedSignerIndices,
-      actor,
-    });
-    recordContractSigned(agency.id, actor ?? { name: "Fuera de Byvaro" }, ct.title);
-    recordCompanyAny(agency.id, "contract_signed", "Contrato archivado como firmado",
-      `${ct.title} · firmado fuera de Byvaro`, actor);
-    toast.success("Archivado como firmado", {
-      description: `${ct.title} · ${data.signedSignerIndices.length} firmante${data.signedSignerIndices.length === 1 ? "" : "s"}`,
-    });
-    onOpenChange(false);
-  };
 
   /* ─── Navegación wizard ─── */
   const goNext = () => {
@@ -430,9 +403,9 @@ export function ContractUploadDialog({ open, onOpenChange, agency, actor }: Prop
               <ArrowRight className="h-3.5 w-3.5 ml-1.5" strokeWidth={1.75} />
             </Button>
           ) : (
-            <Button onClick={() => setChoiceOpen(true)} disabled={!canSendStep3} className="rounded-full">
+            <Button onClick={handleSendToFirmafy} disabled={!canSendStep3} className="rounded-full">
               <Send className="h-3.5 w-3.5 mr-1.5" strokeWidth={1.75} />
-              Continuar
+              Enviar a firmar
             </Button>
           )}
         </footer>
@@ -452,14 +425,6 @@ export function ContractUploadDialog({ open, onOpenChange, agency, actor }: Prop
         onAdd={handlePickerAdd}
       />
 
-      {/* Popup de decisión · enviar a firmar VS archivar firmado */}
-      <ContractSendChoiceDialog
-        open={choiceOpen}
-        onOpenChange={setChoiceOpen}
-        signers={buildFinalSigners()}
-        onSend={handleSendToFirmafy}
-        onMarkSigned={handleArchiveSigned}
-      />
     </Dialog>
   );
 }

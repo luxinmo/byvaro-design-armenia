@@ -106,7 +106,11 @@ export function UserSelect({
             />
           </div>
         </div>
-        <div className="max-h-[260px] overflow-y-auto py-1">
+        <div
+          className="max-h-[260px] overflow-y-auto overscroll-contain py-1"
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+        >
           {filtered.length === 0 ? (
             <p className="text-[11px] text-muted-foreground italic text-center py-3">Sin coincidencias</p>
           ) : filtered.map((m) => {

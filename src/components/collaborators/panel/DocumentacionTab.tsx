@@ -41,6 +41,8 @@ import {
   type AgencyDocRequest, type DocRequestType,
 } from "@/lib/agencyDocRequests";
 import { ContractUploadDialog } from "@/components/collaborators/ContractUploadDialog";
+import { ContractSignedUploadDialog } from "@/components/collaborators/ContractSignedUploadDialog";
+import { ContractNewChoiceDialog } from "@/components/collaborators/ContractNewChoiceDialog";
 import { ContractDetailDialog } from "@/components/collaborators/ContractDetailDialog";
 import { DocRequestDialog } from "@/components/collaborators/DocRequestDialog";
 import { SectionHeader, StateBadge, formatRelative } from "./shared";
@@ -59,7 +61,9 @@ export function DocumentacionTab({ agency: a }: Props) {
   const contracts = useContractsForAgency(a.id);
   const docs = useAgencyDocRequests(a.id);
 
+  const [newChoiceOpen, setNewChoiceOpen] = useState(false);
   const [uploadContractOpen, setUploadContractOpen] = useState(false);
+  const [signedUploadOpen, setSignedUploadOpen] = useState(false);
   const [requestDocOpen, setRequestDocOpen] = useState(false);
   const [detailContractId, setDetailContractId] = useState<string | null>(null);
   const detailContract = contracts.find((c) => c.id === detailContractId) ?? null;
@@ -74,11 +78,11 @@ export function DocumentacionTab({ agency: a }: Props) {
             subtitle="Acuerdo firmado que regula la relación · comisión, duración y scope."
             right={canManageContracts && (
               <button
-                onClick={() => setUploadContractOpen(true)}
+                onClick={() => setNewChoiceOpen(true)}
                 className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-foreground text-background text-xs font-semibold hover:bg-foreground/90 transition-colors"
               >
                 <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                Subir y enviar a firmar
+                Nuevo contrato
               </button>
             )}
           />
@@ -110,12 +114,28 @@ export function DocumentacionTab({ agency: a }: Props) {
       </section>
 
       {/* Dialogs */}
+      {/* 1 · popup inicial de elección · qué flujo seguir */}
+      <ContractNewChoiceDialog
+        open={newChoiceOpen}
+        onOpenChange={setNewChoiceOpen}
+        onPickSend={() => setUploadContractOpen(true)}
+        onPickSigned={() => setSignedUploadOpen(true)}
+      />
+      {/* 2a · wizard completo · Firmafy */}
       <ContractUploadDialog
         open={uploadContractOpen}
         onOpenChange={setUploadContractOpen}
         agency={a}
         actor={actor}
       />
+      {/* 2b · form simple · archivar firmado */}
+      <ContractSignedUploadDialog
+        open={signedUploadOpen}
+        onOpenChange={setSignedUploadOpen}
+        agency={a}
+        actor={actor}
+      />
+
       <DocRequestDialog
         open={requestDocOpen}
         onOpenChange={setRequestDocOpen}

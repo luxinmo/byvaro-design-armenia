@@ -70,11 +70,16 @@ export function JobTitlePicker({
           </button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-[320px] p-1.5 max-h-[380px] overflow-y-auto"
+          className="w-[320px] p-1.5 max-h-[380px] overflow-y-auto overscroll-contain"
           align="start"
           /* Evita que Radix fuerce scroll al abrir para enfocar algo
              interno · el padre (ej. MemberFormDialog) tenía saltos. */
           onOpenAutoFocus={(e) => e.preventDefault()}
+          /* Fix scroll interno · el Dialog padre usa scroll-lock
+             global (react-remove-scroll) y wheel events no llegan al
+             popover. Stop-propagation lo soluciona. */
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
         >
           {/* Aviso cuando se alcanza el máximo — bloqueamos selección y
              pedimos explícitamente limpiar. */}
