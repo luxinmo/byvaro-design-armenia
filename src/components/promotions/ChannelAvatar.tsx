@@ -27,10 +27,10 @@ interface Props {
   className?: string;
 }
 
-const SIZE_CLASSES: Record<NonNullable<Props["size"]>, { wrap: string; icon: string; ban: string; px: number }> = {
-  sm: { wrap: "h-7 w-7 rounded-lg",    icon: "h-3.5 w-3.5", ban: "h-3 w-3",     px: 32 },
-  md: { wrap: "h-9 w-9 rounded-xl",    icon: "h-4 w-4",     ban: "h-3.5 w-3.5", px: 48 },
-  lg: { wrap: "h-12 w-12 rounded-xl",  icon: "h-5 w-5",     ban: "h-4 w-4",     px: 64 },
+const SIZE_CLASSES: Record<NonNullable<Props["size"]>, { wrap: string; icon: string; ban: string; pad: string; px: number }> = {
+  sm: { wrap: "h-7 w-7 rounded-lg",    icon: "h-3.5 w-3.5", ban: "h-3 w-3",     pad: "p-1",   px: 32 },
+  md: { wrap: "h-9 w-9 rounded-xl",    icon: "h-4 w-4",     ban: "h-3.5 w-3.5", pad: "p-1.5", px: 48 },
+  lg: { wrap: "h-12 w-12 rounded-xl",  icon: "h-5 w-5",     ban: "h-4 w-4",     pad: "p-2",   px: 64 },
 };
 
 export function ChannelAvatar({ channel, prohibited = false, size = "md", className }: Props) {
@@ -68,7 +68,8 @@ export function ChannelAvatar({ channel, prohibited = false, size = "md", classN
           loading="lazy"
           onError={() => setFaviconFailed(true)}
           className={cn(
-            "absolute inset-0 w-full h-full object-contain p-1.5",
+            "absolute inset-0 w-full h-full object-contain",
+            s.pad,
             prohibited && "opacity-60",
           )}
         />

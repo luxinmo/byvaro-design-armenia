@@ -18,11 +18,11 @@
  * `hsl(var(--warning))` para el caso ámbar · nunca colores hardcoded.
  */
 
+import { useState } from "react";
 import { CheckCircle2, ShieldAlert, Pencil, Ban, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMarketingProhibitions } from "@/lib/marketingRulesStorage";
-import { getMarketingChannel, TOTAL_CHANNELS } from "@/lib/marketingChannels";
-import { ChannelAvatar } from "./ChannelAvatar";
+import { getMarketingChannel, channelFaviconUrl, TOTAL_CHANNELS, type MarketingChannel } from "@/lib/marketingChannels";
 
 interface Props {
   promotionId: string;
@@ -111,36 +111,23 @@ export function MarketingRulesCard({ promotionId, readOnly = false, onEdit, clas
           )}
         </div>
 
-        {/* Chips de canales prohibidos · neutros · solo el icono Ban
-            señala la prohibición. Nombre y favicon en color normal
-            para que el canal siga siendo reconocible. */}
+        {/* Chips de canales prohibidos · neutros · favicon real del
+            portal + nombre en color normal + Ban como única señal de
+            prohibición. Si el favicon falla cae al icono Lucide del
+            catálogo (no a un genérico "inventado"). */}
         {tone === "some" && (
           <div className="mt-3 flex flex-wrap gap-1.5">
             {prohibitedIds.map((id) => {
               const channel = getMarketingChannel(id);
               if (!channel) {
                 return (
-                  <span
-                    key={id}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card text-[11px] font-semibold text-foreground px-2 py-0.5"
-                  >
+                  <span key={id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card text-[11px] font-semibold text-foreground px-2 py-0.5">
                     <Ban className="h-2.5 w-2.5 text-destructive" strokeWidth={2.5} />
                     {id}
                   </span>
                 );
               }
-              return (
-                <span
-                  key={id}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card pl-0.5 pr-2 py-0.5"
-                >
-                  <ChannelAvatar channel={channel} prohibited={false} size="sm" className="h-5 w-5 rounded-full" />
-                  <span className="text-[11px] font-semibold text-foreground leading-tight">
-                    {channel.label}
-                  </span>
-                  <Ban className="h-2.5 w-2.5 text-destructive shrink-0" strokeWidth={2.5} aria-label="Prohibido" />
-                </span>
-              );
+              return <ProhibitedChannelChip key={id} channel={channel} />;
             })}
           </div>
         )}
@@ -163,5 +150,36 @@ export function MarketingRulesCard({ promotionId, readOnly = false, onEdit, clas
         )}
       </div>
     </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ProhibitedChannelChip · favicon real + nombre + Ban
+   · el favicon viene de Google Favicons (channelFaviconUrl) y llena
+     16×16px dentro del chip · fallback al icono Lucide del catálogo
+     si Google no sirve uno.
+   ═══════════════════════════════════════════════════════════════════ */
+function ProhibitedChannelChip({ channel }: { channel: MarketingChannel }) {
+  const [faviconFailed, setFaviconFailed] = useState(false);
+  const favicon = channelFaviconUrl(channel, 32);
+  const Icon = channel.icon;
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card pl-1.5 pr-2 py-1">
+      {favicon && !faviconFailed ? (
+        <img
+          src={favicon}
+          alt=""
+          loading="lazy"
+          onError={() => setFaviconFailed(true)}
+          className="h-4 w-4 rounded-[3px] object-contain shrink-0"
+        />
+      ) : (
+        <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" strokeWidth={1.75} />
+      )}
+      <span className="text-[11px] font-semibold text-foreground leading-tight">
+        {channel.label}
+      </span>
+      <Ban className="h-2.5 w-2.5 text-destructive shrink-0" strokeWidth={2.5} aria-label="Prohibido" />
+    </span>
   );
 }
