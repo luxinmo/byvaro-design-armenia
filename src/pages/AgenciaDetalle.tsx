@@ -19,9 +19,9 @@
  */
 
 import { useMemo } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
-  Pause, Play, Trash2, Share2, Mail, History, ArrowUpRight,
+  Pause, Play, Trash2, Share2, Mail,
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import Empresa from "./Empresa";
@@ -31,7 +31,6 @@ import {
   recordRequestApproved, recordRequestRejected,
   recordCollaborationPaused, recordCollaborationResumed,
   recordCompanyAny,
-  useCanViewCompanyHistory,
 } from "@/lib/companyEvents";
 import { useCurrentUser } from "@/lib/currentUser";
 
@@ -72,7 +71,6 @@ export default function AgenciaDetalle() {
   const isPending = !!(a.solicitudPendiente || a.isNewRequest);
   const currentUser = useCurrentUser();
   const actor = { name: currentUser.name, email: currentUser.email };
-  const canViewHistory = useCanViewCompanyHistory();
 
   const handleAprobar = () => {
     recordRequestApproved(a.id, actor);
@@ -180,25 +178,12 @@ export default function AgenciaDetalle() {
     </footer>
   );
 
-  /* ─── Link al historial cross-empresa (solo admin del promotor) ───
-     El historial es su propia página · aquí solo el enlace discreto
-     arriba a la derecha. Visible únicamente si el usuario puede
-     verlo (admin del promotor). */
-  const visitorHeaderRight = canViewHistory ? (
-    <Link
-      to={`/colaboradores/${a.id}/historial`}
-      className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-    >
-      <History className="h-3.5 w-3.5" strokeWidth={1.75} />
-      Historial conmigo
-      <ArrowUpRight className="h-3 w-3 opacity-60" />
-    </Link>
-  ) : null;
+  /* Historial cross-empresa se ve dentro del panel (`/colaboradores/:id/panel?tab=historial`)
+     · en la ficha pública no exponemos acceso. */
 
   return (
     <Empresa
       tenantId={id}
-      visitorHeaderRight={visitorHeaderRight}
       visitorFooter={visitorFooter}
     />
   );

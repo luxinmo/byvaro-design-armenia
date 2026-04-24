@@ -171,8 +171,7 @@ export default function Calendario() {
                 Calendario
               </h1>
               <p className="text-sm text-muted-foreground mt-1.5 max-w-[640px] leading-relaxed">
-                Agenda del equipo · visitas, llamadas, reuniones y bloqueos. Cada
-                agente tiene su carril · conecta tu Google Calendar para sincronizar.
+                Agenda del equipo · sincroniza con Google Calendar.
               </p>
             </div>
 

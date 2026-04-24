@@ -26,7 +26,7 @@ import {
 } from "react-router-dom";
 import {
   ArrowLeft, ArrowUpRight, Eye, Mail, Share2, Shield,
-  LayoutGrid, FileSignature, CreditCard,
+  LayoutGrid, FileSignature, CreditCard, History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -41,12 +41,13 @@ import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { ResumenTab } from "@/components/collaborators/panel/ResumenTab";
 import { DocumentacionTab } from "@/components/collaborators/panel/DocumentacionTab";
 import { PagosTab } from "@/components/collaborators/panel/PagosTab";
+import { HistorialTab } from "@/components/collaborators/panel/HistorialTab";
 
 function initials(name: string): string {
   return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
 }
 
-const PANEL_TABS = ["resumen", "documentacion", "pagos"] as const;
+const PANEL_TABS = ["resumen", "documentacion", "pagos", "historial"] as const;
 type PanelTab = typeof PANEL_TABS[number];
 
 export default function ColaboracionPanel() {
@@ -101,6 +102,7 @@ export default function ColaboracionPanel() {
     { id: "resumen",       label: "Resumen",       icon: LayoutGrid },
     { id: "documentacion", label: "Documentación", icon: FileSignature },
     { id: "pagos",         label: "Pagos",         icon: CreditCard },
+    { id: "historial",     label: "Historial",     icon: History },
   ];
 
   return (
@@ -224,6 +226,7 @@ export default function ColaboracionPanel() {
         )}
         {tab === "documentacion" && <DocumentacionTab agency={a} />}
         {tab === "pagos" && <PagosTab agency={a} />}
+        {tab === "historial" && <HistorialTab agency={a} />}
       </div>
     </div>
   );

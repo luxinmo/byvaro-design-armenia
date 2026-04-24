@@ -14,9 +14,9 @@
  */
 
 import { useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
-  Calendar, ChevronRight, FileSignature, Home, Plus, Share2,
+  ChevronRight, FileSignature, Home, Plus, Share2,
   Upload, ArrowRight, Check, MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -55,11 +55,10 @@ function usePromoCatalog() {
 interface Props {
   agency: Agency;
   fromPromoId?: string;
-  onGoTo: (tab: "documentacion" | "pagos") => void;
+  onGoTo: (tab: "documentacion" | "pagos" | "historial") => void;
 }
 
-export function ResumenTab({ agency: a, fromPromoId, onGoTo }: Props) {
-  const navigate = useNavigate();
+export function ResumenTab({ agency: a, onGoTo }: Props) {
   const contracts = useContractsForAgency(a.id);
   const docRequests = useAgencyDocRequests(a.id);
   const promoCatalog = usePromoCatalog();
@@ -73,6 +72,13 @@ export function ResumenTab({ agency: a, fromPromoId, onGoTo }: Props) {
       .map((id) => promoCatalog.get(id))
       .filter(Boolean) as Array<{ id: string; name: string; active: boolean }>;
   }, [a.promotionsCollaborating, promoCatalog]);
+  /* Solo contamos las compartidas que además siguen activas · así el
+     hero "N de M activas" no queda descuadrado si hay colaboraciones
+     heredadas de promociones cerradas. */
+  const sharedActiveCount = useMemo(
+    () => sharedPromos.filter((p) => p.active).length,
+    [sharedPromos],
+  );
   const notSharedPromos = useMemo(
     () => activePromos.filter((pr) => !(a.promotionsCollaborating ?? []).includes(pr.id)),
     [activePromos, a.promotionsCollaborating],
@@ -101,91 +107,44 @@ export function ResumenTab({ agency: a, fromPromoId, onGoTo }: Props) {
     return (base[a.id] ?? []).slice(0, 3);
   }, [a.id]);
 
-  const blockerCount = pendingContracts.length + pendingDocs.length;
-  const pendingCount = blockerCount + notSharedPromos.length;
-
-  const createSale = () => {
-    const params = new URLSearchParams({ agencyId: a.id });
-    if (fromPromoId) params.set("promotionId", fromPromoId);
-    navigate(`/ventas?nueva=1&${params.toString()}`);
-  };
+  /* "En curso" = trámites normales (contratos + docs a entregar). No
+     son incidencias · son trabajo-en-vuelo que avanza solo. */
+  const inFlightCount = pendingContracts.length + pendingDocs.length;
+  const pendingCount = inFlightCount + notSharedPromos.length;
 
   /* ════════════════════════════════════════════════════════════════ */
 
   return (
     <div className="space-y-8">
 
-      {/* ═══════════════════ HERO ═══════════════════ */}
-      <section className="relative rounded-3xl border border-border bg-gradient-to-br from-card via-card to-muted/30 p-5 sm:p-7 overflow-hidden shadow-soft">
-        <div className="absolute -top-20 -right-16 h-48 w-48 rounded-full bg-foreground/[0.03] blur-3xl pointer-events-none" />
-
-        <div className="relative flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Estado de la colaboración
-            </p>
-            <h2 className="text-[22px] sm:text-[26px] font-bold tracking-tight text-foreground leading-tight mt-2">
-              Trabaja en{" "}
-              <span className="tabular-nums">{sharedPromos.length}</span>
-              <span className="text-muted-foreground"> de </span>
-              <span className="tabular-nums">{activePromos.length}</span>
-              <span className="text-muted-foreground">
-                {activePromos.length === 1 ? " promoción" : " promociones"} activas
+      {/* ═══════════════════ HERO · compacto ═══════════════════ */}
+      <section className="rounded-2xl border border-border bg-card px-4 sm:px-5 py-3.5 shadow-soft">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Estado de la colaboración
+        </p>
+        <h2 className="text-[15px] sm:text-[17px] font-bold tracking-tight text-foreground leading-snug mt-1">
+          Trabaja en{" "}
+          <span className="tabular-nums">{sharedActiveCount}</span>
+          <span className="text-muted-foreground"> de </span>
+          <span className="tabular-nums">{activePromos.length}</span>
+          <span className="text-muted-foreground">
+            {activePromos.length === 1 ? " promoción" : " promociones"} activas
+          </span>
+          {pendingCount > 0 ? (
+            <>
+              <span className="text-muted-foreground"> · </span>
+              <span className="tabular-nums text-foreground">{pendingCount}</span>{" "}
+              <span className="text-foreground">
+                {pendingCount === 1 ? "acción en curso" : "acciones en curso"}
               </span>
-              {pendingCount > 0 ? (
-                <>
-                  <span className="text-muted-foreground"> · </span>
-                  <span className={cn(
-                    "tabular-nums",
-                    pendingCount > 3 ? "text-warning" : "text-foreground",
-                  )}>
-                    {pendingCount}
-                  </span>{" "}
-                  <span className={cn(pendingCount > 3 ? "text-warning/90" : "text-foreground")}>
-                    {pendingCount === 1 ? "cosa pendiente" : "cosas pendientes"}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="text-muted-foreground"> · </span>
-                  <span className="text-success">todo al día</span>
-                </>
-              )}
-            </h2>
-            <p className="text-[12.5px] text-muted-foreground mt-2 leading-relaxed max-w-xl">
-              {pendingCount === 0 && sharedPromos.length > 0 && (
-                <>Relación sana · sin acciones urgentes por parte del promotor.</>
-              )}
-              {pendingCount === 0 && sharedPromos.length === 0 && (
-                <>Aún no colabora en ninguna promoción · comparte una para empezar.</>
-              )}
-              {pendingCount > 0 && (
-                <>Resuelve lo pendiente para seguir moviendo visitas, contratos y pagos.</>
-              )}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            <button
-              type="button"
-              onClick={createSale}
-              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-foreground text-background text-[13px] font-semibold hover:bg-foreground/90 transition-all hover:shadow-soft-lg"
-            >
-              <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
-              Crear venta
-            </button>
-            {notSharedPromos.length > 0 && (
-              <button
-                type="button"
-                onClick={() => toast.info("Compartir promoción · próximamente")}
-                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-border bg-card text-[13px] font-medium text-foreground hover:bg-muted transition-colors"
-              >
-                <Share2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-                Compartir promoción
-              </button>
-            )}
-          </div>
-        </div>
+            </>
+          ) : (
+            <>
+              <span className="text-muted-foreground"> · </span>
+              <span className="text-success">todo al día</span>
+            </>
+          )}
+        </h2>
       </section>
 
       {/* ═══════════════════ BLOQUE 1 · En colaboración ═══════════════════ */}
@@ -196,9 +155,9 @@ export function ResumenTab({ agency: a, fromPromoId, onGoTo }: Props) {
           subtitle={
             sharedPromos.length === 0
               ? "Aún no comparte ninguna promoción"
-              : `${sharedPromos.length} promoción${sharedPromos.length === 1 ? "" : "es"} · ${blockerCount === 0 ? "todo al día" : `${blockerCount} cosa${blockerCount === 1 ? "" : "s"} por resolver`}`
+              : `${sharedPromos.length} promoción${sharedPromos.length === 1 ? "" : "es"} · ${inFlightCount === 0 ? "sin trámites abiertos" : `${inFlightCount} trámite${inFlightCount === 1 ? "" : "s"} en curso`}`
           }
-          tone={blockerCount > 0 ? "warning" : "success"}
+          tone={inFlightCount > 0 ? "primary" : "success"}
         />
 
         {sharedPromos.length === 0 ? (
@@ -239,22 +198,22 @@ export function ResumenTab({ agency: a, fromPromoId, onGoTo }: Props) {
               ))}
             </div>
 
-            {/* Estado · blockers por resolver (si hay) */}
+            {/* Estado · trámites normales en curso (no incidencias) */}
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <StatusTile
                 icon={FileSignature}
                 value={pendingContracts.length}
-                label={pendingContracts.length === 1 ? "contrato sin firmar" : "contratos sin firmar"}
+                label={pendingContracts.length === 1 ? "contrato en proceso de firma" : "contratos en proceso de firma"}
                 doneLabel="Contratos al día"
-                tone={pendingContracts.length > 0 ? "muted" : "done"}
+                tone={pendingContracts.length > 0 ? "in-progress" : "done"}
                 onClick={pendingContracts.length > 0 ? () => onGoTo("documentacion") : undefined}
               />
               <StatusTile
                 icon={Upload}
                 value={pendingDocs.length}
-                label={pendingDocs.length === 1 ? "documento pendiente" : "documentos pendientes"}
+                label={pendingDocs.length === 1 ? "documento por entregar" : "documentos por entregar"}
                 doneLabel="Documentación al día"
-                tone={pendingDocs.length > 0 ? "warning" : "done"}
+                tone={pendingDocs.length > 0 ? "in-progress" : "done"}
                 onClick={pendingDocs.length > 0 ? () => onGoTo("documentacion") : undefined}
               />
             </div>
@@ -359,13 +318,14 @@ export function ResumenTab({ agency: a, fromPromoId, onGoTo }: Props) {
 
       {/* ═══ Ver actividad ═══ */}
       <div className="flex flex-wrap gap-2 pt-2">
-        <Link
-          to={`/colaboradores/${a.id}?tab=historial`}
+        <button
+          type="button"
+          onClick={() => onGoTo("historial")}
           className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full border border-border bg-card text-xs font-medium text-foreground hover:bg-muted transition-colors"
         >
           <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={1.75} />
           Ver toda la actividad
-        </Link>
+        </button>
       </div>
     </div>
   );
@@ -413,18 +373,20 @@ function StatusTile({
   value: number;
   label: string;
   doneLabel: string;
-  tone: "warning" | "muted" | "done";
+  tone: "in-progress" | "done";
   onClick?: () => void;
 }) {
   const cls = {
-    warning: "border-warning/30 bg-warning/5 hover:bg-warning/10",
-    muted:   "border-border bg-card hover:bg-muted/40",
-    done:    "border-border/60 bg-muted/20",
+    "in-progress": "border-primary/20 bg-primary/[0.04] hover:bg-primary/[0.08]",
+    "done":        "border-border/60 bg-muted/20",
   }[tone];
   const iconCls = {
-    warning: "bg-warning/15 text-warning",
-    muted:   "bg-muted text-muted-foreground",
-    done:    "bg-success/10 text-success",
+    "in-progress": "bg-primary/10 text-primary",
+    "done":        "bg-success/10 text-success",
+  }[tone];
+  const valueCls = {
+    "in-progress": "text-primary",
+    "done":        "text-success",
   }[tone];
   const isDone = tone === "done";
   const Wrapper: any = onClick ? "button" : "div";
@@ -442,12 +404,7 @@ function StatusTile({
         {isDone ? <Check className="h-5 w-5" strokeWidth={2.25} /> : <Icon className="h-5 w-5" strokeWidth={1.75} />}
       </span>
       <div className="flex-1 min-w-0">
-        <p className={cn(
-          "text-[22px] font-bold tabular-nums leading-none",
-          tone === "warning" && "text-warning",
-          tone === "muted" && "text-foreground",
-          tone === "done" && "text-success",
-        )}>
+        <p className={cn("text-[22px] font-bold tabular-nums leading-none", valueCls)}>
           {isDone ? "✓" : value}
         </p>
         <p className={cn(
