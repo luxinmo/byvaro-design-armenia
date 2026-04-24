@@ -18,12 +18,14 @@
  *   · `collaboration.documents.manage` → solicitar + aprobar/rechazar.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   FileSignature, Plus, Trash2, Pause, Play, FileText, Download,
   Receipt, Landmark, Shield, ShieldCheck, Sparkles, Check, X,
-  ClipboardCheck, Upload,
+  ClipboardCheck, Upload, ChevronDown,
 } from "lucide-react";
+import { PdfIcon } from "@/components/icons/PdfIcon";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Agency } from "@/data/agencies";
@@ -44,6 +46,8 @@ import { ContractUploadDialog } from "@/components/collaborators/ContractUploadD
 import { ContractSignedUploadDialog } from "@/components/collaborators/ContractSignedUploadDialog";
 import { ContractNewChoiceDialog } from "@/components/collaborators/ContractNewChoiceDialog";
 import { ContractDetailDialog } from "@/components/collaborators/ContractDetailDialog";
+import { ContractRowKebab } from "@/components/collaborators/ContractRowKebab";
+import { ContractFloatingBar } from "@/components/collaborators/ContractFloatingBar";
 import { DocRequestDialog } from "@/components/collaborators/DocRequestDialog";
 import { SectionHeader, StateBadge, formatRelative } from "./shared";
 
@@ -61,12 +65,33 @@ export function DocumentacionTab({ agency: a }: Props) {
   const contracts = useContractsForAgency(a.id);
   const docs = useAgencyDocRequests(a.id);
 
+  const confirm = useConfirm();
   const [newChoiceOpen, setNewChoiceOpen] = useState(false);
   const [uploadContractOpen, setUploadContractOpen] = useState(false);
   const [signedUploadOpen, setSignedUploadOpen] = useState(false);
   const [requestDocOpen, setRequestDocOpen] = useState(false);
   const [detailContractId, setDetailContractId] = useState<string | null>(null);
   const detailContract = contracts.find((c) => c.id === detailContractId) ?? null;
+
+  /* Split · activos (listado principal) vs archivados (sección al pie). */
+  const activeContracts = contracts.filter((c) => !c.archived);
+  const archivedContracts = [...contracts.filter((c) => !!c.archived)]
+    .sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0));
+
+  /* Selección múltiple · sobre contratos activos. */
+  const [selectedContracts, setSelectedContracts] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setSelectedContracts((prev) => {
+      const valid = new Set(activeContracts.map((c) => c.id));
+      return new Set([...prev].filter((id) => valid.has(id)));
+    });
+  }, [activeContracts]);
+  const toggleContract = (id: string) => setSelectedContracts((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const clearContractSelection = () => setSelectedContracts(new Set());
 
   return (
     <div className="space-y-6">
@@ -86,12 +111,23 @@ export function DocumentacionTab({ agency: a }: Props) {
               </button>
             )}
           />
+          {/* Activos */}
           <ContractsList
-            contracts={contracts}
+            contracts={activeContracts}
             actor={actor}
             canManage={canManageContracts}
             onOpenDetail={(id) => setDetailContractId(id)}
+            selectedIds={selectedContracts}
+            onToggleSelect={toggleContract}
           />
+
+          {/* Archivados · muestra top 3 · link "ver todos (N)" si hay más */}
+          {archivedContracts.length > 0 && (
+            <ArchivedSection
+              contracts={archivedContracts}
+              onOpenDetail={(id) => setDetailContractId(id)}
+            />
+          )}
         </section>
       )}
 
@@ -147,6 +183,15 @@ export function DocumentacionTab({ agency: a }: Props) {
         onOpenChange={(v) => { if (!v) setDetailContractId(null); }}
         contract={detailContract}
       />
+
+      {/* Pill flotante · aparece con ≥1 contrato seleccionado. */}
+      <ContractFloatingBar
+        selectedIds={selectedContracts}
+        totalVisible={activeContracts.length}
+        allVisibleIds={activeContracts.map((c) => c.id)}
+        onSelectAll={(ids) => setSelectedContracts(new Set(ids))}
+        onClear={clearContractSelection}
+      />
     </div>
   );
 }
@@ -154,12 +199,14 @@ export function DocumentacionTab({ agency: a }: Props) {
 /* ══════ Contratos (list + row) ══════ */
 
 function ContractsList({
-  contracts, actor, canManage, onOpenDetail,
+  contracts, actor, canManage, onOpenDetail, selectedIds, onToggleSelect,
 }: {
   contracts: CollaborationContract[];
   actor: { name: string; email: string };
   canManage: boolean;
   onOpenDetail: (id: string) => void;
+  selectedIds: Set<string>;
+  onToggleSelect: (id: string) => void;
 }) {
   if (contracts.length === 0) {
     return (
@@ -182,6 +229,8 @@ function ContractsList({
           actor={actor}
           canManage={canManage}
           onOpenDetail={() => onOpenDetail(c.id)}
+          selected={selectedIds.has(c.id)}
+          onToggleSelect={() => onToggleSelect(c.id)}
         />
       ))}
     </ul>
@@ -189,21 +238,47 @@ function ContractsList({
 }
 
 function ContractRow({
-  contract: c, actor, canManage, onOpenDetail,
+  contract: c, onOpenDetail, selected, onToggleSelect,
 }: {
   contract: CollaborationContract;
   actor: { name: string; email: string };
   canManage: boolean;
   onOpenDetail: () => void;
+  selected: boolean;
+  onToggleSelect: () => void;
 }) {
   const status = getDerivedStatus(c);
   return (
     <li
-      className="px-4 sm:px-5 py-3 flex items-start gap-3 hover:bg-muted/20 transition-colors cursor-pointer"
+      className={cn(
+        "group px-3 sm:px-4 py-3 flex items-start gap-3 transition-colors cursor-pointer",
+        selected ? "bg-foreground/5" : "hover:bg-muted/20",
+      )}
       onClick={onOpenDetail}
     >
-      <span className="h-9 w-9 rounded-lg bg-muted/60 grid place-items-center shrink-0">
-        <FileSignature className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
+      {/* Checkbox a la IZQUIERDA · aparece en hover o cuando está marcado. */}
+      <div
+        className="w-5 h-9 flex items-center shrink-0"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={onToggleSelect}
+          aria-pressed={selected}
+          aria-label={selected ? "Deseleccionar contrato" : "Seleccionar contrato"}
+          className={cn(
+            "h-5 w-5 rounded-[6px] border grid place-items-center transition-all duration-150",
+            selected
+              ? "opacity-100 bg-foreground border-foreground text-background"
+              : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 border-border bg-card hover:border-foreground/40 text-transparent hover:text-foreground",
+          )}
+        >
+          {selected && <Check className="h-3 w-3" strokeWidth={3} />}
+        </button>
+      </div>
+      {/* Icono PDF · siempre visible. */}
+      <span className="h-9 w-8 grid place-items-center shrink-0">
+        <PdfIcon className="h-8 w-7 text-muted-foreground/80" />
       </span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
@@ -223,49 +298,81 @@ function ContractRow({
           {c.createdBy?.name ? ` · por ${c.createdBy.name}` : ""}
         </p>
       </div>
-      {canManage && (
-        <div
-          className="flex items-center gap-1 shrink-0 pt-0.5"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {c.status === "draft" && (
-            <>
-              <button
-                onClick={() => { sendContractToSign(c.id, actor); toast.success("Enviado a firmar"); }}
-                className="h-8 px-3 inline-flex items-center gap-1.5 rounded-full bg-foreground text-background text-xs font-semibold hover:bg-foreground/90 transition-colors"
-              >
-                <FileSignature className="h-3.5 w-3.5" strokeWidth={1.75} />
-                Enviar a firmar
-              </button>
-              <button
-                onClick={() => { deleteContract(c.id); toast.success("Borrador eliminado"); }}
-                className="h-8 w-8 inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
-                title="Eliminar borrador"
-              >
-                <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-              </button>
-            </>
-          )}
-          {(c.status === "sent" || c.status === "viewed") && (
-            <button
-              onClick={() => { revokeContract(c.id, actor); toast.success("Contrato revocado"); }}
-              className="h-8 w-8 inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
-              title="Revocar envío"
-            >
-              <Pause className="h-3.5 w-3.5" strokeWidth={1.75} />
-            </button>
-          )}
-          {(c.status === "signed" || c.status === "expired" || c.status === "revoked") && (
-            <button
-              onClick={() => { deleteContract(c.id); toast.success("Contrato retirado"); }}
-              className="h-8 w-8 inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
-              title="Quitar de la lista"
-            >
-              <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-            </button>
-          )}
-        </div>
+      <div className="pt-0.5 shrink-0">
+        <ContractRowKebab contract={c} onOpenDetail={onOpenDetail} />
+      </div>
+    </li>
+  );
+}
+
+/* ══════ Sección Archivados · colapsada por defecto · click en el
+        header para mostrar/ocultar la lista completa ══════ */
+function ArchivedSection({
+  contracts, onOpenDetail,
+}: {
+  contracts: CollaborationContract[];
+  onOpenDetail: (id: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="mt-4 rounded-2xl border border-border bg-muted/20 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className={cn(
+          "w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-muted/40",
+          expanded && "border-b border-border/50",
+        )}
+      >
+        <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Archivados · {contracts.length}
+        </p>
+        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+          {expanded ? "Ocultar" : "Ver"}
+          <ChevronDown
+            className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")}
+            strokeWidth={1.75}
+          />
+        </span>
+      </button>
+      {expanded && (
+        <ul className="divide-y divide-border/40">
+          {contracts.map((c) => (
+            <ArchivedRow key={c.id} contract={c} onOpenDetail={() => onOpenDetail(c.id)} />
+          ))}
+        </ul>
       )}
+    </div>
+  );
+}
+
+function ArchivedRow({
+  contract: c, onOpenDetail,
+}: {
+  contract: CollaborationContract;
+  onOpenDetail: () => void;
+}) {
+  const status = getDerivedStatus(c);
+  return (
+    <li
+      className="group px-3 sm:px-4 py-2.5 flex items-center gap-3 hover:bg-muted/30 transition-colors cursor-pointer"
+      onClick={onOpenDetail}
+    >
+      <span className="h-8 w-7 grid place-items-center shrink-0 opacity-60">
+        <PdfIcon className="h-7 w-6 text-muted-foreground/60" />
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-[13px] font-medium text-foreground truncate">{c.title}</p>
+          <StateBadge label={status.label} tone={status.tone} />
+        </div>
+        <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+          {c.pdfFilename}
+          {c.archivedAt ? ` · archivado ${formatRelative(c.archivedAt)}` : ""}
+        </p>
+      </div>
+      <ContractRowKebab contract={c} onOpenDetail={onOpenDetail} canSend={false} />
     </li>
   );
 }

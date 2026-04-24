@@ -134,7 +134,7 @@ export function ContractDetailDialog({ open, onOpenChange, contract }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl p-0 gap-0 max-h-[92vh] overflow-hidden flex flex-col">
         {/* ══════ Header ══════ */}
-        <header className="flex items-start gap-3 px-5 sm:px-6 pt-5 pb-3 border-b border-border/60">
+        <header className="flex items-start gap-3 px-5 sm:px-6 pt-5 pb-3 pr-12 sm:pr-14 border-b border-border/60">
           <span className="h-9 w-9 rounded-lg bg-muted/60 grid place-items-center shrink-0">
             <FileText className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
           </span>
@@ -151,13 +151,6 @@ export function ContractDetailDialog({ open, onOpenChange, contract }: Props) {
               </p>
             )}
           </div>
-          <button
-            onClick={() => onOpenChange(false)}
-            className="h-8 w-8 inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
-            aria-label="Cerrar"
-          >
-            <X className="h-4 w-4" strokeWidth={1.75} />
-          </button>
         </header>
 
         {/* ══════ Body con scroll interno ══════ */}

@@ -1,4 +1,8 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
+import { useCalendarEvents } from "@/lib/calendarStorage";
+import { formatTime, isToday as isTodayDate, eventsInDay } from "@/lib/calendarHelpers";
+import { eventTypeConfig } from "@/data/calendarEvents";
 import {
   FileText, CircleDollarSign, CalendarCheck, Handshake, Sparkles, ArrowUpRight,
   TrendingUp, Check, AlertTriangle, Calendar, Plus, UserPlus, CalendarPlus, Mail,
@@ -317,24 +321,8 @@ export default function Inicio() {
             {/* Right column ─── 1/3 */}
             <div className="space-y-4 sm:space-y-5">
 
-              {/* Hoy */}
-              <section className="bg-card border border-border rounded-2xl shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
-                <header className="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-border">
-                  <div>
-                    <h3 className="text-sm font-semibold">Hoy</h3>
-                    <p className="text-[11.5px] text-muted-foreground mt-0.5">19 abril · 4 eventos</p>
-                  </div>
-                  <button className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1">
-                    Agenda <ArrowUpRight className="h-3 w-3" />
-                  </button>
-                </header>
-                <ul className="p-2">
-                  <AgendaItem time="AHORA" hour="11:00" title="Visita · María García 🇪🇸" detail="Torres del Puerto · ático 7º" active />
-                  <AgendaItem time="12:30" title="Llamada · Dmitri Volkov 🇷🇺" detail="Firma de reserva" />
-                  <AgendaItem time="16:00" title="Visita · Hans Müller 🇩🇪" detail="Los Arqueros · villa 12" />
-                  <AgendaItem time="18:30" title="Reunión · Equipo comercial" detail="Cierre semanal" />
-                </ul>
-              </section>
+              {/* Hoy · widget de próximas visitas/eventos del calendario real */}
+              <TodayAgendaWidget />
 
               {/* Top colaboradores */}
               <section className="bg-card border border-border rounded-2xl shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
@@ -499,5 +487,108 @@ function QuickAction({ icon, iconBg, iconText, label, sub }: {
       <div className={cn("h-8 w-8 rounded-lg grid place-items-center shrink-0", iconBg, iconText)}>{icon}</div>
       <span className="text-[12.5px] font-medium leading-tight">{label}<br />{sub}</span>
     </button>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TODAY AGENDA WIDGET · próximas visitas/llamadas/reuniones de HOY
+   ───────────────────────────────────────────────────────────────────
+   Consume `useCalendarEvents()` · filtra del día de hoy · renderiza
+   hasta 5 con el tipo de evento coloreado. Si no hay nada, empty
+   state con CTA para ir al calendario. Link del header lleva a
+   /calendario para la vista completa.
+   ═══════════════════════════════════════════════════════════════════ */
+function TodayAgendaWidget() {
+  const allEvents = useCalendarEvents();
+
+  const today = new Date();
+  const todayEvents = useMemo(() => {
+    return eventsInDay(allEvents, today)
+      .filter((ev) => ev.status !== "cancelled")
+      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allEvents]);
+
+  const totalToday = todayEvents.length;
+  const visible = todayEvents.slice(0, 5);
+  const overflow = Math.max(0, totalToday - visible.length);
+
+  const todayLabel = today.toLocaleDateString("es-ES", { day: "numeric", month: "long" });
+  const now = Date.now();
+
+  return (
+    <section className="bg-card border border-border rounded-2xl shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+      <header className="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-border">
+        <div>
+          <h3 className="text-sm font-semibold">Hoy</h3>
+          <p className="text-[11.5px] text-muted-foreground mt-0.5">
+            {todayLabel} · {totalToday} evento{totalToday === 1 ? "" : "s"}
+          </p>
+        </div>
+        <Link
+          to="/calendario"
+          className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
+        >
+          Calendario <ArrowUpRight className="h-3 w-3" />
+        </Link>
+      </header>
+
+      {totalToday === 0 ? (
+        <div className="px-4 sm:px-5 py-8 text-center">
+          <p className="text-[12px] text-muted-foreground">
+            Sin eventos para hoy. Un buen momento para programar una visita.
+          </p>
+          <Link
+            to="/calendario"
+            className="inline-flex items-center gap-1.5 mt-3 h-8 px-3 rounded-full border border-border bg-card text-[11.5px] font-medium hover:bg-muted"
+          >
+            Abrir calendario
+          </Link>
+        </div>
+      ) : (
+        <ul className="p-2">
+          {visible.map((ev) => {
+            const cfg = eventTypeConfig[ev.type];
+            const startTime = formatTime(ev.start);
+            const isActive = isTodayDate(ev.start) && new Date(ev.start).getTime() <= now && new Date(ev.end).getTime() > now;
+            const timeLabel = isActive ? "AHORA" : startTime;
+            const detail = ev.location?.label ?? ev.contactName ?? cfg.label;
+            return (
+              <li key={ev.id}>
+                <Link
+                  to={ev.leadId ? `/oportunidades/${ev.leadId}` : "/calendario"}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2 rounded-xl transition-colors hover:bg-muted/40",
+                    isActive && "bg-primary/5",
+                  )}
+                >
+                  <div className={cn("w-14 shrink-0 text-center", isActive ? "text-primary font-semibold" : "text-muted-foreground")}>
+                    <p className="text-[10px] tracking-wider tabular-nums">{timeLabel}</p>
+                    {isActive && <p className="text-[9.5px] tabular-nums">{startTime}</p>}
+                  </div>
+                  <div className={cn("h-8 w-1 rounded-full shrink-0", cfg.dotClass)} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12.5px] font-medium text-foreground truncate">
+                      {ev.title}
+                    </p>
+                    <p className="text-[10.5px] text-muted-foreground truncate">{detail}</p>
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
+          {overflow > 0 && (
+            <li className="px-3 pt-1">
+              <Link
+                to="/calendario"
+                className="text-[11px] font-medium text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+              >
+                Ver {overflow} evento{overflow === 1 ? "" : "s"} más
+              </Link>
+            </li>
+          )}
+        </ul>
+      )}
+    </section>
   );
 }

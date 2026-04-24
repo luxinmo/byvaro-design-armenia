@@ -52,7 +52,8 @@ COMERCIAL
   Calendario
 
 RED
-  Colaboradores   (antes "Agencies")
+  Colaboradores       (antes "Agencies")
+  Contratos           (contratos de colaboración · globales · cruzando agencias)
   Contactos
 
 CONTENIDO

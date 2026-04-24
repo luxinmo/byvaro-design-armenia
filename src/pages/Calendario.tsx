@@ -43,6 +43,7 @@ import {
   eventsInDay, eventsInMonth, WEEKDAY_SHORT_ES,
 } from "@/lib/calendarHelpers";
 import { getAllTeamMembers, memberInitials, getMemberAvatarUrl } from "@/lib/team";
+import { CreateCalendarEventDialog } from "@/components/calendar/CreateCalendarEventDialog";
 import { cn } from "@/lib/utils";
 
 type ViewMode = "semana" | "mes" | "dia" | "agenda";
@@ -111,13 +112,21 @@ export default function Calendario() {
     viewMode === "dia"    ? formatDayTitle(viewDate) :
     /* agenda */            `Próximas · desde ${formatShortDate(viewDate)}`;
 
-  /* ─── Crear evento (Fase 3 · dialog pendiente · por ahora toast) ─── */
+  /* ─── Crear evento · dialog con detección de conflicto ─── */
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createPreset, setCreatePreset] = useState<
+    { date?: Date; hour?: number; assigneeUserId?: string } | undefined
+  >(undefined);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | undefined>(undefined);
   const openCreate = (preset?: { date?: Date; hour?: number; assigneeUserId?: string }) => {
-    toast.info("Crear evento · dialog en Fase 3", {
-      description: preset?.date
-        ? `Pre-fill: ${formatShortDate(preset.date)}${preset.hour != null ? ` · ${preset.hour}:00` : ""}`
-        : undefined,
-    });
+    setEditingEvent(undefined);
+    setCreatePreset(preset);
+    setCreateOpen(true);
+  };
+  const openEdit = (ev: CalendarEvent) => {
+    setEditingEvent(ev);
+    setCreatePreset(undefined);
+    setCreateOpen(true);
   };
 
   return (
@@ -256,7 +265,7 @@ export default function Calendario() {
                 viewDate={viewDate}
                 events={filteredEvents}
                 onEmptySlotClick={(date, hour) => openCreate({ date, hour })}
-                onEventClick={(ev) => toast.info(ev.title, { description: formatTimeRange(ev.start, ev.end) })}
+                onEventClick={(ev) => openEdit(ev)}
               />
             )}
             {viewMode === "mes" && (
@@ -264,7 +273,7 @@ export default function Calendario() {
                 viewDate={viewDate}
                 events={filteredEvents}
                 onDayClick={(d) => { setViewDate(d); setViewMode("dia"); }}
-                onEventClick={(ev) => toast.info(ev.title, { description: formatTimeRange(ev.start, ev.end) })}
+                onEventClick={(ev) => openEdit(ev)}
                 onEmptyDayClick={(d) => openCreate({ date: d })}
               />
             )}
@@ -273,22 +282,27 @@ export default function Calendario() {
                 viewDate={viewDate}
                 events={filteredEvents}
                 onEmptySlotClick={(date, hour) => openCreate({ date, hour })}
-                onEventClick={(ev) => toast.info(ev.title, { description: formatTimeRange(ev.start, ev.end) })}
+                onEventClick={(ev) => openEdit(ev)}
               />
             )}
             {viewMode === "agenda" && (
               <AgendaView
                 viewDate={viewDate}
                 events={filteredEvents}
-                onEventClick={(ev) => {
-                  if (ev.leadId) navigate(`/oportunidades/${ev.leadId}`);
-                  else toast.info(ev.title, { description: formatTimeRange(ev.start, ev.end) });
-                }}
+                onEventClick={(ev) => openEdit(ev)}
               />
             )}
           </div>
         </div>
       </section>
+
+      {/* Dialog de crear / editar evento */}
+      <CreateCalendarEventDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        event={editingEvent}
+        preset={createPreset}
+      />
     </div>
   );
 }

@@ -349,7 +349,7 @@ export function ContractUploadDialog({ open, onOpenChange, agency, actor }: Prop
       <DialogContent className="max-w-2xl p-0 gap-0 max-h-[92vh] overflow-hidden flex flex-col">
 
         {/* ══════ Header + stepper ══════ */}
-        <header className="px-5 sm:px-6 pt-5 pb-3 border-b border-border/60 flex items-start gap-3">
+        <header className="px-5 sm:px-6 pt-5 pb-3 pr-12 sm:pr-14 border-b border-border/60 flex items-start gap-3">
           <div className="flex-1 min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Nuevo contrato · {agency.name}
@@ -360,13 +360,6 @@ export function ContractUploadDialog({ open, onOpenChange, agency, actor }: Prop
                : "Configura el envío"}
             </h2>
           </div>
-          <button
-            onClick={() => onOpenChange(false)}
-            className="h-8 w-8 inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
-            aria-label="Cerrar"
-          >
-            <X className="h-4 w-4" strokeWidth={1.75} />
-          </button>
         </header>
         <Stepper current={step} />
 

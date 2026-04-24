@@ -11,6 +11,7 @@ import LeadDetalle from "@/pages/LeadDetalle";
 import Ventas from "@/pages/Ventas";
 import Calendario from "@/pages/Calendario";
 import Colaboradores from "@/pages/Colaboradores";
+import Contratos from "@/pages/Contratos";
 import AgenciaDetalle from "@/pages/AgenciaDetalle";
 import ColaboracionPanel from "@/pages/ColaboracionPanel";
 import ColaboradorHistorial from "@/pages/ColaboradorHistorial";
@@ -46,6 +47,7 @@ import AjustesEmpresaOficinas from "@/pages/ajustes/empresa/oficinas";
 import AjustesEmpresaVerificacion from "@/pages/ajustes/empresa/verificacion";
 import AjustesEmpresaSuscripcion from "@/pages/ajustes/empresa/suscripcion";
 import AjustesEmpresaDepartamentos from "@/pages/ajustes/empresa/departamentos";
+import AjustesCalendarioSync from "@/pages/ajustes/calendario/sync";
 import AjustesUsuariosMiembros from "@/pages/ajustes/usuarios/miembros";
 import AjustesUsuariosRoles from "@/pages/ajustes/usuarios/roles";
 import AjustesUsuariosInvitaciones from "@/pages/ajustes/usuarios/invitaciones";
@@ -134,6 +136,7 @@ export default function App() {
                 <Route path="empresa/verificacion" element={<AjustesEmpresaVerificacion />} />
                 <Route path="empresa/suscripcion" element={<AjustesEmpresaSuscripcion />} />
                 <Route path="empresa/departamentos" element={<AjustesEmpresaDepartamentos />} />
+                <Route path="calendario/sync" element={<AjustesCalendarioSync />} />
                 <Route path="usuarios/miembros" element={<AjustesUsuariosMiembros />} />
                 <Route path="usuarios/roles" element={<AjustesUsuariosRoles />} />
                 <Route path="usuarios/invitaciones" element={<AjustesUsuariosInvitaciones />} />
@@ -202,6 +205,7 @@ export default function App() {
                 <Route path="/ventas" element={<Ventas />} />
                 <Route path="/calendario" element={<Calendario />} />
                 <Route path="/colaboradores" element={<PromotorOnly><Colaboradores /></PromotorOnly>} />
+                <Route path="/contratos" element={<PromotorOnly><Contratos /></PromotorOnly>} />
                 <Route path="/colaboradores/estadisticas" element={<PromotorOnly><ColaboradoresEstadisticas /></PromotorOnly>} />
                 <Route path="/colaboradores/:id" element={<PromotorOnly><AgenciaDetalle /></PromotorOnly>} />
                 <Route path="/colaboradores/:id/ficha" element={<PromotorOnly><AgenciaDetalle /></PromotorOnly>} />
