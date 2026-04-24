@@ -472,6 +472,135 @@ Ver `docs/plan-equipo-estadisticas.md §3`:
 
 ---
 
+## 1.10 · Dashboard de actividad (`/actividad` · admin-only)
+
+**Pantalla**: `src/pages/Actividad.tsx` (1564 líneas). Se consume
+cuando el admin entra a `/actividad`. Gate por
+`useHasPermission("activity.dashboard.view")` — ver
+`docs/permissions.md §Dashboard de actividad`. Agentes no ven el
+link en sidebar ni la ruta responde con datos.
+
+**Regla dura**: toda KPI que hable de "ventas" debe declarar en UI si
+cuenta **cerradas** (`contratada ∨ escriturada`) o **terminadas**
+(solo `escriturada`). Es la regla de oro "venta cerrada vs
+terminada" (CLAUDE.md). El backend aplica el mismo filtrado.
+
+### Endpoint único
+
+```
+GET /api/activity/dashboard
+  ?window=7d|30d|90d|year|custom
+  &from=YYYY-MM-DD               (solo custom)
+  &to=YYYY-MM-DD                 (solo custom)
+  &userId=<memberId>             (opcional · filtra a 1 miembro)
+```
+
+### Shape de respuesta
+
+```ts
+{
+  window: { from: string; to: string };   // ISO dates del rango resuelto
+  previous: { from: string; to: string }; // rango previo para deltas
+
+  kpis: {
+    pipelineCierreEur: number;       // reservadas vivas (stock €)
+    pipelineCobroEur: number;        // contratadas vivas (stock €)
+    ventasCerradasCount: number;     // sales con fechaContrato en rango
+    ventasCerradasEur: number;
+    ventasTerminadasCount: number;   // sales con fechaEscritura en rango
+    ventasTerminadasEur: number;
+    visitas: number;                 // calendar events type=visit + done
+    avgResponseMin: number | null;   // ms entre registro.fecha y .decidedAt
+    conversionPct: number;           // visitas / nuevosLeads · 0-100
+    nuevosLeads: number;             // registros con .fecha en rango
+  };
+  kpisPrevious: typeof kpis;         // MISMO shape · rango previo para delta
+
+  funnel: {
+    leads: number;
+    aprobados: number;
+    visitas: number;
+    reservas: number;
+    cerradas: number;                // contratada + escriturada
+    terminadas: number;              // solo escriturada
+  };
+
+  velocity: {
+    leadToApproved: number | null;   // días medios
+    approvedToVisit: number | null;
+    visitToReserva: number | null;
+    reservaToContrato: number | null;
+    contratoToEscritura: number | null;
+  };
+
+  mix: {
+    byOrigin: Array<{ key: "direct" | "collaborator"; count: number; pct: number }>;
+    byAgencia: Array<{ agencyId: string; name: string; count: number }>;
+    byPromocion: Array<{ promotionId: string; name: string; count: number }>;
+  };
+
+  heatmap: number[][];               // 7×24 · [dow][hour] · eventos del rango
+
+  team: {
+    members: Array<{
+      userId: string;
+      name: string;
+      avatarUrl?: string;
+      score: number;                 // 0-100 · composite health
+      signals: {
+        leadsDecididos: number;
+        visitasCumplidas: number;
+        avgResponseMin: number | null;
+        conversionPct: number;
+        lastActivityAt: string | null;
+      };
+    }>;
+  };
+
+  rankings: {
+    topAgenciasByRegistros: Array<{ agencyId: string; name: string; count: number }>;
+    topAgenciasByVentas: Array<{ agencyId: string; name: string; count: number; volumenEur: number }>;
+    topMiembrosByClosed: Array<{ userId: string; name: string; count: number; volumenEur: number }>;
+  };
+}
+```
+
+### Reglas server-side (vinculantes)
+
+1. **Gate**: el handler rechaza con 403 si el JWT no trae
+   `activity.dashboard.view` (no depender solo de la UI).
+2. **Ventas cerradas** = `status IN ('contratada', 'escriturada')` ·
+   nunca solo `escriturada`.
+3. **Ventas terminadas** = `status = 'escriturada'` exclusivo.
+4. **Rango previo** = mismo tamaño que `window` justo antes (ej.
+   ventana 30d → 30 días anteriores). Para `custom`, el backend
+   calcula `to_previous = from - 1 día; from_previous = to_previous
+   - (to - from)`.
+5. **`userId` filter**: cuando se filtra por miembro, TODOS los
+   arrays (`funnel`, `mix`, `rankings.topMiembrosByClosed`,
+   `heatmap`) se recalculan contra ese miembro. El backend NO
+   devuelve otras personas del equipo.
+6. **Caché**: resultado cacheable 60 segundos por `(tenantId,
+   window, userId)`. Los movimientos de negocio son "near-real-time"
+   pero no hace falta sub-minuto.
+
+### Mock actual
+
+El frontend calcula todo client-side desde:
+- `src/data/records.ts` (registros)
+- `src/data/sales.ts` (ventas)
+- `src/lib/calendarStorage.ts` (visitas)
+- `src/lib/team.ts` (miembros)
+- `src/data/agencies.ts` (agencias)
+
+Al conectar backend, el computo server-side debe coincidir con las
+fórmulas de `computeKpis()`, `computeFunnel()`, `computeVelocity()`,
+`computeHeatmap()`, `computeTeamHealth()` del archivo `Actividad.tsx`.
+Idealmente: tests E2E que comparen `mock vs backend` para una ventana
+fija antes de quitar los mocks.
+
+---
+
 ## 2 · Empresa (perfil del tenant)
 
 **Tipo completo**: `src/lib/empresa.ts:32` (interface `Empresa`).
