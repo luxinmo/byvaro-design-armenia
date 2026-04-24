@@ -28,6 +28,7 @@ Leyenda: ✅ hecho · 🟡 en curso · 🎨 placeholder · ⬜ pendiente
 | 🎨 | Ventas | `/ventas` | Placeholder |
 | 🟢 | Calendario | `/calendario` | 4 vistas + multi-calendario + conflicto duro + Google sync (mock) · ADR-056 |
 | ✅ | Colaboradores | `/colaboradores` | Red + Analítica (KPIs · Top 5 · Heatmap · Conversión) |
+| ✅ | Colaborador · panel | `/colaboradores/:id/panel` | 9 tabs operativos · contratos per-promoción · tick azul · ADR-057 |
 | 🎨 | Contactos | `/contactos` | Placeholder |
 | 🎨 | Microsites | `/microsites` | Placeholder |
 | 🟡 | Emails | `/emails` | Paso 1 hecho (doc + tipos + data). Falta UI |
@@ -189,9 +190,35 @@ en [`docs/screens/calendario.md`](docs/screens/calendario.md).
 - ⬜ Ajustes secundarios (`/ajustes/calendario/horario`, `duracion`,
   `recordatorios`) quedan como placeholder
 
-### ⬜ Fase 11 — Ventas (pipeline)
+### 🟢 Fase 11 — Colaboradores · panel operativo del vínculo (ADR-057)
 
-### ⬜ Fase 12 — Colaboradores + Analítica Agencia × Nacionalidad
+Pantalla dedicada al vínculo promotor↔agencia con toda la operativa
+agregada. Reglas de oro nuevas: tick azul siempre junto al nombre,
+ficha pública vs panel según `isActiveCollaborator`, gate dura de
+compartibilidad, invitaciones simétricas promotor↔agencia.
+
+- ✅ `/colaboradores/:id/panel` con 9 tabs (Resumen · Datos · Visitas ·
+  Registros · Ventas · Documentación · Pagos · Facturas · Historial)
+- ✅ Contratos per-promoción · `scopePromotionIds` estilo Firmafy ·
+  "Contrato en vigor" como lenguaje canónico
+- ✅ `<VerifiedBadge>` canónico (SVG tick azul) + 11 sitios cubiertos ·
+  fuente única `isAgencyVerified(getAgencyLicenses(a))`
+- ✅ `agencyHref(agency, { fromPromoId? })` · prohibido hardcodear
+  `/colaboradores/:id/panel` en código nuevo
+- ✅ Gate de compartibilidad · `ShareMultiPromosDialog` y
+  `ResumenTab.activePromos` filtran `canShareWithAgencies !== false`
+- ✅ Self-heal en `invitaciones.ts` y `agencyCartera.ts` · limpian
+  entradas huérfanas al cargar
+- ✅ Invitaciones bidireccionales · `PromoCardCompact` con overlay
+  "Invitación" para agencia · CTA "Añadir a mi cartera"
+- ✅ Botones exclusivos del promotor (Compartir · Invitar) ocultos
+  para agencia · no deshabilitados
+- ✅ Historial cross-empresa visible solo para admins (`AdminOnly` +
+  banner explícito · REGLA DE ORO)
+- ⬜ Integración real con Firmafy (`docs/backend/integrations/firmafy.md`)
+- ⬜ Endpoints `/api/collaborators/:id/panel/*` (TODO backend)
+
+### ⬜ Fase 12 — Ventas (pipeline)
 
 ### 🟡 Fase 13 — Emails · cliente Gmail + plantillas + campañas
 

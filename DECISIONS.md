@@ -1887,3 +1887,137 @@ Ver:
   crear/editar con conflicto duro.
 - `src/pages/ajustes/calendario/sync.tsx` · sync Google.
 - `docs/screens/calendario.md` · spec.
+
+---
+
+## 2026-04-24 · ADR-057 · Panel operativo del colaborador + reglas de oro del vínculo promotor↔agencia
+
+**Contexto.** Al cerrar la ficha de agencia nos encontramos con varios
+problemas mezclados que antes resolvíamos "a ojo" en cada sitio:
+
+1. La ficha pública de la agencia (`Empresa.tsx`) funciona como
+   brochure, pero cuando la agencia **ya colabora** el promotor no
+   quiere el marketing — quiere la operativa.
+2. No había un sitio donde centralizar contratos, visitas, registros,
+   ventas, pagos, facturas e historial **de ese vínculo concreto**.
+3. El tick azul de verificación se pintaba en unos sitios sí y en
+   otros no · incoherente con la identidad del producto.
+4. El flujo de "compartir promoción" permitía compartir promociones
+   con `canShareWithAgencies: false` (p.ej. borradores, pausadas),
+   y además la agencia nunca recibía la invitación en consecuencia,
+   lo que rompía toda la cadena.
+5. La agencia colaboradora entraba a la promoción y veía botones
+   "Compartir con agencias" / "Invitar" que no tienen sentido en su
+   rol — filtraban capacidades del promotor a quien no debe verlas.
+
+**Decisión.**
+
+### 1. Panel operativo del colaborador — `/colaboradores/:id/panel`
+
+Nueva pantalla dedicada (`ColaboracionPanel.tsx`) con **9 tabs** que
+cubren toda la operativa del vínculo con una agencia concreta:
+Resumen · Datos · Visitas · Registros · Ventas · Documentación ·
+Pagos · Facturas · Historial.
+
+- Tabs sincronizadas con `useTabParam` (regla de oro URL·tabs).
+- Historial solo visible para admins (`AdminOnly` + banner explícito).
+- Contratos per-promoción · modelo Firmafy-style con `scopePromotionIds`
+  y `ContractSigner`. Al firmar, las promociones en scope se marcan
+  como "contrato en vigor" en la ficha.
+- Todas las acciones cross-empresa llaman a `recordCompanyEvent()`
+  para alimentar el historial (regla de oro historial cross-tenant).
+
+### 2. 🧭 REGLA DE ORO · Ficha pública vs panel operativo
+
+**Si la agencia ya es colaboradora activa, clicar lleva al PANEL
+operativo. Si NO, lleva a la FICHA PÚBLICA.**
+
+Centralizado en `src/lib/agencyNavigation.ts`:
+
+```ts
+agencyHref(agency, { fromPromoId? })
+isActiveCollaborator(a) = a.status === "active" || a.estadoColaboracion === "activa"
+```
+
+Prohibido hardcodear `/colaboradores/:id/panel` en código nuevo —
+todo `navigate()` hacia una agencia pasa por `agencyHref()`. Documentado
+en `CLAUDE.md`. Ya aplicado a `AgenciasTabStats`, `Contratos`,
+`Inicio`, `AccountSwitcher`, `Colaboradores`, `Ficha contacto`…
+
+### 3. ✅ REGLA DE ORO · Tick azul de verificación
+
+**Donde aparece el nombre de una agencia verificada, SIEMPRE
+aparece `<VerifiedBadge>` pegado al nombre. Sin excepciones.**
+
+- Componente único en `src/components/ui/VerifiedBadge.tsx` · custom
+  SVG path (Twitter/X-blue `#1d9bf0`) · tamaños `sm/md/lg`.
+- Fuente canónica de verificación: `isAgencyVerified(getAgencyLicenses(a))`
+  — nunca `isAgencyVerified(a.licencias)`. `getAgencyLicenses()`
+  aplica overrides que la propia agencia guarda via
+  `/ajustes/empresa/licencias`.
+- Cubre: `/colaboradores` listado, panel header, ficha pública,
+  `AgenciasTabStats`, `SharePromotionDialog`, `AgenciaEntry`,
+  `AccountSwitcher`, `AgenciasPendientesDialog`, `ajustes/empresa/datos`.
+
+### 4. Gate dura de compartibilidad + self-heal
+
+- `ShareMultiPromosDialog` y `ResumenTab.activePromos` filtran
+  `status === "active" && canShareWithAgencies !== false`. Antes solo
+  filtraba status, dejando publicar promos internas.
+- `src/lib/invitaciones.ts::loadAll()` y
+  `src/lib/agencyCartera.ts::loadStore()` ejecutan **auto-heal**:
+  eliminan al cargar cualquier entrada que apunte a una promoción que
+  ya no es compartible. Evita arrastrar datos corruptos de flujos
+  previos al gate.
+- Helper compartido `shareablePromoIds()` en ambos módulos para que
+  la definición de "qué se puede compartir" sea una única regla.
+
+### 5. Invitaciones bidireccionales con UX simétrica
+
+- El promotor invita → se crea una entrada en `invitaciones.ts`
+  con `{ promotionId, agencyId, invitedAt, status: "pending" }`.
+- La agencia ve la promoción **en su listado normal** de
+  `/promociones` (misma `PromoCardCompact`) con una overlay chip
+  "Invitación" arriba + contador rojo en sidebar. No se inventa una
+  tarjeta distinta — la diferenciación es mínima porque la promo es
+  la misma, solo cambia la relación.
+- Al abrir la promoción, la agencia ve CTA "Añadir a mi cartera".
+  Al aceptar → se guarda en `agencyCartera.ts` y se desbloquea
+  "Registrar cliente". Hasta entonces, registrar está bloqueado con
+  motivo explícito.
+- Los botones exclusivos del promotor (Compartir · Invitar agencia ·
+  AgenciasTab) se **ocultan** (no desabilitan) cuando el usuario es
+  agencia. Patrón declarativo, no deshabilitado sin motivo.
+
+### 6. "Contrato en vigor" · lenguaje canónico
+
+Renombrado "Cubierta" → "Contrato en vigor" en todos los sitios
+(panel, badges, filtros, seed). El estado refleja el hito comercial
+(contrato firmado), no una categoría genérica de documento. Alinea
+con regla de oro "venta cerrada vs venta terminada" (ADR anterior).
+
+**Consecuencia en backend** (actualizado en
+`docs/backend-integration.md §4 Colaboradores`):
+
+- `GET /api/collaborators/:agencyId/panel/*` (por tab).
+- `POST/PATCH /api/contracts` con `scopePromotionIds` obligatorio
+  para contratos per-promoción + hook a Firmafy
+  (`docs/backend/integrations/firmafy.md`).
+- `POST /api/invitations` / `POST /api/invitations/:id/accept` +
+  evento `CollaborationStarted` al aceptar.
+- Validación server-side · rechazo si la promo en el payload no es
+  `active && canShareWithAgencies` — el gate debe replicarse en
+  backend, no solo en UI.
+
+Ver:
+- `src/pages/ColaboracionPanel.tsx` · panel con 9 tabs.
+- `src/components/collaborators/panel/*` · tabs (ResumenTab,
+  DatosTab, VisitasTab, RegistrosTab, VentasTab, DocumentacionTab,
+  PagosTab, FacturasTab, HistorialTab).
+- `src/lib/agencyNavigation.ts` · regla de navegación.
+- `src/components/ui/VerifiedBadge.tsx` · tick canónico.
+- `src/lib/licenses.ts` + `src/lib/agencyLicenses.ts` · verificación
+  con overrides.
+- `src/lib/invitaciones.ts` · store de invitaciones + self-heal.
+- `src/lib/agencyCartera.ts` · cartera aceptada de la agencia + self-heal.
+- `src/components/collaborators/ShareMultiPromosDialog.tsx` · gate dura.
