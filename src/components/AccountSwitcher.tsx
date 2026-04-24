@@ -16,6 +16,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Building2, Check, ChevronDown, Handshake, LogOut } from "lucide-react";
 import { agencies } from "@/data/agencies";
+import { isAgencyVerified } from "@/lib/licenses";
+import { getAgencyLicenses } from "@/lib/agencyLicenses";
+import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
 import { useEmpresa } from "@/lib/empresa";
 import {
   useAccountType,
@@ -132,7 +135,10 @@ export function AccountSwitcher() {
                       strokeWidth={1.75}
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-foreground truncate">{a.name}</div>
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="font-medium text-foreground truncate">{a.name}</span>
+                        {isAgencyVerified(getAgencyLicenses(a)) && <VerifiedBadge size="sm" />}
+                      </div>
                       <div className="text-[11px] text-muted-foreground truncate">
                         {a.location}
                       </div>

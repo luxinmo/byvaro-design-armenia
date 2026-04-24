@@ -1006,6 +1006,106 @@ registrar un cliente sobre una promoción.
 
 ---
 
+## 7.5 · Calendar (agenda unificada · ADR-056)
+
+**Tipo**: `src/data/calendarEvents.ts` → `CalendarEvent` (union
+discriminada). **Consumidores**: `src/pages/Calendario.tsx`,
+`CreateCalendarEventDialog`, widget "Hoy" de `/inicio`, CTA "Programar
+visita" en `/oportunidades/:id`. Spec UI en `docs/screens/calendario.md`.
+
+### CRUD
+
+```
+GET    /api/calendar/events?from=ISO&to=ISO&assigneeUserId=&types=&statuses=
+GET    /api/calendar/events/:id                                 → CalendarEvent
+POST   /api/calendar/events                                     body: CalendarEventInput
+PATCH  /api/calendar/events/:id                                 body: Partial<CalendarEvent>
+DELETE /api/calendar/events/:id
+```
+
+### Conflict check (pre-validación server-side)
+
+```
+GET /api/calendar/events/conflicts
+    ?assigneeUserId=u1&start=ISO&end=ISO&ignoreId=ev-abc
+    → { conflict: CalendarEvent | null }
+```
+
+Debe replicar lo que hace `findConflict()` del mock: excluye eventos
+`cancelled` y `noshow`, coincidencia exacta de `assigneeUserId`, borde
+tocándose NO es conflicto. La UI hace la validación en vivo; el
+backend valida de nuevo al POST/PATCH para evitar race conditions.
+
+### Reglas de negocio
+
+- **Un único agente** por evento (`assigneeUserId`). Multi-asignee
+  queda para iteración futura.
+- **Visita desde registro** llega con `status="pending-confirmation"`.
+  La confirmación cambia el status a `confirmed` y actualiza el
+  `lead.status` a `"visita"`.
+- **Evaluación** post-visita se guarda como `evaluation` dentro del
+  `CalendarVisitEvent` (mismo shape que `ContactVisitEntry.evaluation`
+  — portable entre modelos).
+
+### Google Calendar sync (bidireccional)
+
+```
+POST   /api/me/integrations/google-calendar/connect
+    → { oauthUrl }                    # redirect al OAuth consent de Google
+
+GET    /api/me/integrations/google-calendar/status
+    → { connected: boolean, email?: string, lastSyncAt?: ISO }
+
+POST   /api/me/integrations/google-calendar/disconnect
+    → { ok: true }
+```
+
+Flujo:
+1. Al conectar, el token OAuth (refresh) se guarda cifrado.
+2. Cron `calendar-sync` cada 5 min:
+   - **Pull** de eventos nuevos/modificados de Google → insertar/
+     actualizar `CalendarEvent` con `source="google-calendar"` y
+     `externalId`.
+   - **Push** de eventos Byvaro creados por ese agente → a Google
+     Calendar API. Cada evento lleva el `externalId` devuelto por
+     Google para detectar duplicados en próximos pulls.
+3. Al desconectar, **no** se borran los eventos importados · se mantienen
+   pero pierden el sync.
+
+### Envío de la visita al cliente
+
+```
+POST /api/calendar/events/:id/ics                → ICS attachment (text/calendar)
+POST /api/calendar/events/:id/send               body: { channels: ("email"|"whatsapp")[] }
+```
+
+Envío por email lleva `.ics` adjunto para que el cliente la añada a su
+agenda; envío por WhatsApp usa link corto al ICS.
+
+### Emisión de eventos en timelines
+
+Cada mutación emite evento en el historial del contacto y/o de la
+oportunidad (regla 🥇 `CLAUDE.md`):
+
+- Crear visita vinculada a oportunidad → `visit_scheduled` en ambos.
+- Confirmación de `pending-confirmation` → `visit_confirmed`.
+- Mover fecha → `visit_rescheduled` con rango antiguo y nuevo.
+- Cancelar → `visit_cancelled`.
+- Noshow → `visit_noshow`.
+- Evaluar → `visit_evaluated` con `rating` + `clientInterest`.
+
+### Mock actual
+
+- `src/data/calendarEvents.ts` · 24 eventos seed distribuidos en la
+  semana actual (pasado + presente + futuro) cubriendo todos los
+  tipos y estados.
+- `src/lib/calendarStorage.ts` · CRUD en `localStorage` con
+  `byvaro.calendar.overrides.v1` + `byvaro.calendar.deleted.v1`.
+- `src/pages/ajustes/calendario/sync.tsx` · mock de estado Google por
+  miembro en `byvaro.calendar.googleSync.v1`.
+
+---
+
 
 ## 8 · Integraciones externas
 

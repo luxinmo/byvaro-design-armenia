@@ -170,7 +170,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         { label: "Horario laboral", to: "/ajustes/calendario/horario" },
         { label: "Duración de visitas", to: "/ajustes/calendario/duracion" },
         { label: "Recordatorios", to: "/ajustes/calendario/recordatorios" },
-        { label: "Sincronizar calendario externo", to: "/ajustes/calendario/sync" },
+        { label: "Sincronizar calendario externo", to: "/ajustes/calendario/sync", live: true },
       ]},
       { id: "documentos", title: "Documentos", icon: FileSignature, links: [
         { label: "Carpetas por defecto", to: "/ajustes/documentos/carpetas" },

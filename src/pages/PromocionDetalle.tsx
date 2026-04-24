@@ -9,7 +9,7 @@ import { unitDataToUnit, mergeUnitIntoUnitData } from "@/lib/unitDataAdapter";
 import type { Unit } from "@/data/units";
 import { promotions, getBuildingTypeLabel } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion, type Comercial, type ComercialPermissions } from "@/data/developerPromotions";
-import { agencies, countAgenciesForPromotion, type Agency } from "@/data/agencies";
+import { agencies, countAgenciesForPromotion, getAgencyShareStats, type Agency } from "@/data/agencies";
 import { AgenciasTabStats } from "@/components/promotions/detail/AgenciasTabStats";
 import { FeatureCardV3 } from "@/pages/Colaboradores";
 import ColaboradoresEstadisticas from "@/pages/ColaboradoresEstadisticas";
@@ -19,7 +19,7 @@ import {
   FileText, Layers, Handshake, CreditCard, ChevronRight,
   Settings, Eye, Building2, HardHat, Car, Archive,
   Globe, Shield, ClipboardList, Image, Video, Play,
-  Plus, Phone, Mail, MessageCircle, Store, UserPlus,
+  Plus, Phone, Mail, MailPlus, MessageCircle, Store, UserPlus,
   Check, X, ExternalLink, Zap, Star, Search, ChevronDown, Info,
   Lock, Unlock, FolderOpen, Folder, Download, BookOpen, Upload, MoreHorizontal, FilePlus, ArrowRight,
   Trophy, Sparkles, ArrowUpRight, FileCheck2, Rocket, BarChart3,
@@ -61,6 +61,8 @@ import {
 import { RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner"; // feedback tras publicar · Toaster global en App.tsx
 import { useCurrentUser } from "@/lib/currentUser";
+import { useInvitaciones } from "@/lib/invitaciones";
+import { addPromotionToCartera, useAgencyCartera } from "@/lib/agencyCartera";
 import { Flag } from "@/components/ui/Flag";
 import { findLanguageByCode } from "@/lib/languages";
 import { TEAM_MEMBERS, type TeamMember } from "@/lib/team";
@@ -209,6 +211,15 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const [previewAsCollaborator, setPreviewAsCollaborator] = useState(agentMode);
   const viewAsCollaborator = isAgencyUser || previewAsCollaborator;
   const setViewAsCollaborator = setPreviewAsCollaborator;
+
+  /* Cartera de la agencia activa · usada para bloquear "Registrar
+     cliente" mientras la promoción no esté aceptada. Para promotor
+     no aplica (cartera mock vacía · el promotor no tiene gate). */
+  const activeAgencyForCartera = isAgencyUser && currentUser.agencyId
+    ? agencies.find((ag) => ag.id === currentUser.agencyId) ?? null
+    : null;
+  const carteraSet = useAgencyCartera(activeAgencyForCartera ?? ({ id: "", promotionsCollaborating: [] } as unknown as Agency));
+  const inCartera = !isAgencyUser || (!!activeAgencyForCartera && carteraSet.has(p.id));
   // FAB móvil — abre un menú con las acciones principales de la ficha.
   const [mobileFabOpen, setMobileFabOpen] = useState(false);
   // Swipe horizontal entre tabs · sólo activa en móvil (<640px).
@@ -621,6 +632,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
   return (
     <div className="h-full overflow-auto bg-background" data-scroll-container>
+      {/* ── Banner de invitación pendiente · solo si el usuario es una
+           agencia y tiene una invitación sin aceptar para esta promo. */}
+      {isAgencyUser && currentUser.agencyId && (
+        <AgencyInvitationBanner agencyId={currentUser.agencyId} promotionId={p.id} />
+      )}
+
       {/* ── Collaborator preview banner — solo cuando es el PROMOTOR quien
            está previsualizando la vista colaborador. Si el usuario ya es una
            agencia (via AccountSwitcher) o es ruta de agente, no hay banner. */}
@@ -907,7 +924,13 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               <Button size="sm" variant="outline" onClick={() => setSendEmailOpen(true)} className="gap-1.5 hidden sm:inline-flex">
                 <Mail className="h-3.5 w-3.5" /> Enviar
               </Button>
-              <Button size="sm" onClick={() => setRegisterClientOpen(true)} className="gap-1.5 hidden sm:inline-flex">
+              <Button
+                size="sm"
+                onClick={() => setRegisterClientOpen(true)}
+                disabled={!inCartera}
+                title={!inCartera ? "Añade la promoción a tu cartera primero · acepta la invitación" : undefined}
+                className="gap-1.5 hidden sm:inline-flex disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 <Users className="h-3.5 w-3.5" /> Registrar cliente
               </Button>
             </div>
@@ -1981,14 +2004,23 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   onClick={() => { setMobileFabOpen(false); setActiveTab(visibleTabs.indexOf("Agencies")); }}
                 />
               )}
-              {/* Registrar/Enviar sólo si la promoción está publicada. */}
+              {/* Registrar/Enviar sólo si la promoción está publicada.
+                  Agencia · bloqueado hasta que añada la promo a su cartera. */}
               {p.status === "active" && !isIncomplete && (
                 <>
-                  <FabAction
-                    icon={Users}
-                    label="Registrar cliente"
-                    onClick={() => { setMobileFabOpen(false); setRegisterClientOpen(true); }}
-                  />
+                  {inCartera ? (
+                    <FabAction
+                      icon={Users}
+                      label="Registrar cliente"
+                      onClick={() => { setMobileFabOpen(false); setRegisterClientOpen(true); }}
+                    />
+                  ) : (
+                    <FabAction
+                      icon={Users}
+                      label="Añade a tu cartera primero"
+                      onClick={() => { setMobileFabOpen(false); }}
+                    />
+                  )}
                   <FabAction
                     icon={Mail}
                     label="Enviar email"
@@ -2604,7 +2636,12 @@ function AgenciesTab({ promotionId, navigate, onInvite, canShare = true, onActiv
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-medium text-foreground truncate">{a.name}</p>
-                          <p className="text-[10px] text-muted-foreground">{a.promotionsCollaborating.length} de {a.totalPromotionsAvailable} promos</p>
+                          {(() => {
+                            const s = getAgencyShareStats(a);
+                            return (
+                              <p className="text-[10px] text-muted-foreground">{s.sharedActive} de {s.activeTotal} promos</p>
+                            );
+                          })()}
                         </div>
                       </div>
                       <button
@@ -2630,8 +2667,9 @@ function AgenciesTab({ promotionId, navigate, onInvite, canShare = true, onActiv
 function AgencyCard({ agency: ag, promotionId, selected, onToggleSelect }: { agency: Agency; promotionId: string; selected: boolean; onToggleSelect: () => void }) {
   const logoUrl = ag.logo || `https://ui-avatars.com/api/?name=${encodeURIComponent(ag.name)}&background=e2e8f0&color=475569&size=120&font-size=0.33&bold=true`;
   const collabInThis = ag.promotionsCollaborating.includes(promotionId);
-  const collabCount = ag.promotionsCollaborating.length;
-  const totalPromos = ag.totalPromotionsAvailable;
+  const shareStats = getAgencyShareStats(ag);
+  const collabCount = shareStats.sharedActive;
+  const totalPromos = shareStats.activeTotal;
   const conversionRate = ag.visitsCount > 0 ? Math.round((ag.registrations / ag.visitsCount) * 100) : 0;
 
   return (
@@ -3588,3 +3626,85 @@ function OfficeMiniCard({ office: o }: { office: PuntoDeVentaType }) {
     </div>
   );
 }
+
+/* ══════════════ AgencyInvitationBanner ══════════════
+   Banner al tope de la ficha de una promoción · solo se pinta cuando
+   el usuario es una agencia con una invitación `pendiente` a esta
+   promoción concreta. Permite aceptar inline con un botón "Añadir a
+   mi cartera". Al aceptar, cambia estado a "aceptada" · el historial
+   cross-empresa se dispara en el flujo real. */
+function AgencyInvitationBanner({
+  agencyId, promotionId,
+}: { agencyId: string; promotionId: string }) {
+  const { lista, aceptar, revocar } = useInvitaciones();
+  const currentUser = useCurrentUser();
+  const email = useMemo(() => {
+    const a = agencies.find((x) => x.id === agencyId);
+    return a?.contactoPrincipal?.email?.toLowerCase() ?? null;
+  }, [agencyId]);
+  const invitation = useMemo(() => {
+    return lista.find((i) =>
+      i.promocionId === promotionId
+      && i.estado === "pendiente"
+      && (i.agencyId === agencyId || (email && i.emailAgencia.toLowerCase() === email)),
+    );
+  }, [lista, promotionId, agencyId, email]);
+
+  if (!invitation) return null;
+
+  const handleAccept = () => {
+    aceptar(invitation.id);
+    addPromotionToCartera(agencyId, promotionId);
+    toast.success("Añadida a tu cartera", {
+      description: "Ya puedes registrar clientes para esta promoción.",
+    });
+    /* TODO(backend) · persistir también en agency.promotionsCollaborating
+     *  + recordCompanyAny(agency.id, "invitation_accepted", ...) */
+  };
+
+  const handleReject = () => {
+    revocar(invitation.id);
+    toast.info("Invitación rechazada");
+  };
+
+  return (
+    <div className="sticky top-0 z-40 bg-destructive/5 border-b border-destructive/20 px-4 sm:px-6 lg:px-8 py-3">
+      <div className="max-w-[1570px] mx-auto flex items-start sm:items-center gap-3 flex-wrap">
+        <span className="h-9 w-9 rounded-xl bg-destructive text-destructive-foreground grid place-items-center shrink-0">
+          <MailPlus className="h-4 w-4" strokeWidth={2} />
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-foreground">
+            {currentUser.name} · {currentUser.email ? currentUser.email : ""}
+          </p>
+          <p className="text-[12px] text-muted-foreground">
+            Te han invitado a colaborar en esta promoción ·
+            <span className="text-foreground font-medium"> {invitation.comisionOfrecida}%</span>
+            {typeof invitation.duracionMeses === "number" && invitation.duracionMeses > 0
+              ? ` · ${invitation.duracionMeses} meses`
+              : ""}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={handleReject}
+            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full border border-border bg-card text-[13px] font-medium text-foreground hover:bg-muted transition-colors"
+          >
+            <X className="h-3.5 w-3.5" strokeWidth={2} />
+            Rechazar
+          </button>
+          <button
+            type="button"
+            onClick={handleAccept}
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-foreground text-background text-[13px] font-semibold hover:bg-foreground/90 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
+            Añadir a mi cartera
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+

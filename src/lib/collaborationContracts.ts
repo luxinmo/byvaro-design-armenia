@@ -31,7 +31,7 @@ export type ContractStatus =
 
 export interface ContractEvent {
   id: string;
-  type: "uploaded" | "sent" | "viewed" | "signed" | "expired" | "revoked";
+  type: "uploaded" | "sent" | "viewed" | "signed" | "expired" | "revoked" | "archived" | "unarchived";
   at: number;
   by?: { name: string; email?: string };
   /** Mensaje opcional (p. ej. motivo de revocación). */
@@ -151,6 +151,10 @@ export interface CollaborationContract {
    *  para descargar desde la UI sin re-consultar. */
   docSignedUrl?: string;
   docAuditUrl?: string;
+  /** Archivado · sale del listado principal y va a la sub-sección
+   *  "Archivados" al pie. No se borra · recuperable con "Desarchivar". */
+  archived?: boolean;
+  archivedAt?: number;
 }
 
 const STORAGE_KEY = "byvaro.collaborationContracts.v1";
@@ -358,6 +362,50 @@ export function revokeContract(
 
 export function deleteContract(contractId: string) {
   writeStore(readStore().filter((c) => c.id !== contractId));
+}
+
+/** Mueve el contrato a la sub-sección "Archivados" · no se borra. */
+export function archiveContract(
+  contractId: string,
+  actor?: { name: string; email?: string },
+) {
+  const now = Date.now();
+  writeStore(readStore().map((c) =>
+    c.id === contractId
+      ? {
+          ...c,
+          archived: true,
+          archivedAt: now,
+          events: [
+            ...c.events,
+            { id: `ev-${now}-arch`, type: "archived" as const, at: now, by: actor,
+              note: "Contrato archivado" },
+          ],
+        }
+      : c,
+  ));
+}
+
+/** Devuelve el contrato archivado al listado principal. */
+export function unarchiveContract(
+  contractId: string,
+  actor?: { name: string; email?: string },
+) {
+  const now = Date.now();
+  writeStore(readStore().map((c) =>
+    c.id === contractId
+      ? {
+          ...c,
+          archived: false,
+          archivedAt: undefined,
+          events: [
+            ...c.events,
+            { id: `ev-${now}-unarch`, type: "unarchived" as const, at: now, by: actor,
+              note: "Contrato desarchivado" },
+          ],
+        }
+      : c,
+  ));
 }
 
 /** Editar datos de un firmante (email / teléfono / etc) entre el

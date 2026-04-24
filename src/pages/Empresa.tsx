@@ -31,6 +31,7 @@ import { EmpresaSidebar } from "@/components/empresa/EmpresaSidebar";
 import { ImageCropModal } from "@/components/empresa/ImageCropModal";
 import { HeroSocialIcons } from "@/components/empresa/HeroSocialIcons";
 import { Toaster } from "sonner";
+import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
 
 const TAB_KEYS = ["home", "about", "agents", "statistics"] as const;
 type Tab = typeof TAB_KEYS[number];
@@ -264,9 +265,7 @@ export default function Empresa({
                   <h1 className="text-[19px] sm:text-[22px] font-bold text-foreground leading-tight tracking-tight">
                     {empresa.nombreComercial || "Tu empresa"}
                   </h1>
-                  {empresa.verificada && (
-                    <CheckCircle2 className="h-[18px] w-[18px] text-primary shrink-0" />
-                  )}
+                  {empresa.verificada && <VerifiedBadge size="md" />}
                 </div>
                 {empresa.tagline ? (
                   <p className="text-[14px] font-medium text-primary mt-1 leading-snug" style={{ color: empresa.colorCorporativo || undefined }}>

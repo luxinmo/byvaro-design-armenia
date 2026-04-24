@@ -11,7 +11,7 @@
  */
 
 import {
-  Download, X, FileText, AlertCircle,
+  Download, FileText, AlertCircle,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -54,17 +54,10 @@ export function DocumentPreviewDialog({ open, onOpenChange, document: doc }: Pro
             </p>
           </div>
           {dataUrl && (
-            <Button onClick={handleDownload} variant="outline" size="sm" className="rounded-full shrink-0">
+            <Button onClick={handleDownload} variant="outline" size="sm" className="rounded-full shrink-0 mr-10">
               <Download className="h-3.5 w-3.5" /> Descargar
             </Button>
           )}
-          <button
-            onClick={() => onOpenChange(false)}
-            className="h-8 w-8 rounded-full grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
-            aria-label="Cerrar"
-          >
-            <X className="h-4 w-4" />
-          </button>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto bg-muted/30">

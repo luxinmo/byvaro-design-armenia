@@ -7,12 +7,12 @@
  */
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, NavLink } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Building2, Plus, MapPin, Users, Flame, SlidersHorizontal,
   X, AlertTriangle, Ban, Share2, TrendingUp, Check, ChevronDown,
-  List, Map as MapIcon, LayoutGrid, type LucideIcon,
+  List, Map as MapIcon, LayoutGrid, Mail, ArrowRight, type LucideIcon,
 } from "lucide-react";
 import { promotions, getBuildingTypeLabel, type Promotion } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion } from "@/data/developerPromotions";
@@ -28,6 +28,7 @@ import { Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
 import { useCurrentUser } from "@/lib/currentUser";
+import { useInvitacionesForAgency } from "@/lib/invitaciones";
 import { canPublishPromotion } from "@/lib/publicationRequirements";
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -417,32 +418,52 @@ export default function Promociones() {
     [isAgencyUser, currentUser.agencyId],
   );
 
+  /* Invitaciones pendientes del agente activo · se fusionan con la
+     cartera oficial para que aparezcan en el mismo listado/grilla que
+     el resto, con un chip "Invitación" superpuesto. */
+  const agentInvitations = useInvitacionesForAgency(
+    activeAgency?.id ?? "",
+    activeAgency?.contactoPrincipal?.email,
+  );
+  const pendingInvitationPromoIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const i of agentInvitations) {
+      if (i.estado === "pendiente" && i.promocionId) s.add(i.promocionId);
+    }
+    return s;
+  }, [agentInvitations]);
+
+
   const allPromotions: DevPromotion[] = useMemo(() => {
     if (isAgencyUser) {
       /* Agencia: une promociones públicas + developerOnly (hay agencias
        * invitadas a colaborar en ambas) y filtra por los IDs que figuran
-       * en `promotionsCollaborating` de la agencia activa. Los borradores
-       * del promotor nunca son visibles. Además:
-       *   · status === "active" (publicada, no archivada/incompleta)
-       *   · canPublishPromotion(p) (todos los campos obligatorios OK)
-       *   · canShareWithAgencies !== false (el promotor no desactivó la
-       *     compartición)
-       * Si una promo falla cualquiera de estos, no existe para la agencia. */
+       * en `promotionsCollaborating` de la agencia activa O en
+       * invitaciones pendientes (para que aparezcan junto al resto
+       * con el chip "Invitación"). */
       const collaboratingIds = new Set(activeAgency?.promotionsCollaborating ?? []);
+      for (const id of pendingInvitationPromoIds) collaboratingIds.add(id);
       const pool: DevPromotion[] = [
         ...developerOnlyPromotions,
         ...promotions.map((p) => ({ ...p } as DevPromotion)),
       ];
-      return pool.filter((p) => {
-        if (!collaboratingIds.has(p.id)) return false;
-        if (p.status !== "active") return false;
-        if (!canPublishPromotion(p as unknown as Promotion)) return false;
-        if ((p as DevPromotion).canShareWithAgencies === false) return false;
-        return true;
-      });
+      return pool
+        .filter((p) => {
+          if (!collaboratingIds.has(p.id)) return false;
+          if (p.status !== "active") return false;
+          if (!canPublishPromotion(p as unknown as Promotion)) return false;
+          if ((p as DevPromotion).canShareWithAgencies === false) return false;
+          return true;
+        })
+        /* Las invitaciones arriba del todo · llaman más a la acción. */
+        .sort((a, b) => {
+          const aPending = pendingInvitationPromoIds.has(a.id) ? 0 : 1;
+          const bPending = pendingInvitationPromoIds.has(b.id) ? 0 : 1;
+          return aPending - bPending;
+        });
     }
     return [...draftPromotions, ...developerOnlyPromotions, ...promotions.map((p) => ({ ...p } as DevPromotion))];
-  }, [draftPromotions, isAgencyUser, activeAgency]);
+  }, [draftPromotions, isAgencyUser, activeAgency, pendingInvitationPromoIds]);
 
   /* ─── Opciones de filtros de GESTIÓN (fijas) ─── */
   const activityOptions = [
@@ -774,9 +795,20 @@ export default function Promociones() {
               <EmptyState />
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                {sortedAndFiltered.map(p => (
-                  <PromoCardCompact key={p.id} promo={p} isTrending={isTrending(p)} />
-                ))}
+                {sortedAndFiltered.map(p => {
+                  const isInvitation = isAgencyUser && pendingInvitationPromoIds.has(p.id);
+                  return (
+                    <div key={p.id} className="relative">
+                      <PromoCardCompact promo={p} isTrending={isTrending(p)} />
+                      {isInvitation && (
+                        <span className="absolute top-3 right-3 inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-destructive text-destructive-foreground text-[10.5px] font-semibold shadow-soft pointer-events-none">
+                          <Mail className="h-3 w-3" strokeWidth={2.25} />
+                          Invitación
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -838,6 +870,12 @@ export default function Promociones() {
                           <Tag variant="trending" size="sm" shape="pill" icon={<Flame className="h-3 w-3" />} className="absolute top-3 right-3">
                             Trending
                           </Tag>
+                        )}
+                        {isAgencyUser && pendingInvitationPromoIds.has(p.id) && (
+                          <span className="absolute top-3 right-3 inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-destructive text-destructive-foreground text-[10.5px] font-semibold shadow-soft">
+                            <Mail className="h-3 w-3" strokeWidth={2.25} />
+                            Invitación
+                          </span>
                         )}
                       </>
                     ) : (
@@ -1038,7 +1076,10 @@ export default function Promociones() {
                         )}
                         {p.hasShowFlat && <span className="hidden sm:inline">Piso piloto</span>}
                       </div>
-                      {(() => {
+                      {/* "Compartir con agencias" es una acción del
+                          promotor. Una cuenta de agencia no comparte
+                          promociones ajenas · se oculta sin dejar hueco. */}
+                      {!isAgencyUser && (() => {
                         const sharingEnabled = p.canShareWithAgencies !== false;
                         const shareEnabled = p.status === "active" && !hasMissing && sharingEnabled;
                         return (

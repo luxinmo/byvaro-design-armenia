@@ -18,6 +18,7 @@ contract, permisos, estados, enlaces salientes.
 | Oportunidad · ficha | `/oportunidades/:id` | [`oportunidades-ficha.md`](oportunidades-ficha.md) | ✅ diseñada (tabs + cualificación) |
 | Leads (histórico) | — | [`leads.md`](leads.md) | ⚠️ el concepto se unificó en Oportunidades, doc sigue como referencia |
 | Registros | `/registros` | (pendiente) | 🎨 placeholder |
+| Calendario | `/calendario` | [`calendario.md`](calendario.md) | ✅ diseñada (4 vistas + mobile + Google sync · ADR-056) |
 | Ventas | `/ventas` | (pendiente) | 🎨 placeholder |
 | Calendario | `/calendario` | (pendiente) | 🎨 placeholder |
 | Colaboradores | `/colaboradores` | [`colaboradores.md`](colaboradores.md) | ✅ diseñada (versión única) |

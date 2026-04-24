@@ -14,6 +14,11 @@
  * Cuando se conecte backend: los campos públicos (logo, cover, name, …)
  * deben venir del Empresa del tenant de la agencia — no duplicados aquí.
  */
+
+import { developerOnlyPromotions } from "./developerPromotions";
+import { getAllContracts } from "@/lib/collaborationContracts";
+import type { LicenciaInmobiliaria } from "@/lib/licenses";
+
 export type Agency = {
   id: string;
   name: string;
@@ -100,7 +105,16 @@ export type Agency = {
   /** Rating subjetivo del promotor sobre esta agencia (1-5). */
   ratingPromotor?: number;
   /** Persona de contacto principal en la agencia. */
-  contactoPrincipal?: { nombre: string; rol?: string; email: string; telefono?: string };
+  contactoPrincipal?: {
+    nombre: string;
+    rol?: string;
+    email: string;
+    telefono?: string;
+    /** Idiomas que habla esta persona en concreto · subset de
+     *  `Empresa.idiomasAtencion`. Puede diferir: la agencia atiende
+     *  en 6 idiomas pero el contacto asignado habla solo 3. */
+    idiomas?: string[];
+  };
   /** Incidencias acumuladas — banderas de alerta. */
   incidencias?: { duplicados: number; cancelaciones: number; reclamaciones: number };
 
@@ -115,20 +129,69 @@ export type Agency = {
   googleFetchedAt?: string;
   /** URL pública de la ficha de Maps. */
   googleMapsUrl?: string;
+
+  /* ─── Ficha operativa (Empresa) · lo que la agencia mantiene en su
+         workspace · backend: `GET /api/empresas/:id/public` ─── */
+  /** Razón social (nombre jurídico). */
+  razonSocial?: string;
+  /** CIF / número de identificación fiscal. */
+  cif?: string;
+  /** Año de fundación, texto libre ("2015"). */
+  fundadaEn?: string;
+  /** Sitio web corporativo. */
+  sitioWeb?: string;
+  /** Horario de atención en texto libre. */
+  horario?: string;
+  /** Códigos de idioma en los que atiende (BCP 47 corto · "es","en","sv"). */
+  idiomasAtencion?: string[];
+  /** URLs de redes sociales. */
+  redes?: {
+    linkedin?: string;
+    instagram?: string;
+    facebook?: string;
+    youtube?: string;
+    tiktok?: string;
+  };
+  /** Dirección fiscal completa · a futuro viene de Google Places. */
+  direccionFiscal?: {
+    direccion?: string;
+    codigoPostal?: string;
+    ciudad?: string;
+    provincia?: string;
+    pais?: string;
+  };
+  /** Licencias y registros inmobiliarios que tiene la agencia (AICAT,
+   *  RAICV, COAPI, FMI…). Ver `src/lib/licenses.ts` para el catálogo
+   *  completo y los metadatos por tipo. */
+  licencias?: LicenciaInmobiliaria[];
 };
 
-/** Calcula el estado del contrato respecto a una fecha de referencia (hoy
- *  por defecto). Se considera "por-expirar" si quedan ≤30 días.  */
+/** Calcula el estado del contrato real de una agencia consultando los
+ *  `CollaborationContract` firmados (no archivados). Lo que pintaba
+ *  "Contrato vigente" en cualquier sitio salía del mock legacy
+ *  `Agency.contractSignedAt` — mentira, porque la app v2 vive en
+ *  localStorage y puede estar vacía.
+ *
+ *  Reglas:
+ *    · Sin ningún contrato firmado vivo → `sin-contrato`.
+ *    · Con contratos firmados · tomamos el que más lejos expira
+ *      (si alguno no expira nunca, vence infinito).
+ *    · `por-expirar` si quedan ≤30 días.
+ */
 export function getContractStatus(
   a: Agency,
   refDate: Date = new Date(),
 ): { state: "vigente" | "por-expirar" | "expirado" | "sin-contrato"; daysLeft?: number } {
-  if (!a.contractExpiresAt) {
-    return a.contractSignedAt ? { state: "vigente" } : { state: "sin-contrato" };
-  }
-  const expires = new Date(a.contractExpiresAt);
-  const diffMs = expires.getTime() - refDate.getTime();
-  const daysLeft = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+  const signed = getAllContracts().filter(
+    (c) => c.agencyId === a.id && !c.archived && c.status === "signed",
+  );
+  if (signed.length === 0) return { state: "sin-contrato" };
+  /* Un contrato sin expiresAt se trata como infinito · basta con él
+     para que la agencia esté "vigente". */
+  const someNoExpiry = signed.some((c) => !c.expiresAt);
+  if (someNoExpiry) return { state: "vigente" };
+  const maxExpires = Math.max(...signed.map((c) => c.expiresAt!));
+  const daysLeft = Math.ceil((maxExpires - refDate.getTime()) / (24 * 60 * 60 * 1000));
   if (daysLeft < 0) return { state: "expirado", daysLeft };
   if (daysLeft <= 30) return { state: "por-expirar", daysLeft };
   return { state: "vigente", daysLeft };
@@ -179,6 +242,11 @@ export const agencies: Agency[] = [
     googleRatingsTotal: 247,
     googleFetchedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
     googleMapsUrl: "https://maps.app.goo.gl/DEMO_Prime",
+    licencias: [
+      { tipo: "RAIA",  numero: "RAIA-MA-000247", desde: "2018-06-14", verificada: true },
+      { tipo: "COAPI", numero: "COAPI-MA-01234", desde: "2017-03-02", verificada: true, publicUrl: "https://www.coapi.org" },
+      { tipo: "GIPE",  numero: "GIPE-3456",      desde: "2019-11-20" },
+    ],
   },
   {
     id: "ag-2",
@@ -216,6 +284,7 @@ export const agencies: Agency[] = [
     contactoPrincipal: {
       nombre: "Erik Lindqvist", rol: "Partner",
       email: "erik@nordichomefinders.com", telefono: "+46 70 123 4567",
+      idiomas: ["SV", "EN", "ES"],
     },
     incidencias: { duplicados: 1, cancelaciones: 0, reclamaciones: 0 },
     googlePlaceId: "ChIJDEMO_Nordic",
@@ -223,6 +292,31 @@ export const agencies: Agency[] = [
     googleRatingsTotal: 183,
     googleFetchedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
     googleMapsUrl: "https://maps.app.goo.gl/DEMO_Nordic",
+    /* ─── Ficha operativa Empresa · lo que la agencia mantiene ─── */
+    razonSocial: "Nordic Home Finders AB",
+    cif: "SE559234567801",
+    fundadaEn: "2015",
+    sitioWeb: "nordichomefinders.com",
+    horario: "L-V 9:00-17:00 (CET)",
+    idiomasAtencion: ["SV", "EN", "ES", "NO", "DA", "FI"],
+    redes: {
+      linkedin:  "https://www.linkedin.com/company/nordic-home-finders",
+      instagram: "https://www.instagram.com/nordichomefinders",
+      facebook:  "https://www.facebook.com/nordichomefinders",
+      youtube:   "https://www.youtube.com/@nordichomefinders",
+    },
+    direccionFiscal: {
+      direccion: "Birger Jarlsgatan 44",
+      codigoPostal: "114 29",
+      ciudad: "Stockholm",
+      provincia: "Stockholms län",
+      pais: "Suecia",
+    },
+    licencias: [
+      { tipo: "FMI",    numero: "FMI-2018-4567",  desde: "2018-02-10", verificada: true, publicUrl: "https://fmi.se" },
+      { tipo: "FIABCI", numero: "FIABCI-SE-04321", desde: "2020-09-01", verificada: true, publicUrl: "https://www.fiabci.org" },
+      { tipo: "RAICV",  numero: "RAICV-A-002158", desde: "2024-01-15", verificada: true, publicUrl: "https://habitatge.gva.es" },
+    ],
   },
   {
     id: "ag-3",
@@ -541,4 +635,39 @@ export const agencies: Agency[] = [
  */
 export function countAgenciesForPromotion(promotionId: string): number {
   return agencies.filter((a) => a.promotionsCollaborating.includes(promotionId)).length;
+}
+
+/**
+ * Estadísticas de colaboración de UNA agencia respecto al catálogo
+ * real de promociones del promotor.
+ *
+ * `Agency.totalPromotionsAvailable` es mock histórico y mentía — cuenta
+ * genérica puesta a mano en cada agency. La fuente de verdad debe
+ * derivarse del catálogo de `developerOnlyPromotions`:
+ *   - `activeTotal`  · nº de promociones ACTIVAS (publicables) del promotor.
+ *   - `sharedActive` · cuántas de ellas están efectivamente compartidas.
+ *   - `sharedDeclared` · cuántas tiene declaradas en
+ *                        `promotionsCollaborating` aunque algunas ya
+ *                        estén cerradas/incomplete.
+ *
+ * Importa perezoso para evitar ciclo (developerPromotions importa
+ * tipos de promotions; si agencias.ts lo importa arriba podría romper).
+ *
+ * TODO(backend): al conectar, `GET /api/agencias/:id/share-stats`
+ * sustituye esto con números precalculados en el backend.
+ */
+export function getAgencyShareStats(agency: Agency): {
+  activeTotal: number;
+  sharedActive: number;
+  sharedDeclared: number;
+} {
+  const activePromos = developerOnlyPromotions.filter((p) => p.status === "active");
+  const activeIds = new Set(activePromos.map((p) => p.id));
+  const declared = agency.promotionsCollaborating ?? [];
+  const sharedActive = declared.filter((id) => activeIds.has(id)).length;
+  return {
+    activeTotal: activePromos.length,
+    sharedActive,
+    sharedDeclared: declared.length,
+  };
 }

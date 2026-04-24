@@ -29,12 +29,16 @@ export type AccountType = "developer" | "agency";
 
 const STORAGE_KEY = "byvaro.accountType.v1";
 const AGENCY_KEY = "byvaro.accountType.agencyId.v1";
+/** Email del developer logueado · permite distinguir arman (admin) de
+ *  laura (member) en el mock de `currentUser`. Solo tiene sentido
+ *  cuando type === "developer". */
+const DEVELOPER_EMAIL_KEY = "byvaro.accountType.developerEmail.v1";
 const CHANGE_EVENT = "byvaro:account-change";
 
 /** Agencia por defecto cuando el usuario activa modo agencia sin elegir una. */
 export const DEFAULT_AGENCY_ID = "ag-1";
 
-type Snapshot = { type: AccountType; agencyId: string };
+type Snapshot = { type: AccountType; agencyId: string; developerEmail?: string };
 
 /** sessionStorage vive por pestaña; así el usuario puede tener una pestaña como
  *  Promotor y otra como Agencia simultáneamente sin que se pisen. Al cerrar la
@@ -46,7 +50,8 @@ function read(): Snapshot {
   const rawType = sessionStorage.getItem(STORAGE_KEY);
   const type: AccountType = rawType === "agency" ? "agency" : "developer";
   const agencyId = sessionStorage.getItem(AGENCY_KEY) ?? DEFAULT_AGENCY_ID;
-  return { type, agencyId };
+  const developerEmail = sessionStorage.getItem(DEVELOPER_EMAIL_KEY) ?? undefined;
+  return { type, agencyId, developerEmail };
 }
 
 function emit() {
@@ -63,11 +68,22 @@ export function setAccountAgencyId(id: string) {
   emit();
 }
 
-/** Login mock: setea ambos valores de golpe y emite UNA sola vez. */
-export function loginAs(type: AccountType, agencyId?: string) {
+/** Login mock: setea los valores de golpe y emite UNA sola vez.
+ *  - Para developer, `emailOrAgencyId` es el email del mock user logueado
+ *    (ej. "laura@byvaro.com") · se usa para resolver rol y id reales en
+ *    `useCurrentUser`.
+ *  - Para agency, es el agencyId de la agencia logueada. */
+export function loginAs(type: AccountType, emailOrAgencyId?: string) {
   sessionStorage.setItem(STORAGE_KEY, type);
-  if (type === "agency" && agencyId) {
-    sessionStorage.setItem(AGENCY_KEY, agencyId);
+  // Limpia cualquier identidad previa del otro rol para que no se mezclen.
+  if (type === "agency") {
+    sessionStorage.removeItem(DEVELOPER_EMAIL_KEY);
+    if (emailOrAgencyId) sessionStorage.setItem(AGENCY_KEY, emailOrAgencyId);
+  } else {
+    // developer
+    sessionStorage.removeItem(AGENCY_KEY);
+    if (emailOrAgencyId) sessionStorage.setItem(DEVELOPER_EMAIL_KEY, emailOrAgencyId);
+    else sessionStorage.removeItem(DEVELOPER_EMAIL_KEY);
   }
   emit();
 }
@@ -80,6 +96,7 @@ export function loginAs(type: AccountType, agencyId?: string) {
 export function logout() {
   sessionStorage.removeItem(STORAGE_KEY);
   sessionStorage.removeItem(AGENCY_KEY);
+  sessionStorage.removeItem(DEVELOPER_EMAIL_KEY);
   if (typeof window !== "undefined") {
     localStorage.removeItem("byvaro.user.profile.v1");
     localStorage.removeItem("byvaro.user.phones.v1");

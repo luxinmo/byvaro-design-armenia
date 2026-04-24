@@ -14,12 +14,16 @@ import { useNavigate } from "react-router-dom";
 import {
   Search, X, Plus, Users, Star, ArrowUpRight, Sparkles, Mail, Phone,
   MoreHorizontal, Pause, Play, Trash2, Building2, FileSignature,
-  AlertTriangle, TrendingUp, Activity, Calendar, Gem, Home, Store,
-  Plane, Tag, SlidersHorizontal, Check,
+  AlertTriangle, TrendingUp, Activity, Calendar,
+  Tag, SlidersHorizontal, Check,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Toaster, toast } from "sonner";
-import { agencies as baseAgencies, getContractStatus, type Agency } from "@/data/agencies";
+import { agencies as baseAgencies, getContractStatus, getAgencyShareStats, type Agency } from "@/data/agencies";
+import { isAgencyVerified } from "@/lib/licenses";
+import { getAgencyLicenses } from "@/lib/agencyLicenses";
+import { agencyHref } from "@/lib/agencyNavigation";
+import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
 import { InvitarAgenciaModal } from "@/components/empresa/InvitarAgenciaModal";
 import { useInvitaciones, invitacionToSyntheticAgency } from "@/lib/invitaciones";
 import { useFavoriteAgencies } from "@/lib/favoriteAgencies";
@@ -98,14 +102,6 @@ function Highlight({ text, query }: { text: string; query: string }) {
     </>
   );
 }
-
-const ESPECIALIDAD_META: Record<NonNullable<Agency["especialidad"]>, { label: string; icon: typeof Gem }> = {
-  luxury: { label: "Lujo", icon: Gem },
-  residential: { label: "Residencial", icon: Home },
-  commercial: { label: "Comercial", icon: Store },
-  tourist: { label: "Turístico", icon: Plane },
-  "second-home": { label: "Segunda residencia", icon: Home },
-};
 
 /* ═══════════════════════════════════════════════════════════════════ */
 
@@ -527,8 +523,9 @@ export default function Colaboradores() {
                         />
                         <div className="mt-2 flex items-start gap-2">
                           <div className="min-w-0 flex-1">
-                            <h3 className="text-sm font-semibold text-foreground truncate">
+                            <h3 className="text-sm font-semibold text-foreground truncate inline-flex items-center gap-1.5">
                               {a.name}
+                              {isAgencyVerified(getAgencyLicenses(a)) && <VerifiedBadge size="sm" />}
                             </h3>
                             <p className="text-[11px] text-muted-foreground truncate">
                               {a.location}{a.type ? ` · ${typeLabel(a.type)}` : ""}
@@ -581,7 +578,7 @@ export default function Colaboradores() {
                         <button
                           onClick={() => {
                             setRequestsOpen(false);
-                            navigate(`/colaboradores/${a.id}`);
+                            navigate(agencyHref(a));
                           }}
                           className="mt-4 w-full h-9 rounded-full bg-foreground text-background text-xs font-semibold hover:bg-foreground/90 transition-colors inline-flex items-center justify-center gap-1.5"
                         >
@@ -939,38 +936,6 @@ function ActivityChip({ iso, size = "xs" }: { iso?: string; size?: "xs" | "sm" }
   );
 }
 
-/** Chip de especialidad. */
-function EspecialidadChip({ especialidad, size = "xs" }: { especialidad: Agency["especialidad"]; size?: "xs" | "sm" }) {
-  if (!especialidad) return null;
-  const meta = ESPECIALIDAD_META[especialidad];
-  const Icon = meta.icon;
-  return (
-    <span className={cn(
-      "inline-flex items-center gap-1 font-medium border rounded-full bg-card text-foreground border-border",
-      size === "xs" ? "text-[10px] px-2 py-0.5" : "text-[11px] px-2.5 py-0.5",
-    )}>
-      <Icon className="h-3 w-3" strokeWidth={2} />
-      {meta.label}
-    </span>
-  );
-}
-
-/** Chip mostrando incidencias críticas si las hay. */
-function IncidenciasChip({ inc, size = "xs" }: { inc?: Agency["incidencias"]; size?: "xs" | "sm" }) {
-  if (!inc) return null;
-  const total = inc.duplicados + inc.cancelaciones + inc.reclamaciones;
-  if (total === 0) return null;
-  return (
-    <span className={cn(
-      "inline-flex items-center gap-1 font-medium border rounded-full bg-destructive/5 text-destructive border-destructive/25",
-      size === "xs" ? "text-[10px] px-2 py-0.5" : "text-[11px] px-2.5 py-0.5",
-    )} title={`Duplicados: ${inc.duplicados} · Cancelaciones: ${inc.cancelaciones} · Reclamaciones: ${inc.reclamaciones}`}>
-      <AlertTriangle className="h-3 w-3" strokeWidth={2} />
-      {total} {total === 1 ? "incidencia" : "incidencias"}
-    </span>
-  );
-}
-
 /* Card grande · destacados */
 export function FeatureCardV3({
   agency: a, onPause, onDelete, highlight = "",
@@ -978,7 +943,7 @@ export function FeatureCardV3({
   const navigate = useNavigate();
   const { isFavorite, toggleFavorite } = useFavoriteAgencies();
   const fav = isFavorite(a.id);
-  const goToFicha = () => navigate(`/colaboradores/${a.id}`);
+  const goToFicha = () => navigate(agencyHref(a));
 
   return (
     <article className="group relative overflow-hidden rounded-2xl bg-card border border-border shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200">
@@ -1017,8 +982,9 @@ export function FeatureCardV3({
 
         <div className="mt-3">
           <div className="flex items-start gap-2">
-            <h3 className="text-base font-bold text-foreground truncate leading-tight flex-1 min-w-0">
+            <h3 className="text-base font-bold text-foreground truncate leading-tight flex-1 min-w-0 inline-flex items-center gap-1.5">
               <Highlight text={a.name} query={highlight} />
+              {isAgencyVerified(getAgencyLicenses(a)) && <VerifiedBadge size="sm" />}
             </h3>
             <GoogleRatingBadge agency={a} size="xs" />
           </div>
@@ -1036,12 +1002,16 @@ export function FeatureCardV3({
 
         {/* Chips de estado */}
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-success/10 border border-success/25 text-[10px] font-semibold text-success">
-            <span className="h-1.5 w-1.5 rounded-full bg-success" />
-            {a.promotionsCollaborating.length}/{a.totalPromotionsAvailable} compartidos
-          </span>
+          {(() => {
+            const s = getAgencyShareStats(a);
+            return (
+              <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-success/10 border border-success/25 text-[10px] font-semibold text-success">
+                <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                {s.sharedActive}/{s.activeTotal} compartidas
+              </span>
+            );
+          })()}
           <ContractChip agency={a} size="xs" />
-          <IncidenciasChip inc={a.incidencias} size="xs" />
         </div>
 
         {/* Stats grid (3 cols) */}

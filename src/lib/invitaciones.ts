@@ -14,8 +14,10 @@
  * Hoy → todo en localStorage (MVP). Mañana → backend + email real.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Agency } from "@/data/agencies";
+import { developerOnlyPromotions } from "@/data/developerPromotions";
+import { promotions } from "@/data/promotions";
 
 export type EstadoInvitacion = "pendiente" | "aceptada" | "rechazada" | "caducada";
 
@@ -31,6 +33,8 @@ export type InvitacionEventType =
   | "created"        // creada y enviada por primera vez
   | "resent"         // reenviada (mismo email)
   | "email_changed"  // email corregido antes/durante el reenvío
+  | "accepted"       // aceptada por la agencia
+  | "rejected"       // rechazada por la agencia
   | "cancelled";     // cancelada
 
 export interface InvitacionEvent {
@@ -49,6 +53,11 @@ export interface Invitacion {
   token: string;                 // token único del link
   emailAgencia: string;
   nombreAgencia: string;
+  /** Id de la agencia destinataria en el mock · se rellena cuando la
+   *  invitación parte de una agencia YA existente en nuestra red
+   *  (p. ej. desde el panel de colaboración). Si la invitación es a
+   *  un email externo, queda `undefined`. */
+  agencyId?: string;
   mensajePersonalizado: string;
   comisionOfrecida: number;      // %
   idiomaEmail: "es" | "en" | "fr" | "de" | "pt" | "it";
@@ -77,17 +86,50 @@ export interface Invitacion {
 const STORAGE_KEY = "byvaro-invitaciones";
 const VALIDEZ_DIAS = 30;
 
+/** Catálogo de promociones que SÍ se pueden compartir con agencias ·
+ *  se usa para auto-limpiar invitaciones huérfanas que quedaron en
+ *  localStorage apuntando a promos que nunca debieron compartirse
+ *  (p. ej. promos con `canShareWithAgencies: false`). */
+function shareablePromoIds(): Set<string> {
+  const ids = new Set<string>();
+  for (const p of developerOnlyPromotions) {
+    if (p.status === "active" && p.canShareWithAgencies !== false) ids.add(p.id);
+  }
+  for (const p of promotions) {
+    if (p.status === "active") ids.add(p.id);
+  }
+  return ids;
+}
+
 function loadAll(): Invitacion[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const list = JSON.parse(raw);
     if (!Array.isArray(list)) return [];
-    // Marcar caducadas automáticamente
     const now = Date.now();
-    return list.map((i: Invitacion) =>
-      i.estado === "pendiente" && i.expiraEn < now ? { ...i, estado: "caducada" as EstadoInvitacion } : i
+    const shareable = shareablePromoIds();
+    let dirty = false;
+    const cleaned = (list as Invitacion[]).filter((i) => {
+      /* Self-heal · si la invitación está pendiente sobre una
+         promoción que no es compartible (no existe, no publicada,
+         canShareWithAgencies=false) la descartamos · es data
+         huérfana de algún bug histórico. */
+      if (i.promocionId && !shareable.has(i.promocionId)) {
+        dirty = true;
+        return false;
+      }
+      return true;
+    }).map((i) =>
+      i.estado === "pendiente" && i.expiraEn < now
+        ? { ...i, estado: "caducada" as EstadoInvitacion }
+        : i,
     );
+    if (dirty) {
+      /* Persistimos la limpieza para que no se repita en cada load. */
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+    }
+    return cleaned;
   } catch {
     return [];
   }
@@ -125,6 +167,8 @@ export function useInvitaciones() {
   const invitar = useCallback((data: {
     emailAgencia: string;
     nombreAgencia: string;
+    /** Id de la agencia si la invitación parte de una existente. */
+    agencyId?: string;
     mensajePersonalizado: string;
     comisionOfrecida: number;
     idiomaEmail: Invitacion["idiomaEmail"];
@@ -144,6 +188,7 @@ export function useInvitaciones() {
       token: generateToken(),
       emailAgencia: data.emailAgencia.trim().toLowerCase(),
       nombreAgencia: data.nombreAgencia.trim(),
+      agencyId: data.agencyId,
       mensajePersonalizado: data.mensajePersonalizado.trim(),
       comisionOfrecida: data.comisionOfrecida,
       idiomaEmail: data.idiomaEmail,
@@ -170,6 +215,17 @@ export function useInvitaciones() {
   const revocar = useCallback((id: string) => {
     const list = loadAll();
     saveAll(list.map(i => i.id === id ? { ...i, estado: "rechazada" as EstadoInvitacion, respondidoEn: Date.now() } : i));
+  }, []);
+
+  const aceptar = useCallback((id: string) => {
+    const list = loadAll();
+    const now = Date.now();
+    saveAll(list.map(i => i.id === id ? {
+      ...i,
+      estado: "aceptada" as EstadoInvitacion,
+      respondidoEn: now,
+      events: [...(i.events ?? []), { id: `ev-${now}-accepted`, type: "accepted" as const, at: now }],
+    } : i));
   }, []);
 
   const eliminar = useCallback((id: string) => {
@@ -223,8 +279,26 @@ export function useInvitaciones() {
 
   return {
     lista, pendientes, aceptadas, rechazadas, caducadas,
-    invitar, revocar, eliminar, reenviar,
+    invitar, revocar, aceptar, eliminar, reenviar,
   };
+}
+
+/** Filtra invitaciones asociadas a una agencia concreta · cruzando
+ *  `agencyId` directo (moderno) y por email del contacto principal
+ *  como fallback (invitaciones antiguas sin agencyId). */
+export function useInvitacionesForAgency(
+  agencyId: string,
+  agencyEmail?: string,
+): Invitacion[] {
+  const { lista } = useInvitaciones();
+  return useMemo(() => {
+    const email = agencyEmail?.trim().toLowerCase();
+    return lista.filter((i) => {
+      if (i.agencyId === agencyId) return true;
+      if (email && i.emailAgencia.toLowerCase() === email) return true;
+      return false;
+    });
+  }, [lista, agencyId, agencyEmail]);
 }
 
 /* ─── Templates de email (para preview en el modal) ──────────────── */

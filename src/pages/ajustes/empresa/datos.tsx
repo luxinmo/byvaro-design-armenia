@@ -1,15 +1,22 @@
 /**
  * /ajustes/empresa/datos — Datos fiscales y de contacto de la empresa.
+ *
+ * Cabecera con identidad compacta: nombre comercial + tik azul de
+ * verificación (estilo Instagram/X) · CIF pequeño debajo. El tik solo
+ * aparece si `empresa.verificada === true` (validado por Byvaro ·
+ * ver `/ajustes/empresa/verificacion`).
  */
 
 import { useEffect, useState } from "react";
-import { Building2, Globe } from "lucide-react";
+import { Globe } from "lucide-react";
 import { SettingsScreen, SettingsCard } from "@/components/settings/SettingsScreen";
 import { SettingsField } from "@/components/settings/fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDirty } from "@/components/settings/SettingsDirtyContext";
 import { isAdmin, useCurrentUser } from "@/lib/currentUser";
+import { useEmpresa } from "@/lib/empresa";
+import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
 import { toast } from "sonner";
 
 const KEY = "byvaro.organization.profile.v1";
@@ -52,6 +59,7 @@ export default function AjustesEmpresaDatos() {
   const [data, setData] = useState<OrgProfile>(() => load());
   const [initial, setInitial] = useState(data);
   const { setDirty } = useDirty();
+  const { empresa } = useEmpresa();
 
   useEffect(() => { setDirty(JSON.stringify(data) !== JSON.stringify(initial)); }, [data, initial, setDirty]);
   const isDirty = JSON.stringify(data) !== JSON.stringify(initial);
@@ -76,6 +84,24 @@ export default function AjustesEmpresaDatos() {
         </Button>
       }
     >
+      {/* Identidad compacta · nombre comercial + tik azul si verificada
+          + número de registro pequeño. Estilo Instagram/X. */}
+      <SettingsCard>
+        <div className="flex items-center gap-2.5 -my-1">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-[17px] sm:text-[19px] font-bold text-foreground tracking-tight truncate">
+                {data.commercialName || data.legalName || "Tu empresa"}
+              </h2>
+              {empresa.verificada && <VerifiedBadge size="md" />}
+            </div>
+            <p className="text-[11.5px] text-muted-foreground mt-0.5 tabular-nums">
+              {data.taxId ? `Nº de registro · ${data.taxId}` : "Sin CIF / NIF configurado"}
+            </p>
+          </div>
+        </div>
+      </SettingsCard>
+
       <SettingsCard title="Identidad fiscal">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <SettingsField label="Razón social"><Input value={data.legalName} onChange={(e) => set({ legalName: e.target.value })} disabled={!canEdit} /></SettingsField>

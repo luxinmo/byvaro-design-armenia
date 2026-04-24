@@ -4,6 +4,9 @@ import { AppLayout } from "@/components/AppLayout";
 import { ConfirmDialogHost } from "@/components/ui/ConfirmDialog";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import Inicio from "@/pages/Inicio";
+import Actividad from "@/pages/Actividad";
+import Sugerencias from "@/pages/Sugerencias";
+import Estadisticas from "@/pages/Estadisticas";
 import Promociones from "@/pages/Promociones";
 import Registros from "@/pages/Registros";
 import Leads from "@/pages/Leads";
@@ -11,6 +14,7 @@ import LeadDetalle from "@/pages/LeadDetalle";
 import Ventas from "@/pages/Ventas";
 import Calendario from "@/pages/Calendario";
 import Colaboradores from "@/pages/Colaboradores";
+import Contratos from "@/pages/Contratos";
 import AgenciaDetalle from "@/pages/AgenciaDetalle";
 import ColaboracionPanel from "@/pages/ColaboracionPanel";
 import ColaboradorHistorial from "@/pages/ColaboradorHistorial";
@@ -46,6 +50,7 @@ import AjustesEmpresaOficinas from "@/pages/ajustes/empresa/oficinas";
 import AjustesEmpresaVerificacion from "@/pages/ajustes/empresa/verificacion";
 import AjustesEmpresaSuscripcion from "@/pages/ajustes/empresa/suscripcion";
 import AjustesEmpresaDepartamentos from "@/pages/ajustes/empresa/departamentos";
+import AjustesCalendarioSync from "@/pages/ajustes/calendario/sync";
 import AjustesUsuariosMiembros from "@/pages/ajustes/usuarios/miembros";
 import AjustesUsuariosRoles from "@/pages/ajustes/usuarios/roles";
 import AjustesUsuariosInvitaciones from "@/pages/ajustes/usuarios/invitaciones";
@@ -134,6 +139,7 @@ export default function App() {
                 <Route path="empresa/verificacion" element={<AjustesEmpresaVerificacion />} />
                 <Route path="empresa/suscripcion" element={<AjustesEmpresaSuscripcion />} />
                 <Route path="empresa/departamentos" element={<AjustesEmpresaDepartamentos />} />
+                <Route path="calendario/sync" element={<AjustesCalendarioSync />} />
                 <Route path="usuarios/miembros" element={<AjustesUsuariosMiembros />} />
                 <Route path="usuarios/roles" element={<AjustesUsuariosRoles />} />
                 <Route path="usuarios/invitaciones" element={<AjustesUsuariosInvitaciones />} />
@@ -194,6 +200,9 @@ export default function App() {
               <Routes>
                 <Route path="/" element={<Navigate to="/inicio" replace />} />
                 <Route path="/inicio" element={<Inicio />} />
+                <Route path="/actividad" element={<PromotorOnly><Actividad /></PromotorOnly>} />
+                <Route path="/sugerencias" element={<PromotorOnly><Sugerencias /></PromotorOnly>} />
+                <Route path="/estadisticas" element={<Estadisticas />} />
                 <Route path="/promociones" element={<Promociones />} />
                 <Route path="/promociones/:id" element={<PromocionDetalle />} />
                 <Route path="/oportunidades" element={<PromotorOnly><Leads /></PromotorOnly>} />
@@ -202,6 +211,7 @@ export default function App() {
                 <Route path="/ventas" element={<Ventas />} />
                 <Route path="/calendario" element={<Calendario />} />
                 <Route path="/colaboradores" element={<PromotorOnly><Colaboradores /></PromotorOnly>} />
+                <Route path="/contratos" element={<PromotorOnly><Contratos /></PromotorOnly>} />
                 <Route path="/colaboradores/estadisticas" element={<PromotorOnly><ColaboradoresEstadisticas /></PromotorOnly>} />
                 <Route path="/colaboradores/:id" element={<PromotorOnly><AgenciaDetalle /></PromotorOnly>} />
                 <Route path="/colaboradores/:id/ficha" element={<PromotorOnly><AgenciaDetalle /></PromotorOnly>} />

@@ -47,7 +47,13 @@ export type PermissionKey =
   | "collaboration.payments.manage"
   /** Solicitar documentos a la agencia (factura, IBAN, certificados
    *  fiscales) + aprobar/rechazar los subidos. */
-  | "collaboration.documents.manage";
+  | "collaboration.documents.manage"
+  /** Ver el dashboard analítico `/actividad` — KPIs financieros
+   *  (pipeline €, ventas €, ventas cerradas), embudo de conversión,
+   *  rankings de miembros y agencias, salud del equipo,
+   *  heatmap. Datos sensibles de negocio y de desempeño interno.
+   *  Admin-only por defecto. */
+  | "activity.dashboard.view";
 
 const STORAGE_KEY = "byvaro.workspace.rolePermissions.v1";
 
@@ -61,6 +67,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
     "collaboration.contracts.manage", "collaboration.incidents.view",
     "collaboration.payments.view", "collaboration.payments.manage",
     "collaboration.documents.manage",
+    "activity.dashboard.view",
   ],
   member: [
     "whatsapp.viewOwn",

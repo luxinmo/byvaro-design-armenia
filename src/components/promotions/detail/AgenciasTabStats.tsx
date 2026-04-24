@@ -25,7 +25,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { agencies, getContractStatus, type Agency } from "@/data/agencies";
+import { agencies, getContractStatus, getAgencyShareStats, type Agency } from "@/data/agencies";
+import { isAgencyVerified } from "@/lib/licenses";
+import { getAgencyLicenses } from "@/lib/agencyLicenses";
+import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
+import { agencyHref } from "@/lib/agencyNavigation";
 import { promotions } from "@/data/promotions";
 import { Flag } from "@/components/ui/Flag";
 import { MinimalSort } from "@/components/ui/MinimalSort";
@@ -67,14 +71,6 @@ function formatRelativeISO(iso?: string): string | null {
 function initials(name: string): string {
   return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
 }
-
-const especialidadLabel: Record<NonNullable<Agency["especialidad"]>, string> = {
-  luxury: "Lujo",
-  residential: "Residencial",
-  commercial: "Comercial",
-  tourist: "Turístico",
-  "second-home": "Segunda residencia",
-};
 
 type SortKey = "ventas" | "registros" | "visitas" | "conversion" | "rating" | "since" | "name";
 
@@ -412,7 +408,7 @@ export function AgenciasTabStats({
             top={leaders.visitas && {
               agency: leaders.visitas.agency,
               value: leaders.visitas.value,
-              onClick: () => navigate(`/colaboradores/${leaders.visitas!.agency.id}/panel?from=${p.id}`),
+              onClick: () => navigate(agencyHref(leaders.visitas!.agency, { fromPromoId: p.id })),
             }}
           />
           <KpiStat
@@ -421,7 +417,7 @@ export function AgenciasTabStats({
             top={leaders.registros && {
               agency: leaders.registros.agency,
               value: leaders.registros.value,
-              onClick: () => navigate(`/colaboradores/${leaders.registros!.agency.id}/panel?from=${p.id}`),
+              onClick: () => navigate(agencyHref(leaders.registros!.agency, { fromPromoId: p.id })),
             }}
           />
           <KpiStat
@@ -431,7 +427,7 @@ export function AgenciasTabStats({
             top={leaders.ventas && {
               agency: leaders.ventas.agency,
               value: leaders.ventas.value,
-              onClick: () => navigate(`/colaboradores/${leaders.ventas!.agency.id}/panel?from=${p.id}`),
+              onClick: () => navigate(agencyHref(leaders.ventas!.agency, { fromPromoId: p.id })),
             }}
           />
           <KpiStat
@@ -570,7 +566,10 @@ export function AgenciasTabStats({
               onToggleId={toggleId}
               pageAllSelected={pageAllSelected}
               onTogglePage={togglePage}
-              onOpenAgency={(id) => navigate(`/colaboradores/${id}/panel?from=${p.id}`)}
+              onOpenAgency={(id) => {
+                const ag = agenciasEnPromo.find((a) => a.id === id);
+                if (ag) navigate(agencyHref(ag, { fromPromoId: p.id }));
+              }}
               onSeeAll={() => navigate("/colaboradores")}
               isFavorite={isFavorite}
               onToggleFavorite={handleToggleFavorite}
@@ -600,7 +599,10 @@ export function AgenciasTabStats({
                 agencies={pageItems}
                 selectedIds={selectedIds}
                 onToggleId={toggleId}
-                onOpenAgency={(id) => navigate(`/colaboradores/${id}/panel?from=${p.id}`)}
+                onOpenAgency={(id) => {
+                const ag = agenciasEnPromo.find((a) => a.id === id);
+                if (ag) navigate(agencyHref(ag, { fromPromoId: p.id }));
+              }}
                 isFavorite={isFavorite}
                 onToggleFavorite={handleToggleFavorite}
                 topBadgesByAgency={topBadgesByAgency}
@@ -748,7 +750,6 @@ function ListView({
           const selected = selectedIds.includes(a.id);
           const metaLine2 = [
             a.location,
-            a.especialidad ? especialidadLabel[a.especialidad] : null,
             a.collaboratingSince ? `Desde ${a.collaboratingSince}` : null,
           ].filter(Boolean).join(" · ");
 
@@ -776,6 +777,7 @@ function ListView({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
                       <p className="text-sm font-semibold text-foreground truncate">{a.name}</p>
+                      {isAgencyVerified(getAgencyLicenses(a)) && <VerifiedBadge size="sm" />}
                       <TopBadge categories={topBadgesByAgency[a.id] ?? []} />
                       {typeof a.googleRating === "number" && (
                         <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground tabular-nums shrink-0">
@@ -958,6 +960,7 @@ function GridView({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 min-w-0">
                     <p className="text-sm font-semibold text-foreground truncate">{a.name}</p>
+                    {isAgencyVerified(getAgencyLicenses(a)) && <VerifiedBadge size="sm" />}
                     <TopBadge categories={topBadgesByAgency[a.id] ?? []} />
                     {typeof a.googleRating === "number" && (
                       <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground tabular-nums shrink-0">
@@ -968,7 +971,6 @@ function GridView({
                   </div>
                   <p className="text-[11.5px] text-muted-foreground truncate mt-0.5">
                     {a.location}
-                    {a.especialidad ? ` · ${especialidadLabel[a.especialidad]}` : ""}
                   </p>
                 </div>
               </div>
@@ -1225,20 +1227,17 @@ function EmptyStatePanel({
   );
 }
 
-/* ══════ StatusChips · contrato · cobertura · incidencias ══════
+/* ══════ StatusChips · contrato + cobertura ══════
  * Fila compacta de indicadores con tokens semánticos. Responde a:
  *   - ¿El contrato sigue vigente?
  *   - ¿La agencia colabora en todas mis promociones o solo en algunas?
- *   - ¿Hay incidencias (duplicados, cancelaciones, reclamaciones) sin
- *     resolver con esta agencia?
  */
 function StatusChips({ agency: a }: { agency: Agency }) {
   const contract = getContractStatus(a);
-  const shared = a.promotionsCollaborating?.length ?? 0;
-  const total = a.totalPromotionsAvailable ?? shared;
+  const stats = getAgencyShareStats(a);
+  const shared = stats.sharedActive;
+  const total = stats.activeTotal;
   const inAll = total > 0 && shared === total;
-  const inc = a.incidencias;
-  const incTotal = (inc?.duplicados ?? 0) + (inc?.cancelaciones ?? 0) + (inc?.reclamaciones ?? 0);
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
@@ -1279,21 +1278,6 @@ function StatusChips({ agency: a }: { agency: Agency }) {
           {inAll
             ? "promociones · todas"
             : shared === 1 ? "promoción" : "promociones"}
-        </span>
-      )}
-
-      {/* Incidencias sin resolver */}
-      {incTotal > 0 && (
-        <span
-          className="inline-flex items-center gap-1 h-5 px-2 rounded-full border border-destructive/25 bg-destructive/5 text-[10.5px] font-medium text-destructive"
-          title={[
-            inc?.duplicados ? `${inc.duplicados} duplicado${inc.duplicados === 1 ? "" : "s"}` : null,
-            inc?.cancelaciones ? `${inc.cancelaciones} cancelación${inc.cancelaciones === 1 ? "" : "es"}` : null,
-            inc?.reclamaciones ? `${inc.reclamaciones} reclamación${inc.reclamaciones === 1 ? "" : "es"}` : null,
-          ].filter(Boolean).join(" · ")}
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
-          {incTotal} {incTotal === 1 ? "incidencia" : "incidencias"}
         </span>
       )}
     </div>

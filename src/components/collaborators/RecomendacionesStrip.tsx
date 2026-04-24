@@ -15,14 +15,8 @@
 
 import { Sparkles, Star, ShieldCheck, TrendingUp, Users } from "lucide-react";
 import type { RecommendedAgency } from "@/data/agencyRecommendations";
+import { Flag } from "@/components/ui/Flag";
 import { cn } from "@/lib/utils";
-
-/** ISO2 → emoji flag. */
-function flagOf(code: string): string {
-  const c = code.toUpperCase();
-  if (c.length !== 2) return "🏳️";
-  return String.fromCodePoint(...[...c].map((ch) => 127397 + ch.charCodeAt(0)));
-}
 
 export function RecomendacionesStrip({
   items, onInvitar,
@@ -96,9 +90,7 @@ function Card({ rec, onInvitar }: { rec: RecommendedAgency; onInvitar: () => voi
       {/* Mercados + tipo */}
       <div className="mt-3 flex items-center gap-1.5 flex-wrap">
         {rec.mercados.slice(0, 4).map((m) => (
-          <span key={m} className="text-[13px] leading-none" title={m}>
-            {flagOf(m)}
-          </span>
+          <Flag key={m} iso={m} size={14} shape="rect" title={m} />
         ))}
         {rec.mercados.length > 4 && (
           <span className="text-[10px] text-muted-foreground font-medium">+{rec.mercados.length - 4}</span>

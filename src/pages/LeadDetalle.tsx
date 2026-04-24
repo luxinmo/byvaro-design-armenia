@@ -25,6 +25,7 @@ import {
   Clock, User, UserPlus, Tag, Copy, AlertTriangle, Home, MapPin,
   Euro, Bed, Inbox, ExternalLink, Sparkles, History as HistoryIcon,
   FileText, Receipt, ThumbsDown, ThumbsUp, Flame,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -35,6 +36,7 @@ import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { Building2 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { ContactWhatsAppDialog } from "@/components/contacts/detail/ContactWhatsAppDialog";
+import { CreateCalendarEventDialog } from "@/components/calendar/CreateCalendarEventDialog";
 import type { ContactDetail } from "@/components/contacts/types";
 import { cn } from "@/lib/utils";
 
@@ -92,6 +94,14 @@ export default function LeadDetalle() {
      del Lead como ContactDetail — sólo se consultan `id`, `name`,
      `flag`, `phones[].number` / `phones[].hasWhatsapp`. */
   const [whatsappOpen, setWhatsappOpen] = useState(false);
+
+  /* "Programar visita" · abre CreateCalendarEventDialog con lead +
+     promoción prefilleados. Al confirmar en el dialog se crea una
+     Visit y el status de la oportunidad debería pasar a "visita" (TODO
+     backend · de momento el dialog solo crea el evento).
+     Si la visita viene de un registro, el dialog recibe
+     status="pending-confirmation" y se pinta atenuada en el calendario. */
+  const [scheduleVisitOpen, setScheduleVisitOpen] = useState(false);
 
   /* Cualificación rápida (mock) · "No es lead" / "Es lead" / "Tiene interés". */
   const [qualif, setQualif] = useState<"no" | "yes" | "interest" | null>(null);
@@ -228,8 +238,14 @@ export default function LeadDetalle() {
 
               {/* CTAs · Llamar/Email/WhatsApp viven abajo del nombre
                  como pills clicables (mismo patrón que el contacto).
-                 Aquí solo queda la acción destructiva. */}
+                 Aquí "Programar visita" abre el dialog del calendario
+                 con lead/promoción prefilleados · y el destructivo. */}
               <div className="flex items-center gap-2 flex-wrap shrink-0">
+                <CTAPill
+                  icon={CalendarIcon} label="Programar visita" primary
+                  disabled={lead.status === "perdida" || lead.status === "duplicate" || lead.status === "ganada"}
+                  onClick={() => setScheduleVisitOpen(true)}
+                />
                 <CTAPill
                   icon={XCircle} label="Descartar" danger
                   disabled={lead.status === "perdida" || lead.status === "duplicate"}
@@ -494,6 +510,25 @@ export default function LeadDetalle() {
           phone: lead.phone,
           phones: [{ number: lead.phone, hasWhatsapp: true, isPrimary: true }],
         } as unknown as ContactDetail}
+      />
+
+      {/* Dialog · Programar visita · preset con lead + promoción. */}
+      <CreateCalendarEventDialog
+        open={scheduleVisitOpen}
+        onOpenChange={setScheduleVisitOpen}
+        preset={{
+          type: "visit",
+          title: promo ? `Visita · ${promo.name}` : `Visita · ${lead.fullName}`,
+          date: new Date(),
+          hour: 10,
+          contactId: lead.id,
+          contactName: lead.fullName,
+          leadId: lead.id,
+          promotionId: promo?.id,
+          promotionName: promo?.name,
+          status: "confirmed",
+        }}
+        onSaved={() => toast.success("Visita programada · marca la oportunidad como 'En visita' cuando se confirme")}
       />
     </div>
   );
