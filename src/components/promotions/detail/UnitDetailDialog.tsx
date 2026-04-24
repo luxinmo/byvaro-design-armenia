@@ -70,7 +70,7 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
 
   const photos = useMemo(() => {
     if (!unit) return [];
-    // Si la unidad tiene fotos propias (editadas vía UnitPhotosEditDialog),
+    // Si la unidad tiene fotos propias (editadas vía UnitEditDialog),
     // usarlas. Si no, fallback mock · se usarán como baseline si el
     // promotor abre el editor por primera vez.
     if (unit.photos && unit.photos.length > 0) return unit.photos;
@@ -737,7 +737,7 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
                     <>
                       {/* Editar unidad · activa editMode (edición inline
                           de datos) + destapa el botón "Editar fotos" de
-                          la galería que abre UnitPhotosEditDialog.
+                          la galería que abre UnitEditDialog.
                           Si el caller inyecta un onEdit custom (p. ej.
                           un wizard), se llama antes de togglear. */}
                       <Button
