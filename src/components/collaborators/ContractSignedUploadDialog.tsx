@@ -197,48 +197,71 @@ export function ContractSignedUploadDialog({ open, onOpenChange, agency, actor }
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* PDF */}
+          {/* PDFs firmados · multi-file */}
           <div>
-            <Label>Archivo PDF firmado</Label>
+            <Label>
+              {files.length === 0
+                ? "Archivos PDF firmados"
+                : `${files.length} ${files.length === 1 ? "archivo PDF" : "archivos PDF"}`}
+            </Label>
             <label
               onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
-              onDrop={(e) => { e.preventDefault(); setDragging(false); pickFile(e.dataTransfer.files?.[0] ?? null); }}
+              onDrop={(e) => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}
               className={cn(
                 "mt-1.5 block cursor-pointer rounded-2xl border-2 border-dashed px-4 py-5 text-center transition-colors",
                 dragging ? "border-foreground/40 bg-muted/40" : "border-border bg-muted/20 hover:border-foreground/20",
               )}
             >
-              <input type="file" accept=".pdf,application/pdf" onChange={(e) => pickFile(e.target.files?.[0] ?? null)} className="sr-only" />
-              {file ? (
-                <div className="flex items-center gap-3 justify-center">
-                  <span className="h-10 w-10 rounded-lg bg-foreground/5 grid place-items-center">
-                    <FileSignature className="h-5 w-5 text-foreground" strokeWidth={1.75} />
-                  </span>
-                  <div className="text-left min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">{file.name}</p>
-                    <p className="text-[11px] text-muted-foreground tabular-nums">{formatSize(file.size)}</p>
-                  </div>
-                  <button type="button" onClick={(e) => { e.preventDefault(); setFile(null); }}
-                    className="h-7 w-7 inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
-                    aria-label="Quitar archivo"
-                  >
-                    <X className="h-3.5 w-3.5" strokeWidth={2} />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <Upload className="h-6 w-6 text-muted-foreground/60 mx-auto mb-2" strokeWidth={1.5} />
-                  <p className="text-sm font-medium text-foreground">Arrastra el PDF aquí o haz click</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">PDF ya firmado</p>
-                </>
-              )}
+              <input
+                type="file"
+                accept=".pdf,application/pdf"
+                multiple
+                onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }}
+                className="sr-only"
+              />
+              <Upload className="h-5 w-5 text-muted-foreground/60 mx-auto mb-1.5" strokeWidth={1.5} />
+              <p className="text-sm font-medium text-foreground">
+                {files.length === 0 ? "Arrastra PDFs firmados aquí o haz click" : "Añadir más archivos"}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Puedes subir uno o varios · cada PDF se archiva como un contrato firmado independiente.
+              </p>
             </label>
+
+            {files.length > 0 && (
+              <ul className="mt-2 space-y-1.5">
+                {files.map((f, i) => (
+                  <li
+                    key={`${f.name}-${f.size}-${i}`}
+                    className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2"
+                  >
+                    <span className="h-8 w-8 rounded-lg bg-destructive/5 grid place-items-center shrink-0">
+                      <FileText className="h-4 w-4 text-destructive" strokeWidth={1.75} />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{f.name}</p>
+                      <p className="text-[11px] text-muted-foreground tabular-nums">{formatSize(f.size)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(i)}
+                      className="h-7 w-7 inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
+                      aria-label={`Quitar ${f.name}`}
+                    >
+                      <X className="h-3.5 w-3.5" strokeWidth={2} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           {/* Título */}
           <div>
-            <Label>Título</Label>
+            <Label>
+              {files.length > 1 ? "Título base (se añadirá el nombre de cada PDF)" : "Título"}
+            </Label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
