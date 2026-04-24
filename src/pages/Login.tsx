@@ -99,7 +99,12 @@ export default function Login() {
     /* Login exitoso — escribimos el accountType en sessionStorage antes de
      * navegar para que la primera renderización de /inicio vea el contexto
      * correcto (vista promotor vs vista agencia). */
-    loginAs(user.accountType, user.agencyId);
+    // Para developer pasamos el email (resuelve rol admin/member en el mock
+    // de currentUser). Para agency pasamos el agencyId como antes.
+    loginAs(
+      user.accountType,
+      user.accountType === "agency" ? user.agencyId : user.email,
+    );
     setSubmitting(false);
 
     toast.success(`Bienvenido, ${user.name.split(" ")[0]}`, {
@@ -115,7 +120,10 @@ export default function Login() {
     setError(null);
     setSubmitting(true);
     await new Promise((r) => setTimeout(r, 300));
-    loginAs(u.accountType, u.agencyId);
+    loginAs(
+      u.accountType,
+      u.accountType === "agency" ? u.agencyId : u.email,
+    );
     setSubmitting(false);
     toast.success(`Bienvenido, ${u.name.split(" ")[0]}`, { description: u.label });
     navigate("/inicio", { replace: true });

@@ -30,6 +30,10 @@ import { useCurrentUser } from "@/lib/currentUser";
 import { useInvitaciones } from "@/lib/invitaciones";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { agencies } from "@/data/agencies";
+import { agencyHref } from "@/lib/agencyNavigation";
+import { isAgencyVerified } from "@/lib/licenses";
+import { getAgencyLicenses } from "@/lib/agencyLicenses";
+import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
 import {
   recordInvitationCancelled, recordCompanyAny,
   recordRequestApproved, recordRequestRejected,
@@ -86,7 +90,8 @@ export function AgenciasPendientesDialog({ open, onOpenChange, mode, promotionId
    *  al promotor a la tab Agencias, no al dialog flotante. */
   const openAgencyDetail = (agencyId: string) => {
     onOpenChange(false);
-    navigate(`/colaboradores/${agencyId}`);
+    const a = agencies.find((x) => x.id === agencyId);
+    navigate(a ? agencyHref(a) : `/colaboradores/${agencyId}`);
   };
 
   /** Invitación cuyo historial está expandido (acordeón en la lista). */
@@ -191,9 +196,10 @@ export function AgenciasPendientesDialog({ open, onOpenChange, mode, promotionId
                       <button
                         type="button"
                         onClick={() => openAgencyDetail(a.id)}
-                        className="text-sm font-semibold text-foreground truncate hover:underline text-left"
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-foreground truncate hover:underline text-left"
                       >
                         {a.name}
+                        {isAgencyVerified(getAgencyLicenses(a)) && <VerifiedBadge size="sm" />}
                       </button>
                       <p className="text-[11.5px] text-muted-foreground truncate">
                         {a.location}{typeof a.teamSize === "number" && a.teamSize > 0 ? ` · ${a.teamSize} agentes` : ""}
@@ -256,10 +262,11 @@ export function AgenciasPendientesDialog({ open, onOpenChange, mode, promotionId
                       <Mark name={matched?.name ?? displayName} logo={matched?.logo} />
                       <div className="flex-1 min-w-0">
                         <p className={cn(
-                          "text-sm truncate",
+                          "text-sm truncate inline-flex items-center gap-1.5",
                           placeholder ? "text-muted-foreground italic" : "font-semibold text-foreground",
                         )}>
                           {displayName}
+                          {matched && isAgencyVerified(getAgencyLicenses(matched)) && <VerifiedBadge size="sm" />}
                         </p>
                         <p className="text-[11.5px] text-muted-foreground truncate" title={inv.emailAgencia}>
                           {inv.emailAgencia}

@@ -24,6 +24,7 @@ import { PdfIcon } from "@/components/icons/PdfIcon";
 import { cn } from "@/lib/utils";
 import { useHasPermission } from "@/lib/permissions";
 import { agencies } from "@/data/agencies";
+import { agencyHref } from "@/lib/agencyNavigation";
 import {
   useAllContracts, getDerivedStatus,
   type CollaborationContract,
@@ -306,7 +307,8 @@ export default function Contratos() {
                 onOpenDetail={() => setDetailContractId(c.id)}
                 onOpenAgency={(e) => {
                   e.stopPropagation();
-                  navigate(`/colaboradores/${c.agencyId}/panel`);
+                  const ag = agencyMap.get(c.agencyId);
+                  if (ag) navigate(agencyHref(ag));
                 }}
               />
             ))}
@@ -319,7 +321,10 @@ export default function Contratos() {
             contracts={archivedAll}
             agencyMap={agencyMap}
             onOpenDetail={(id) => setDetailContractId(id)}
-            onOpenAgency={(agencyId) => navigate(`/colaboradores/${agencyId}/panel`)}
+            onOpenAgency={(agencyId) => {
+              const ag = agencyMap.get(agencyId);
+              if (ag) navigate(agencyHref(ag));
+            }}
           />
         )}
       </div>

@@ -20,13 +20,14 @@
  * tienen sus propias keys específicas (contracts, documents, payments).
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   useNavigate, useParams, useSearchParams, Link,
 } from "react-router-dom";
 import {
   ArrowLeft, ArrowUpRight, Eye, Mail, Share2, Shield,
   LayoutGrid, FileSignature, CreditCard, History, Building2, Receipt,
+  CalendarCheck, TrendingUp, FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -40,16 +41,26 @@ import { promotions } from "@/data/promotions";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { ResumenTab } from "@/components/collaborators/panel/ResumenTab";
 import { DatosTab } from "@/components/collaborators/panel/DatosTab";
+import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
+import { isAgencyVerified } from "@/lib/licenses";
+import { getAgencyLicenses } from "@/lib/agencyLicenses";
+import { VisitasTab } from "@/components/collaborators/panel/VisitasTab";
+import { RegistrosTab } from "@/components/collaborators/panel/RegistrosTab";
+import { VentasTab } from "@/components/collaborators/panel/VentasTab";
 import { DocumentacionTab } from "@/components/collaborators/panel/DocumentacionTab";
 import { PagosTab } from "@/components/collaborators/panel/PagosTab";
 import { FacturasTab } from "@/components/collaborators/panel/FacturasTab";
 import { HistorialTab } from "@/components/collaborators/panel/HistorialTab";
+import { ShareMultiPromosDialog } from "@/components/collaborators/ShareMultiPromosDialog";
 
 function initials(name: string): string {
   return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
 }
 
-const PANEL_TABS = ["resumen", "datos", "documentacion", "pagos", "facturas", "historial"] as const;
+const PANEL_TABS = [
+  "resumen", "datos", "visitas", "registros", "ventas",
+  "documentacion", "pagos", "facturas", "historial",
+] as const;
 type PanelTab = typeof PANEL_TABS[number];
 
 export default function ColaboracionPanel() {
@@ -67,6 +78,7 @@ export default function ColaboracionPanel() {
 
   const canView = useHasPermission("collaboration.panel.view");
   const [tab, setTab] = useTabParam<PanelTab>(PANEL_TABS, "resumen");
+  const [shareMultiOpen, setShareMultiOpen] = useState(false);
 
   /* ── Guards ── */
   if (!id || !agency) {
@@ -103,6 +115,9 @@ export default function ColaboracionPanel() {
   const tabDefs: Array<{ id: PanelTab; label: string; icon: typeof LayoutGrid }> = [
     { id: "resumen",       label: "Resumen",       icon: LayoutGrid },
     { id: "datos",         label: "Datos",         icon: Building2 },
+    { id: "visitas",       label: "Visitas",       icon: CalendarCheck },
+    { id: "registros",     label: "Registros",     icon: FileText },
+    { id: "ventas",        label: "Ventas",        icon: TrendingUp },
     { id: "documentacion", label: "Documentación", icon: FileSignature },
     { id: "pagos",         label: "Pagos",         icon: CreditCard },
     { id: "facturas",      label: "Facturas",      icon: Receipt },
@@ -110,8 +125,8 @@ export default function ColaboracionPanel() {
   ];
 
   return (
-    <div className="flex-1 flex flex-col min-h-full bg-background" data-scroll-container>
-      <div className="px-4 sm:px-6 lg:px-10 pt-6 pb-16 max-w-[1250px] mx-auto w-full">
+    <div className="h-full overflow-auto bg-background" data-scroll-container>
+      <div className="px-4 sm:px-6 lg:px-10 pt-6 pb-16 max-w-[1570px] mx-auto w-full">
 
         {/* ══════ Back + eyebrow ══════ */}
         <div className="mb-4">
@@ -136,9 +151,12 @@ export default function ColaboracionPanel() {
           <div className="flex items-start gap-4 min-w-0">
             <AgencyLogoBig name={a.name} logo={a.logo} />
             <div className="min-w-0 flex-1">
-              <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight text-foreground leading-tight">
-                {a.name}
-              </h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight text-foreground leading-tight">
+                  {a.name}
+                </h1>
+                {isAgencyVerified(getAgencyLicenses(a)) && <VerifiedBadge size="sm" />}
+              </div>
               <p className="text-[12.5px] text-muted-foreground mt-0.5">
                 {a.location}
                 {a.contactoPrincipal?.nombre
@@ -186,7 +204,7 @@ export default function ColaboracionPanel() {
               </button>
             )}
             <button
-              onClick={() => toast.info("Compartir promoción · próximamente desde aquí")}
+              onClick={() => setShareMultiOpen(true)}
               className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-foreground text-background text-xs font-semibold hover:bg-foreground/90 transition-colors"
             >
               <Share2 className="h-3.5 w-3.5" strokeWidth={2} />
@@ -229,11 +247,22 @@ export default function ColaboracionPanel() {
           />
         )}
         {tab === "datos" && <DatosTab agency={a} />}
+        {tab === "visitas" && <VisitasTab agency={a} />}
+        {tab === "registros" && <RegistrosTab agency={a} />}
+        {tab === "ventas" && <VentasTab agency={a} />}
         {tab === "documentacion" && <DocumentacionTab agency={a} />}
         {tab === "pagos" && <PagosTab agency={a} />}
         {tab === "facturas" && <FacturasTab agency={a} />}
         {tab === "historial" && <HistorialTab agency={a} />}
       </div>
+
+      {/* Compartir una o varias promociones con esta agencia · popup
+          con elección "todas publicadas" vs "seleccionar una a una". */}
+      <ShareMultiPromosDialog
+        open={shareMultiOpen}
+        onOpenChange={setShareMultiOpen}
+        agency={a}
+      />
     </div>
   );
 }

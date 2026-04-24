@@ -12,19 +12,22 @@
  */
 
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Home, Tag, FileText, CircleDollarSign, CalendarDays,
   Handshake, Contact, Globe, Mail, Settings, ChevronsUpDown, FileSignature,
-  Building2, Inbox, User as UserIcon, LogOut, Users,
+  Building2, Inbox, User as UserIcon, LogOut, Users, Activity, Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEmpresa } from "@/lib/empresa";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useCurrentUser } from "@/lib/currentUser";
+import { useInvitaciones } from "@/lib/invitaciones";
+import { agencies } from "@/data/agencies";
+import { useHasPermission } from "@/lib/permissions";
 import { logout } from "@/lib/accountType";
 
-type NavItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }>; badge?: string | number; accent?: boolean };
+type NavItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }>; badge?: string | number; accent?: boolean; accentColor?: "primary" | "destructive" };
 type NavGroup = { label: string; items: NavItem[] };
 
 /** Rutas donde la sidebar se colapsa automáticamente a icon-only. */
@@ -33,7 +36,11 @@ const COLLAPSED_ROUTES = ["/emails"];
 const groups: NavGroup[] = [
   {
     label: "General",
-    items: [{ title: "Inicio", url: "/inicio", icon: Home }],
+    items: [
+      { title: "Inicio", url: "/inicio", icon: Home },
+      { title: "Actividad", url: "/actividad", icon: Activity },
+      { title: "Sugerencias", url: "/sugerencias", icon: Sparkles },
+    ],
   },
   {
     label: "Comercial",
@@ -68,6 +75,11 @@ export function AppSidebar() {
   const { empresa } = useEmpresa();
   const currentUser = useCurrentUser();
   const isAgencyUser = currentUser.accountType === "agency";
+  // CLAUDE.md · "Datos sensibles requieren permiso" · /actividad
+  // oculta del sidebar si el user no tiene la key. El gate real vive
+  // en la página (early return); esta ocultación es por UX, no por
+  // seguridad.
+  const canSeeActivity = useHasPermission("activity.dashboard.view");
 
   const onEmpresaRoute = location.pathname.startsWith("/empresa");
   const necesitaOnboarding = !empresa.onboardingCompleto;
@@ -96,15 +108,54 @@ export function AppSidebar() {
     "/microsites",
     "/oportunidades",
     "/emails",
+    "/actividad",
+    "/sugerencias",
   ]);
-  const visibleGroups = isAgencyUser
-    ? groups
-        .map((g) => ({
-          ...g,
-          items: g.items.filter((it) => !agencyHiddenRoutes.has(it.url)),
-        }))
-        .filter((g) => g.items.length > 0)
-    : groups;
+  const permissionHiddenRoutes = new Set<string>();
+  if (!canSeeActivity) permissionHiddenRoutes.add("/actividad");
+
+  /* Invitaciones pendientes del agente · red pill en /promociones.
+     Solo aplica a cuentas de agencia. Match por agencyId OR email. */
+  const { pendientes: allPendientes } = useInvitaciones();
+  const agencyEmail = useMemo(() => {
+    if (!isAgencyUser || !currentUser.agencyId) return null;
+    const a = agencies.find((x) => x.id === currentUser.agencyId);
+    return a?.contactoPrincipal?.email?.toLowerCase() ?? null;
+  }, [isAgencyUser, currentUser.agencyId]);
+  const pendingInvitations = useMemo(() => {
+    if (!isAgencyUser || !currentUser.agencyId) return 0;
+    return allPendientes.filter((i) =>
+      i.agencyId === currentUser.agencyId ||
+      (agencyEmail && i.emailAgencia.toLowerCase() === agencyEmail),
+    ).length;
+  }, [allPendientes, isAgencyUser, currentUser.agencyId, agencyEmail]);
+
+  const visibleGroups = (isAgencyUser
+    ? groups.map((g) => ({
+        ...g,
+        items: g.items.filter((it) => !agencyHiddenRoutes.has(it.url)),
+      }))
+    : groups
+  )
+    .map((g) => ({
+      ...g,
+      items: g.items
+        .filter((it) => !permissionHiddenRoutes.has(it.url))
+        .map((it) => {
+          /* Promociones · para agencias, sustituye el badge mock por
+             el nº real de invitaciones pendientes (o lo oculta). */
+          if (isAgencyUser && it.url === "/promociones") {
+            return {
+              ...it,
+              badge: pendingInvitations > 0 ? pendingInvitations : undefined,
+              accent: pendingInvitations > 0,
+              accentColor: "destructive" as const,
+            };
+          }
+          return it;
+        }),
+    }))
+    .filter((g) => g.items.length > 0);
 
   return (
     <aside
@@ -160,9 +211,11 @@ export function AppSidebar() {
                     <span
                       className={cn(
                         "ml-auto text-[11px] tnum font-semibold rounded-md",
-                        item.accent
-                          ? "text-primary bg-primary/10 px-1.5 py-px"
-                          : "text-sidebar-foreground/50",
+                        item.accentColor === "destructive"
+                          ? "text-destructive-foreground bg-destructive px-1.5 py-px"
+                          : item.accent
+                            ? "text-primary bg-primary/10 px-1.5 py-px"
+                            : "text-sidebar-foreground/50",
                       )}
                     >
                       {item.badge}
@@ -172,7 +225,9 @@ export function AppSidebar() {
                     <span
                       className={cn(
                         "absolute top-1 right-1 h-1.5 w-1.5 rounded-full",
-                        item.accent ? "bg-primary" : "bg-sidebar-foreground/40",
+                        item.accentColor === "destructive"
+                          ? "bg-destructive"
+                          : item.accent ? "bg-primary" : "bg-sidebar-foreground/40",
                       )}
                       aria-hidden
                     />

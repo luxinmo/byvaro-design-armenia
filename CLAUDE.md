@@ -495,6 +495,82 @@ Ver:
 
 ---
 
+## 💰 REGLA DE ORO · Venta cerrada vs venta terminada
+
+> **Una venta está "cerrada" cuando se firma el contrato de
+> compraventa (CPV · contrato privado). Una venta está "terminada"
+> cuando ya se ha cobrado por completo (escritura pública firmada +
+> último pago recibido).** No son intercambiables: **cerrada es hito
+> comercial**, **terminada es hito financiero**.
+
+**Mapping al modelo** (`src/data/sales.ts::VentaEstado`):
+
+| Estado        | Significado                           | Cerrada | Terminada |
+|---------------|---------------------------------------|:-------:|:---------:|
+| `reservada`   | Señal firmada, sin contrato aún       |   ❌    |    ❌     |
+| `contratada`  | **Contrato de compraventa firmado**   |   ✅    |    ❌     |
+| `escriturada` | **Escritura + cobro total**           |   ✅    |    ✅     |
+| `caida`       | Cancelada/fallida                     |   ❌    |    ❌     |
+
+**Cómo se aplica.**
+
+- Toda KPI / contador "ventas cerradas" agrega
+  `estado IN ("contratada", "escriturada")`. **Nunca sólo
+  `escriturada`** — eso infla los KPIs al director comercial.
+- Toda KPI / contador "ventas terminadas" / "cobradas" / "volumen
+  cobrado" agrega sólo `estado === "escriturada"`.
+- **Pipeline abierto de cierre** · `estado === "reservada"` — es
+  lo que falta por convertir a contrato.
+- **Pipeline abierto de cobro** · `estado === "contratada"` — es
+  lo que falta por cobrar / escriturar.
+- **Embudo comercial** · lead → aprobado → visita → reserva →
+  **cerrada (contrato)** → **terminada (escritura)**. Seis pasos,
+  no cinco.
+- **Eventos de dominio**: `sale.closed` se dispara al entrar en
+  `contratada`; `sale.completed` al entrar en `escriturada`.
+  `businessActivity.ts` debe etiquetarlos con títulos distintos
+  ("Venta cerrada · contrato firmado" vs "Venta terminada ·
+  cobro completado").
+- **Comisiones**: se DEVENGAN al cerrar (contrato) pero se PAGAN al
+  terminar (escritura) · la ficha del colaborador debe mostrar
+  comisión devengada · cobrada · pendiente por separado.
+
+**Por qué importa.** Entre firma de contrato y escritura suelen
+pasar 3–6 meses. Confundir los dos hitos infla/desinfla los KPIs
+entre 25-40%. El CEO mide rendimiento comercial por cerradas; el
+CFO mide caja por terminadas; si la UI los junta, ambos pierden
+confianza en los números.
+
+**Dónde aplica hoy** (auditar al añadir KPI nuevo que hable de
+ventas):
+
+- `src/pages/Actividad.tsx` · KPI row, embudo, "Ventas por mes".
+- `src/pages/Estadisticas.tsx` · KPI "Ventas · volumen".
+- `src/pages/Ventas.tsx` · columna estado + filtros.
+- `src/lib/businessActivity.ts` · builders de eventos de venta
+  (`sale-contract-*` = cerrada, `sale-deed-*` = terminada).
+- `src/pages/ColaboradoresEstadisticas.tsx` · ranking por ventas.
+- `src/pages/EquipoMiembroEstadisticas.tsx` · KPIs del miembro.
+
+**Checklist antes de cerrar una tarea que toque ventas:**
+
+- [ ] ¿La KPI cuenta cerradas (contratada+escriturada) o
+      terminadas (escriturada)? ¿Está etiquetada correctamente en
+      la UI (no "ventas" a secas)?
+- [ ] ¿El pipeline abierto separa "falta contrato" de "falta
+      escritura"?
+- [ ] ¿Los eventos de timeline ("Venta cerrada" vs "Venta
+      terminada") usan los títulos correctos?
+- [ ] ¿Las comisiones aparecen como devengadas al cerrar y
+      cobradas al terminar?
+
+**TODO(backend).** Vistas SQL `v_ventas_cerradas` (contratada +
+escriturada) y `v_ventas_terminadas` (escriturada). Eventos de
+dominio `SaleClosed` y `SaleCompleted` emitidos en las transiciones
+correspondientes. Webhook a contabilidad sólo en `SaleCompleted`.
+
+---
+
 ## 📊 REGLA DE ORO · KPIs en el dashboard del miembro
 
 > **Todo dato de actividad del trabajador que tenga valor para valorar
@@ -789,6 +865,89 @@ paranoico y declarar cada sensitive-view con su key.
 - [ ] ¿La documenté en `docs/permissions.md` con default por rol?
 - [ ] Si es ruta completa · ¿tiene empty state "Sin acceso" con
       explicación del porqué?
+
+---
+
+## 🧭 REGLA DE ORO · Ficha pública vs panel operativo al entrar en una agencia
+
+> **Si la agencia YA es colaboradora activa, clicar para verla lleva al
+> PANEL operativo (`/colaboradores/:id/panel`). Si NO es colaboradora
+> todavía (pending, inactive, marketplace, resultado de búsqueda) lleva
+> a la FICHA PÚBLICA (`/colaboradores/:id`).**
+>
+> Antes de colaborar, el promotor necesita marketing (descripción,
+> mercados, equipo, testimonios). Una vez colaboran, quiere operativa
+> — no el brochure.
+
+**Helper canónico** · `src/lib/agencyNavigation.ts`:
+
+```ts
+import { agencyHref, isActiveCollaborator } from "@/lib/agencyNavigation";
+
+navigate(agencyHref(agency));
+// opcional · preserva contexto de promoción en el panel
+navigate(agencyHref(agency, { fromPromoId: p.id }));
+```
+
+**Criterio** · `isActiveCollaborator(a) = a.status === "active" || a.estadoColaboracion === "activa"`.
+
+**No hardcodear `/colaboradores/:id`** para abrir desde click de usuario.
+Todo `navigate()` / `<Link to=...>` hacia una agencia debe pasar por
+`agencyHref()` — si no, la regla se rompe en sitios nuevos.
+
+**Excepción** · rutas explícitas donde el usuario pidió ficha pública
+(ej. botón "Ver ficha pública" dentro del panel). En ese caso sí se
+linkea a `/colaboradores/:id` directamente · queda documentado en el
+propio componente.
+
+---
+
+## ✅ REGLA DE ORO · Tick azul de verificación junto al nombre
+
+> **Donde aparece el nombre de una agencia y está verificada,
+> SIEMPRE debe aparecer el tick azul (`<VerifiedBadge>`) pegado
+> al nombre · sin excepciones.** Es identidad visual del producto.
+
+**Cómo se aplica.** En cualquier componente que renderice
+`agency.name`, si la agencia está verificada debe ir el tick
+inline justo al lado (no en otro chip-row, no flotando en
+otro lado de la card).
+
+```tsx
+import { isAgencyVerified } from "@/lib/licenses";
+import { getAgencyLicenses } from "@/lib/agencyLicenses";
+import { VerifiedBadge } from "@/components/collaborators/panel/DatosTab";
+
+<h3 className="inline-flex items-center gap-1.5">
+  {a.name}
+  {isAgencyVerified(getAgencyLicenses(a)) && <VerifiedBadge size="sm" />}
+</h3>
+```
+
+**Regla de la fuente.** Siempre `isAgencyVerified(getAgencyLicenses(a))`
+— no `isAgencyVerified(a.licencias)`. El helper `getAgencyLicenses(a)`
+aplica los overrides que la propia agencia haya guardado en
+localStorage via `/ajustes/empresa/licencias`.
+
+**Tamaños del tick** · `<VerifiedBadge size="sm|md|lg">`:
+- `sm` (16px) · chips y listas.
+- `md` (20px) · junto a `<h1>` / `<h2>` en headers.
+- `lg` (24px) · hero grande del perfil.
+
+**Lista de sitios ya cubiertos** (update si añades uno nuevo):
+- `/colaboradores` · card del listado y card de solicitudes pendientes.
+- `/colaboradores/:id/panel` · header del panel operativo.
+- `/colaboradores/:id/panel?tab=datos` · header de la ficha.
+- `/colaboradores/:id` → `Empresa.tsx` · header público.
+- `/promociones/:id?tab=Agencies` · `AgenciasTabStats` grid y list.
+- `SharePromotionDialog` · `SelectableAgencyCard`.
+- `AgenciaEntry` · lista de selección de cuenta.
+- `AccountSwitcher` · topbar dropdown.
+
+**Checklist al añadir una vista que renderice una agencia:**
+- [ ] ¿El tick azul sale al lado del nombre si `isAgencyVerified(getAgencyLicenses(a))`?
+- [ ] ¿Usé `size="sm"` (listas) o `"md"` (headers) según contexto?
+- [ ] ¿Añadí la ruta a la lista de sitios cubiertos aquí arriba?
 
 ---
 

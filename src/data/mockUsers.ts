@@ -16,12 +16,23 @@
  */
 
 import type { AccountType } from "@/lib/accountType";
+import type { UserRole } from "@/lib/currentUser";
 
 export interface MockUser {
   email: string;
   password: string;
   name: string;
   accountType: AccountType;
+  /** Solo presente cuando accountType === "developer". "admin" controla
+   *  acceso a todas las keys de permisos; "member" es el rol operativo
+   *  con permisos limitados (ver `src/lib/permissions.ts`). Si falta →
+   *  se asume "admin" para compatibilidad con cuentas viejas. */
+  role?: UserRole;
+  /** Solo para developer · id del registro en `TEAM_MEMBERS` al que
+   *  corresponde esta cuenta. Permite que `useCurrentUser()` devuelva
+   *  el id real (ej. `u2` para Laura) y que la ownership / filtros
+   *  por usuario funcionen. */
+  teamMemberId?: string;
   /** Solo presente cuando accountType === "agency". */
   agencyId?: string;
   /** Label humano para mostrar en la UI (ej. "Prime Properties · Agencia"). */
@@ -31,13 +42,26 @@ export interface MockUser {
 export const DEMO_PASSWORD = "demo1234";
 
 export const mockUsers: MockUser[] = [
-  /* ───── Promotor ───── */
+  /* ───── Promotor · admin ───── */
   {
     email: "arman@byvaro.com",
     password: DEMO_PASSWORD,
     name: "Arman Rahmanov",
     accountType: "developer",
-    label: "Luxinmo · Promotor",
+    role: "admin",
+    teamMemberId: "u1",
+    label: "Luxinmo · Promotor (admin)",
+  },
+
+  /* ───── Promotor · miembro (para probar gating por permisos) ───── */
+  {
+    email: "laura@byvaro.com",
+    password: DEMO_PASSWORD,
+    name: "Laura Gómez",
+    accountType: "developer",
+    role: "member",
+    teamMemberId: "u2",
+    label: "Luxinmo · Agente (member)",
   },
 
   /* ───── Agencias colaboradoras ───── */

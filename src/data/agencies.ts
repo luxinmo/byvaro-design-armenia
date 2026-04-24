@@ -17,6 +17,7 @@
 
 import { developerOnlyPromotions } from "./developerPromotions";
 import { getAllContracts } from "@/lib/collaborationContracts";
+import type { LicenciaInmobiliaria } from "@/lib/licenses";
 
 export type Agency = {
   id: string;
@@ -104,7 +105,16 @@ export type Agency = {
   /** Rating subjetivo del promotor sobre esta agencia (1-5). */
   ratingPromotor?: number;
   /** Persona de contacto principal en la agencia. */
-  contactoPrincipal?: { nombre: string; rol?: string; email: string; telefono?: string };
+  contactoPrincipal?: {
+    nombre: string;
+    rol?: string;
+    email: string;
+    telefono?: string;
+    /** Idiomas que habla esta persona en concreto · subset de
+     *  `Empresa.idiomasAtencion`. Puede diferir: la agencia atiende
+     *  en 6 idiomas pero el contacto asignado habla solo 3. */
+    idiomas?: string[];
+  };
   /** Incidencias acumuladas — banderas de alerta. */
   incidencias?: { duplicados: number; cancelaciones: number; reclamaciones: number };
 
@@ -119,6 +129,41 @@ export type Agency = {
   googleFetchedAt?: string;
   /** URL pública de la ficha de Maps. */
   googleMapsUrl?: string;
+
+  /* ─── Ficha operativa (Empresa) · lo que la agencia mantiene en su
+         workspace · backend: `GET /api/empresas/:id/public` ─── */
+  /** Razón social (nombre jurídico). */
+  razonSocial?: string;
+  /** CIF / número de identificación fiscal. */
+  cif?: string;
+  /** Año de fundación, texto libre ("2015"). */
+  fundadaEn?: string;
+  /** Sitio web corporativo. */
+  sitioWeb?: string;
+  /** Horario de atención en texto libre. */
+  horario?: string;
+  /** Códigos de idioma en los que atiende (BCP 47 corto · "es","en","sv"). */
+  idiomasAtencion?: string[];
+  /** URLs de redes sociales. */
+  redes?: {
+    linkedin?: string;
+    instagram?: string;
+    facebook?: string;
+    youtube?: string;
+    tiktok?: string;
+  };
+  /** Dirección fiscal completa · a futuro viene de Google Places. */
+  direccionFiscal?: {
+    direccion?: string;
+    codigoPostal?: string;
+    ciudad?: string;
+    provincia?: string;
+    pais?: string;
+  };
+  /** Licencias y registros inmobiliarios que tiene la agencia (AICAT,
+   *  RAICV, COAPI, FMI…). Ver `src/lib/licenses.ts` para el catálogo
+   *  completo y los metadatos por tipo. */
+  licencias?: LicenciaInmobiliaria[];
 };
 
 /** Calcula el estado del contrato real de una agencia consultando los
@@ -197,6 +242,11 @@ export const agencies: Agency[] = [
     googleRatingsTotal: 247,
     googleFetchedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
     googleMapsUrl: "https://maps.app.goo.gl/DEMO_Prime",
+    licencias: [
+      { tipo: "RAIA",  numero: "RAIA-MA-000247", desde: "2018-06-14", verificada: true },
+      { tipo: "COAPI", numero: "COAPI-MA-01234", desde: "2017-03-02", verificada: true, publicUrl: "https://www.coapi.org" },
+      { tipo: "GIPE",  numero: "GIPE-3456",      desde: "2019-11-20" },
+    ],
   },
   {
     id: "ag-2",
@@ -234,6 +284,7 @@ export const agencies: Agency[] = [
     contactoPrincipal: {
       nombre: "Erik Lindqvist", rol: "Partner",
       email: "erik@nordichomefinders.com", telefono: "+46 70 123 4567",
+      idiomas: ["SV", "EN", "ES"],
     },
     incidencias: { duplicados: 1, cancelaciones: 0, reclamaciones: 0 },
     googlePlaceId: "ChIJDEMO_Nordic",
@@ -241,6 +292,31 @@ export const agencies: Agency[] = [
     googleRatingsTotal: 183,
     googleFetchedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
     googleMapsUrl: "https://maps.app.goo.gl/DEMO_Nordic",
+    /* ─── Ficha operativa Empresa · lo que la agencia mantiene ─── */
+    razonSocial: "Nordic Home Finders AB",
+    cif: "SE559234567801",
+    fundadaEn: "2015",
+    sitioWeb: "nordichomefinders.com",
+    horario: "L-V 9:00-17:00 (CET)",
+    idiomasAtencion: ["SV", "EN", "ES", "NO", "DA", "FI"],
+    redes: {
+      linkedin:  "https://www.linkedin.com/company/nordic-home-finders",
+      instagram: "https://www.instagram.com/nordichomefinders",
+      facebook:  "https://www.facebook.com/nordichomefinders",
+      youtube:   "https://www.youtube.com/@nordichomefinders",
+    },
+    direccionFiscal: {
+      direccion: "Birger Jarlsgatan 44",
+      codigoPostal: "114 29",
+      ciudad: "Stockholm",
+      provincia: "Stockholms län",
+      pais: "Suecia",
+    },
+    licencias: [
+      { tipo: "FMI",    numero: "FMI-2018-4567",  desde: "2018-02-10", verificada: true, publicUrl: "https://fmi.se" },
+      { tipo: "FIABCI", numero: "FIABCI-SE-04321", desde: "2020-09-01", verificada: true, publicUrl: "https://www.fiabci.org" },
+      { tipo: "RAICV",  numero: "RAICV-A-002158", desde: "2024-01-15", verificada: true, publicUrl: "https://habitatge.gva.es" },
+    ],
   },
   {
     id: "ag-3",

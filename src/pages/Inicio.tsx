@@ -22,12 +22,13 @@ import { Link } from "react-router-dom";
 import {
   CalendarDays, FileText, Home, Phone, Mail, MessageSquare,
   CheckSquare, Sparkles, ArrowUpRight, TrendingUp, Handshake,
-  Building2, UserPlus, AlertCircle, Users, BarChart3,
+  Building2, UserPlus, AlertCircle, Users, BarChart3, Activity,
 } from "lucide-react";
 import { UserContextSwitcher } from "@/components/ui/UserContextSwitcher";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/currentUser";
+import { useHasPermission } from "@/lib/permissions";
 import AgencyHome from "./AgencyHome";
 import { useCalendarEvents } from "@/lib/calendarStorage";
 import {
@@ -37,7 +38,8 @@ import {
 import { eventsInDay, formatTime, isToday as isTodayDate } from "@/lib/calendarHelpers";
 import { registros } from "@/data/records";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
-import { getAllTeamMembers, memberInitials, getMemberAvatarUrl } from "@/lib/team";
+import { getAllTeamMembers, memberInitials, getMemberAvatarUrl, findTeamMember } from "@/lib/team";
+import { useBusinessActivity } from "@/lib/businessActivity";
 
 /* ═══════════════════════════════════════════════════════════════════
    PAGE
@@ -97,6 +99,7 @@ export default function Inicio() {
           </div>
           <aside className="space-y-4 sm:space-y-5 min-w-0">
             <TodayAgendaWidget selectedUserId={selectedUserId} />
+            <RecentActivityWidget selectedUserId={selectedUserId} />
             <QuickActions />
           </aside>
         </div>
@@ -166,21 +169,20 @@ function ActividadesPendientes({ selectedUserId }: { selectedUserId: string | nu
       (ev) => ev.type === "call" && ev.status !== "cancelled" && ev.status !== "done" && byUser(ev),
     );
 
-    /* Mock counts · si hay filtro por usuario, dividimos los counts
-       por el número de miembros para que no sea visualmente confuso. */
-    const emailsAll = 4;
-    const whatsappsAll = 2;
-    const tareasTotalAll = 3;
-    const tareasVencidasAll = 1;
-    const divisor = selectedUserId ? Math.max(1, teamMembers.length) : 1;
-    const emails = Math.ceil(emailsAll / divisor);
-    const whatsapps = Math.ceil(whatsappsAll / divisor);
-    const tareasTotal = Math.ceil(tareasTotalAll / divisor);
-    const tareasVencidas = selectedUserId ? Math.min(1, tareasVencidasAll) : tareasVencidasAll;
+    /* Mock counts · cuando llegue el backend, estos vendrán filtrados
+       por ownership real (assignedTo = selectedUserId || currentUser.id).
+       Hoy no dividimos por miembros porque era matemática falsa — ver
+       discusión de incoherencias Inicio↔Actividad (abril 2026). */
+    const emails = 4;
+    const whatsapps = 2;
+    const tareasTotal = 3;
+    const tareasVencidas = 1;
 
     return [
       {
-        kind: "registro", icon: FileText, label: "Registros",
+        // CLAUDE.md · desambiguación Inicio vs Actividad:
+        //   Inicio = "pendientes" (backlog) · Actividad = throughput
+        kind: "registro", icon: FileText, label: "Registros pendientes",
         count: regs.length, urgent: regsDup,
         preview: regs.length > 0
           ? `${regs[0].cliente.nombre}${regs.length > 1 ? ` · +${regs.length - 1} más` : ""}`
@@ -189,7 +191,7 @@ function ActividadesPendientes({ selectedUserId }: { selectedUserId: string | nu
         tone: regsDup > 0 ? "destructive" : regs.length > 0 ? "warning" : "default",
       },
       {
-        kind: "visita", icon: Home, label: "Visitas",
+        kind: "visita", icon: Home, label: "Visitas por gestionar",
         count: visitasTotal,
         urgent: vPending.length,
         preview: visitasTotal > 0
@@ -229,7 +231,7 @@ function ActividadesPendientes({ selectedUserId }: { selectedUserId: string | nu
         tone: tareasVencidas > 0 ? "destructive" : "primary",
       },
     ];
-  }, [allEvents, selectedUserId, teamMembers.length]);
+  }, [allEvents, selectedUserId]);
 
   const totalAll = summaries.reduce((s, x) => s + x.count, 0);
   const selectedMember = selectedUserId
@@ -504,6 +506,105 @@ function TodayAgendaWidget({ selectedUserId }: { selectedUserId: string | null }
               </Link>
             </li>
           )}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ÚLTIMOS MOVIMIENTOS · widget compacto (5 items) que enlaza con
+   `/actividad` para el feed completo. Filtra por `selectedUserId`
+   igual que el resto del dashboard.
+   ═══════════════════════════════════════════════════════════════════ */
+
+function RecentActivityWidget({ selectedUserId }: { selectedUserId: string | null }) {
+  // CLAUDE.md · "Datos sensibles requieren permiso" · si el user no
+  // tiene activity.dashboard.view, el widget NO muestra actividad del
+  // resto del equipo — solo la suya. Así un agente junior puede ver
+  // "mis últimos movimientos" sin leakear ventas € o decisiones de
+  // colegas desde el Home.
+  const currentUser = useCurrentUser();
+  const canSeeAll = useHasPermission("activity.dashboard.view");
+  const effectiveUserId = canSeeAll
+    ? (selectedUserId ?? undefined)
+    : currentUser.id;
+
+  const feed = useBusinessActivity({ userId: effectiveUserId });
+  const items = feed.slice(0, 5);
+
+  return (
+    <section className="bg-card border border-border rounded-2xl shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
+      <header className="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-border">
+        <div>
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Activity className="h-3.5 w-3.5 text-primary" strokeWidth={1.75} />
+            {canSeeAll ? "Últimos movimientos" : "Mis últimos movimientos"}
+          </h3>
+          <p className="text-[11.5px] text-muted-foreground mt-0.5 tabular-nums">
+            {feed.length} en los últimos días
+          </p>
+        </div>
+        {canSeeAll && (
+          <Link
+            to="/actividad"
+            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
+          >
+            Ver todo <ArrowUpRight className="h-3 w-3" />
+          </Link>
+        )}
+      </header>
+      {items.length === 0 ? (
+        <div className="px-4 sm:px-5 py-6 text-center">
+          <p className="text-[12px] text-muted-foreground">
+            Sin movimientos recientes.
+          </p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-border/40">
+          {items.map((ev) => {
+            const Icon = ev.icon;
+            const tone = ev.tone === "success"
+              ? "bg-emerald-50 text-emerald-700"
+              : ev.tone === "destructive"
+                ? "bg-destructive/10 text-destructive"
+                : ev.tone === "warning"
+                  ? "bg-warning/10 text-warning"
+                  : ev.tone === "primary"
+                    ? "bg-primary/10 text-primary"
+                    : "bg-muted text-muted-foreground";
+            const member = ev.userId ? findTeamMember(ev.userId) : undefined;
+            const when = new Date(ev.at);
+            const now = new Date();
+            const hoursAgo = (now.getTime() - when.getTime()) / (1000 * 60 * 60);
+            const relative = hoursAgo < 1
+              ? "hace unos min"
+              : hoursAgo < 24
+                ? `hace ${Math.floor(hoursAgo)}h`
+                : hoursAgo < 24 * 7
+                  ? `hace ${Math.floor(hoursAgo / 24)}d`
+                  : when.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+            const content = (
+              <div className="flex items-start gap-2.5 px-3 py-2.5 hover:bg-muted/30 transition-colors">
+                <div className={cn("h-7 w-7 rounded-lg grid place-items-center shrink-0", tone)}>
+                  <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12px] font-medium text-foreground leading-snug line-clamp-2">
+                    {ev.title}
+                  </p>
+                  <p className="text-[10.5px] text-muted-foreground mt-0.5 tabular-nums">
+                    {member?.name.split(" ")[0] ?? ev.userName?.split(" ")[0] ?? ev.agencyName ?? "Sistema"} · {relative}
+                  </p>
+                </div>
+              </div>
+            );
+            return (
+              <li key={ev.id}>
+                {ev.href ? <Link to={ev.href}>{content}</Link> : content}
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

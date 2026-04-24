@@ -20,6 +20,10 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { Toaster, toast } from "sonner";
 import { agencies as baseAgencies, getContractStatus, getAgencyShareStats, type Agency } from "@/data/agencies";
+import { isAgencyVerified } from "@/lib/licenses";
+import { getAgencyLicenses } from "@/lib/agencyLicenses";
+import { agencyHref } from "@/lib/agencyNavigation";
+import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
 import { InvitarAgenciaModal } from "@/components/empresa/InvitarAgenciaModal";
 import { useInvitaciones, invitacionToSyntheticAgency } from "@/lib/invitaciones";
 import { useFavoriteAgencies } from "@/lib/favoriteAgencies";
@@ -519,8 +523,9 @@ export default function Colaboradores() {
                         />
                         <div className="mt-2 flex items-start gap-2">
                           <div className="min-w-0 flex-1">
-                            <h3 className="text-sm font-semibold text-foreground truncate">
+                            <h3 className="text-sm font-semibold text-foreground truncate inline-flex items-center gap-1.5">
                               {a.name}
+                              {isAgencyVerified(getAgencyLicenses(a)) && <VerifiedBadge size="sm" />}
                             </h3>
                             <p className="text-[11px] text-muted-foreground truncate">
                               {a.location}{a.type ? ` · ${typeLabel(a.type)}` : ""}
@@ -573,7 +578,7 @@ export default function Colaboradores() {
                         <button
                           onClick={() => {
                             setRequestsOpen(false);
-                            navigate(`/colaboradores/${a.id}`);
+                            navigate(agencyHref(a));
                           }}
                           className="mt-4 w-full h-9 rounded-full bg-foreground text-background text-xs font-semibold hover:bg-foreground/90 transition-colors inline-flex items-center justify-center gap-1.5"
                         >
@@ -938,7 +943,7 @@ export function FeatureCardV3({
   const navigate = useNavigate();
   const { isFavorite, toggleFavorite } = useFavoriteAgencies();
   const fav = isFavorite(a.id);
-  const goToFicha = () => navigate(`/colaboradores/${a.id}`);
+  const goToFicha = () => navigate(agencyHref(a));
 
   return (
     <article className="group relative overflow-hidden rounded-2xl bg-card border border-border shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200">
@@ -977,8 +982,9 @@ export function FeatureCardV3({
 
         <div className="mt-3">
           <div className="flex items-start gap-2">
-            <h3 className="text-base font-bold text-foreground truncate leading-tight flex-1 min-w-0">
+            <h3 className="text-base font-bold text-foreground truncate leading-tight flex-1 min-w-0 inline-flex items-center gap-1.5">
               <Highlight text={a.name} query={highlight} />
+              {isAgencyVerified(getAgencyLicenses(a)) && <VerifiedBadge size="sm" />}
             </h3>
             <GoogleRatingBadge agency={a} size="xs" />
           </div>

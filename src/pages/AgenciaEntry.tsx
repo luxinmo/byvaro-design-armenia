@@ -23,6 +23,9 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Handshake, ArrowRight, Building2, ArrowLeft } from "lucide-react";
 import { agencies, getAgencyShareStats } from "@/data/agencies";
+import { isAgencyVerified } from "@/lib/licenses";
+import { getAgencyLicenses } from "@/lib/agencyLicenses";
+import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
 import {
   setAccountType,
   setAccountAgencyId,
@@ -123,8 +126,11 @@ function AgencyPicker() {
                 className="h-14 w-14 rounded-full object-cover border-2 border-card shadow-soft bg-background shrink-0"
               />
               <div className="min-w-0 flex-1">
-                <div className="font-semibold text-foreground truncate">
-                  {a.name}
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-semibold text-foreground truncate">
+                    {a.name}
+                  </span>
+                  {isAgencyVerified(getAgencyLicenses(a)) && <VerifiedBadge size="sm" />}
                 </div>
                 <div className="text-[11px] text-muted-foreground truncate">
                   {a.location}

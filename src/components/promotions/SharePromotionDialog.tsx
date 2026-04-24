@@ -35,6 +35,10 @@ import { agencies as allAgencies, type Agency } from "@/data/agencies";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { useInvitaciones } from "@/lib/invitaciones";
 import { useFavoriteAgencies } from "@/lib/favoriteAgencies";
+import { Flag } from "@/components/ui/Flag";
+import { isAgencyVerified } from "@/lib/licenses";
+import { getAgencyLicenses } from "@/lib/agencyLicenses";
+import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -260,11 +264,14 @@ export function SharePromotionDialog({ open, onOpenChange, promotionName, promot
     const durationMeses = duration === "custom" ? customDuration : parseInt(duration, 10);
 
     if (multiMode) {
-      /* Creamos N invitaciones, una por agencia, con las mismas condiciones. */
+      /* Creamos N invitaciones, una por agencia, con las mismas condiciones.
+         Guardamos `agencyId` para poder cruzar la invitación con la agencia
+         en sus vistas (Resumen, /promociones de la agencia, etc). */
       selectedAgenciesList.forEach(ag => {
         invitar({
           emailAgencia: ag.contactoPrincipal?.email ?? `contacto@${slugify(ag.name).slice(0, 32) || "agencia"}.com`,
           nombreAgencia: ag.name,
+          agencyId: ag.id,
           mensajePersonalizado: "",
           comisionOfrecida: commission,
           idiomaEmail: "es",
@@ -289,6 +296,7 @@ export function SharePromotionDialog({ open, onOpenChange, promotionName, promot
     invitar({
       emailAgencia: targetEmail,
       nombreAgencia: targetName,
+      agencyId: matchedAgency?.id,
       mensajePersonalizado: "",
       comisionOfrecida: commission,
       idiomaEmail: "es",
@@ -340,6 +348,7 @@ export function SharePromotionDialog({ open, onOpenChange, promotionName, promot
       invitar({
         emailAgencia: targetEmail,
         nombreAgencia: targetName,
+        agencyId: matchedAgency?.id,
         mensajePersonalizado: "",
         comisionOfrecida: commission,
         idiomaEmail: "es",
@@ -1296,12 +1305,6 @@ function InlineEditNumber({
    acciones navegables — la card entera es el toggle de selección.
    ══════════════════════════════════════════════════════════════════════ */
 
-function flagOf(code: string): string {
-  const c = code.toUpperCase();
-  if (c.length !== 2) return "🏳️";
-  return String.fromCodePoint(...[...c].map(ch => 127397 + ch.charCodeAt(0)));
-}
-
 function SelectableAgencyCard({
   agency: a, selected, onToggle,
 }: { agency: Agency; selected: boolean; onToggle: () => void }) {
@@ -1345,15 +1348,18 @@ function SelectableAgencyCard({
           className="h-11 w-11 rounded-full object-cover border-2 border-card shadow-soft bg-background"
         />
         <div className="mt-2">
-          <h3 className="text-[13.5px] font-bold text-foreground truncate leading-tight">{a.name}</h3>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <h3 className="text-[13.5px] font-bold text-foreground truncate leading-tight">{a.name}</h3>
+            {isAgencyVerified(getAgencyLicenses(a)) && <VerifiedBadge size="sm" />}
+          </div>
           <p className="text-[10.5px] text-muted-foreground truncate mt-0.5">{a.location}</p>
         </div>
 
         {/* Mercados · banderas */}
         {a.mercados && a.mercados.length > 0 && (
-          <div className="mt-2 flex items-center gap-0.5 flex-wrap">
+          <div className="mt-2 flex items-center gap-1 flex-wrap">
             {a.mercados.slice(0, 5).map(m => (
-              <span key={m} className="text-[13px] leading-none" title={m}>{flagOf(m)}</span>
+              <Flag key={m} iso={m} size={14} shape="rect" title={m} />
             ))}
             {a.mercados.length > 5 && (
               <span className="text-[9.5px] text-muted-foreground ml-0.5">+{a.mercados.length - 5}</span>

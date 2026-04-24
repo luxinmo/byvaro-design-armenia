@@ -26,6 +26,10 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { agencies, getContractStatus, getAgencyShareStats, type Agency } from "@/data/agencies";
+import { isAgencyVerified } from "@/lib/licenses";
+import { getAgencyLicenses } from "@/lib/agencyLicenses";
+import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
+import { agencyHref } from "@/lib/agencyNavigation";
 import { promotions } from "@/data/promotions";
 import { Flag } from "@/components/ui/Flag";
 import { MinimalSort } from "@/components/ui/MinimalSort";
@@ -404,7 +408,7 @@ export function AgenciasTabStats({
             top={leaders.visitas && {
               agency: leaders.visitas.agency,
               value: leaders.visitas.value,
-              onClick: () => navigate(`/colaboradores/${leaders.visitas!.agency.id}/panel?from=${p.id}`),
+              onClick: () => navigate(agencyHref(leaders.visitas!.agency, { fromPromoId: p.id })),
             }}
           />
           <KpiStat
@@ -413,7 +417,7 @@ export function AgenciasTabStats({
             top={leaders.registros && {
               agency: leaders.registros.agency,
               value: leaders.registros.value,
-              onClick: () => navigate(`/colaboradores/${leaders.registros!.agency.id}/panel?from=${p.id}`),
+              onClick: () => navigate(agencyHref(leaders.registros!.agency, { fromPromoId: p.id })),
             }}
           />
           <KpiStat
@@ -423,7 +427,7 @@ export function AgenciasTabStats({
             top={leaders.ventas && {
               agency: leaders.ventas.agency,
               value: leaders.ventas.value,
-              onClick: () => navigate(`/colaboradores/${leaders.ventas!.agency.id}/panel?from=${p.id}`),
+              onClick: () => navigate(agencyHref(leaders.ventas!.agency, { fromPromoId: p.id })),
             }}
           />
           <KpiStat
@@ -562,7 +566,10 @@ export function AgenciasTabStats({
               onToggleId={toggleId}
               pageAllSelected={pageAllSelected}
               onTogglePage={togglePage}
-              onOpenAgency={(id) => navigate(`/colaboradores/${id}/panel?from=${p.id}`)}
+              onOpenAgency={(id) => {
+                const ag = agenciasEnPromo.find((a) => a.id === id);
+                if (ag) navigate(agencyHref(ag, { fromPromoId: p.id }));
+              }}
               onSeeAll={() => navigate("/colaboradores")}
               isFavorite={isFavorite}
               onToggleFavorite={handleToggleFavorite}
@@ -592,7 +599,10 @@ export function AgenciasTabStats({
                 agencies={pageItems}
                 selectedIds={selectedIds}
                 onToggleId={toggleId}
-                onOpenAgency={(id) => navigate(`/colaboradores/${id}/panel?from=${p.id}`)}
+                onOpenAgency={(id) => {
+                const ag = agenciasEnPromo.find((a) => a.id === id);
+                if (ag) navigate(agencyHref(ag, { fromPromoId: p.id }));
+              }}
                 isFavorite={isFavorite}
                 onToggleFavorite={handleToggleFavorite}
                 topBadgesByAgency={topBadgesByAgency}
@@ -767,6 +777,7 @@ function ListView({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
                       <p className="text-sm font-semibold text-foreground truncate">{a.name}</p>
+                      {isAgencyVerified(getAgencyLicenses(a)) && <VerifiedBadge size="sm" />}
                       <TopBadge categories={topBadgesByAgency[a.id] ?? []} />
                       {typeof a.googleRating === "number" && (
                         <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground tabular-nums shrink-0">
@@ -949,6 +960,7 @@ function GridView({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 min-w-0">
                     <p className="text-sm font-semibold text-foreground truncate">{a.name}</p>
+                    {isAgencyVerified(getAgencyLicenses(a)) && <VerifiedBadge size="sm" />}
                     <TopBadge categories={topBadgesByAgency[a.id] ?? []} />
                     {typeof a.googleRating === "number" && (
                       <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground tabular-nums shrink-0">

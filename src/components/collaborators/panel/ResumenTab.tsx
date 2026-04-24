@@ -13,11 +13,11 @@
  * No hay KPIs — todo son señales accionables.
  */
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ChevronRight, FileSignature, Home, Plus, Share2,
-  Upload, ArrowRight, Check, MoreHorizontal, AlertTriangle,
+  Upload, ArrowRight, Check, MoreHorizontal, AlertTriangle, Send,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,7 @@ import { promotions } from "@/data/promotions";
 import { useContractsForAgency } from "@/lib/collaborationContracts";
 import { useAgencyDocRequests } from "@/lib/agencyDocRequests";
 import { useCurrentUser } from "@/lib/currentUser";
+import { useInvitacionesForAgency } from "@/lib/invitaciones";
 import { ContractScopePickerDialog } from "@/components/collaborators/ContractScopePickerDialog";
 import { ContractNewChoiceDialog } from "@/components/collaborators/ContractNewChoiceDialog";
 import { ContractUploadDialog } from "@/components/collaborators/ContractUploadDialog";
@@ -35,14 +36,17 @@ import { SharePromotionDialog } from "@/components/promotions/SharePromotionDial
 
 /* ─── Helpers ─────────────────────────────────────────────────────── */
 
-function formatWhen(ms: number) {
-  const d = new Date(ms);
-  return {
-    day: d.getDate(),
-    month: d.toLocaleDateString("es-ES", { month: "short" }).replace(".", ""),
-    time: d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }),
-  };
+/** Etiqueta corta para la fecha de invitación en el chip del card. */
+function formatInvitedAt(ms: number): string {
+  if (!ms) return "hoy";
+  const diff = Date.now() - ms;
+  const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+  if (days <= 0) return "hoy";
+  if (days === 1) return "ayer";
+  if (days < 7) return `hace ${days} días`;
+  return new Date(ms).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 }
+
 
 type PromoStatus = "active" | "incomplete" | "inactive" | "sold-out";
 type PromoEntry = {
@@ -52,6 +56,7 @@ type PromoEntry = {
   status: PromoStatus;
   location?: string;
   commission?: number;
+  image?: string;
 };
 
 function usePromoCatalog() {
@@ -65,6 +70,7 @@ function usePromoCatalog() {
         status: p.status as PromoStatus,
         location: p.location,
         commission: typeof p.commission === "number" && p.commission > 0 ? p.commission : undefined,
+        image: p.image,
       });
     }
     for (const p of promotions) {
@@ -73,6 +79,7 @@ function usePromoCatalog() {
         id: p.id, name: p.name, active: true, status: "active",
         location: p.location,
         commission: typeof p.commission === "number" && p.commission > 0 ? p.commission : undefined,
+        image: p.image,
       });
     }
     return m;
@@ -117,8 +124,14 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
     setScopePickerOpen(true);
   };
 
+  /* Solo contamos como "compartibles" las promos publicadas Y donde
+     el promotor no desactivó la compartición. Alineado con
+     `ShareMultiPromosDialog` y la regla "no invitar a algo que no
+     está listo". */
   const activePromos = useMemo(
-    () => developerOnlyPromotions.filter((p) => p.status === "active"),
+    () => developerOnlyPromotions.filter(
+      (p) => p.status === "active" && p.canShareWithAgencies !== false,
+    ),
     [],
   );
   const sharedPromos = useMemo(() => {
@@ -133,10 +146,50 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
     () => sharedPromos.filter((p) => p.active).length,
     [sharedPromos],
   );
+  /* Invitaciones · cruzamos por agencyId o email · solo pendientes
+     (no aceptadas y no rechazadas/caducadas). Mapeamos a una lookup
+     `promoId → Invitacion` para anotar las cards de promociones. */
+  const allInvitations = useInvitacionesForAgency(a.id, a.contactoPrincipal?.email);
+  const invitationByPromoId = useMemo(() => {
+    const m = new Map<string, { createdAt: number; estado: "pendiente" | "aceptada" | "rechazada" | "caducada" }>();
+    for (const i of allInvitations) {
+      if (!i.promocionId) continue;
+      /* Si hay varias, quedate con la más reciente. */
+      const prev = m.get(i.promocionId);
+      if (!prev || i.createdAt > prev.createdAt) {
+        m.set(i.promocionId, { createdAt: i.createdAt, estado: i.estado });
+      }
+    }
+    return m;
+  }, [allInvitations]);
+
+  /* Una promo está "invitada" si hay una invitación PENDIENTE para ella
+     y la agencia aún no la tiene en `promotionsCollaborating`. */
+  const invitedPromoIds = useMemo(() => {
+    const shared = new Set(a.promotionsCollaborating ?? []);
+    const ids = new Set<string>();
+    for (const [promoId, inv] of invitationByPromoId) {
+      if (inv.estado === "pendiente" && !shared.has(promoId)) ids.add(promoId);
+    }
+    return ids;
+  }, [invitationByPromoId, a.promotionsCollaborating]);
+
+  /* Bloque 2 solo lista las activas SIN compartir y SIN invitación
+     pendiente · las invitadas suben al Bloque 1. */
   const notSharedPromos = useMemo(
-    () => activePromos.filter((pr) => !(a.promotionsCollaborating ?? []).includes(pr.id)),
-    [activePromos, a.promotionsCollaborating],
+    () => activePromos.filter((pr) =>
+      !(a.promotionsCollaborating ?? []).includes(pr.id) && !invitedPromoIds.has(pr.id),
+    ),
+    [activePromos, a.promotionsCollaborating, invitedPromoIds],
   );
+
+  /* Promos invitadas · activas, con invitación pendiente, no compartidas.
+     Se renderizan en Bloque 1 con chip "Invitado · fecha". */
+  const invitedPromos = useMemo(() => {
+    return activePromos
+      .filter((pr) => invitedPromoIds.has(pr.id))
+      .map((pr) => ({ ...pr, invitedAt: invitationByPromoId.get(pr.id)?.createdAt ?? 0 }));
+  }, [activePromos, invitedPromoIds, invitationByPromoId]);
 
   const pendingContracts = useMemo(
     () => contracts.filter((c) => !c.archived && (c.status === "draft" || c.status === "sent" || c.status === "viewed")),
@@ -164,18 +217,20 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
     return { uncoveredPromos: uncovered, hasBlanketSigned: blanket };
   }, [contracts, sharedPromos]);
 
-  const upcomingVisits = useMemo(() => {
-    const base: Record<string, Array<{ when: number; client: string; promo: string; unit: string; status: "confirmada" | "pendiente" }>> = {
-      "ag-1": [
-        { when: Date.now() + 2 * 86400e3, client: "María García",  promo: "Villa Serena",     unit: "Villa 12-B", status: "confirmada" },
-        { when: Date.now() + 5 * 86400e3, client: "Pedro Sánchez", promo: "Villas del Pinar", unit: "Apt. 04-2",  status: "pendiente" },
-        { when: Date.now() + 8 * 86400e3, client: "Isabel Ruiz",   promo: "Villa Serena",     unit: "Villa 08-C", status: "confirmada" },
-      ],
-      "ag-2": [
-        { when: Date.now() + 3 * 86400e3, client: "Erik Lindqvist", promo: "Villa Serena", unit: "Villa 14-A", status: "confirmada" },
-      ],
-    };
-    return (base[a.id] ?? []).slice(0, 3);
+  /* Mock determinista · visits + registros + ventas por (agencyId,
+     promoId). Evita números uniformes en todas las cards y mantiene
+     consistencia entre renders. Backend real:
+       GET /api/agencias/:id/stats-by-promotion */
+  const metricsFor = useCallback((promoId: string, hasShared: boolean):
+    { visits: number; registros: number; ventas: number } => {
+    if (!hasShared) return { visits: 0, registros: 0, ventas: 0 };
+    const key = `${a.id}-${promoId}`;
+    let seed = 0;
+    for (let i = 0; i < key.length; i++) seed = (seed * 31 + key.charCodeAt(i)) >>> 0;
+    const visits    = (seed % 18) + 2;
+    const registros = Math.min(visits, ((seed >> 3) % 13) + 1);
+    const ventas    = Math.min(registros, ((seed >> 6) % 5));
+    return { visits, registros, ventas };
   }, [a.id]);
 
   /* "En curso" = trámites normales (contratos + docs a entregar). No
@@ -188,8 +243,16 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
 
   /* ════════════════════════════════════════════════════════════════ */
 
+  /* Tono del estado · `warning` si hay algo que arreglar (sin
+     contrato), `primary` si todo lo compartido está cubierto pero
+     hay trámites en curso O quedan promociones por compartir,
+     `success` solo cuando TODO cuadra. */
   const headerTone: "warning" | "primary" | "success" =
-    uncoveredPromos.length > 0 ? "warning" : inFlightCount > 0 ? "primary" : "success";
+    uncoveredPromos.length > 0
+      ? "warning"
+      : (inFlightCount > 0 || notSharedPromos.length > 0)
+        ? "primary"
+        : "success";
   const headerDotCls = {
     warning: "bg-warning",
     primary: "bg-primary",
@@ -219,9 +282,7 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
             <>
               <span className="text-muted-foreground"> · </span>
               <span className="tabular-nums text-warning">{uncoveredPromos.length}</span>{" "}
-              <span className="text-warning">
-                {uncoveredPromos.length === 1 ? "sin contrato" : "sin contrato"}
-              </span>
+              <span className="text-warning">sin contrato</span>
             </>
           ) : inFlightCount > 0 ? (
             <>
@@ -229,6 +290,14 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
               <span className="tabular-nums text-foreground">{inFlightCount}</span>{" "}
               <span className="text-foreground">
                 {inFlightCount === 1 ? "trámite en curso" : "trámites en curso"}
+              </span>
+            </>
+          ) : notSharedPromos.length > 0 ? (
+            <>
+              <span className="text-muted-foreground"> · </span>
+              <span className="tabular-nums text-primary">{notSharedPromos.length}</span>{" "}
+              <span className="text-primary">
+                {notSharedPromos.length === 1 ? "sin compartir aún" : "sin compartir aún"}
               </span>
             </>
           ) : sharedActiveCount > 0 ? (
@@ -240,7 +309,7 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
         </h2>
         <div className="mt-5">
 
-        {sharedPromos.length === 0 ? (
+        {sharedPromos.length === 0 && invitedPromos.length === 0 ? (
           <EmptyCard
             icon={Share2}
             title="No colabora en ninguna promoción todavía"
@@ -248,6 +317,55 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
           />
         ) : (
           <>
+            {/* Grid de promociones INVITADAS (pendientes de aceptar) ·
+                suben arriba porque son lo más accionable en ese momento. */}
+            {invitedPromos.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
+                {invitedPromos.map((p) => (
+                  <div
+                    key={p.id}
+                    className="rounded-2xl border border-primary/30 bg-primary/[0.04] shadow-soft overflow-hidden transition-all"
+                  >
+                    {/* Cover */}
+                    <div className="relative aspect-[16/8] bg-muted overflow-hidden">
+                      {p.image ? (
+                        <img src={p.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                      ) : (
+                        <div className="absolute inset-0 grid place-items-center bg-muted/60">
+                          <Home className="h-6 w-6 text-muted-foreground/50" strokeWidth={1.25} />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent pointer-events-none" />
+                      <span className="absolute top-2 right-2 inline-flex items-center gap-1 h-5 px-2 rounded-full border border-primary/30 bg-primary/90 text-primary-foreground text-[10px] font-semibold backdrop-blur">
+                        <Send className="h-2.5 w-2.5" strokeWidth={2.5} />
+                        Invitado · {formatInvitedAt(p.invitedAt)}
+                      </span>
+                    </div>
+                    <div className="p-4">
+                      <Link to={`/promociones/${p.id}`} className="block group">
+                        <p className="text-sm font-semibold text-foreground truncate group-hover:underline">
+                          {p.name}
+                        </p>
+                      </Link>
+                      <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                        <span className="inline-flex items-center h-5 px-2 rounded-full bg-muted/60 text-[10.5px] font-medium text-foreground tabular-nums">
+                          Comisión {typeof p.commission === "number" && p.commission > 0 ? p.commission : 5}%
+                        </span>
+                        {p.location && (
+                          <span className="text-[10.5px] text-muted-foreground truncate">
+                            {p.location}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10.5px] text-muted-foreground mt-2 italic">
+                        Esperando a que {a.name.split(" ")[0]} acepte la invitación.
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* ⚠ Incidencia real · promociones sin contrato que cubra */}
             {uncoveredPromos.length > 0 && (
               <button
@@ -291,56 +409,75 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
                       <div
                         key={p.id}
                         className={cn(
-                          "rounded-2xl border bg-card shadow-soft p-4 transition-all",
+                          "rounded-2xl border bg-card shadow-soft overflow-hidden transition-all",
                           isUncovered ? "border-warning/30" : "border-border",
                         )}
                       >
-                        <div className="flex items-start justify-between gap-2">
+                        {/* Cover con imagen + chip de estado superpuesto */}
+                        <div className="relative aspect-[16/8] bg-muted overflow-hidden">
+                          {p.image ? (
+                            <img src={p.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                          ) : (
+                            <div className="absolute inset-0 grid place-items-center bg-muted/60">
+                              <Home className="h-6 w-6 text-muted-foreground/50" strokeWidth={1.25} />
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none" />
                           <span className={cn(
-                            "h-8 w-8 rounded-lg grid place-items-center shrink-0",
-                            isUncovered ? "bg-warning/10 text-warning" : "bg-success/10 text-success",
+                            "absolute top-2 right-2 inline-flex items-center gap-1 h-5 px-2 rounded-full border text-[10px] font-medium backdrop-blur",
+                            isUncovered
+                              ? "border-warning/30 bg-warning/90 text-warning-foreground"
+                              : "border-success/25 bg-success/90 text-success-foreground",
                           )}>
                             {isUncovered
-                              ? <AlertTriangle className="h-4 w-4" strokeWidth={2} />
-                              : <Check className="h-4 w-4" strokeWidth={2.25} />}
-                          </span>
-                          <span className={cn(
-                            "inline-flex items-center h-5 px-2 rounded-full border text-[10px] font-medium shrink-0",
-                            isUncovered
-                              ? "border-warning/30 bg-warning/10 text-warning"
-                              : "border-success/25 bg-success/10 text-success",
-                          )}>
-                            {isUncovered ? "Sin contrato" : "Cubierta"}
+                              ? <><AlertTriangle className="h-2.5 w-2.5" strokeWidth={2.5} />Sin contrato</>
+                              : <><Check className="h-2.5 w-2.5" strokeWidth={2.5} />Contrato en vigor</>}
                           </span>
                         </div>
-                        <Link
-                          to={`/promociones/${p.id}?tab=Agencies`}
-                          className="block mt-3 group"
-                        >
-                          <p className="text-sm font-semibold text-foreground truncate group-hover:underline">
-                            {p.name}
-                          </p>
-                        </Link>
-                        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-                          {typeof p.commission === "number" && (
-                            <span className="inline-flex items-center h-5 px-2 rounded-full bg-muted/60 text-[10.5px] font-medium text-foreground tabular-nums">
-                              Comisión {p.commission}%
-                            </span>
-                          )}
-                          {p.location && (
-                            <span className="text-[10.5px] text-muted-foreground truncate">
-                              {p.location}
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-3 flex items-center justify-end">
+
+                        <div className="p-4">
                           <Link
                             to={`/promociones/${p.id}?tab=Agencies`}
-                            className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                            className="block group"
                           >
-                            Ver en promoción
-                            <ArrowRight className="h-3 w-3" />
+                            <p className="text-sm font-semibold text-foreground truncate group-hover:underline">
+                              {p.name}
+                            </p>
                           </Link>
+                          <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                            {typeof p.commission === "number" && (
+                              <span className="inline-flex items-center h-5 px-2 rounded-full bg-muted/60 text-[10.5px] font-medium text-foreground tabular-nums">
+                                Comisión {p.commission}%
+                              </span>
+                            )}
+                            {p.location && (
+                              <span className="text-[10.5px] text-muted-foreground truncate">
+                                {p.location}
+                              </span>
+                            )}
+                          </div>
+                          {(() => {
+                            const m = metricsFor(p.id, true);
+                            const conversion = m.visits > 0
+                              ? Math.round((m.ventas / m.visits) * 100)
+                              : 0;
+                            return (
+                              <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-muted/40 px-2.5 py-2">
+                                <MetricStat label="Visitas"    value={m.visits} />
+                                <MetricStat label="Ventas"     value={m.ventas} />
+                                <MetricStat label="Conversión" value={`${conversion}%`} />
+                              </div>
+                            );
+                          })()}
+                          <div className="mt-3 flex items-center justify-end">
+                            <Link
+                              to={`/promociones/${p.id}?tab=Agencies`}
+                              className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              Ver en promoción
+                              <ArrowRight className="h-3 w-3" />
+                            </Link>
+                          </div>
                         </div>
                       </div>
                     );
@@ -395,21 +532,39 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
                 type="button"
                 key={p.id}
                 onClick={() => setSharePromo({ id: p.id, name: p.name })}
-                className="group text-left rounded-2xl border border-dashed border-border bg-card/50 p-4 hover:bg-card hover:border-foreground/40 hover:shadow-soft transition-all"
+                className="group text-left rounded-2xl border border-dashed border-border bg-card/50 overflow-hidden hover:bg-card hover:border-foreground/40 hover:shadow-soft transition-all"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="h-8 w-8 rounded-lg bg-muted text-muted-foreground grid place-items-center shrink-0">
-                    <Home className="h-4 w-4" strokeWidth={1.75} />
-                  </span>
-                  <span className="inline-flex items-center h-5 px-2 rounded-full border border-border bg-muted/40 text-[10px] font-medium text-muted-foreground shrink-0">
+                {/* Cover con imagen de la promoción · color completo */}
+                <div className="relative aspect-[16/8] bg-muted overflow-hidden">
+                  {p.image ? (
+                    <img
+                      src={p.image}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 grid place-items-center bg-muted/60">
+                      <Home className="h-6 w-6 text-muted-foreground/50" strokeWidth={1.25} />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
+                  <span className="absolute top-2 right-2 inline-flex items-center h-5 px-2 rounded-full border border-border bg-background/90 backdrop-blur text-[10px] font-medium text-muted-foreground">
                     Sin compartir
                   </span>
                 </div>
-                <p className="text-sm font-semibold text-foreground mt-3 truncate">{p.name}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">{p.location ?? "—"}</p>
-                <div className="mt-2 inline-flex items-center gap-1 text-[11px] text-foreground font-medium group-hover:gap-1.5 transition-all">
-                  <Plus className="h-3 w-3" strokeWidth={2.25} />
-                  Compartir con {a.name.split(" ")[0]}
+
+                <div className="p-4">
+                  <p className="text-sm font-semibold text-foreground truncate">{p.name}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{p.location ?? "—"}</p>
+                  <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-muted/40 px-2.5 py-2">
+                    <MetricStat label="Visitas"    value={0}   muted />
+                    <MetricStat label="Ventas"     value={0}   muted />
+                    <MetricStat label="Conversión" value="—"   muted />
+                  </div>
+                  <div className="mt-3 inline-flex items-center gap-1 text-[11px] text-foreground font-medium group-hover:gap-1.5 transition-all">
+                    <Plus className="h-3 w-3" strokeWidth={2.25} />
+                    Compartir con {a.name.split(" ")[0]}
+                  </div>
                 </div>
               </button>
             ))}
@@ -417,53 +572,8 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
         </section>
       )}
 
-      {/* ═══════════════════ Próximas visitas ═══════════════════ */}
-      {upcomingVisits.length > 0 && (
-        <section>
-          <BlockHeader
-            title="Próximas visitas"
-            subtitle={`${upcomingVisits.length} visita${upcomingVisits.length === 1 ? "" : "s"} programada${upcomingVisits.length === 1 ? "" : "s"}`}
-            right={
-              <Link
-                to="/calendario"
-                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-0.5"
-              >
-                Ver calendario
-                <ChevronRight className="h-3 w-3" />
-              </Link>
-            }
-          />
-          <ul className="rounded-2xl border border-border bg-card shadow-soft divide-y divide-border/50 overflow-hidden">
-            {upcomingVisits.map((v, i) => {
-              const w = formatWhen(v.when);
-              return (
-                <li key={i} className="px-4 py-3 flex items-center gap-3">
-                  <div className="shrink-0 h-10 w-10 rounded-lg bg-muted/60 grid place-items-center">
-                    <div className="text-center">
-                      <p className="text-[9px] uppercase tracking-wider text-muted-foreground leading-none">{w.month}</p>
-                      <p className="text-sm font-bold text-foreground leading-none tabular-nums mt-0.5">{w.day}</p>
-                    </div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">{v.client}</p>
-                    <p className="text-[11.5px] text-muted-foreground truncate">
-                      {v.promo} · {v.unit} · {w.time}
-                    </p>
-                  </div>
-                  <span className={cn(
-                    "inline-flex items-center h-5 px-2 rounded-full border text-[10px] font-medium shrink-0",
-                    v.status === "confirmada"
-                      ? "border-success/25 bg-success/10 text-success"
-                      : "border-warning/30 bg-warning/10 text-warning",
-                  )}>
-                    {v.status}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+      {/* ═══════════════ Estadísticas útiles ═══════════════ */}
+      <AgencyStats agency={a} />
 
       {/* ═══ Ver actividad ═══ */}
       <div className="flex flex-wrap gap-2 pt-2">
@@ -529,6 +639,124 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
 }
 
 /* ═══════════════ Sub-componentes ═══════════════ */
+
+/** Estadísticas útiles de la agencia para el promotor · leídas del
+ *  agregado `Agency` (backend: `GET /api/agencias/:id/summary`). */
+function AgencyStats({ agency: a }: { agency: Agency }) {
+  const visits   = a.visitsCount ?? 0;
+  const ventas   = a.ventasCerradas ?? 0;
+  const regs     = a.registrosAportados ?? a.registrations ?? 0;
+  const volumen  = a.salesVolume ?? 0;
+  const ticket   = a.ticketMedio ?? (ventas > 0 ? Math.round(volumen / ventas) : 0);
+  const conv     = typeof a.conversionRate === "number"
+    ? a.conversionRate
+    : (regs > 0 ? Math.round((ventas / regs) * 100) : 0);
+  const rating   = a.ratingPromotor ?? 0;
+
+  const last = a.lastActivityAt ? relativeFromIso(a.lastActivityAt) : "—";
+
+  const fmtEur = (n: number) => {
+    if (!Number.isFinite(n) || n === 0) return "—";
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")} M€`;
+    if (n >= 1_000)     return `${Math.round(n / 1_000)} K€`;
+    return `${n} €`;
+  };
+
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-3">
+        <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Estadísticas
+        </p>
+        <p className="text-[11.5px] text-muted-foreground">
+          · histórico acumulado con esta agencia
+        </p>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard label="Conversión registros → ventas" value={`${conv}%`}
+          tone={conv >= 15 ? "success" : conv >= 8 ? "primary" : "muted"}
+          hint={`${regs} registros · ${ventas} ventas`} />
+        <StatCard label="Ticket medio" value={fmtEur(ticket)} tone="muted"
+          hint={ventas > 0 ? `${ventas} ventas cerradas` : "aún sin ventas"} />
+        <StatCard label="Volumen cerrado" value={fmtEur(volumen)}
+          tone={volumen > 0 ? "success" : "muted"}
+          hint={ventas > 0 ? `${ventas} operaciones` : "—"} />
+        <StatCard label="Actividad" value={last}
+          tone={isRecent(a.lastActivityAt) ? "success" : "muted"}
+          hint={rating > 0 ? `Rating ${rating}/5 · ${visits} visitas` : `${visits} visitas totales`} />
+      </div>
+    </section>
+  );
+}
+
+function StatCard({
+  label, value, hint, tone,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone: "success" | "primary" | "muted";
+}) {
+  const valueCls = {
+    success: "text-success",
+    primary: "text-primary",
+    muted:   "text-foreground",
+  }[tone];
+  return (
+    <div className="rounded-2xl border border-border bg-card shadow-soft p-3.5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground truncate">
+        {label}
+      </p>
+      <p className={cn("text-[20px] font-bold tabular-nums leading-none mt-2", valueCls)}>
+        {value}
+      </p>
+      {hint && <p className="text-[10.5px] text-muted-foreground/80 mt-1.5 truncate">{hint}</p>}
+    </div>
+  );
+}
+
+function relativeFromIso(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const diff = Date.now() - d.getTime();
+    const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+    if (days <= 0) return "hoy";
+    if (days === 1) return "ayer";
+    if (days < 7)   return `hace ${days} días`;
+    if (days < 30)  return `hace ${Math.floor(days / 7)} sem.`;
+    if (days < 365) return `hace ${Math.floor(days / 30)} meses`;
+    return `hace ${Math.floor(days / 365)} años`;
+  } catch { return iso; }
+}
+
+function isRecent(iso?: string): boolean {
+  if (!iso) return false;
+  const diff = Date.now() - new Date(iso).getTime();
+  return diff < 30 * 24 * 60 * 60 * 1000;
+}
+
+function MetricStat({
+  label, value, muted,
+}: {
+  label: string;
+  value: number | string;
+  muted?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-0">
+      <span className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+        {label}
+      </span>
+      <span className={cn(
+        "text-sm font-bold tabular-nums leading-none mt-0.5",
+        muted ? "text-muted-foreground/70" : "text-foreground",
+      )}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 
 /** Agrupa las promociones compartidas que NO están publicables
  *  (`incomplete`, `inactive`, `sold-out`) en una sola línea compacta.

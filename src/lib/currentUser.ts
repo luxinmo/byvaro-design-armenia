@@ -14,6 +14,7 @@
 
 import { useMemo } from "react";
 import { agencies } from "@/data/agencies";
+import { mockUsers } from "@/data/mockUsers";
 import { useAccountType, type AccountType } from "./accountType";
 import { usePersistedProfile } from "./profileStorage";
 
@@ -66,18 +67,39 @@ function buildAgencyUser(agencyId: string): CurrentUser {
   };
 }
 
+/** Construye un usuario developer a partir del MockUser logueado.
+ *  Cuando `developerEmail` no coincide con ningún mock (o no existe),
+ *  cae en DEVELOPER_USER (arman · admin) por compatibilidad. */
+function buildDeveloperUser(developerEmail?: string): CurrentUser {
+  if (!developerEmail) return DEVELOPER_USER;
+  const mock = mockUsers.find(
+    (u) => u.accountType === "developer"
+        && u.email.toLowerCase() === developerEmail.toLowerCase(),
+  );
+  if (!mock) return DEVELOPER_USER;
+  return {
+    id: mock.teamMemberId ?? "u1",
+    name: mock.name,
+    email: mock.email,
+    role: mock.role ?? "admin",
+    organizationId: "org1",
+    accountType: "developer",
+  };
+}
+
 export function useCurrentUser(): CurrentUser {
-  const { type, agencyId } = useAccountType();
+  const { type, agencyId, developerEmail } = useAccountType();
   /* Fachada legacy · delega en meStorage. Ver ADR-050 y `src/lib/meStorage.ts`.
    * Se sincroniza automáticamente con la lista de TEAM_MEMBERS — si un
    * admin edita al usuario actual desde `/equipo`, este hook se refresca. */
   const profile = usePersistedProfile();
   return useMemo(() => {
     if (type === "agency") return buildAgencyUser(agencyId);
+    const base = buildDeveloperUser(developerEmail);
     return {
-      ...DEVELOPER_USER,
-      name:       profile?.fullName  ?? DEVELOPER_USER.name,
-      email:      profile?.email     ?? DEVELOPER_USER.email,
+      ...base,
+      name:       profile?.fullName  ?? base.name,
+      email:      profile?.email     ?? base.email,
       jobTitle:   profile?.jobTitle,
       department: profile?.department,
       languages:  profile?.languages,
@@ -85,7 +107,7 @@ export function useCurrentUser(): CurrentUser {
       avatar:     profile?.avatar,
       phone:      profile?.phone,
     };
-  }, [type, agencyId, profile]);
+  }, [type, agencyId, developerEmail, profile]);
 }
 
 export function isAdmin(user: CurrentUser): boolean {
