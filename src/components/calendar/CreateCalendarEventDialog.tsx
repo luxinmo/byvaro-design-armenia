@@ -310,14 +310,14 @@ export function CreateCalendarEventDialog({
                     type="button"
                     onClick={() => setType(t)}
                     className={cn(
-                      "flex flex-col items-center gap-1 h-14 rounded-xl border text-[10.5px] font-medium transition-colors",
+                      "flex flex-col items-center justify-center gap-1.5 py-2.5 px-1 rounded-xl border text-[11px] font-medium leading-none transition-colors min-h-[60px]",
                       active
                         ? `${cfg.bgClass} ${cfg.textClass} ${cfg.borderClass} ring-2 ring-offset-1 ring-offset-background`
                         : "bg-card border-border text-muted-foreground hover:bg-muted",
                     )}
                   >
-                    <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
-                    {cfg.label}
+                    <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                    <span className="truncate max-w-full leading-none">{cfg.label}</span>
                   </button>
                 );
               })}

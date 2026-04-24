@@ -42,7 +42,7 @@ import {
   formatDayTitle, formatShortDate, durationMinutes,
   eventsInDay, eventsInMonth, WEEKDAY_SHORT_ES,
 } from "@/lib/calendarHelpers";
-import { getAllTeamMembers, memberInitials, getMemberAvatarUrl } from "@/lib/team";
+import { findTeamMember, getAllTeamMembers, memberInitials, getMemberAvatarUrl } from "@/lib/team";
 import { CreateCalendarEventDialog } from "@/components/calendar/CreateCalendarEventDialog";
 import { cn } from "@/lib/utils";
 
@@ -985,11 +985,7 @@ function AgendaView({
                           {` · ${durationMinutes(ev)} min`}
                         </p>
                       </div>
-                      <div className={cn("h-7 w-7 rounded-full grid place-items-center shrink-0", getMemberCalendarColor(ev.assigneeUserId))}>
-                        <span className="text-[9px] font-bold text-white">
-                          {(ev.assigneeName ?? "").split(" ").map((w) => w[0]).slice(0, 2).join("")}
-                        </span>
-                      </div>
+                      <AssigneeAvatar userId={ev.assigneeUserId} fallbackName={ev.assigneeName} size={28} />
                     </button>
                   </li>
                 );
@@ -1131,5 +1127,56 @@ function MobileMonthView({
         )}
       </div>
     </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ASSIGNEE AVATAR · coherente en todo el calendario
+   ───────────────────────────────────────────────────────────────────
+   Si el miembro tiene `avatarUrl` → muestra la foto real con un ring
+   del color del agente (para no perder la identificación visual del
+   carril del calendario).
+   Si no hay foto → círculo con iniciales sobre el color del agente.
+   ═══════════════════════════════════════════════════════════════════ */
+function AssigneeAvatar({
+  userId, fallbackName, size = 28,
+}: {
+  userId: string;
+  fallbackName?: string;
+  size?: number;
+}) {
+  const member = findTeamMember(userId);
+  const url = member ? getMemberAvatarUrl(member) : undefined;
+  const color = getMemberCalendarColor(userId);
+  const initials = member
+    ? memberInitials(member)
+    : (fallbackName ?? "")
+        .split(" ")
+        .map((w) => w[0])
+        .slice(0, 2)
+        .join("")
+        .toUpperCase();
+
+  const dim = { width: size, height: size };
+
+  if (url) {
+    return (
+      <span
+        className={cn("rounded-full p-[2px] shrink-0 grid place-items-center", color)}
+        style={dim}
+        title={member?.name ?? fallbackName}
+      >
+        <img src={url} alt="" className="rounded-full w-full h-full object-cover" />
+      </span>
+    );
+  }
+  return (
+    <span
+      className={cn("rounded-full grid place-items-center shrink-0", color)}
+      style={dim}
+      title={member?.name ?? fallbackName}
+    >
+      <span className="text-[9.5px] font-bold text-white leading-none">{initials}</span>
+    </span>
   );
 }
