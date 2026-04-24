@@ -22,7 +22,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Handshake, ArrowRight, Building2, ArrowLeft } from "lucide-react";
-import { agencies } from "@/data/agencies";
+import { agencies, getAgencyShareStats } from "@/data/agencies";
 import {
   setAccountType,
   setAccountAgencyId,
@@ -130,10 +130,15 @@ function AgencyPicker() {
                   {a.location}
                 </div>
                 <div className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-                  <span>
-                    {a.promotionsCollaborating.length}{" "}
-                    {a.promotionsCollaborating.length === 1 ? "promoción" : "promociones"}
-                  </span>
+                  {(() => {
+                    const s = getAgencyShareStats(a);
+                    return (
+                      <span>
+                        {s.sharedActive} de {s.activeTotal}{" "}
+                        {s.activeTotal === 1 ? "promoción" : "promociones"}
+                      </span>
+                    );
+                  })()}
                   {a.teamSize != null && (
                     <>
                       <span className="opacity-40">·</span>

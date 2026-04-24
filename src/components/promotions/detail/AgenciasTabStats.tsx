@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { agencies, getContractStatus, type Agency } from "@/data/agencies";
+import { agencies, getContractStatus, getAgencyShareStats, type Agency } from "@/data/agencies";
 import { promotions } from "@/data/promotions";
 import { Flag } from "@/components/ui/Flag";
 import { MinimalSort } from "@/components/ui/MinimalSort";
@@ -1234,8 +1234,9 @@ function EmptyStatePanel({
  */
 function StatusChips({ agency: a }: { agency: Agency }) {
   const contract = getContractStatus(a);
-  const shared = a.promotionsCollaborating?.length ?? 0;
-  const total = a.totalPromotionsAvailable ?? shared;
+  const stats = getAgencyShareStats(a);
+  const shared = stats.sharedActive;
+  const total = stats.activeTotal;
   const inAll = total > 0 && shared === total;
   const inc = a.incidencias;
   const incTotal = (inc?.duplicados ?? 0) + (inc?.cancelaciones ?? 0) + (inc?.reclamaciones ?? 0);

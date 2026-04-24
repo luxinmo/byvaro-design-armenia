@@ -9,7 +9,7 @@ import { unitDataToUnit, mergeUnitIntoUnitData } from "@/lib/unitDataAdapter";
 import type { Unit } from "@/data/units";
 import { promotions, getBuildingTypeLabel } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion, type Comercial, type ComercialPermissions } from "@/data/developerPromotions";
-import { agencies, countAgenciesForPromotion, type Agency } from "@/data/agencies";
+import { agencies, countAgenciesForPromotion, getAgencyShareStats, type Agency } from "@/data/agencies";
 import { AgenciasTabStats } from "@/components/promotions/detail/AgenciasTabStats";
 import { FeatureCardV3 } from "@/pages/Colaboradores";
 import ColaboradoresEstadisticas from "@/pages/ColaboradoresEstadisticas";
@@ -2604,7 +2604,12 @@ function AgenciesTab({ promotionId, navigate, onInvite, canShare = true, onActiv
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-medium text-foreground truncate">{a.name}</p>
-                          <p className="text-[10px] text-muted-foreground">{a.promotionsCollaborating.length} de {a.totalPromotionsAvailable} promos</p>
+                          {(() => {
+                            const s = getAgencyShareStats(a);
+                            return (
+                              <p className="text-[10px] text-muted-foreground">{s.sharedActive} de {s.activeTotal} promos</p>
+                            );
+                          })()}
                         </div>
                       </div>
                       <button
@@ -2630,8 +2635,9 @@ function AgenciesTab({ promotionId, navigate, onInvite, canShare = true, onActiv
 function AgencyCard({ agency: ag, promotionId, selected, onToggleSelect }: { agency: Agency; promotionId: string; selected: boolean; onToggleSelect: () => void }) {
   const logoUrl = ag.logo || `https://ui-avatars.com/api/?name=${encodeURIComponent(ag.name)}&background=e2e8f0&color=475569&size=120&font-size=0.33&bold=true`;
   const collabInThis = ag.promotionsCollaborating.includes(promotionId);
-  const collabCount = ag.promotionsCollaborating.length;
-  const totalPromos = ag.totalPromotionsAvailable;
+  const shareStats = getAgencyShareStats(ag);
+  const collabCount = shareStats.sharedActive;
+  const totalPromos = shareStats.activeTotal;
   const conversionRate = ag.visitsCount > 0 ? Math.round((ag.registrations / ag.visitsCount) * 100) : 0;
 
   return (

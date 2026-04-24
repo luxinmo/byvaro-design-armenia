@@ -1036,10 +1036,15 @@ export function FeatureCardV3({
 
         {/* Chips de estado */}
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-success/10 border border-success/25 text-[10px] font-semibold text-success">
-            <span className="h-1.5 w-1.5 rounded-full bg-success" />
-            {a.promotionsCollaborating.length}/{a.totalPromotionsAvailable} compartidos
-          </span>
+          {(() => {
+            const s = getAgencyShareStats(a);
+            return (
+              <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-success/10 border border-success/25 text-[10px] font-semibold text-success">
+                <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                {s.sharedActive}/{s.activeTotal} compartidas
+              </span>
+            );
+          })()}
           <ContractChip agency={a} size="xs" />
           <IncidenciasChip inc={a.incidencias} size="xs" />
         </div>

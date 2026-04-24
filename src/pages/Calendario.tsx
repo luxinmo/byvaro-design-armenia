@@ -21,7 +21,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ChevronLeft, ChevronRight, Plus, Home, Phone, Users, Ban, Bell,
   CalendarDays, CalendarCheck2, Filter, X,
@@ -156,6 +156,24 @@ export default function Calendario() {
     setCreatePreset(undefined);
     setCreateOpen(true);
   };
+
+  /* Deep-link · si llega `?event=<id>` abrimos ese evento en edit
+     automáticamente y limpiamos el param para no re-abrir al navegar. */
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const eventId = searchParams.get("event");
+    if (!eventId) return;
+    const ev = allEvents.find((e) => e.id === eventId);
+    if (ev) {
+      setEditingEvent(ev);
+      setCreatePreset(undefined);
+      setCreateOpen(true);
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("event");
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allEvents]);
 
   return (
     <div className="flex flex-col min-h-full bg-background">
