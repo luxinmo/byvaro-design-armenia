@@ -47,20 +47,20 @@ export function UserContextSwitcher({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
-          className="inline-flex items-center gap-1.5 h-9 pl-1 pr-2.5 sm:pr-3 rounded-full border border-border bg-card text-[12.5px] font-medium hover:bg-muted transition-colors shrink-0"
+          className="inline-flex items-center gap-1.5 h-10 pl-1 pr-3 sm:pr-4 rounded-full border border-border bg-card text-sm font-medium hover:bg-muted transition-colors shrink-0"
           title={selected ? `Filtrando · ${selected.name}` : `Contexto · ${allLabel}`}
         >
           {selected ? (
             avatarUrl ? (
-              <img src={avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover shrink-0" />
+              <img src={avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover shrink-0" />
             ) : (
-              <div className="h-7 w-7 rounded-full bg-muted grid place-items-center text-[10px] font-bold shrink-0">
+              <div className="h-8 w-8 rounded-full bg-muted grid place-items-center text-[11px] font-bold shrink-0">
                 {memberInitials(selected)}
               </div>
             )
           ) : (
-            <div className="h-7 w-7 rounded-full bg-muted grid place-items-center shrink-0">
-              <Users className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.75} />
+            <div className="h-8 w-8 rounded-full bg-muted grid place-items-center shrink-0">
+              <Users className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
             </div>
           )}
           <span className="hidden sm:inline truncate max-w-[120px]">

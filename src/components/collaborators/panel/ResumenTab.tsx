@@ -31,6 +31,7 @@ import { ContractScopePickerDialog } from "@/components/collaborators/ContractSc
 import { ContractNewChoiceDialog } from "@/components/collaborators/ContractNewChoiceDialog";
 import { ContractUploadDialog } from "@/components/collaborators/ContractUploadDialog";
 import { ContractSignedUploadDialog } from "@/components/collaborators/ContractSignedUploadDialog";
+import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
 
 /* ─── Helpers ─────────────────────────────────────────────────────── */
 
@@ -106,6 +107,10 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
   const [newChoiceOpen, setNewChoiceOpen] = useState(false);
   const [uploadContractOpen, setUploadContractOpen] = useState(false);
   const [signedUploadOpen, setSignedUploadOpen] = useState(false);
+
+  /* Dialog para compartir una promoción concreta con esta agencia.
+     Arranca en el paso de condiciones con la comisión prefill. */
+  const [sharePromo, setSharePromo] = useState<{ id: string; name: string } | null>(null);
 
   const openScopePicker = (preselect?: string[]) => {
     setScopePreselect(preselect);
@@ -389,7 +394,7 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
               <button
                 type="button"
                 key={p.id}
-                onClick={() => toast.info(`Compartir "${p.name}" · próximamente`)}
+                onClick={() => setSharePromo({ id: p.id, name: p.name })}
                 className="group text-left rounded-2xl border border-dashed border-border bg-card/50 p-4 hover:bg-card hover:border-foreground/40 hover:shadow-soft transition-all"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -507,6 +512,18 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
         actor={actor}
         defaultScopePromotionIds={resolvedScope}
       />
+
+      {/* Dialog · compartir promoción con ESTA agencia · entra
+          directamente al paso de condiciones (comisión + duración). */}
+      {sharePromo && (
+        <SharePromotionDialog
+          open={!!sharePromo}
+          onOpenChange={(v) => { if (!v) setSharePromo(null); }}
+          promotionId={sharePromo.id}
+          promotionName={sharePromo.name}
+          defaultAgencyId={a.id}
+        />
+      )}
     </div>
   );
 }

@@ -173,13 +173,20 @@ export function SharePromotionDialog({ open, onOpenChange, promotionName, promot
       setPickVisibleCount(PICK_PAGE_SIZE);
       setDuration("12");
       setCustomDuration(18);
-      setCommission(5);
+      /* Pre-filla comisión desde la propia promoción si existe, para
+         que el promotor no tenga que teclearla cada vez. */
+      const promo = developerOnlyPromotions.find((p) => p.id === promotionId);
+      setCommission(
+        typeof promo?.commission === "number" && promo.commission > 0
+          ? promo.commission
+          : 5,
+      );
       setSplits(DEFAULT_PAYMENT_SPLITS);
       setDurationEditing(false);
       setSplitsEditing(false);
       setCrossSelection(new Set());
     }
-  }, [open, defaultAgencyId]);
+  }, [open, defaultAgencyId, promotionId]);
 
   const durationLabel = duration === "custom"
     ? `${customDuration} ${customDuration === 1 ? "mes" : "meses"}`

@@ -79,7 +79,7 @@ export default function Inicio() {
             <Link
               to="/estadisticas"
               title="Ver estadísticas"
-              className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-3.5 rounded-full border border-border bg-card text-[12.5px] font-medium hover:bg-muted transition-colors shrink-0"
+              className="inline-flex items-center gap-1.5 h-10 px-3.5 sm:px-4 rounded-full border border-border bg-card text-sm font-medium hover:bg-muted transition-colors shrink-0"
             >
               <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.75} />
               <span className="hidden sm:inline">Estadísticas</span>
