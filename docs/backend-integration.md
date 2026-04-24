@@ -605,6 +605,126 @@ Disponibilidad aparece condicionalmente).
 | `POST /api/collaborators/:id/resume` | reanudar colaboración | idem |
 | `GET /api/agencias/:id/email-contacto` | email de contacto para invitaciones | `src/components/promotions/SharePromotionDialog.tsx:203` |
 
+### 4.0 · Panel operativo del colaborador (ADR-057)
+
+Endpoints que consumen los 9 tabs de `/colaboradores/:id/panel`
+(`src/pages/ColaboracionPanel.tsx`). Todos tras gate
+`collaboration.panel.view` (ver `docs/permissions.md §Colaboradores`).
+El backend **debe** devolver 403 si el caller no tiene la key, no
+depender solo del hide-on-UI.
+
+| Tab | Endpoint | Permiso | Fuente en UI |
+|---|---|---|---|
+| Resumen | `GET /api/agencias/:id/panel/summary` | `collaboration.panel.view` | `ResumenTab.tsx` |
+| Datos | `GET /api/empresas/:id/public` | `collaboration.panel.view` | `DatosTab.tsx` vía `useEmpresa(id)` |
+| Visitas | `GET /api/agencias/:id/visits?status=...` | `collaboration.panel.view` | `VisitasTab.tsx` |
+| Registros | `GET /api/agencias/:id/registrations?status=...` | `collaboration.panel.view` | `RegistrosTab.tsx` |
+| Ventas | `GET /api/agencias/:id/sales?stage=...` | `collaboration.panel.view` | `VentasTab.tsx` |
+| Documentación · contratos | `GET /api/agencias/:id/contracts` | `collaboration.contracts.view` | `DocumentacionTab.tsx` bloque 1 |
+| Documentación · requests | `GET /api/agencias/:id/doc-requests` | `collaboration.documents.manage` | `DocumentacionTab.tsx` bloque 2 |
+| Pagos | `GET /api/agencias/:id/payments` | `collaboration.payments.view` | `PagosTab.tsx` |
+| Facturas | `GET /api/agencias/:id/invoices` | `collaboration.payments.view` | `FacturasTab.tsx` |
+| Historial | `GET /api/agencias/:id/company-events` | `collaboration.panel.view` · admin | `HistorialTab.tsx` |
+
+#### Resumen · shape
+
+```ts
+GET /api/agencias/:id/panel/summary → {
+  status: "activa" | "contrato-pendiente" | "pausada";
+  enColaboracion: Array<{
+    promotionId: string;
+    promotionName: string;
+    coverUrl?: string;
+    contratoEnVigor: boolean;   // true si hay contrato firmado con
+                                // este promotionId en scopePromotionIds
+    docsPendientes: number;     // doc-requests abiertos
+    registros30d: number;
+    visitasProximas: number;
+  }>;
+  sinCompartir: Array<{         // promos activas + canShareWithAgencies
+    promotionId: string;
+    promotionName: string;
+    coverUrl?: string;
+  }>;
+  proximasVisitas: Array<{
+    visitId: string;
+    clientName: string;
+    promotionName: string;
+    scheduledAt: string;
+    agentName: string;
+  }>;
+  incidencias: { duplicados: number; cancelaciones: number; reclamaciones: number };
+}
+```
+
+#### Contratos per-promoción (Firmafy-style)
+
+`POST /api/contracts` — subir PDF + enviar a firmar.
+
+```ts
+{
+  agencyId: string;
+  scopePromotionIds: string[];   // OBLIGATORIO · contratos per-promoción
+  signers: Array<{ email: string; name: string; role: "promotor"|"agencia" }>;
+  file: File;                    // PDF · multipart
+  expiresAt?: string;            // caducidad del contrato firmado
+}
+→ { contractId: string; firmafySessionUrl: string }
+```
+
+`PATCH /api/contracts/:id` — actualizar scope, marcar firmado
+manualmente, revocar. Ver `docs/backend/integrations/firmafy.md` para
+el webhook de confirmación de firma.
+
+**Regla crítica**: al firmarse, emitir `CollaborationContractSigned`
++ marcar `contratoEnVigor: true` en cada `promotionId` de
+`scopePromotionIds`. La UI lee ese flag para pintar el badge
+"Contrato en vigor" en `AgenciasTabStats` y `ResumenTab`.
+
+#### Pagos · mutaciones
+
+```
+POST /api/agencias/:id/payments/:paymentId/mark-paid
+POST /api/agencias/:id/payments/:paymentId/hold
+POST /api/agencias/:id/payments/:paymentId/release
+POST /api/agencias/:id/payments/:paymentId/cancel
+POST /api/agencias/:id/payments/:paymentId/proof    (multipart)
+```
+
+Todas requieren `collaboration.payments.manage` y emiten
+`recordCompanyEvent({ type: "payment.*" })` para el historial.
+
+#### Doc requests
+
+```
+POST /api/agencias/:id/doc-requests
+  → { type: "invoice"|"iban"|"tax-cert"|"quarterly"|"insurance"|"custom", title, dueDate? }
+POST /api/agencias/:id/doc-requests/:rid/approve
+POST /api/agencias/:id/doc-requests/:rid/reject   { reason }
+```
+
+La agencia sube los PDFs desde su workspace (fase futura); el promotor
+aprueba/rechaza desde aquí.
+
+#### Invitaciones (Fase 11)
+
+```
+POST /api/invitations                     { promotionId, agencyId, message? }
+POST /api/invitations/:id/accept          → genera Collaboration activa
+POST /api/invitations/:id/reject          { reason? }
+GET  /api/invitations?scope=agency|promotor
+```
+
+**Gate server-side obligatorio**: rechazar (`422`) si la promo no es
+`status === "active" && canShareWithAgencies !== false`. El frontend
+ya filtra pero el backend **debe** replicar la regla — es la única
+defensa contra datos corruptos que el self-heal del cliente no puede
+resolver.
+
+Al aceptar, emitir `CollaborationStarted` y registrar entrada en el
+historial cross-empresa (`recordCompanyEvent` del lado promotor y del
+lado agencia cuando exista `workspaceId` de agencia).
+
 ### Campos clave del `Agency`
 
 **Identidad (vienen del Empresa de la agencia):**
