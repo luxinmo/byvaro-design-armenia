@@ -175,18 +175,14 @@ export function PhoneInput({
         <PopoverContent
           align="start"
           className="w-[300px] p-0 rounded-xl border-border shadow-soft-lg overflow-hidden"
-          /* Fix scroll-jump al abrir · Radix enfocaba el input por
-             defecto y el browser hacía scrollIntoView al viewport si
-             el popover quedaba parcialmente tapado, provocando que el
-             dialog/página pegara un salto. Bloqueamos el auto-focus
-             y enfocamos manualmente DESPUÉS del mount sin scroll. */
-          onOpenAutoFocus={(e) => {
-            e.preventDefault();
-            // Enfoca el input de búsqueda sin forzar scroll.
-            requestAnimationFrame(() => {
-              searchRef.current?.focus({ preventScroll: true });
-            });
-          }}
+          /* Fix scroll-jump al abrir · el input de búsqueda llevaba
+             autoFocus natural del HTML + Radix intentaba enfocar el
+             primer focusable al montarse → el browser hacía
+             scrollIntoView para "ver" el input y el dialog saltaba.
+             Bloqueamos el auto-focus de Radix sin tocar el scroll
+             interno ni el scroll manual con rueda/touch. El usuario
+             puede clicar el input para escribir. */
+          onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <div className="border-b border-border/60 px-3 py-2">
             <div className="relative">
