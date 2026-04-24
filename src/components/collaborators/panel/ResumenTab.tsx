@@ -183,15 +183,26 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
 
   /* ════════════════════════════════════════════════════════════════ */
 
+  const headerTone: "warning" | "primary" | "success" =
+    uncoveredPromos.length > 0 ? "warning" : inFlightCount > 0 ? "primary" : "success";
+  const headerDotCls = {
+    warning: "bg-warning",
+    primary: "bg-primary",
+    success: "bg-success",
+  }[headerTone];
+
   return (
     <div className="space-y-8">
 
-      {/* ═══════════════════ HERO · compacto ═══════════════════ */}
-      <section className="rounded-2xl border border-border bg-card px-4 sm:px-5 py-3.5 shadow-soft">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          Estado de la colaboración
-        </p>
-        <h2 className="text-[15px] sm:text-[17px] font-bold tracking-tight text-foreground leading-snug mt-1">
+      {/* ═══════════════ Cabecera unificada · estado + bloque 1 ═══════════════ */}
+      <section>
+        <div className="flex items-center gap-2 mb-2">
+          <span className={cn("h-2 w-2 rounded-full shrink-0", headerDotCls)} />
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Estado de la colaboración
+          </p>
+        </div>
+        <h2 className="text-[17px] sm:text-[19px] font-bold tracking-tight text-foreground leading-snug">
           Compartes{" "}
           <span className="tabular-nums">{sharedActiveCount}</span>
           <span className="text-muted-foreground"> de </span>
@@ -199,37 +210,30 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
           <span className="text-muted-foreground">
             {activePromos.length === 1 ? " promoción" : " promociones"}
           </span>
-          {pendingCount > 0 ? (
+          {uncoveredPromos.length > 0 ? (
             <>
               <span className="text-muted-foreground"> · </span>
-              <span className="tabular-nums text-foreground">{pendingCount}</span>{" "}
-              <span className="text-foreground">
-                {pendingCount === 1 ? "acción en curso" : "acciones en curso"}
+              <span className="tabular-nums text-warning">{uncoveredPromos.length}</span>{" "}
+              <span className="text-warning">
+                {uncoveredPromos.length === 1 ? "sin contrato" : "sin contrato"}
               </span>
             </>
-          ) : (
+          ) : inFlightCount > 0 ? (
             <>
               <span className="text-muted-foreground"> · </span>
-              <span className="text-success">todo al día</span>
+              <span className="tabular-nums text-foreground">{inFlightCount}</span>{" "}
+              <span className="text-foreground">
+                {inFlightCount === 1 ? "trámite en curso" : "trámites en curso"}
+              </span>
             </>
-          )}
+          ) : sharedActiveCount > 0 ? (
+            <>
+              <span className="text-muted-foreground"> · </span>
+              <span className="text-success">todo cubierto y al día</span>
+            </>
+          ) : null}
         </h2>
-      </section>
-
-      {/* ═══════════════════ BLOQUE 1 · En colaboración ═══════════════════ */}
-      <section>
-        <BlockHeader
-          eyebrow="Bloque 1"
-          title="En colaboración"
-          subtitle={
-            sharedActiveCount === 0
-              ? "Aún no comparte ninguna promoción activa"
-              : uncoveredPromos.length > 0
-                ? `${sharedActiveCount} promoción${sharedActiveCount === 1 ? "" : "es"} · ${uncoveredPromos.length} sin contrato firmado`
-                : `${sharedActiveCount} promoción${sharedActiveCount === 1 ? "" : "es"} · ${inFlightCount === 0 ? "todo cubierto y al día" : `${inFlightCount} trámite${inFlightCount === 1 ? "" : "s"} en curso`}`
-          }
-          tone={uncoveredPromos.length > 0 ? "warning" : inFlightCount > 0 ? "primary" : "success"}
-        />
+        <div className="mt-5">
 
         {sharedPromos.length === 0 ? (
           <EmptyCard

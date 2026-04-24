@@ -14,8 +14,8 @@ import { useNavigate } from "react-router-dom";
 import {
   Search, X, Plus, Users, Star, ArrowUpRight, Sparkles, Mail, Phone,
   MoreHorizontal, Pause, Play, Trash2, Building2, FileSignature,
-  AlertTriangle, TrendingUp, Activity, Calendar, Gem, Home, Store,
-  Plane, Tag, SlidersHorizontal, Check,
+  AlertTriangle, TrendingUp, Activity, Calendar,
+  Tag, SlidersHorizontal, Check,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Toaster, toast } from "sonner";
@@ -98,14 +98,6 @@ function Highlight({ text, query }: { text: string; query: string }) {
     </>
   );
 }
-
-const ESPECIALIDAD_META: Record<NonNullable<Agency["especialidad"]>, { label: string; icon: typeof Gem }> = {
-  luxury: { label: "Lujo", icon: Gem },
-  residential: { label: "Residencial", icon: Home },
-  commercial: { label: "Comercial", icon: Store },
-  tourist: { label: "Turístico", icon: Plane },
-  "second-home": { label: "Segunda residencia", icon: Home },
-};
 
 /* ═══════════════════════════════════════════════════════════════════ */
 
@@ -939,38 +931,6 @@ function ActivityChip({ iso, size = "xs" }: { iso?: string; size?: "xs" | "sm" }
   );
 }
 
-/** Chip de especialidad. */
-function EspecialidadChip({ especialidad, size = "xs" }: { especialidad: Agency["especialidad"]; size?: "xs" | "sm" }) {
-  if (!especialidad) return null;
-  const meta = ESPECIALIDAD_META[especialidad];
-  const Icon = meta.icon;
-  return (
-    <span className={cn(
-      "inline-flex items-center gap-1 font-medium border rounded-full bg-card text-foreground border-border",
-      size === "xs" ? "text-[10px] px-2 py-0.5" : "text-[11px] px-2.5 py-0.5",
-    )}>
-      <Icon className="h-3 w-3" strokeWidth={2} />
-      {meta.label}
-    </span>
-  );
-}
-
-/** Chip mostrando incidencias críticas si las hay. */
-function IncidenciasChip({ inc, size = "xs" }: { inc?: Agency["incidencias"]; size?: "xs" | "sm" }) {
-  if (!inc) return null;
-  const total = inc.duplicados + inc.cancelaciones + inc.reclamaciones;
-  if (total === 0) return null;
-  return (
-    <span className={cn(
-      "inline-flex items-center gap-1 font-medium border rounded-full bg-destructive/5 text-destructive border-destructive/25",
-      size === "xs" ? "text-[10px] px-2 py-0.5" : "text-[11px] px-2.5 py-0.5",
-    )} title={`Duplicados: ${inc.duplicados} · Cancelaciones: ${inc.cancelaciones} · Reclamaciones: ${inc.reclamaciones}`}>
-      <AlertTriangle className="h-3 w-3" strokeWidth={2} />
-      {total} {total === 1 ? "incidencia" : "incidencias"}
-    </span>
-  );
-}
-
 /* Card grande · destacados */
 export function FeatureCardV3({
   agency: a, onPause, onDelete, highlight = "",
@@ -1046,7 +1006,6 @@ export function FeatureCardV3({
             );
           })()}
           <ContractChip agency={a} size="xs" />
-          <IncidenciasChip inc={a.incidencias} size="xs" />
         </div>
 
         {/* Stats grid (3 cols) */}

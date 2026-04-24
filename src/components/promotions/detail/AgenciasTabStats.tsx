@@ -68,14 +68,6 @@ function initials(name: string): string {
   return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
 }
 
-const especialidadLabel: Record<NonNullable<Agency["especialidad"]>, string> = {
-  luxury: "Lujo",
-  residential: "Residencial",
-  commercial: "Comercial",
-  tourist: "Turístico",
-  "second-home": "Segunda residencia",
-};
-
 type SortKey = "ventas" | "registros" | "visitas" | "conversion" | "rating" | "since" | "name";
 
 const SORT_OPTIONS = [
@@ -748,7 +740,6 @@ function ListView({
           const selected = selectedIds.includes(a.id);
           const metaLine2 = [
             a.location,
-            a.especialidad ? especialidadLabel[a.especialidad] : null,
             a.collaboratingSince ? `Desde ${a.collaboratingSince}` : null,
           ].filter(Boolean).join(" · ");
 
@@ -968,7 +959,6 @@ function GridView({
                   </div>
                   <p className="text-[11.5px] text-muted-foreground truncate mt-0.5">
                     {a.location}
-                    {a.especialidad ? ` · ${especialidadLabel[a.especialidad]}` : ""}
                   </p>
                 </div>
               </div>
@@ -1225,12 +1215,10 @@ function EmptyStatePanel({
   );
 }
 
-/* ══════ StatusChips · contrato · cobertura · incidencias ══════
+/* ══════ StatusChips · contrato + cobertura ══════
  * Fila compacta de indicadores con tokens semánticos. Responde a:
  *   - ¿El contrato sigue vigente?
  *   - ¿La agencia colabora en todas mis promociones o solo en algunas?
- *   - ¿Hay incidencias (duplicados, cancelaciones, reclamaciones) sin
- *     resolver con esta agencia?
  */
 function StatusChips({ agency: a }: { agency: Agency }) {
   const contract = getContractStatus(a);
@@ -1238,8 +1226,6 @@ function StatusChips({ agency: a }: { agency: Agency }) {
   const shared = stats.sharedActive;
   const total = stats.activeTotal;
   const inAll = total > 0 && shared === total;
-  const inc = a.incidencias;
-  const incTotal = (inc?.duplicados ?? 0) + (inc?.cancelaciones ?? 0) + (inc?.reclamaciones ?? 0);
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
@@ -1280,21 +1266,6 @@ function StatusChips({ agency: a }: { agency: Agency }) {
           {inAll
             ? "promociones · todas"
             : shared === 1 ? "promoción" : "promociones"}
-        </span>
-      )}
-
-      {/* Incidencias sin resolver */}
-      {incTotal > 0 && (
-        <span
-          className="inline-flex items-center gap-1 h-5 px-2 rounded-full border border-destructive/25 bg-destructive/5 text-[10.5px] font-medium text-destructive"
-          title={[
-            inc?.duplicados ? `${inc.duplicados} duplicado${inc.duplicados === 1 ? "" : "s"}` : null,
-            inc?.cancelaciones ? `${inc.cancelaciones} cancelación${inc.cancelaciones === 1 ? "" : "es"}` : null,
-            inc?.reclamaciones ? `${inc.reclamaciones} reclamación${inc.reclamaciones === 1 ? "" : "es"}` : null,
-          ].filter(Boolean).join(" · ")}
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
-          {incTotal} {incTotal === 1 ? "incidencia" : "incidencias"}
         </span>
       )}
     </div>

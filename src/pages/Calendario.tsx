@@ -44,6 +44,7 @@ import {
 } from "@/lib/calendarHelpers";
 import { findTeamMember, getAllTeamMembers, memberInitials, getMemberAvatarUrl } from "@/lib/team";
 import { CreateCalendarEventDialog } from "@/components/calendar/CreateCalendarEventDialog";
+import { UserContextSwitcher } from "@/components/ui/UserContextSwitcher";
 import { cn } from "@/lib/utils";
 
 type ViewMode = "semana" | "mes" | "dia" | "agenda";
@@ -82,6 +83,10 @@ export default function Calendario() {
   const [mobileSelectedDay, setMobileSelectedDay] = useState<Date>(() => new Date());
   /* Sidebar de agentes · drawer en mobile. */
   const [mobileAgentsOpen, setMobileAgentsOpen] = useState(false);
+  /* Focus filter · si hay un usuario seleccionado, se ignoran los
+     toggles individuales de la sidebar y se muestra SOLO ese miembro.
+     Es un shortcut para el caso "quiero ver lo de Laura". */
+  const [focusUserId, setFocusUserId] = useState<string | null>(null);
   /* Al cambiar entre mobile y desktop, ajusta vistas que no encajan. */
   useEffect(() => {
     if (isMobile && (viewMode === "semana" || viewMode === "dia")) {
@@ -111,15 +116,21 @@ export default function Calendario() {
   const [statusFilter, setStatusFilter] = useState<Set<CalendarEventStatus>>(new Set());
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
 
-  /* ─── Eventos filtrados · todas las vistas los consumen. ─── */
+  /* ─── Eventos filtrados · todas las vistas los consumen.
+     · Si hay focusUserId, solo ese agente (shortcut del switcher).
+     · Si no, respeta los toggles de la sidebar multi-calendario. ─── */
   const filteredEvents = useMemo(() => {
     return allEvents.filter((ev) => {
-      if (!enabledAgents.has(ev.assigneeUserId)) return false;
+      if (focusUserId) {
+        if (ev.assigneeUserId !== focusUserId) return false;
+      } else if (!enabledAgents.has(ev.assigneeUserId)) {
+        return false;
+      }
       if (typeFilter.size > 0 && !typeFilter.has(ev.type)) return false;
       if (statusFilter.size > 0 && !statusFilter.has(ev.status)) return false;
       return true;
     });
-  }, [allEvents, enabledAgents, typeFilter, statusFilter]);
+  }, [allEvents, enabledAgents, typeFilter, statusFilter, focusUserId]);
 
   /* ─── Navegación ─── */
   const goToday = () => setViewDate(new Date());
@@ -193,12 +204,17 @@ export default function Calendario() {
               </p>
             </div>
 
-            {/* CTA primary · crear. En mobile se sustituye por FAB
-               flotante abajo-derecha (más cómodo para pulgar). */}
-            <div className="hidden lg:flex items-center gap-2 shrink-0">
+            {/* Acciones superiores-derecha · selector usuario siempre
+               visible (desktop + mobile) · CTA 'Crear evento' solo en
+               desktop (en mobile es el FAB flotante). */}
+            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+              <UserContextSwitcher
+                selectedUserId={focusUserId}
+                onChange={setFocusUserId}
+              />
               <button
                 onClick={() => openCreate({ date: new Date() })}
-                className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-foreground text-background text-sm font-semibold hover:bg-foreground/90 shadow-soft transition-colors"
+                className="hidden lg:inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-foreground text-background text-sm font-semibold hover:bg-foreground/90 shadow-soft transition-colors"
               >
                 <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                 Crear evento
