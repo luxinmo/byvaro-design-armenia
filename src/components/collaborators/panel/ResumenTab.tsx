@@ -26,6 +26,11 @@ import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { promotions } from "@/data/promotions";
 import { useContractsForAgency } from "@/lib/collaborationContracts";
 import { useAgencyDocRequests } from "@/lib/agencyDocRequests";
+import { useCurrentUser } from "@/lib/currentUser";
+import { ContractScopePickerDialog } from "@/components/collaborators/ContractScopePickerDialog";
+import { ContractNewChoiceDialog } from "@/components/collaborators/ContractNewChoiceDialog";
+import { ContractUploadDialog } from "@/components/collaborators/ContractUploadDialog";
+import { ContractSignedUploadDialog } from "@/components/collaborators/ContractSignedUploadDialog";
 
 /* ─── Helpers ─────────────────────────────────────────────────────── */
 
@@ -39,21 +44,35 @@ function formatWhen(ms: number) {
 }
 
 type PromoStatus = "active" | "incomplete" | "inactive" | "sold-out";
+type PromoEntry = {
+  id: string;
+  name: string;
+  active: boolean;
+  status: PromoStatus;
+  location?: string;
+  commission?: number;
+};
 
 function usePromoCatalog() {
   return useMemo(() => {
-    const m = new Map<string, { id: string; name: string; active: boolean; status: PromoStatus }>();
+    const m = new Map<string, PromoEntry>();
     for (const p of developerOnlyPromotions) {
       m.set(p.id, {
         id: p.id,
         name: p.name,
         active: p.status === "active",
         status: p.status as PromoStatus,
+        location: p.location,
+        commission: typeof p.commission === "number" && p.commission > 0 ? p.commission : undefined,
       });
     }
     for (const p of promotions) {
       if (m.has(p.id)) continue;
-      m.set(p.id, { id: p.id, name: p.name, active: true, status: "active" });
+      m.set(p.id, {
+        id: p.id, name: p.name, active: true, status: "active",
+        location: p.location,
+        commission: typeof p.commission === "number" && p.commission > 0 ? p.commission : undefined,
+      });
     }
     return m;
   }, []);
@@ -73,9 +92,25 @@ interface Props {
 }
 
 export function ResumenTab({ agency: a, onGoTo }: Props) {
+  const user = useCurrentUser();
+  const actor = { name: user.name, email: user.email };
   const contracts = useContractsForAgency(a.id);
   const docRequests = useAgencyDocRequests(a.id);
   const promoCatalog = usePromoCatalog();
+
+  /* ─── Flujo de subida de contrato ·
+     Picker de scope → choice (firmar vs archivar) → upload dialog ─── */
+  const [scopePickerOpen, setScopePickerOpen] = useState(false);
+  const [scopePreselect, setScopePreselect] = useState<string[] | undefined>(undefined);
+  const [resolvedScope, setResolvedScope] = useState<string[] | undefined>(undefined);
+  const [newChoiceOpen, setNewChoiceOpen] = useState(false);
+  const [uploadContractOpen, setUploadContractOpen] = useState(false);
+  const [signedUploadOpen, setSignedUploadOpen] = useState(false);
+
+  const openScopePicker = (preselect?: string[]) => {
+    setScopePreselect(preselect);
+    setScopePickerOpen(true);
+  };
 
   const activePromos = useMemo(
     () => developerOnlyPromotions.filter((p) => p.status === "active"),
@@ -84,7 +119,7 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
   const sharedPromos = useMemo(() => {
     return (a.promotionsCollaborating ?? [])
       .map((id) => promoCatalog.get(id))
-      .filter(Boolean) as Array<{ id: string; name: string; active: boolean; status: PromoStatus }>;
+      .filter(Boolean) as PromoEntry[];
   }, [a.promotionsCollaborating, promoCatalog]);
   /* Solo contamos las compartidas que además siguen activas · así el
      hero "N de M activas" no queda descuadrado si hay colaboraciones
@@ -187,11 +222,11 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
           eyebrow="Bloque 1"
           title="En colaboración"
           subtitle={
-            sharedPromos.length === 0
-              ? "Aún no comparte ninguna promoción"
+            sharedActiveCount === 0
+              ? "Aún no comparte ninguna promoción activa"
               : uncoveredPromos.length > 0
-                ? `${sharedPromos.length} promoción${sharedPromos.length === 1 ? "" : "es"} · ${uncoveredPromos.length} sin contrato firmado`
-                : `${sharedPromos.length} promoción${sharedPromos.length === 1 ? "" : "es"} · ${inFlightCount === 0 ? "todo cubierto y al día" : `${inFlightCount} trámite${inFlightCount === 1 ? "" : "s"} en curso`}`
+                ? `${sharedActiveCount} promoción${sharedActiveCount === 1 ? "" : "es"} · ${uncoveredPromos.length} sin contrato firmado`
+                : `${sharedActiveCount} promoción${sharedActiveCount === 1 ? "" : "es"} · ${inFlightCount === 0 ? "todo cubierto y al día" : `${inFlightCount} trámite${inFlightCount === 1 ? "" : "s"} en curso`}`
           }
           tone={uncoveredPromos.length > 0 ? "warning" : inFlightCount > 0 ? "primary" : "success"}
         />
@@ -208,7 +243,7 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
             {uncoveredPromos.length > 0 && (
               <button
                 type="button"
-                onClick={() => onGoTo("documentacion")}
+                onClick={() => openScopePicker(uncoveredPromos.map((u) => u.id))}
                 className="w-full text-left rounded-2xl border border-warning/30 bg-warning/5 hover:bg-warning/10 p-4 mb-3 transition-colors"
               >
                 <div className="flex items-start gap-3">
@@ -233,83 +268,105 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
               </button>
             )}
 
-            {/* Activas · una card por cada una con estado de cobertura */}
+            {/* Activas · una card por cada una con estado de cobertura.
+                Las `incomplete`/`inactive`/`sold-out` se ocultan del
+                panel · no aportan información operativa. */}
             {(() => {
               const activeShared = sharedPromos.filter((p) => p.active);
-              const closedShared = sharedPromos.filter((p) => !p.active);
+              if (activeShared.length === 0) return null;
               return (
-                <>
-                  {activeShared.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {activeShared.map((p) => {
-                        const isUncovered = !hasBlanketSigned && uncoveredPromos.some((u) => u.id === p.id);
-                        return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {activeShared.map((p) => {
+                    const isUncovered = !hasBlanketSigned && uncoveredPromos.some((u) => u.id === p.id);
+                    return (
+                      <div
+                        key={p.id}
+                        className={cn(
+                          "rounded-2xl border bg-card shadow-soft p-4 transition-all",
+                          isUncovered ? "border-warning/30" : "border-border",
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className={cn(
+                            "h-8 w-8 rounded-lg grid place-items-center shrink-0",
+                            isUncovered ? "bg-warning/10 text-warning" : "bg-success/10 text-success",
+                          )}>
+                            {isUncovered
+                              ? <AlertTriangle className="h-4 w-4" strokeWidth={2} />
+                              : <Check className="h-4 w-4" strokeWidth={2.25} />}
+                          </span>
+                          <span className={cn(
+                            "inline-flex items-center h-5 px-2 rounded-full border text-[10px] font-medium shrink-0",
+                            isUncovered
+                              ? "border-warning/30 bg-warning/10 text-warning"
+                              : "border-success/25 bg-success/10 text-success",
+                          )}>
+                            {isUncovered ? "Sin contrato" : "Cubierta"}
+                          </span>
+                        </div>
+                        <Link
+                          to={`/promociones/${p.id}?tab=Agencies`}
+                          className="block mt-3 group"
+                        >
+                          <p className="text-sm font-semibold text-foreground truncate group-hover:underline">
+                            {p.name}
+                          </p>
+                        </Link>
+                        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                          {typeof p.commission === "number" && (
+                            <span className="inline-flex items-center h-5 px-2 rounded-full bg-muted/60 text-[10.5px] font-medium text-foreground tabular-nums">
+                              Comisión {p.commission}%
+                            </span>
+                          )}
+                          {p.location && (
+                            <span className="text-[10.5px] text-muted-foreground truncate">
+                              {p.location}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-3 flex items-center justify-end">
                           <Link
-                            key={p.id}
                             to={`/promociones/${p.id}?tab=Agencies`}
-                            className={cn(
-                              "group rounded-2xl border bg-card shadow-soft p-4 hover:-translate-y-0.5 hover:shadow-soft-lg transition-all",
-                              isUncovered ? "border-warning/30" : "border-border",
-                            )}
+                            className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                           >
-                            <div className="flex items-start justify-between gap-2">
-                              <span className={cn(
-                                "h-8 w-8 rounded-lg grid place-items-center shrink-0",
-                                isUncovered ? "bg-warning/10 text-warning" : "bg-success/10 text-success",
-                              )}>
-                                {isUncovered
-                                  ? <AlertTriangle className="h-4 w-4" strokeWidth={2} />
-                                  : <Check className="h-4 w-4" strokeWidth={2.25} />}
-                              </span>
-                              <span className={cn(
-                                "inline-flex items-center h-5 px-2 rounded-full border text-[10px] font-medium shrink-0",
-                                isUncovered
-                                  ? "border-warning/30 bg-warning/10 text-warning"
-                                  : "border-success/25 bg-success/10 text-success",
-                              )}>
-                                {isUncovered ? "Sin contrato" : "Cubierta"}
-                              </span>
-                            </div>
-                            <p className="text-sm font-semibold text-foreground mt-3 truncate group-hover:underline">
-                              {p.name}
-                            </p>
-                            <div className="mt-2 inline-flex items-center gap-0.5 text-[11px] text-muted-foreground group-hover:text-foreground transition-colors">
-                              Ver en promoción
-                              <ArrowRight className="h-3 w-3" />
-                            </div>
+                            Ver en promoción
+                            <ArrowRight className="h-3 w-3" />
                           </Link>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Cerradas · agrupadas en una sola línea colapsable */}
-                  {closedShared.length > 0 && (
-                    <ClosedPromosRow promos={closedShared} className={activeShared.length > 0 ? "mt-3" : ""} />
-                  )}
-                </>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               );
             })()}
 
-            {/* Estado · trámites normales en curso (no incidencias) */}
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <StatusTile
-                icon={FileSignature}
-                value={pendingContracts.length}
-                label={pendingContracts.length === 1 ? "contrato en proceso de firma" : "contratos en proceso de firma"}
-                doneLabel="Contratos al día"
-                tone={pendingContracts.length > 0 ? "in-progress" : "done"}
-                onClick={pendingContracts.length > 0 ? () => onGoTo("documentacion") : undefined}
-              />
-              <StatusTile
-                icon={Upload}
-                value={pendingDocs.length}
-                label={pendingDocs.length === 1 ? "documento por entregar" : "documentos por entregar"}
-                doneLabel="Documentación al día"
-                tone={pendingDocs.length > 0 ? "in-progress" : "done"}
-                onClick={pendingDocs.length > 0 ? () => onGoTo("documentacion") : undefined}
-              />
-            </div>
+            {/* Trámites realmente en curso · solo se muestran tiles
+                cuando hay algo que mover · los "✓ al día" sobraban y
+                contradecían al banner de "sin contrato" de arriba. */}
+            {(pendingContracts.length > 0 || pendingDocs.length > 0) && (
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {pendingContracts.length > 0 && (
+                  <StatusTile
+                    icon={FileSignature}
+                    value={pendingContracts.length}
+                    label={pendingContracts.length === 1 ? "contrato en proceso de firma" : "contratos en proceso de firma"}
+                    doneLabel=""
+                    tone="in-progress"
+                    onClick={() => onGoTo("documentacion")}
+                  />
+                )}
+                {pendingDocs.length > 0 && (
+                  <StatusTile
+                    icon={Upload}
+                    value={pendingDocs.length}
+                    label={pendingDocs.length === 1 ? "documento por entregar" : "documentos por entregar"}
+                    doneLabel=""
+                    tone="in-progress"
+                    onClick={() => onGoTo("documentacion")}
+                  />
+                )}
+              </div>
+            )}
           </>
         )}
       </section>
@@ -420,6 +477,42 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
           Ver toda la actividad
         </button>
       </div>
+
+      {/* ══════ Flujo Subir contrato · picker → choice → upload ══════ */}
+      <ContractScopePickerDialog
+        open={scopePickerOpen}
+        onOpenChange={setScopePickerOpen}
+        agencyName={a.name}
+        promos={sharedPromos
+          .filter((p) => p.active)
+          .map((p) => ({ id: p.id, name: p.name, location: p.location, comision: p.commission }))}
+        defaultSelectedIds={scopePreselect}
+        onContinue={(ids) => {
+          setResolvedScope(ids);
+          setScopePickerOpen(false);
+          setNewChoiceOpen(true);
+        }}
+      />
+      <ContractNewChoiceDialog
+        open={newChoiceOpen}
+        onOpenChange={setNewChoiceOpen}
+        onPickSend={() => setUploadContractOpen(true)}
+        onPickSigned={() => setSignedUploadOpen(true)}
+      />
+      <ContractUploadDialog
+        open={uploadContractOpen}
+        onOpenChange={setUploadContractOpen}
+        agency={a}
+        actor={actor}
+        defaultScopePromotionIds={resolvedScope}
+      />
+      <ContractSignedUploadDialog
+        open={signedUploadOpen}
+        onOpenChange={setSignedUploadOpen}
+        agency={a}
+        actor={actor}
+        defaultScopePromotionIds={resolvedScope}
+      />
     </div>
   );
 }

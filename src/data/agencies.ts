@@ -16,6 +16,7 @@
  */
 
 import { developerOnlyPromotions } from "./developerPromotions";
+import { getAllContracts } from "@/lib/collaborationContracts";
 
 export type Agency = {
   id: string;
@@ -120,18 +121,32 @@ export type Agency = {
   googleMapsUrl?: string;
 };
 
-/** Calcula el estado del contrato respecto a una fecha de referencia (hoy
- *  por defecto). Se considera "por-expirar" si quedan ≤30 días.  */
+/** Calcula el estado del contrato real de una agencia consultando los
+ *  `CollaborationContract` firmados (no archivados). Lo que pintaba
+ *  "Contrato vigente" en cualquier sitio salía del mock legacy
+ *  `Agency.contractSignedAt` — mentira, porque la app v2 vive en
+ *  localStorage y puede estar vacía.
+ *
+ *  Reglas:
+ *    · Sin ningún contrato firmado vivo → `sin-contrato`.
+ *    · Con contratos firmados · tomamos el que más lejos expira
+ *      (si alguno no expira nunca, vence infinito).
+ *    · `por-expirar` si quedan ≤30 días.
+ */
 export function getContractStatus(
   a: Agency,
   refDate: Date = new Date(),
 ): { state: "vigente" | "por-expirar" | "expirado" | "sin-contrato"; daysLeft?: number } {
-  if (!a.contractExpiresAt) {
-    return a.contractSignedAt ? { state: "vigente" } : { state: "sin-contrato" };
-  }
-  const expires = new Date(a.contractExpiresAt);
-  const diffMs = expires.getTime() - refDate.getTime();
-  const daysLeft = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+  const signed = getAllContracts().filter(
+    (c) => c.agencyId === a.id && !c.archived && c.status === "signed",
+  );
+  if (signed.length === 0) return { state: "sin-contrato" };
+  /* Un contrato sin expiresAt se trata como infinito · basta con él
+     para que la agencia esté "vigente". */
+  const someNoExpiry = signed.some((c) => !c.expiresAt);
+  if (someNoExpiry) return { state: "vigente" };
+  const maxExpires = Math.max(...signed.map((c) => c.expiresAt!));
+  const daysLeft = Math.ceil((maxExpires - refDate.getTime()) / (24 * 60 * 60 * 1000));
   if (daysLeft < 0) return { state: "expirado", daysLeft };
   if (daysLeft <= 30) return { state: "por-expirar", daysLeft };
   return { state: "vigente", daysLeft };

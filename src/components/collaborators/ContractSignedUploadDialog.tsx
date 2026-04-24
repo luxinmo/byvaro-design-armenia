@@ -65,9 +65,11 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   agency: Agency;
   actor?: { name: string; email: string };
+  /** Promociones que cubre el contrato · si se omite, cubre todas. */
+  defaultScopePromotionIds?: string[];
 }
 
-export function ContractSignedUploadDialog({ open, onOpenChange, agency, actor }: Props) {
+export function ContractSignedUploadDialog({ open, onOpenChange, agency, actor, defaultScopePromotionIds }: Props) {
   const [files, setFiles] = useState<File[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set());
   const [title, setTitle] = useState("");
@@ -179,6 +181,7 @@ export function ContractSignedUploadDialog({ open, onOpenChange, agency, actor }
         signers: finalSigners,
         comision: comision ? Number(comision) : undefined,
         duracionMeses: duracionMeses ? Number(duracionMeses) : undefined,
+        scopePromotionIds: defaultScopePromotionIds,
         alreadySignedAt: signedAt,
         actor,
       });

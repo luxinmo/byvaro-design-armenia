@@ -149,9 +149,14 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   agency: Agency;
   actor?: { name: string; email: string };
+  /** Si se indica, el contrato se crea cubriendo solo estas
+   *  promociones · si se omite, cubre todas (blanket). Usado desde
+   *  el Resumen cuando se dispara el upload desde una promoción
+   *  concreta que no tiene contrato. */
+  defaultScopePromotionIds?: string[];
 }
 
-export function ContractUploadDialog({ open, onOpenChange, agency, actor }: Props) {
+export function ContractUploadDialog({ open, onOpenChange, agency, actor, defaultScopePromotionIds }: Props) {
   const [step, setStep] = useState<Step>("documento");
 
   /* Paso 1 · Documento(s) · permitimos subir varios PDFs · cada
@@ -312,6 +317,7 @@ export function ContractUploadDialog({ open, onOpenChange, agency, actor }: Prop
         signers: finalSigners,
         comision: comision ? Number(comision) : undefined,
         duracionMeses: duracionMeses ? Number(duracionMeses) : undefined,
+        scopePromotionIds: defaultScopePromotionIds,
         subject: subject.trim() || undefined,
         message: message.trim() || undefined,
         language,

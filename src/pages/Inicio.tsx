@@ -22,8 +22,10 @@ import { Link } from "react-router-dom";
 import {
   CalendarDays, FileText, Home, Phone, Mail, MessageSquare,
   CheckSquare, Sparkles, ArrowUpRight, TrendingUp, Handshake,
-  Building2, UserPlus, AlertCircle, Users, BarChart3,
+  Building2, UserPlus, AlertCircle, Users, BarChart3, ChevronDown,
+  Check,
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/currentUser";
@@ -47,11 +49,16 @@ export default function Inicio() {
     return <AgencyHome />;
   }
 
+  /* Contexto del dashboard · quién se está mirando. null = todo el
+     equipo. El selector vive en el header (desktop y mobile) y filtra
+     las Actividades y la Agenda de hoy. */
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+
   return (
     <div className="flex-1 flex flex-col min-h-full bg-background">
       {/* Header */}
       <div className="px-3 sm:px-6 lg:px-8 pt-6 sm:pt-8">
-        <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div className="max-w-[1400px] mx-auto flex items-start sm:items-end justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               General
@@ -60,18 +67,25 @@ export default function Inicio() {
               Hola, {user.name.split(" ")[0]}
               <span className="text-muted-foreground font-medium"> · qué tienes hoy</span>
             </h1>
-            <p className="text-sm text-muted-foreground mt-1.5">
+            <p className="text-sm text-muted-foreground mt-1.5 hidden sm:block">
               Actividades pendientes, agenda y novedades del equipo.
             </p>
           </div>
-          <Link
-            to="/estadisticas"
-            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full border border-border bg-card text-[12.5px] font-medium hover:bg-muted transition-colors shrink-0"
-          >
-            <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.75} />
-            Ver estadísticas
-            <ArrowUpRight className="h-3 w-3" />
-          </Link>
+          {/* Acciones arriba-derecha · selector usuario + estadísticas */}
+          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+            <UserContextSwitcher
+              selectedUserId={selectedUserId}
+              onChange={setSelectedUserId}
+            />
+            <Link
+              to="/estadisticas"
+              title="Ver estadísticas"
+              className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-3.5 rounded-full border border-border bg-card text-[12.5px] font-medium hover:bg-muted transition-colors shrink-0"
+            >
+              <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.75} />
+              <span className="hidden sm:inline">Estadísticas</span>
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -79,16 +93,130 @@ export default function Inicio() {
       <div className="px-3 sm:px-6 lg:px-8 mt-6 pb-10">
         <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4 sm:gap-5">
           <div className="space-y-4 sm:space-y-5 min-w-0">
-            <ActividadesPendientes />
+            <ActividadesPendientes selectedUserId={selectedUserId} />
             <Novedades />
           </div>
           <aside className="space-y-4 sm:space-y-5 min-w-0">
-            <TodayAgendaWidget />
+            <TodayAgendaWidget selectedUserId={selectedUserId} />
             <QuickActions />
           </aside>
         </div>
       </div>
     </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   USER CONTEXT SWITCHER · pill con popover
+   ───────────────────────────────────────────────────────────────────
+   Selector compacto en el header. Muestra avatar + nombre del usuario
+   seleccionado o icono Users si es "Todo el equipo". Click abre
+   popover con la lista del equipo activo.
+   ═══════════════════════════════════════════════════════════════════ */
+function UserContextSwitcher({
+  selectedUserId, onChange,
+}: {
+  selectedUserId: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const teamMembers = useMemo(
+    () => getAllTeamMembers().filter((m) => !m.status || m.status === "active"),
+    [],
+  );
+  const selected = selectedUserId
+    ? teamMembers.find((m) => m.id === selectedUserId)
+    : null;
+  const avatarUrl = selected ? getMemberAvatarUrl(selected) : null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className="inline-flex items-center gap-1.5 h-9 pl-1 pr-2.5 sm:pr-3 rounded-full border border-border bg-card text-[12.5px] font-medium hover:bg-muted transition-colors shrink-0"
+          title="Cambiar contexto · ver actividades de otro miembro"
+        >
+          {selected ? (
+            avatarUrl ? (
+              <img src={avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover shrink-0" />
+            ) : (
+              <div className="h-7 w-7 rounded-full bg-muted grid place-items-center text-[10px] font-bold shrink-0">
+                {memberInitials(selected)}
+              </div>
+            )
+          ) : (
+            <div className="h-7 w-7 rounded-full bg-muted grid place-items-center shrink-0">
+              <Users className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.75} />
+            </div>
+          )}
+          <span className="hidden sm:inline truncate max-w-[120px]">
+            {selected ? selected.name.split(" ")[0] : "Todo el equipo"}
+          </span>
+          <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" strokeWidth={1.75} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-64 p-1.5"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <p className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Contexto
+        </p>
+        {/* Opción "Todo el equipo" */}
+        <button
+          onClick={() => { onChange(null); setOpen(false); }}
+          className={cn(
+            "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-colors",
+            selectedUserId === null ? "bg-muted" : "hover:bg-muted/60",
+          )}
+        >
+          <div className="h-8 w-8 rounded-full bg-muted grid place-items-center shrink-0">
+            <Users className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[12.5px] font-medium text-foreground">Todo el equipo</p>
+            <p className="text-[10.5px] text-muted-foreground">Totales agregados</p>
+          </div>
+          {selectedUserId === null && <Check className="h-3.5 w-3.5 text-foreground shrink-0" strokeWidth={2.5} />}
+        </button>
+
+        <div className="border-t border-border/60 my-1" />
+
+        {/* Miembros del equipo */}
+        <div className="max-h-[260px] overflow-y-auto overscroll-contain">
+          {teamMembers.map((m) => {
+            const url = getMemberAvatarUrl(m);
+            const active = selectedUserId === m.id;
+            return (
+              <button
+                key={m.id}
+                onClick={() => { onChange(m.id); setOpen(false); }}
+                className={cn(
+                  "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-colors",
+                  active ? "bg-muted" : "hover:bg-muted/60",
+                )}
+              >
+                {url ? (
+                  <img src={url} alt="" className="h-8 w-8 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className="h-8 w-8 rounded-full bg-muted grid place-items-center text-[11px] font-bold shrink-0">
+                    {memberInitials(m)}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12.5px] font-medium text-foreground truncate">{m.name}</p>
+                  {m.jobTitle && (
+                    <p className="text-[10.5px] text-muted-foreground truncate">{m.jobTitle}</p>
+                  )}
+                </div>
+                {active && <Check className="h-3.5 w-3.5 text-foreground shrink-0" strokeWidth={2.5} />}
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -113,14 +241,12 @@ type ActivitySummary = {
   tone: "primary" | "warning" | "success" | "destructive" | "default";
 };
 
-function ActividadesPendientes() {
+function ActividadesPendientes({ selectedUserId }: { selectedUserId: string | null }) {
   const allEvents = useCalendarEvents();
   const teamMembers = useMemo(
     () => getAllTeamMembers().filter((m) => !m.status || m.status === "active"),
     [],
   );
-  /* Filtro por usuario · null = todo el equipo. */
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const summaries = useMemo<ActivitySummary[]>(() => {
     const today = new Date();
@@ -224,64 +350,15 @@ function ActividadesPendientes() {
 
   return (
     <section className="bg-card border border-border rounded-2xl shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
-      <header className="px-4 sm:px-5 py-4 border-b border-border">
-        <div className="flex items-center justify-between gap-3 min-w-0">
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold flex items-center gap-2">
-              <AlertCircle className="h-3.5 w-3.5 text-warning shrink-0" strokeWidth={1.75} />
-              Actividades pendientes
-            </h3>
-            <p className="text-[11.5px] text-muted-foreground mt-0.5 tabular-nums">
-              {totalAll} en total · {selectedMember ? selectedMember.name.split(" ")[0] : "todo el equipo"}
-            </p>
-          </div>
-        </div>
-
-        {/* Stripe de usuarios · click filtra los contadores. */}
-        <div className="mt-3 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => setSelectedUserId(null)}
-            className={cn(
-              "inline-flex items-center gap-1.5 h-8 pl-2 pr-3 rounded-full border text-[11px] font-medium transition-colors shrink-0",
-              selectedUserId === null
-                ? "bg-foreground text-background border-foreground"
-                : "bg-card text-muted-foreground border-border hover:bg-muted",
-            )}
-          >
-            <div className="h-5 w-5 rounded-full bg-muted grid place-items-center shrink-0">
-              <Users className={cn(
-                "h-3 w-3",
-                selectedUserId === null ? "text-background" : "text-muted-foreground",
-              )} strokeWidth={1.75} />
-            </div>
-            Todo el equipo
-          </button>
-          {teamMembers.map((m) => {
-            const active = selectedUserId === m.id;
-            const url = getMemberAvatarUrl(m);
-            return (
-              <button
-                key={m.id}
-                onClick={() => setSelectedUserId(active ? null : m.id)}
-                title={m.name}
-                className={cn(
-                  "inline-flex items-center gap-1.5 h-8 pl-1 pr-3 rounded-full border text-[11px] font-medium transition-colors shrink-0",
-                  active
-                    ? "bg-foreground text-background border-foreground"
-                    : "bg-card text-muted-foreground border-border hover:bg-muted",
-                )}
-              >
-                {url ? (
-                  <img src={url} alt="" className="h-6 w-6 rounded-full object-cover shrink-0" />
-                ) : (
-                  <div className="h-6 w-6 rounded-full bg-muted grid place-items-center text-[9px] font-bold shrink-0">
-                    {memberInitials(m)}
-                  </div>
-                )}
-                {m.name.split(" ")[0]}
-              </button>
-            );
-          })}
+      <header className="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-border">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <AlertCircle className="h-3.5 w-3.5 text-warning shrink-0" strokeWidth={1.75} />
+            Actividades pendientes
+          </h3>
+          <p className="text-[11.5px] text-muted-foreground mt-0.5 tabular-nums">
+            {totalAll} en total · {selectedMember ? selectedMember.name.split(" ")[0] : "todo el equipo"}
+          </p>
         </div>
       </header>
 
@@ -450,15 +527,16 @@ function Novedades() {
    AGENDA DE HOY (widget) · reutilizado desde la versión anterior.
    ═══════════════════════════════════════════════════════════════════ */
 
-function TodayAgendaWidget() {
+function TodayAgendaWidget({ selectedUserId }: { selectedUserId: string | null }) {
   const allEvents = useCalendarEvents();
   const today = new Date();
   const todayEvents = useMemo(() => {
     return eventsInDay(allEvents, today)
       .filter((ev) => ev.status !== "cancelled")
+      .filter((ev) => !selectedUserId || ev.assigneeUserId === selectedUserId)
       .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allEvents]);
+  }, [allEvents, selectedUserId]);
 
   const totalToday = todayEvents.length;
   const visible = todayEvents.slice(0, 5);
