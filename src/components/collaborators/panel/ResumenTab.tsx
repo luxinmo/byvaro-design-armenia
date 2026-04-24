@@ -13,7 +13,7 @@
  * No hay KPIs — todo son señales accionables.
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ChevronRight, FileSignature, Home, Plus, Share2,
@@ -38,19 +38,33 @@ function formatWhen(ms: number) {
   };
 }
 
+type PromoStatus = "active" | "incomplete" | "inactive" | "sold-out";
+
 function usePromoCatalog() {
   return useMemo(() => {
-    const m = new Map<string, { id: string; name: string; active: boolean }>();
+    const m = new Map<string, { id: string; name: string; active: boolean; status: PromoStatus }>();
     for (const p of developerOnlyPromotions) {
-      m.set(p.id, { id: p.id, name: p.name, active: p.status === "active" });
+      m.set(p.id, {
+        id: p.id,
+        name: p.name,
+        active: p.status === "active",
+        status: p.status as PromoStatus,
+      });
     }
     for (const p of promotions) {
       if (m.has(p.id)) continue;
-      m.set(p.id, { id: p.id, name: p.name, active: true });
+      m.set(p.id, { id: p.id, name: p.name, active: true, status: "active" });
     }
     return m;
   }, []);
 }
+
+const STATUS_LABEL: Record<PromoStatus, string> = {
+  active:     "Activa",
+  incomplete: "Incompleta",
+  inactive:   "Inactiva",
+  "sold-out": "Agotada",
+};
 
 interface Props {
   agency: Agency;
@@ -70,7 +84,7 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
   const sharedPromos = useMemo(() => {
     return (a.promotionsCollaborating ?? [])
       .map((id) => promoCatalog.get(id))
-      .filter(Boolean) as Array<{ id: string; name: string; active: boolean }>;
+      .filter(Boolean) as Array<{ id: string; name: string; active: boolean; status: PromoStatus }>;
   }, [a.promotionsCollaborating, promoCatalog]);
   /* Solo contamos las compartidas que además siguen activas · así el
      hero "N de M activas" no queda descuadrado si hay colaboraciones
@@ -219,51 +233,63 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
               </button>
             )}
 
-            {/* Promociones compartidas · grid · cada card declara cobertura */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {sharedPromos.map((p) => {
-                const isUncovered = !hasBlanketSigned && p.active && uncoveredPromos.some((u) => u.id === p.id);
-                return (
-                  <Link
-                    key={p.id}
-                    to={`/promociones/${p.id}?tab=Agencies`}
-                    className={cn(
-                      "group rounded-2xl border bg-card shadow-soft p-4 hover:-translate-y-0.5 hover:shadow-soft-lg transition-all",
-                      isUncovered ? "border-warning/30" : "border-border",
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className={cn(
-                        "h-8 w-8 rounded-lg grid place-items-center shrink-0",
-                        isUncovered ? "bg-warning/10 text-warning" : "bg-success/10 text-success",
-                      )}>
-                        {isUncovered
-                          ? <AlertTriangle className="h-4 w-4" strokeWidth={2} />
-                          : <Check className="h-4 w-4" strokeWidth={2.25} />}
-                      </span>
-                      <span className={cn(
-                        "inline-flex items-center h-5 px-2 rounded-full border text-[10px] font-medium shrink-0",
-                        isUncovered
-                          ? "border-warning/30 bg-warning/10 text-warning"
-                          : "border-success/25 bg-success/10 text-success",
-                      )}>
-                        {isUncovered ? "Sin contrato" : "Cubierta"}
-                      </span>
+            {/* Activas · una card por cada una con estado de cobertura */}
+            {(() => {
+              const activeShared = sharedPromos.filter((p) => p.active);
+              const closedShared = sharedPromos.filter((p) => !p.active);
+              return (
+                <>
+                  {activeShared.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {activeShared.map((p) => {
+                        const isUncovered = !hasBlanketSigned && uncoveredPromos.some((u) => u.id === p.id);
+                        return (
+                          <Link
+                            key={p.id}
+                            to={`/promociones/${p.id}?tab=Agencies`}
+                            className={cn(
+                              "group rounded-2xl border bg-card shadow-soft p-4 hover:-translate-y-0.5 hover:shadow-soft-lg transition-all",
+                              isUncovered ? "border-warning/30" : "border-border",
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <span className={cn(
+                                "h-8 w-8 rounded-lg grid place-items-center shrink-0",
+                                isUncovered ? "bg-warning/10 text-warning" : "bg-success/10 text-success",
+                              )}>
+                                {isUncovered
+                                  ? <AlertTriangle className="h-4 w-4" strokeWidth={2} />
+                                  : <Check className="h-4 w-4" strokeWidth={2.25} />}
+                              </span>
+                              <span className={cn(
+                                "inline-flex items-center h-5 px-2 rounded-full border text-[10px] font-medium shrink-0",
+                                isUncovered
+                                  ? "border-warning/30 bg-warning/10 text-warning"
+                                  : "border-success/25 bg-success/10 text-success",
+                              )}>
+                                {isUncovered ? "Sin contrato" : "Cubierta"}
+                              </span>
+                            </div>
+                            <p className="text-sm font-semibold text-foreground mt-3 truncate group-hover:underline">
+                              {p.name}
+                            </p>
+                            <div className="mt-2 inline-flex items-center gap-0.5 text-[11px] text-muted-foreground group-hover:text-foreground transition-colors">
+                              Ver en promoción
+                              <ArrowRight className="h-3 w-3" />
+                            </div>
+                          </Link>
+                        );
+                      })}
                     </div>
-                    <p className="text-sm font-semibold text-foreground mt-3 truncate group-hover:underline">
-                      {p.name}
-                    </p>
-                    {!p.active && (
-                      <p className="text-[11px] text-muted-foreground mt-0.5">Promoción cerrada</p>
-                    )}
-                    <div className="mt-2 inline-flex items-center gap-0.5 text-[11px] text-muted-foreground group-hover:text-foreground transition-colors">
-                      Ver en promoción
-                      <ArrowRight className="h-3 w-3" />
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
+                  )}
+
+                  {/* Cerradas · agrupadas en una sola línea colapsable */}
+                  {closedShared.length > 0 && (
+                    <ClosedPromosRow promos={closedShared} className={activeShared.length > 0 ? "mt-3" : ""} />
+                  )}
+                </>
+              );
+            })()}
 
             {/* Estado · trámites normales en curso (no incidencias) */}
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -399,6 +425,80 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
 }
 
 /* ═══════════════ Sub-componentes ═══════════════ */
+
+/** Agrupa las promociones compartidas que NO están publicables
+ *  (`incomplete`, `inactive`, `sold-out`) en una sola línea compacta.
+ *  Evita inflar el grid con cards sin valor operativo y muestra el
+ *  motivo real por el que no están activas (no se llaman "cerradas"
+ *  de forma genérica · cada una tiene su razón concreta). */
+function ClosedPromosRow({
+  promos, className,
+}: {
+  promos: Array<{ id: string; name: string; active: boolean; status: PromoStatus }>;
+  className?: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  /* Etiqueta del bloque · si todas comparten estado, la usamos.
+     Si hay mezcla, decimos simplemente "no activas". */
+  const uniqueStatuses = new Set(promos.map((p) => p.status));
+  const groupLabel =
+    uniqueStatuses.size === 1
+      ? STATUS_LABEL[[...uniqueStatuses][0]].toLowerCase()
+      : "no activas";
+  return (
+    <div className={cn(
+      "rounded-2xl border border-border/60 bg-muted/20 overflow-hidden",
+      className,
+    )}>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className={cn(
+          "w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-muted/40 transition-colors",
+          expanded && "border-b border-border/50",
+        )}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="h-6 w-6 rounded-lg bg-muted grid place-items-center shrink-0">
+            <Home className="h-3 w-3 text-muted-foreground" strokeWidth={1.75} />
+          </span>
+          <p className="text-[12px] font-medium text-foreground">
+            {promos.length} promoción{promos.length === 1 ? "" : "es"} {groupLabel}
+          </p>
+          {!expanded && (
+            <p className="text-[11px] text-muted-foreground truncate">
+              · {promos.slice(0, 2).map((p) => p.name).join(", ")}
+              {promos.length > 2 ? `, +${promos.length - 2}` : ""}
+            </p>
+          )}
+        </div>
+        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground shrink-0">
+          {expanded ? "Ocultar" : "Ver"}
+          <ChevronRight
+            className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-90")}
+            strokeWidth={1.75}
+          />
+        </span>
+      </button>
+      {expanded && (
+        <ul className="divide-y divide-border/40">
+          {promos.map((p) => (
+            <li key={p.id} className="px-4 py-2">
+              <Link
+                to={`/promociones/${p.id}`}
+                className="flex items-center justify-between gap-2 group"
+              >
+                <span className="text-[12.5px] text-foreground truncate group-hover:underline">{p.name}</span>
+                <span className="text-[10.5px] text-muted-foreground shrink-0">{STATUS_LABEL[p.status]}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 function BlockHeader({
   eyebrow, title, subtitle, right, tone,

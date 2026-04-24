@@ -17,7 +17,7 @@
  * home (`AgencyHome`).
  */
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   CalendarDays, FileText, Home, Phone, Mail, MessageSquare,
@@ -92,313 +92,171 @@ export default function Inicio() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   ACTIVIDADES PENDIENTES · LISTA PLANA INDIVIDUAL
+   ACTIVIDADES PENDIENTES · vista agregada por tipo.
    ───────────────────────────────────────────────────────────────────
-   Cada item es UNA tarea concreta · click navega al recurso específico:
-     · Registro     → /registros#reg-<id>
-     · Visita       → /calendario?event=<id> · o /oportunidades/:leadId
-     · Llamada      → /contactos/:contactId · o /calendario?event=<id>
-     · Email        → /emails
-     · WhatsApp     → /contactos/:contactId?tab=whatsapp
-     · Tarea        → /calendario?event=<id>
-   Cabecera por tipo con contador · items ordenados por prioridad.
+   Una card grande por cada categoría con el contador total y una
+   línea de preview (los 1-2 items más urgentes). Click en la card
+   navega a la pantalla de esa categoría.
    ═══════════════════════════════════════════════════════════════════ */
 
-type Activity = {
-  id: string;
-  kind: "registro" | "visita" | "llamada" | "email" | "whatsapp" | "tarea";
+type ActivityKind = "registro" | "visita" | "llamada" | "email" | "whatsapp" | "tarea";
+
+type ActivitySummary = {
+  kind: ActivityKind;
   icon: LucideIcon;
-  title: string;
-  subtitle?: string;
-  meta?: string;          // hora · prioridad · etc.
+  label: string;
+  count: number;
+  urgent?: number;     // subconjunto urgente (vencidos, destructivos)
+  preview?: string;    // 1 línea con lo más relevante
   href: string;
-  tone: "default" | "warning" | "primary" | "success" | "destructive";
+  tone: "primary" | "warning" | "success" | "destructive" | "default";
 };
-
-/* Filtros por categoría arriba del bloque. */
-type Filter = "all" | Activity["kind"];
-
-const FILTERS: { key: Filter; label: string; icon: LucideIcon }[] = [
-  { key: "all",       label: "Todas",      icon: AlertCircle },
-  { key: "registro",  label: "Registros",  icon: FileText },
-  { key: "visita",    label: "Visitas",    icon: Home },
-  { key: "llamada",   label: "Llamadas",   icon: Phone },
-  { key: "email",     label: "Emails",     icon: Mail },
-  { key: "whatsapp",  label: "WhatsApps",  icon: MessageSquare },
-  { key: "tarea",     label: "Tareas",     icon: CheckSquare },
-];
 
 function ActividadesPendientes() {
   const allEvents = useCalendarEvents();
-  const [filter, setFilter] = useState<Filter>("all");
 
-  const items = useMemo<Activity[]>(() => {
-    const list: Activity[] = [];
+  const summaries = useMemo<ActivitySummary[]>(() => {
     const today = new Date();
 
-    /* === REGISTROS pendientes === */
-    registros
-      .filter((r) => r.estado === "pendiente")
-      .forEach((r) => {
-        list.push({
-          id: `reg-${r.id}`,
-          kind: "registro",
-          icon: FileText,
-          title: `${r.cliente.nombre} · registro pendiente`,
-          subtitle: `Promoción ${r.promotionId}${r.matchPercentage >= 70 ? ` · ⚠ posible duplicado ${r.matchPercentage}%` : ""}`,
-          meta: relativeTime(r.fecha),
-          href: `/registros#${r.id}`,
-          tone: r.matchPercentage >= 70 ? "destructive" : "warning",
-        });
-      });
+    /* Registros pendientes */
+    const regs = registros.filter((r) => r.estado === "pendiente");
+    const regsDup = regs.filter((r) => r.matchPercentage >= 70).length;
 
-    /* === VISITAS pending-confirmation === */
-    allEvents
-      .filter((ev) => ev.type === "visit" && ev.status === "pending-confirmation")
-      .forEach((v) => {
-        list.push({
-          id: `visit-${v.id}`,
-          kind: "visita",
-          icon: Home,
-          title: v.title,
-          subtitle: `${v.contactName ?? ""} · ${(v as any).promotionName ?? ""}`.trim(),
-          meta: `${formatDay(v.start)} · ${formatTime(v.start)}`,
-          href: v.leadId
-            ? `/oportunidades/${v.leadId}?tab=actividad`
-            : `/calendario?event=${v.id}`,
-          tone: "warning",
-        });
-      });
+    /* Visitas pending + sin evaluar */
+    const vPending = allEvents.filter(
+      (ev) => ev.type === "visit" && ev.status === "pending-confirmation",
+    );
+    const vNoEval = allEvents.filter(
+      (ev) => ev.type === "visit" && ev.status === "done" && !(ev as any).evaluation,
+    );
+    const visitasTotal = vPending.length + vNoEval.length;
 
-    /* === VISITAS done sin evaluación === */
-    allEvents
-      .filter(
-        (ev) => ev.type === "visit" && ev.status === "done" && !(ev as any).evaluation,
-      )
-      .forEach((v) => {
-        list.push({
-          id: `visit-eval-${v.id}`,
-          kind: "visita",
-          icon: CheckSquare,
-          title: `Evaluar ${v.title}`,
-          subtitle: v.contactName ?? "Visita realizada",
-          meta: "pendiente de feedback",
-          href: v.leadId
-            ? `/oportunidades/${v.leadId}?tab=actividad`
-            : `/calendario?event=${v.id}`,
-          tone: "warning",
-        });
-      });
+    /* Llamadas de hoy pendientes */
+    const calls = eventsInDay(allEvents, today).filter(
+      (ev) => ev.type === "call" && ev.status !== "cancelled" && ev.status !== "done",
+    );
 
-    /* === LLAMADAS de hoy === */
-    eventsInDay(allEvents, today)
-      .filter((ev) => ev.type === "call" && ev.status !== "cancelled" && ev.status !== "done")
-      .forEach((c) => {
-        list.push({
-          id: `call-${c.id}`,
-          kind: "llamada",
-          icon: Phone,
-          title: c.contactName ? `Llamar a ${c.contactName}` : c.title,
-          subtitle: c.notes ?? (c as any).phone ?? c.title,
-          meta: formatTime(c.start),
-          href: c.contactId
-            ? `/contactos/${c.contactId}`
-            : `/calendario?event=${c.id}`,
-          tone: "primary",
-        });
-      });
+    /* Mock counts */
+    const emails = 4;
+    const whatsapps = 2;
+    const tareasTotal = 3;
+    const tareasVencidas = 1;
 
-    /* === EMAILS sin responder (mock) === */
-    MOCK_EMAILS.forEach((e) => {
-      list.push({
-        id: `email-${e.id}`,
-        kind: "email",
-        icon: Mail,
-        title: `${e.from} · ${e.subject}`,
-        subtitle: e.snippet,
-        meta: e.time,
-        href: e.contactId ? `/contactos/${e.contactId}?tab=emails` : "/emails",
-        tone: "default",
-      });
-    });
-
-    /* === WHATSAPPS sin leer (mock) === */
-    MOCK_WHATSAPPS.forEach((w) => {
-      list.push({
-        id: `wa-${w.id}`,
-        kind: "whatsapp",
-        icon: MessageSquare,
-        title: `${w.from} · WhatsApp`,
-        subtitle: w.snippet,
-        meta: w.time,
-        href: `/contactos/${w.contactId}?tab=whatsapp`,
-        tone: "success",
-      });
-    });
-
-    /* === TAREAS propias (mock) === */
-    MOCK_TAREAS.forEach((t) => {
-      list.push({
-        id: `task-${t.id}`,
-        kind: "tarea",
-        icon: CheckSquare,
-        title: t.title,
-        subtitle: t.description,
-        meta: t.due,
-        href: `/calendario?task=${t.id}`,
-        tone: t.overdue ? "destructive" : "primary",
-      });
-    });
-
-    /* Orden: destructive primero (urgente), luego warning, luego resto. */
-    const rank = { destructive: 0, warning: 1, primary: 2, success: 3, default: 4 };
-    return list.sort((a, b) => rank[a.tone] - rank[b.tone]);
+    return [
+      {
+        kind: "registro", icon: FileText, label: "Registros",
+        count: regs.length, urgent: regsDup,
+        preview: regs.length > 0
+          ? `${regs[0].cliente.nombre}${regs.length > 1 ? ` · +${regs.length - 1} más` : ""}`
+          : "Todo al día",
+        href: "/registros",
+        tone: regsDup > 0 ? "destructive" : regs.length > 0 ? "warning" : "default",
+      },
+      {
+        kind: "visita", icon: Home, label: "Visitas",
+        count: visitasTotal,
+        urgent: vPending.length,
+        preview: visitasTotal > 0
+          ? `${vPending.length > 0 ? `${vPending.length} por confirmar` : ""}${vPending.length > 0 && vNoEval.length > 0 ? " · " : ""}${vNoEval.length > 0 ? `${vNoEval.length} por evaluar` : ""}`
+          : "Nada pendiente",
+        href: "/calendario",
+        tone: visitasTotal > 0 ? "warning" : "default",
+      },
+      {
+        kind: "llamada", icon: Phone, label: "Llamadas",
+        count: calls.length,
+        preview: calls.length > 0
+          ? calls.slice(0, 2).map((c) => `${formatTime(c.start)} ${c.contactName ?? ""}`).join(" · ")
+          : "Sin llamadas hoy",
+        href: "/calendario",
+        tone: calls.length > 0 ? "primary" : "default",
+      },
+      {
+        kind: "email", icon: Mail, label: "Emails",
+        count: emails,
+        preview: "Ahmed Al Rashid · Marie Dubois · +2 más",
+        href: "/emails",
+        tone: emails > 0 ? "primary" : "default",
+      },
+      {
+        kind: "whatsapp", icon: MessageSquare, label: "WhatsApps",
+        count: whatsapps,
+        preview: "Marie Dubois · Emma Johnson",
+        href: "/contactos",
+        tone: whatsapps > 0 ? "success" : "default",
+      },
+      {
+        kind: "tarea", icon: CheckSquare, label: "Tareas",
+        count: tareasTotal, urgent: tareasVencidas,
+        preview: tareasVencidas > 0 ? `${tareasVencidas} vencida · ${tareasTotal - tareasVencidas} hoy` : `${tareasTotal} para hoy`,
+        href: "/calendario",
+        tone: tareasVencidas > 0 ? "destructive" : "primary",
+      },
+    ];
   }, [allEvents]);
 
-  const countsByKind = useMemo(() => {
-    const c: Record<string, number> = { all: items.length };
-    items.forEach((i) => { c[i.kind] = (c[i.kind] ?? 0) + 1; });
-    return c;
-  }, [items]);
-
-  const filtered = filter === "all" ? items : items.filter((i) => i.kind === filter);
+  const totalAll = summaries.reduce((s, x) => s + x.count, 0);
 
   return (
     <section className="bg-card border border-border rounded-2xl shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
-      <header className="px-4 sm:px-5 py-4 border-b border-border">
-        <div className="flex items-center justify-between gap-3">
+      <header className="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-border">
+        <div className="min-w-0">
           <h3 className="text-sm font-semibold flex items-center gap-2">
             <AlertCircle className="h-3.5 w-3.5 text-warning shrink-0" strokeWidth={1.75} />
             Actividades pendientes
           </h3>
-          <p className="text-[11.5px] text-muted-foreground tabular-nums">
-            {filtered.length} de {items.length}
+          <p className="text-[11.5px] text-muted-foreground mt-0.5 tabular-nums">
+            {totalAll} en total · agrupadas por tipo
           </p>
-        </div>
-        {/* Filtros por categoría */}
-        <div className="mt-3 flex items-center gap-1 flex-wrap">
-          {FILTERS.map((f) => {
-            const count = countsByKind[f.key] ?? 0;
-            if (f.key !== "all" && count === 0) return null;
-            const active = filter === f.key;
-            const Icon = f.icon;
-            return (
-              <button
-                key={f.key}
-                onClick={() => setFilter(f.key)}
-                className={cn(
-                  "inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-medium transition-colors",
-                  active
-                    ? "bg-foreground text-background"
-                    : "bg-muted text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <Icon className="h-3 w-3" strokeWidth={1.75} />
-                {f.label}
-                <span className={cn(
-                  "tabular-nums",
-                  active ? "opacity-80" : "opacity-60",
-                )}>· {count}</span>
-              </button>
-            );
-          })}
         </div>
       </header>
 
-      {filtered.length === 0 ? (
-        <div className="px-4 sm:px-5 py-10 text-center">
-          <p className="text-[12px] text-muted-foreground italic">
-            Sin actividades pendientes en esta categoría.
-          </p>
-        </div>
-      ) : (
-        <ul className="divide-y divide-border/40 max-h-[520px] overflow-y-auto overscroll-contain">
-          {filtered.map((a) => {
-            const Icon = a.icon;
-            const toneBg = {
-              default:     "bg-muted text-foreground",
-              warning:     "bg-warning/10 text-warning",
-              primary:     "bg-primary/10 text-primary",
-              success:     "bg-emerald-50 text-emerald-700",
-              destructive: "bg-destructive/5 text-destructive",
-            }[a.tone];
-            return (
-              <li key={a.id}>
-                <Link
-                  to={a.href}
-                  className="flex items-start gap-3 px-4 sm:px-5 py-3 hover:bg-muted/30 transition-colors"
-                >
-                  <div className={cn("h-9 w-9 rounded-xl grid place-items-center shrink-0", toneBg)}>
-                    <Icon className="h-4 w-4" strokeWidth={1.75} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[12.5px] font-semibold text-foreground truncate">
-                      {a.title}
-                    </p>
-                    {a.subtitle && (
-                      <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                        {a.subtitle}
-                      </p>
-                    )}
-                  </div>
-                  {a.meta && (
-                    <p className="text-[10.5px] text-muted-foreground shrink-0 mt-1.5 tabular-nums">
-                      {a.meta}
-                    </p>
-                  )}
-                  <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0 mt-1.5" strokeWidth={1.75} />
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 sm:p-4">
+        {summaries.map((s) => {
+          const Icon = s.icon;
+          const toneClass = {
+            default:     "bg-card border-border text-muted-foreground",
+            primary:     "bg-primary/5 border-primary/20 text-primary",
+            warning:     "bg-warning/10 border-warning/30 text-warning",
+            success:     "bg-emerald-50 border-emerald-200 text-emerald-800",
+            destructive: "bg-destructive/5 border-destructive/20 text-destructive",
+          }[s.tone];
+          return (
+            <Link
+              key={s.kind}
+              to={s.href}
+              className={cn(
+                "rounded-xl border p-3 sm:p-3.5 transition-all hover:-translate-y-0.5 hover:shadow-soft-lg group",
+                toneClass,
+              )}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <Icon className="h-4 w-4 opacity-80" strokeWidth={1.75} />
+                <ArrowUpRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-70 transition-opacity" strokeWidth={1.75} />
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[24px] sm:text-[28px] font-bold tabular-nums leading-none">{s.count}</span>
+                {s.urgent ? (
+                  <span className="text-[10px] font-semibold tabular-nums opacity-80">
+                    · {s.urgent} urgente{s.urgent === 1 ? "" : "s"}
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider opacity-70 mt-1.5">
+                {s.label}
+              </p>
+              {s.preview && (
+                <p className="text-[11px] opacity-80 mt-1 leading-snug line-clamp-2">
+                  {s.preview}
+                </p>
+              )}
+            </Link>
+          );
+        })}
+      </div>
     </section>
   );
 }
-
-/* ─── Helpers locales ─── */
-
-function formatDay(iso: string): string {
-  const d = new Date(iso);
-  const today = new Date();
-  const tomorrow = new Date(); tomorrow.setDate(today.getDate() + 1);
-  if (d.toDateString() === today.toDateString()) return "Hoy";
-  if (d.toDateString() === tomorrow.toDateString()) return "Mañana";
-  return d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
-}
-
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `hace ${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `hace ${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `hace ${days}d`;
-}
-
-/* ─── Mocks de Emails / WhatsApps / Tareas ·
-       hasta que tengan store propio se hardcoded aquí con link al
-       contacto cuando existe para que el click abra el panel real. ─── */
-
-const MOCK_EMAILS = [
-  { id: "e1", from: "Ahmed Al Rashid", subject: "Re: Villa Serena · financiación", snippet: "Mañana te paso la carta del banco · gracias.", time: "hace 2h", contactId: "ahmed-al-rashid" },
-  { id: "e2", from: "Marie Dubois",    subject: "Re: Terrazas del Golf",           snippet: "Confirmo visita del jueves · ¿a qué hora?",    time: "hace 3h", contactId: "marie-dubois" },
-  { id: "e3", from: "Lars Andersson",  subject: "Documentación adicional",         snippet: "Adjunto la preaprobación bancaria.",          time: "hace 5h", contactId: "lars-andersson" },
-  { id: "e4", from: "Emma Johnson",    subject: "Planos Villa 03",                 snippet: "¿Puedes enviarme los planos actualizados?",    time: "ayer",    contactId: "emma-johnson" },
-];
-
-const MOCK_WHATSAPPS = [
-  { id: "w1", from: "Marie Dubois",   snippet: "¿Podemos adelantar la visita al miércoles?", time: "13:45", contactId: "marie-dubois" },
-  { id: "w2", from: "Emma Johnson",   snippet: "¡Gracias por la info! ¿nos vemos mañana?",   time: "11:20", contactId: "emma-johnson" },
-];
-
-const MOCK_TAREAS = [
-  { id: "t1", title: "Enviar dossier Villa Serena a Ivan Petrov", description: "PDF con precios + disponibilidad", due: "vencida", overdue: true },
-  { id: "t2", title: "Llamar a proveedor gráfico",                description: "Confirmar entrega nueva cartelería", due: "hoy",  overdue: false },
-  { id: "t3", title: "Cierre semanal del pipeline",               description: "Revisar oportunidades · actualizar etapas", due: "hoy", overdue: false },
-];
 
 /* ═══════════════════════════════════════════════════════════════════
    NOVEDADES · nuevos comercializadores + nuevas agencias + última

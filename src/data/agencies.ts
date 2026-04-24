@@ -14,6 +14,9 @@
  * Cuando se conecte backend: los campos públicos (logo, cover, name, …)
  * deben venir del Empresa del tenant de la agencia — no duplicados aquí.
  */
+
+import { developerOnlyPromotions } from "./developerPromotions";
+
 export type Agency = {
   id: string;
   name: string;
@@ -567,9 +570,6 @@ export function getAgencyShareStats(agency: Agency): {
   sharedActive: number;
   sharedDeclared: number;
 } {
-  /* eslint-disable @typescript-eslint/no-require-imports */
-  const { developerOnlyPromotions } =
-    require("./developerPromotions") as typeof import("./developerPromotions");
   const activePromos = developerOnlyPromotions.filter((p) => p.status === "active");
   const activeIds = new Set(activePromos.map((p) => p.id));
   const declared = agency.promotionsCollaborating ?? [];
