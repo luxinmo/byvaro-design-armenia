@@ -1035,6 +1035,54 @@ Las tres se derivan con reglas deterministas en
 Cuando el dataset crezca y las reglas se compliquen, mover al servidor
 con endpoint dedicado `GET .../estadisticas/insights`.
 
+### 4.3 · Reglas de marketing por promoción
+
+El promotor define, por promoción, qué canales (portales inmobiliarios,
+redes sociales, ads) quedan PROHIBIDOS para las agencias
+colaboradoras. La agencia ve la misma regla en la ficha y debe
+respetarla — violarla puede llevar a extinción del contrato.
+
+**Tipo** · `Promotion.marketingProhibitions?: string[]` (ids del
+catálogo). Ausencia = "todo permitido".
+
+**Catálogo** · `src/lib/marketingChannels.ts` (15 canales agrupados
+en 3 categorías · portales · redes · publicidad). Los ids son
+estables — nunca renombrar.
+
+**Storage actual** · localStorage clave
+`byvaro.promotion.marketingProhibitions.v1:<id>`
+(`src/lib/marketingRulesStorage.ts`).
+
+**Endpoints esperados**:
+
+| Endpoint | Propósito |
+|---|---|
+| `GET /api/promociones/:id` | respuesta ya trae `marketingProhibitions: string[]` |
+| `PATCH /api/promociones/:id` | body incluye `marketingProhibitions?: string[]` |
+| `GET /api/marketing/channels` | catálogo del backend (sobrescribe al mock cliente; incluirá qué integraciones están activas en el tenant para UI) |
+
+**Integración con conectores de portales** (fase futura ·
+`src/lib/portalIntegrations/*`):
+
+1. **Gate duro en dispatcher** · al publicar desde la agencia, el
+   dispatcher de portal DEBE leer `marketingProhibitions` antes de
+   hacer push. Si el canal está prohibido → 422
+   `channel_prohibited` + UI de la agencia muestra botón bloqueado
+   con tooltip "El promotor ha prohibido este canal".
+2. **Detección post-hoc** · si un portal notifica (webhook) una
+   publicación fuera del flujo (agencia publicó a mano), el sistema
+   registra incidencia en historial cross-empresa:
+   `recordCompanyEvent({ type: "marketing.violation", channelId,
+   promotionId })` + notifica al admin del promotor por email +
+   push.
+3. **Contrato** · la cláusula de marketing del contrato de
+   colaboración debe referenciar esta regla textualmente (plantilla
+   en `/ajustes/plantillas` categoría "Documentos → contratos").
+
+**Visibilidad** · admin y agente del promotor la editan (no hay gate
+de permiso específico por ahora · la edita quien edita la promoción);
+la agencia la ve read-only en su vista de ficha.
+
 ---
 
 ## 5 · Compartir promoción · invitaciones

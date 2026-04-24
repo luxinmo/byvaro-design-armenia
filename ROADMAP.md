@@ -33,7 +33,7 @@ Leyenda: ✅ hecho · 🟡 en curso · 🎨 placeholder · ⬜ pendiente
 | 🎨 | Microsites | `/microsites` | Placeholder |
 | 🟡 | Emails | `/emails` | Paso 1 hecho (doc + tipos + data). Falta UI |
 | 🎨 | Ajustes | `/ajustes` | Placeholder |
-| ✅ | Promoción · detalle | `/promociones/:id` | Ficha con 6 tabs (Información · Disponibilidad · Multimedia · Docs · Colaboradores · Registros) |
+| ✅ | Promoción · detalle | `/promociones/:id` | Ficha con 6 tabs · card "Reglas de marketing" (portales prohibidos) en Vista general |
 
 ---
 

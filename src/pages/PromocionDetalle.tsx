@@ -23,6 +23,7 @@ import {
   Check, X, ExternalLink, Zap, Star, Search, ChevronDown, Info,
   Lock, Unlock, FolderOpen, Folder, Download, BookOpen, Upload, MoreHorizontal, FilePlus, ArrowRight,
   Trophy, Sparkles, ArrowUpRight, FileCheck2, Rocket, BarChart3,
+  Megaphone,
 } from "lucide-react";
 import { getMissingForPromotion } from "@/lib/publicationRequirements"; // fuente única de verdad de requisitos para publicar
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,8 @@ import { unitsByPromotion } from "@/data/units";
 import { ClientRegistrationDialog } from "@/components/promotions/detail/ClientRegistrationDialog";
 import { PromotionRecords } from "@/components/promotions/detail/PromotionRecords";
 import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
+import { MarketingRulesDialog } from "@/components/promotions/MarketingRulesDialog";
+import { MarketingRulesCard } from "@/components/promotions/MarketingRulesCard";
 import { ImageLightbox } from "@/components/promotions/detail/ImageLightbox";
 import { ActivateSharingDialog } from "@/components/promotions/ActivateSharingDialog";
 import {
@@ -263,6 +266,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const [priceListOpen, setPriceListOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [activateSharingOpen, setActivateSharingOpen] = useState(false);
+  const [marketingRulesOpen, setMarketingRulesOpen] = useState(false);
   /** El brochure puede eliminarse desde su card. Al eliminarlo, la sección
    *  se oculta y la acción rápida "Brochure" queda deshabilitada. */
   const [brochureRemoved, setBrochureRemoved] = useState(false);
@@ -449,6 +453,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           hint: canShare ? "Invitar colaboradores" : "Activa compartir en la tab Comisiones",
           onClick: canShare ? () => setShareOpen(true) : undefined,
           disabled: !canShare,
+        },
+        {
+          icon: Megaphone,
+          label: "Reglas de marketing",
+          hint: "Dónde puede (o no) promocionarse esta promoción",
+          onClick: () => setMarketingRulesOpen(true),
         },
       ] : []),
       ...(isPublished ? [
@@ -1620,6 +1630,21 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               );
             })()}
 
+            {/* ── 7.5 REGLAS DE MARKETING ──
+                 Solo tiene sentido mostrarlas cuando la promoción está
+                 compartida con agencias. Si es de uso interno
+                 (`canShareWithAgencies === false`) la sección se oculta
+                 · el promotor no necesita reglas que aplican a "nadie".
+                 Tanto promotor como agencia ven la tarjeta; solo el
+                 promotor puede editarla (botón oculto en modo collab). */}
+            {sharingEnabledForPromo && (
+              <MarketingRulesCard
+                promotionId={p.id}
+                readOnly={viewAsCollaborator}
+                onEdit={viewAsCollaborator ? undefined : () => setMarketingRulesOpen(true)}
+              />
+            )}
+
             {/* ── 8. CONTACTOS (al final) ── */}
             <ContactFooter
               contacts={contacts}
@@ -1961,6 +1986,14 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       <SharePromotionDialog
         open={shareOpen}
         onOpenChange={setShareOpen}
+        promotionId={p.id}
+        promotionName={p.name}
+      />
+
+      {/* Reglas de marketing · qué canales NO pueden usar las agencias */}
+      <MarketingRulesDialog
+        open={marketingRulesOpen}
+        onOpenChange={setMarketingRulesOpen}
         promotionId={p.id}
         promotionName={p.name}
       />

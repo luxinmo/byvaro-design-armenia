@@ -989,6 +989,66 @@ Implementar **antes** de quitar el modo mock de `permissions.ts`.
 
 ---
 
+## 📣 REGLA DE ORO · Reglas de marketing por promoción
+
+> **Toda promoción compartida con agencias lleva reglas de
+> marketing/publicación.** El promotor define qué canales (portales
+> inmobiliarios, redes sociales, ads) quedan PROHIBIDOS; la agencia
+> los ve en la ficha y DEBE respetarlos. Violarlos puede extinguir
+> el contrato.
+
+**Cómo se aplica hoy (mock).**
+
+- Catálogo canónico en `src/lib/marketingChannels.ts` (15 canales · 3
+  categorías · portales · redes · publicidad). Ids estables — si
+  Byvaro integra un portal nuevo, se añade entrada; nunca se
+  renombran ids existentes.
+- Storage por promoción en `src/lib/marketingRulesStorage.ts`
+  (localStorage · hook reactivo `useMarketingProhibitions(id)`).
+- UI en la ficha:
+  - Entrada en el dock "Acciones rápidas" de la derecha
+    (`PromocionDetalle.tsx` → `renderQuickActionsRail`) · icono
+    `Megaphone`.
+  - Tarjeta `<MarketingRulesCard>` al pie del tab Vista general
+    (solo si `sharingEnabledForPromo`) · verde cuando no hay
+    restricciones · ámbar con chips `<Ban>` cuando las hay · nota
+    legal sobre extinción de contrato.
+  - Dialog de edición `<MarketingRulesDialog>` · switches por canal
+    agrupados por categoría · solo lo ve el promotor (el botón
+    "Editar" se oculta con `viewAsCollaborator`).
+
+**Cómo se aplicará con backend real.**
+
+- `PATCH /api/promociones/:id { marketingProhibitions: string[] }`.
+- Cuando se enchufen los conectores de portales
+  (`src/lib/portalIntegrations/*` · fase futura), el dispatcher de
+  publicación DEBE rechazar con 422 `channel_prohibited` si la
+  agencia intenta publicar a un canal prohibido, y la UI del lado
+  agencia debe deshabilitar ese botón con tooltip "El promotor ha
+  prohibido este canal".
+- Incidencias por violación · webhook del portal → registra evento
+  `marketing.violation` en el historial cross-empresa
+  (`recordCompanyEvent`) + notifica al admin.
+- La cláusula de marketing del contrato de colaboración debe
+  referenciar la regla textualmente · plantilla en
+  `/ajustes/plantillas` categoría "Documentos → contratos".
+
+**Obligaciones al añadir feature nueva que toque publicación/canal:**
+
+1. ¿Hay un canal nuevo (portal o red)? → añadirlo al catálogo
+   `marketingChannels.ts` con id kebab-case estable.
+2. ¿La feature hace push a un portal desde el lado agencia? →
+   consumir `isChannelProhibited(promotionId, channelId)` antes de
+   habilitar el botón/acción. Documentar con `TODO(backend)` el
+   gate server-side.
+3. ¿Añades icono de "prohibido" en UI? → usa `<Ban>` de Lucide con
+   `text-destructive` (coherente con `MarketingRulesCard` y
+   `MarketingRulesDialog`).
+
+Ver `docs/backend-integration.md §4.3` para el contrato completo.
+
+---
+
 ## 🖱️ Popovers/Dropdowns/Selects dentro de Dialogs · fix de scroll
 
 Cuando un `Popover`, `DropdownMenu` o `Select` de Radix se abre dentro
