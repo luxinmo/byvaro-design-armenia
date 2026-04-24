@@ -1820,3 +1820,70 @@ Ver:
 - `src/components/ui/popover.tsx`, `.../dropdown-menu.tsx`, `.../select.tsx`.
 - `src/components/team/JobTitlePicker.tsx` · lógica de límite estricto.
 - `CLAUDE.md §🖱️ Popovers/Dropdowns/Selects dentro de Dialogs`.
+
+
+## 2026-04-24 · ADR-056 · Calendario unificado · entidad única + conflicto duro + multi-calendario
+
+**Contexto.** Había que diseñar el calendario del CRM. Varios caminos
+posibles:
+
+- **Entidades separadas por tipo** (Visit, Call, Meeting, Block,
+  Reminder) cada una con su pantalla y modelo. Más tipado, pero forzaría
+  a duplicar UI y a sincronizar 5 backends.
+- **Un tipo único** con union discriminada por `type`.
+
+El producto esperado es "la agenda del comercial" — todos los eventos
+comparten lo importante: `start/end/assigneeUserId`, se pintan en el
+mismo grid, tienen las mismas acciones (mover, editar, cancelar).
+
+**Decisión.**
+
+1. **Entidad única** `CalendarEvent` con union discriminada por `type`
+   (`visit | call | meeting | block | reminder`). Cada tipo extiende el
+   base con sus campos específicos (p. ej. `visit` con `promotionId`,
+   `unitId`, `evaluation`). Un solo CRUD en backend, un solo listado
+   en UI.
+
+2. **Un único agente por evento** (`assigneeUserId`). El multi-calendario
+   de Google Calendar se representa como "carriles" en la sidebar, no
+   como campos multi-asignee. Razón: el comercial siempre es uno — los
+   compañeros pueden acompañar, pero la responsabilidad es única.
+
+3. **Detección de conflicto DURA**. Si el agente ya tiene un evento
+   solapando (excluyendo cancelados/noshow), el dialog **bloquea** la
+   creación/edición con banner rojo y CTA "Cambia el existente
+   primero". Razón: evitar doble-booking silencioso · el comercial que
+   mueve el existente conscientemente entiende la implicación.
+
+4. **Pipeline mobile como Apple Calendar** · no como Google Calendar:
+   grid del mes con dots de color por tipo · tap en día → lista del
+   día. Más rápido y más leíble en 375px.
+
+5. **Sync con Google Calendar** en V1 con UI funcional (toggle por
+   miembro en `/ajustes/calendario/sync`) y contrato backend
+   documentado. Outlook/Apple llegan después.
+
+6. **Visitas linkadas a oportunidades** · cuando el comercial pulsa
+   "Programar visita" desde la ficha de oportunidad, se crea el
+   evento con `leadId`. Si la visita llega desde un Registro, el
+   evento se crea con `status="pending-confirmation"` y se pinta con
+   borde punteado + opacidad baja en el calendario.
+
+**Consecuencia en backend** (documentada en
+`docs/backend-integration.md §Calendar`):
+
+- `GET/POST/PATCH/DELETE /api/calendar/events`.
+- `GET /api/calendar/events/conflicts?assigneeUserId&start&end&ignoreId`
+  — pre-check server-side para consistencia con la UI.
+- OAuth Google Calendar + cron bidireccional cada 5 min.
+- Emisión de eventos en timeline de la oportunidad/contacto vinculados.
+
+Ver:
+- `src/data/calendarEvents.ts` · tipos + seed con 24 eventos.
+- `src/lib/calendarStorage.ts` · CRUD + `findConflict()`.
+- `src/lib/calendarHelpers.ts` · utilidades fecha/hora.
+- `src/pages/Calendario.tsx` · página con 4 vistas + mobile.
+- `src/components/calendar/CreateCalendarEventDialog.tsx` · dialog de
+  crear/editar con conflicto duro.
+- `src/pages/ajustes/calendario/sync.tsx` · sync Google.
+- `docs/screens/calendario.md` · spec.

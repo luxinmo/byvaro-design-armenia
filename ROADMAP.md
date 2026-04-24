@@ -26,7 +26,7 @@ Leyenda: ✅ hecho · 🟡 en curso · 🎨 placeholder · ⬜ pendiente
 | 🟡 | Crear promoción · wizard | `/crear-promocion` | Fase 1 (shell + pasos role/tipo) |
 | 🎨 | Registros | `/registros` | Placeholder |
 | 🎨 | Ventas | `/ventas` | Placeholder |
-| 🎨 | Calendario | `/calendario` | Placeholder |
+| 🟢 | Calendario | `/calendario` | 4 vistas + multi-calendario + conflicto duro + Google sync (mock) · ADR-056 |
 | ✅ | Colaboradores | `/colaboradores` | Red + Analítica (KPIs · Top 5 · Heatmap · Conversión) |
 | 🎨 | Contactos | `/contactos` | Placeholder |
 | 🎨 | Microsites | `/microsites` | Placeholder |
@@ -164,7 +164,30 @@ Ficha de contacto completa con 8 tabs operativos. Spec en
 - ⬜ Pipeline bar visual + selector de etapa en la ficha de oportunidad
 - ⬜ Implementar gating de permisos por ownership en todos los listados (deuda en `docs/permissions.md` §6)
 
-### ⬜ Fase 10 — Calendario
+### 🟢 Fase 10 — Calendario · agenda unificada (ADR-056)
+
+Una sola pantalla donde conviven **todos los tipos** de evento del
+equipo: visitas, llamadas, reuniones, bloqueos y recordatorios. Spec
+en [`docs/screens/calendario.md`](docs/screens/calendario.md).
+
+- ✅ Modelo único `CalendarEvent` con union discriminada por tipo + seed
+  con 24 eventos mock (`src/data/calendarEvents.ts`)
+- ✅ Helpers de fecha/hora (`src/lib/calendarHelpers.ts`)
+- ✅ Store reactivo con CRUD + `findConflict()` (`src/lib/calendarStorage.ts`)
+- ✅ Página `/calendario` con 4 vistas: Semana (default desktop) · Mes ·
+  Día · Agenda
+- ✅ Multi-calendario · sidebar con carriles por agente toggleables + color
+- ✅ `CreateCalendarEventDialog` con **detección de conflicto dura**
+  (banner rojo + CTA "Ir al evento en conflicto" + botón disabled)
+- ✅ CTA "Programar visita" en ficha de oportunidad → dialog con preset
+- ✅ Widget "Hoy" en Inicio alimentado por el calendario real
+- ✅ `/ajustes/calendario/sync` con mock Google Calendar por miembro
+- ✅ Mobile Apple Calendar-like: grid del mes con dots + lista del día
+  seleccionado + FAB
+- ⬜ Google Calendar OAuth + cron bidireccional (TODO backend)
+- ⬜ Export `.ics` + envío al cliente por email/WhatsApp (TODO backend)
+- ⬜ Ajustes secundarios (`/ajustes/calendario/horario`, `duracion`,
+  `recordatorios`) quedan como placeholder
 
 ### ⬜ Fase 11 — Ventas (pipeline)
 

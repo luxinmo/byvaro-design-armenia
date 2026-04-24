@@ -20,7 +20,7 @@
  * TODO(backend): ver §Calendar de docs/backend-integration.md.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronLeft, ChevronRight, Plus, Home, Phone, Users, Ban, Bell,
@@ -52,14 +52,40 @@ type ViewMode = "semana" | "mes" | "dia" | "agenda";
  * habitual · suficiente para cubrir los eventos mock sin saturar. */
 const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i); // 8..20
 
+/** Detecta si estamos en viewport mobile. Se actualiza con resize. */
+function useIsMobile(breakpoint = 1024): boolean {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < breakpoint : false,
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 export default function Calendario() {
   const navigate = useNavigate();
   const allEvents = useCalendarEvents();
   const teamMembers = useMemo(() => getAllTeamMembers(), []);
 
   /* ─── Estado de vista ─── */
+  const isMobile = useIsMobile();
   const [viewDate, setViewDate] = useState<Date>(() => new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>("semana");
+  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+    typeof window !== "undefined" && window.innerWidth < 1024 ? "mes" : "semana",
+  );
+  /* En mobile, vista Mes muestra además la lista del día seleccionado
+     abajo (estilo Apple Calendar). */
+  const [mobileSelectedDay, setMobileSelectedDay] = useState<Date>(() => new Date());
+  /* Al cambiar entre mobile y desktop, ajusta vistas que no encajan. */
+  useEffect(() => {
+    if (isMobile && (viewMode === "semana" || viewMode === "dia")) {
+      setViewMode("mes");
+    }
+  }, [isMobile, viewMode]);
 
   /* ─── Multi-calendario · qué agentes se muestran.
      Por defecto: todos los miembros activos encendidos. */
@@ -148,8 +174,9 @@ export default function Calendario() {
               </p>
             </div>
 
-            {/* CTA primary · crear */}
-            <div className="flex items-center gap-2 shrink-0">
+            {/* CTA primary · crear. En mobile se sustituye por FAB
+               flotante abajo-derecha (más cómodo para pulgar). */}
+            <div className="hidden lg:flex items-center gap-2 shrink-0">
               <button
                 onClick={() => openCreate({ date: new Date() })}
                 className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-foreground text-background text-sm font-semibold hover:bg-foreground/90 shadow-soft transition-colors"
@@ -188,14 +215,21 @@ export default function Calendario() {
               {headerTitle}
             </p>
 
-            {/* Segmented vistas */}
+            {/* Segmented vistas · en mobile se ofrecen solo Mes/Agenda
+               (Semana y Día son densas y no leen bien en 375px). */}
             <div className="ml-auto inline-flex items-center bg-muted rounded-full p-1 gap-0.5">
-              {([
-                { key: "semana" as const, label: "Semana" },
-                { key: "mes"    as const, label: "Mes" },
-                { key: "dia"    as const, label: "Día" },
-                { key: "agenda" as const, label: "Agenda" },
-              ]).map((opt) => {
+              {(isMobile
+                ? ([
+                    { key: "mes"    as const, label: "Mes" },
+                    { key: "agenda" as const, label: "Agenda" },
+                  ])
+                : ([
+                    { key: "semana" as const, label: "Semana" },
+                    { key: "mes"    as const, label: "Mes" },
+                    { key: "dia"    as const, label: "Día" },
+                    { key: "agenda" as const, label: "Agenda" },
+                  ])
+              ).map((opt) => {
                 const active = viewMode === opt.key;
                 return (
                   <button
@@ -268,13 +302,23 @@ export default function Calendario() {
                 onEventClick={(ev) => openEdit(ev)}
               />
             )}
-            {viewMode === "mes" && (
+            {viewMode === "mes" && !isMobile && (
               <MonthView
                 viewDate={viewDate}
                 events={filteredEvents}
                 onDayClick={(d) => { setViewDate(d); setViewMode("dia"); }}
                 onEventClick={(ev) => openEdit(ev)}
                 onEmptyDayClick={(d) => openCreate({ date: d })}
+              />
+            )}
+            {viewMode === "mes" && isMobile && (
+              <MobileMonthView
+                viewDate={viewDate}
+                events={filteredEvents}
+                selectedDay={mobileSelectedDay}
+                onSelectDay={(d) => setMobileSelectedDay(d)}
+                onEventClick={(ev) => openEdit(ev)}
+                onCreate={(d) => openCreate({ date: d })}
               />
             )}
             {viewMode === "dia" && (
@@ -295,6 +339,16 @@ export default function Calendario() {
           </div>
         </div>
       </section>
+
+      {/* FAB de crear · solo mobile · esquina inferior derecha.
+         En desktop el CTA vive en el header (hidden lg:flex). */}
+      <button
+        onClick={() => openCreate({ date: new Date() })}
+        className="lg:hidden fixed bottom-[88px] right-5 h-14 w-14 rounded-full bg-foreground text-background shadow-soft-lg hover:bg-foreground/90 grid place-items-center z-30"
+        aria-label="Crear evento"
+      >
+        <Plus className="h-5 w-5" strokeWidth={2} />
+      </button>
 
       {/* Dialog de crear / editar evento */}
       <CreateCalendarEventDialog
@@ -893,6 +947,138 @@ function AgendaView({
           </section>
         );
       })}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   VIEW · MES mobile (Apple Calendar-like)
+   ───────────────────────────────────────────────────────────────────
+   Grid 7×6 con el número del día + dots de color (uno por tipo de
+   evento presente). Al tap en un día → se marca y se muestra la
+   lista cronológica debajo. Más compacto que el Month desktop
+   porque no cabría pintar eventos como chips.
+   ═══════════════════════════════════════════════════════════════════ */
+
+function MobileMonthView({
+  viewDate, events, selectedDay, onSelectDay, onEventClick, onCreate,
+}: {
+  viewDate: Date;
+  events: CalendarEvent[];
+  selectedDay: Date;
+  onSelectDay: (d: Date) => void;
+  onEventClick: (ev: CalendarEvent) => void;
+  onCreate: (d: Date) => void;
+}) {
+  const cells = getMonthGrid(viewDate);
+  const monthStart = startOfMonth(viewDate);
+  const dayEvents = eventsInDay(events, selectedDay).sort(
+    (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime(),
+  );
+
+  return (
+    <div className="space-y-3">
+      {/* Grid del mes · cada celda = círculo si seleccionado/hoy +
+          dots del color del tipo de evento. */}
+      <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
+        <div className="grid grid-cols-7 bg-muted/30 border-b border-border">
+          {WEEKDAY_SHORT_ES.map((d, i) => (
+            <div key={i} className="py-1.5 text-center text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {d}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7">
+          {cells.map((d, i) => {
+            const isCurrentMonth = d.getMonth() === monthStart.getMonth();
+            const evs = eventsInDay(events, d);
+            const selected = isSameDay(d, selectedDay);
+            const today = isToday(d);
+            // dots · uno por tipo presente (máx 4 distintos)
+            const types = new Set(evs.map((ev) => ev.type));
+            return (
+              <button
+                key={i}
+                onClick={() => onSelectDay(d)}
+                className={cn(
+                  "relative aspect-[1.1] flex flex-col items-center justify-center gap-0.5 border-r border-b border-border/40",
+                  !isCurrentMonth && "bg-muted/10",
+                )}
+              >
+                <span className={cn(
+                  "grid place-items-center text-[12px] font-semibold",
+                  selected && !today && "h-7 w-7 rounded-full bg-foreground text-background",
+                  today && "h-7 w-7 rounded-full bg-primary text-background",
+                  !selected && !today && isCurrentMonth && "text-foreground",
+                  !isCurrentMonth && "text-muted-foreground/50",
+                )}>
+                  {d.getDate()}
+                </span>
+                {evs.length > 0 && (
+                  <span className="flex gap-0.5">
+                    {[...types].slice(0, 4).map((t) => (
+                      <span key={t} className={cn("h-1 w-1 rounded-full", eventTypeConfig[t].dotClass)} />
+                    ))}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Lista del día seleccionado */}
+      <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
+        <header className="px-4 py-2.5 bg-muted/30 border-b border-border flex items-center justify-between gap-3">
+          <p className="text-[11.5px] font-semibold text-foreground capitalize">
+            {isToday(selectedDay) ? "Hoy · " : ""}{formatDayTitle(selectedDay)}
+          </p>
+          <button
+            onClick={() => onCreate(selectedDay)}
+            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            <Plus className="h-3 w-3" /> Crear
+          </button>
+        </header>
+        {dayEvents.length === 0 ? (
+          <p className="px-4 py-6 text-center text-[11.5px] text-muted-foreground italic">
+            Sin eventos programados.
+          </p>
+        ) : (
+          <ul className="divide-y divide-border/50">
+            {dayEvents.map((ev) => {
+              const cfg = eventTypeConfig[ev.type];
+              return (
+                <li key={ev.id}>
+                  <button
+                    onClick={() => onEventClick(ev)}
+                    className="w-full flex items-start gap-3 px-4 py-3 hover:bg-muted/20 text-left"
+                  >
+                    <div className="w-14 shrink-0">
+                      <p className="text-[11px] font-semibold text-foreground tabular-nums">
+                        {formatTime(ev.start)}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground tabular-nums">
+                        {formatTime(ev.end)}
+                      </p>
+                    </div>
+                    <div className={cn("h-10 w-1 rounded-full shrink-0", cfg.dotClass)} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[12.5px] font-medium text-foreground truncate">
+                        {ev.title}
+                      </p>
+                      <p className="text-[10.5px] text-muted-foreground truncate">
+                        {ev.contactName ?? cfg.label}
+                        {ev.location?.label ? ` · ${ev.location.label}` : ""}
+                      </p>
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

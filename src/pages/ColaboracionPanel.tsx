@@ -25,7 +25,7 @@ import {
   useNavigate, useParams, useSearchParams, Link,
 } from "react-router-dom";
 import {
-  ArrowLeft, ArrowUpRight, Eye, Mail, Share2, Shield, Sparkles,
+  ArrowLeft, ArrowUpRight, Eye, Mail, Share2, Shield,
   LayoutGrid, FileSignature, CreditCard,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -166,13 +166,18 @@ export default function ColaboracionPanel() {
               <ArrowUpRight className="h-3 w-3 opacity-60" />
             </Link>
             {a.contactoPrincipal?.email && (
-              <a
-                href={`mailto:${a.contactoPrincipal.email}`}
+              <button
+                type="button"
+                onClick={() => {
+                  const params = new URLSearchParams({ compose: "1" });
+                  if (a.contactoPrincipal?.email) params.set("to", a.contactoPrincipal.email);
+                  navigate(`/emails?${params.toString()}`);
+                }}
                 className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-border bg-card text-xs font-medium text-foreground hover:bg-muted transition-colors"
               >
                 <Mail className="h-3.5 w-3.5" strokeWidth={1.75} />
                 Email
-              </a>
+              </button>
             )}
             <button
               onClick={() => toast.info("Compartir promoción · próximamente desde aquí")}
@@ -183,22 +188,6 @@ export default function ColaboracionPanel() {
             </button>
           </div>
         </header>
-
-        {/* Aviso · contexto de promoción */}
-        {promo && (
-          <div className="mb-5 rounded-xl border border-border/60 bg-muted/30 px-3.5 py-2.5 flex items-start gap-2">
-            <Sparkles className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" strokeWidth={1.75} />
-            <p className="text-[11.5px] text-muted-foreground leading-snug">
-              Estás viendo esta agencia{" "}
-              <span className="text-foreground font-medium">en el contexto de {promo.name}</span>.
-              Algunos datos (agentes, visitas) se filtran a esta promoción.
-              Para ver el perfil público completo,{" "}
-              <Link to={`/colaboradores/${a.id}/ficha`} className="text-foreground font-medium hover:underline">
-                abre la ficha pública ↗
-              </Link>.
-            </p>
-          </div>
-        )}
 
         {/* ══════ Tab bar ══════ */}
         <nav className="border-b border-border mb-6 overflow-x-auto">
