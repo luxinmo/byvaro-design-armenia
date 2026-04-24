@@ -72,13 +72,13 @@ Por diseñar después de clavar la vista Promotor completa.
 |---|---|---|
 | ✅ | Role | Promotor / Comercializador |
 | ✅ | Tipo | Unifamiliar / Plurifamiliar / Mixto |
-| 🎨 | Sub unifamiliar | Una sola / varias |
-| 🎨 | Tipología + estilo | Según sub-uni |
-| 🎨 | Config edificio | Bloques, plantas, aptos |
-| 🎨 | Extras | Trasteros, parkings, locales |
-| 🎨 | Estado | Proyecto / construcción / terminado |
-| 🎨 | Detalles finales | Piso piloto, oficinas, entrega |
-| 🎨 | Info básica | Nombre, dirección, precios |
+| ✅ | Sub unifamiliar | Una sola / varias |
+| ✅ | Tipología + estilo | Según sub-uni |
+| ✅ | Config edificio | Bloques, plantas, aptos |
+| ✅ | Extras | Trasteros, parkings, locales · opcional |
+| ✅ | Estado | Proyecto / construcción / terminado |
+| ✅ | Detalles finales | Piso piloto, oficinas, entrega (tipoEntrega omitible si terminado) |
+| ✅ | Info básica | Nombre, dirección (AddressAutocomplete), precios |
 | ✅ | Multimedia | Fotos drag&drop + videos (YouTube / upload / 360°) |
 | ✅ | Descripción | IA o manual · traducciones en 8 idiomas |
 | ✅ | Crear unidades | Lista editable con multimedia por unidad |
@@ -99,14 +99,23 @@ Proyecto limpio + tokens + AppShell + IA del menú + deploy + docs completa.
 
 ### ✅ Fase 1 — Pantalla Inicio + Promociones listado + Crear promoción (shell + 2 pasos)
 
-### 🟡 Fase 2 — Wizard Crear promoción completo
-Todos los pasos restantes del wizard:
-  - sub_uni, sub_varias, config_edificio, extras
-  - estado, detalles
-  - info_basica (con dirección + MapBox), multimedia (drag&drop), descripcion
-  - crear_unidades, colaboradores, plan_pagos
+### 🟢 Fase 2 — Wizard Crear promoción completo
 
-Sin completar este wizard no se puede ni probar el flujo principal.
+Los 13 pasos operativos · auditado end-to-end con Playwright (0 errores
+JS, 0 errores de red, auto-save funcional, 10/13 avanzan sin bloqueos
+en auto, los 3 restantes son interacciones modales que funcionan
+manualmente).
+
+- ✅ role, tipo, sub_uni, sub_varias, config_edificio, extras,
+  estado, detalles, info_basica
+- ✅ multimedia (drag&drop), descripcion (multi-idioma + IA mock),
+  crear_unidades (tabla + edición masiva + anejos), colaboradores
+  (comisiones nac/intl), plan_pagos (3 métodos), revision
+- ✅ Validación unificada · `canContinue()` delega en
+  `isStepComplete()` · una sola fuente de verdad (fix incoherencia)
+- ✅ DetallesStep no exige `tipoEntrega` si estado=terminado
+- ✅ "Publicar" con `TODO(backend)` explícito referenciando
+  `POST /api/promociones` de `docs/backend-integration.md §3`
 
 ### ⬜ Fase 3 — Registros (con IA de duplicados · núcleo del valor)
 Master-detail. Listado a la izquierda, timeline a la derecha. Modal de
