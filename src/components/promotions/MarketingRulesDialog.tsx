@@ -250,11 +250,19 @@ export function MarketingRulesDialog({ open, onOpenChange, promotionId, promotio
                             <p className="text-[10.5px] text-muted-foreground mt-0.5 truncate">{c.domain}</p>
                           )}
                         </div>
-                        <Switch
-                          checked={isProhibited}
-                          onCheckedChange={() => toggle(c.id)}
-                          ariaLabel={`${isProhibited ? "Permitir" : "Prohibir"} ${c.label}`}
-                        />
+                        {/* Wrapper con stopPropagation · si no, el click
+                            en el Switch burbuja al <li> y dispara
+                            toggle() dos veces → net effect sin cambio.
+                            Con esto, Switch.onCheckedChange es el único
+                            que dispara al clicar el switch; clicar en el
+                            resto de la fila delega al <li>.onClick. */}
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <Switch
+                            checked={isProhibited}
+                            onCheckedChange={() => toggle(c.id)}
+                            ariaLabel={`${isProhibited ? "Permitir" : "Prohibir"} ${c.label}`}
+                          />
+                        </div>
                       </li>
                     );
                   })}
