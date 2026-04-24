@@ -305,7 +305,7 @@ export default function Registros() {
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground leading-none">
               Comercial
             </p>
-            <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight leading-tight mt-1">Registros</h1>
+            <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight leading-tight mt-1">Registros</h1>
           </div>
 
           {/* Buscador */}

@@ -117,7 +117,7 @@ export default function Leads() {
                 Comercial
               </p>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-1">
-                <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight text-foreground leading-tight">
+                <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight text-foreground leading-tight">
                   Oportunidades
                 </h1>
                 {/* Pill informativo · email único del workspace al que los

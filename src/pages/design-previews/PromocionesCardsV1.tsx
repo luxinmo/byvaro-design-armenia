@@ -248,7 +248,7 @@ export default function PromocionesCardsV1() {
         <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
             <p className="text-xs text-muted-foreground font-medium">Comercial</p>
-            <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight mt-1 leading-tight">
+            <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight mt-1 leading-tight">
               Promociones <span className="text-muted-foreground font-medium text-[18px] sm:text-[22px]">· {counts.all}</span>
             </h1>
           </div>

@@ -185,6 +185,12 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     id: "communication",
     title: "Comunicación",
     groups: [
+      /* Hub unificado · REGLA DE ORO · toda plantilla nueva del
+         sistema (email, notificación, documento, WhatsApp) se registra
+         aquí. Ver CLAUDE.md §"Plantillas del sistema". */
+      { id: "plantillas", title: "Plantillas del sistema", icon: FileText, links: [
+        { label: "Todas las plantillas", to: "/ajustes/plantillas", live: true },
+      ]},
       { id: "email", title: "Email", icon: Mailbox, links: [
         { label: "Cuentas conectadas", to: "/emails", external: true, live: true },
         { label: "Firma de email", to: "/ajustes/email/firma", live: true },

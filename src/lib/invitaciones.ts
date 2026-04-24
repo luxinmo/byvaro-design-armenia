@@ -26,6 +26,24 @@ export interface PagoTramo {
   colaborador: number; // % de la comisión al colaborador en este tramo
 }
 
+/** Evento en el historial de una invitación · quién hizo qué y cuándo. */
+export type InvitacionEventType =
+  | "created"        // creada y enviada por primera vez
+  | "resent"         // reenviada (mismo email)
+  | "email_changed"  // email corregido antes/durante el reenvío
+  | "cancelled";     // cancelada
+
+export interface InvitacionEvent {
+  id: string;
+  type: InvitacionEventType;
+  at: number;                             // timestamp ms
+  by?: { name: string; email?: string };  // actor · undefined = sistema
+  /** Solo para `email_changed`. */
+  previousEmail?: string;
+  /** Solo para `email_changed`. */
+  newEmail?: string;
+}
+
 export interface Invitacion {
   id: string;
   token: string;                 // token único del link
@@ -38,6 +56,11 @@ export interface Invitacion {
   createdAt: number;
   expiraEn: number;              // timestamp ms
   respondidoEn?: number;
+  /** Actor que creó la invitación (promotor que la envió). */
+  createdBy?: { name: string; email?: string };
+  /** Historial de acciones sobre esta invitación (creación, reenvíos,
+   *  ediciones de email, cancelación). Orden cronológico ascendente. */
+  events?: InvitacionEvent[];
 
   /* ── Compartir promoción (opcional · flujo SharePromotionDialog) ── */
   /** Promoción sobre la que se ofrece la colaboración. */
@@ -111,10 +134,13 @@ export function useInvitaciones() {
     duracionMeses?: number;
     formaPago?: PagoTramo[];
     datosRequeridos?: string[];
+    /* Actor que creó la invitación · registro en historial. */
+    actor?: { name: string; email?: string };
   }) => {
     const actual = loadAll();
+    const now = Date.now();
     const nueva: Invitacion = {
-      id: `inv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `inv-${now}-${Math.random().toString(36).slice(2, 6)}`,
       token: generateToken(),
       emailAgencia: data.emailAgencia.trim().toLowerCase(),
       nombreAgencia: data.nombreAgencia.trim(),
@@ -122,13 +148,20 @@ export function useInvitaciones() {
       comisionOfrecida: data.comisionOfrecida,
       idiomaEmail: data.idiomaEmail,
       estado: "pendiente",
-      createdAt: Date.now(),
-      expiraEn: Date.now() + VALIDEZ_DIAS * 24 * 60 * 60 * 1000,
+      createdAt: now,
+      expiraEn: now + VALIDEZ_DIAS * 24 * 60 * 60 * 1000,
       promocionId: data.promocionId,
       promocionNombre: data.promocionNombre,
       duracionMeses: data.duracionMeses,
       formaPago: data.formaPago,
       datosRequeridos: data.datosRequeridos,
+      createdBy: data.actor,
+      events: [{
+        id: `ev-${now}-created`,
+        type: "created",
+        at: now,
+        by: data.actor,
+      }],
     };
     saveAll([...actual, nueva]);
     return nueva;
@@ -144,13 +177,43 @@ export function useInvitaciones() {
     saveAll(list.filter(i => i.id !== id));
   }, []);
 
-  const reenviar = useCallback((id: string) => {
+  /** Reenvía una invitación. Si se pasa `newEmail` distinto al actual,
+   *  primero actualiza el email y registra un evento `email_changed`;
+   *  después registra el `resent` y extiende la validez. */
+  const reenviar = useCallback((id: string, opts?: {
+    newEmail?: string;
+    actor?: { name: string; email?: string };
+  }) => {
     const list = loadAll();
-    saveAll(list.map(i => i.id === id ? {
-      ...i,
-      expiraEn: Date.now() + VALIDEZ_DIAS * 24 * 60 * 60 * 1000,
-      estado: "pendiente" as EstadoInvitacion,
-    } : i));
+    const now = Date.now();
+    saveAll(list.map(i => {
+      if (i.id !== id) return i;
+      const events = [...(i.events ?? [])];
+      const finalEmail = opts?.newEmail?.trim() || i.emailAgencia;
+      if (finalEmail && finalEmail !== i.emailAgencia) {
+        events.push({
+          id: `ev-${now}-email`,
+          type: "email_changed",
+          at: now,
+          by: opts?.actor,
+          previousEmail: i.emailAgencia,
+          newEmail: finalEmail,
+        });
+      }
+      events.push({
+        id: `ev-${now}-resent`,
+        type: "resent",
+        at: now + 1,
+        by: opts?.actor,
+      });
+      return {
+        ...i,
+        emailAgencia: finalEmail,
+        expiraEn: now + VALIDEZ_DIAS * 24 * 60 * 60 * 1000,
+        estado: "pendiente" as EstadoInvitacion,
+        events,
+      };
+    }));
   }, []);
 
   const pendientes = lista.filter(i => i.estado === "pendiente");

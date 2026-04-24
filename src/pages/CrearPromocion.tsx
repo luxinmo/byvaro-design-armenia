@@ -566,7 +566,7 @@ export default function CrearPromocion() {
               >
                 {/* Step header */}
                 <div>
-                  <h1 className="text-[22px] sm:text-[24px] font-bold tracking-tight leading-tight">
+                  <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight leading-tight">
                     {meta.title}
                   </h1>
                   <p className="text-sm text-muted-foreground mt-1.5">{meta.subtitle}</p>

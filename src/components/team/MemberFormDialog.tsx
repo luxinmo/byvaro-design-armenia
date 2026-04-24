@@ -307,10 +307,19 @@ export function MemberFormDialog({
                         )}
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-[280px] p-1.5" align="start">
+                    <PopoverContent
+                      className="w-[280px] p-1.5"
+                      align="start"
+                      /* Evita que Radix haga scrollIntoView del elemento
+                         enfocado al abrir · el input tenía autoFocus y
+                         el Dialog hacía un salto de scroll desagradable.
+                         Quitamos el autoFocus y bloqueamos también el
+                         auto-focus por Radix · el usuario escribe sólo
+                         si lo pide (y el input sigue editable). */
+                      onOpenAutoFocus={(e) => e.preventDefault()}
+                    >
                       <div className="px-2 pt-1 pb-2">
                         <Input
-                          autoFocus
                           value={department}
                           onChange={(e) => { setDepartment(e.target.value); setDepartmentTouched(true); }}
                           placeholder="Escribe un departamento…"

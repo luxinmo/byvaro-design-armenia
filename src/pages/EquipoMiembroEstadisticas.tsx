@@ -102,7 +102,7 @@ export default function EquipoMiembroEstadisticas() {
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground leading-none">
                 Estadísticas
               </p>
-              <h1 className="text-[22px] sm:text-[26px] font-bold tracking-tight leading-tight mt-1">
+              <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight leading-tight mt-1">
                 {member.name}
               </h1>
               <p className="text-xs text-muted-foreground mt-1">

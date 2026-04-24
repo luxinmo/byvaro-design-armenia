@@ -98,7 +98,7 @@ export default function AgencyHome() {
             <p className="text-xs text-muted-foreground font-medium">
               {agency ? `${agency.name} · Agencia colaboradora` : "Agencia colaboradora"}
             </p>
-            <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight mt-1 leading-tight">
+            <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight mt-1 leading-tight">
               Hola, {firstName}
               <span className="text-muted-foreground font-medium"> · tu panel de colaboración</span>
             </h1>

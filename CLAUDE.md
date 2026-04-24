@@ -78,7 +78,7 @@ hex ni colores literales en componentes. Usa siempre los tokens semánticos:
 - `text-xs` (12px) para metadata, counters, badges
 - `text-sm` (14px) para UI principal, body
 - `text-base` (16px) para títulos de sección
-- `text-[22px] sm:text-[28px]` para H1 de página
+- `text-[19px] sm:text-[22px]` para H1 de página (escala restrained estilo Linear/Stripe)
 - Fuente: **Inter**, cargada desde Google Fonts
 
 **Radios.**
@@ -537,6 +537,260 @@ de implementación en **`docs/plan-equipo-estadisticas.md`**.
 
 ---
 
+## 📬 REGLA DE ORO · Plantillas del sistema
+
+> **Toda plantilla nueva que se cree en el producto — email, aviso
+> automático, documento PDF o mensaje de WhatsApp — DEBE registrarse
+> en el hub `/ajustes/plantillas`** (`src/pages/ajustes/plantillas/index.tsx`).
+> Esa página es la única fuente de verdad de qué comunicaciones envía
+> Byvaro y desde qué flujo se disparan.
+
+**Por qué.** El admin de una cuenta necesita saber qué emails salen
+con su marca antes de aprobarlos. Si una plantilla nueva queda escondida
+en el flujo que la dispara, el admin la descubre tarde (o la descubre un
+cliente). Centralizar en `/ajustes/plantillas` le da:
+
+1. Un **mapa completo** de lo que envía Byvaro.
+2. Contexto de **dónde** se dispara cada una (qué flujo/pantalla).
+3. Estado **live / planned** para saber qué falta por implementar.
+4. Un punto único desde donde editar contenido, remitente, marca.
+
+**Categorías canónicas** (no inventar nuevas sin discutirlo):
+
+1. **Comunicación comercial** · emails que el promotor/agencia envía
+   desde `SendEmailDialog` (disponibilidad, nuevo lanzamiento, última
+   unidad, sin plantilla).
+2. **Cuentas y acceso** · emails de auth (bienvenida, reseteo de
+   contraseña, verificación, invitación a miembro, invitación a
+   agencia).
+3. **Notificaciones transaccionales** · eventos del negocio (registro
+   recibido/aprobado/rechazado, visita programada, contrato firmado,
+   venta cerrada, etc.).
+4. **Documentos** · PDFs generados (listado de precios, brochure,
+   contrato de colaboración, propuesta de reserva).
+5. **WhatsApp** · respuestas rápidas y auto-respondedor.
+
+**Checklist al añadir una plantilla:**
+
+- [ ] Registré la plantilla en `CATEGORIES` de `src/pages/ajustes/plantillas/index.tsx`
+      con `id`, `label`, `description`, `icon`, `status`, `usedIn`.
+- [ ] Si es `status: "live"`, la descripción refleja la realidad (no
+      la aspiración).
+- [ ] El campo `usedIn` lista TODOS los flujos/pantallas desde los que
+      se puede disparar — así el admin sabe dónde aparece.
+- [ ] Si hay pantalla donde se puede editar (p. ej. WhatsApp respuestas
+      rápidas tienen `/ajustes/whatsapp/respuestas-rapidas`), se puso
+      en `editHref`.
+- [ ] Los emails automáticos del sistema están documentados como
+      `planned` aunque aún no se haya implementado backend — así no se
+      olvidan.
+
+**Contrato backend** (cuando llegue el agent):
+
+- `GET /api/templates` → lista con overrides del tenant actual.
+- `PATCH /api/templates/:id` → custom subject/body/brand por tenant.
+- Cada trigger del sistema referencia el `id` canónico — no
+  hardcodear textos en handlers, se renderiza desde la plantilla
+  configurada.
+
+**Por qué no mezclar con otras listas.** Hay ya `/ajustes/email/plantillas`
+(heredado) y `/ajustes/documentos/plantillas` (PDFs). **El hub unificado
+`/ajustes/plantillas` los reemplaza a ambos** · los enlaces antiguos
+pueden quedar como sub-filtros del hub, pero la página única es la que
+se mantiene y se amplía. No duplicar plantillas en varios sitios —
+una sola definición, un solo lugar donde editarla.
+
+---
+
+## ⬆️ REGLA DE ORO · Scroll al entrar en una página
+
+> **Al navegar entre pantallas, el usuario aterriza SIEMPRE arriba**
+> — no donde había dejado la pantalla anterior. El componente
+> `<ScrollToTop>` de `src/components/ScrollToTop.tsx` está montado
+> una sola vez en `App.tsx` dentro del `BrowserRouter` y resetea
+> todos los scrollers en cada cambio de `pathname`.
+
+**Por qué.** Sin esto, React Router mantiene la posición del scroll
+al re-renderizar. El usuario hace click en un contacto desde la mitad
+de un listado largo, entra al detalle y aparece "a la mitad" — y la
+percepción es "se ha roto algo". Es el bug de UX web más común.
+
+**Qué cubre** `<ScrollToTop>`:
+
+1. `window.scrollTo(0,0)` · páginas con scroll del documento.
+2. El `<main>` del `AppLayout` · contenedor con `overflow-auto` que
+   engloba las páginas internas.
+3. Cualquier elemento con `data-scroll-container` · escape hatch
+   para pantallas que tienen su propio contenedor scrollable interno
+   (ej. `/promociones/:id` con `h-full overflow-auto`).
+
+**Qué NO hace:**
+
+- No se dispara si cambian `search` o `hash` (cambiar de tab vía
+  `?tab=` no debe scrollear).
+- No intercepta el botón atrás si el navegador tiene scroll
+  restoration propio — eso es deseable (volver y encontrar la
+  posición).
+
+**Si tu pantalla tiene un scroller interno propio:**
+
+- Añade `data-scroll-container` al elemento con `overflow-auto` que
+  quieras resetear al entrar · el `ScrollToTop` lo detecta y lo
+  resetea.
+
+```tsx
+<div className="h-full overflow-auto bg-background" data-scroll-container>
+  {/* contenido */}
+</div>
+```
+
+**Checklist al crear una pantalla con scroller propio:**
+
+- [ ] ¿El contenedor con `overflow-auto` está marcado con
+      `data-scroll-container`?
+- [ ] ¿Probé navegar a otra ruta y volver · la pantalla aparece arriba?
+
+---
+
+## 🔗 REGLA DE ORO · Estado navegable en la URL
+
+> **Toda sub-navegación de nivel pantalla (tabs, sub-secciones de
+> detalle) DEBE sincronizar su estado con un query param en la URL
+> usando `useTabParam` de `src/lib/useTabParam.ts`. Nunca `useState`
+> para tabs.**
+
+**Por qué.** Si el usuario entra a una tab, navega a una sub-pantalla
+(ej. ficha de agencia desde la tab Agencias de una promoción) y pulsa
+"atrás", al re-montar la pantalla con `useState` la tab se pierde y el
+usuario aterriza en la vista por defecto. Eso rompe el flujo y se
+percibe como bug. Con URL sync, el historial del navegador restaura
+la tab automáticamente.
+
+Además habilita **deep-linking** (compartir
+`/contactos/5?tab=emails` funciona) y hace que el patrón de back sea
+consistente con el resto de la web (Linear, Stripe, GitHub, etc.).
+
+**Cómo se aplica.** Importa el hook canónico:
+
+```ts
+import { useTabParam } from "@/lib/useTabParam";
+
+const TAB_KEYS = ["resumen", "historial", "emails"] as const;
+type Tab = typeof TAB_KEYS[number];
+
+const [tab, setTab] = useTabParam<Tab>(TAB_KEYS, "resumen");
+```
+
+Comportamiento del hook:
+
+- Lee la tab inicial de `?tab=<key>` · si es inválida o no está,
+  usa `defaultKey`.
+- Al cambiar, escribe con `{ replace: true }` — cambiar de tab NO
+  ensucia el historial del navegador, pero navegar a sub-pantallas
+  sí preserva la tab en el back.
+- Cuando la tab activa coincide con el default, borra el param de la
+  URL (`/contactos/5` en lugar de `/contactos/5?tab=resumen`).
+- Tercer argumento opcional `paramName` si necesitas varios ejes
+  ortogonales en la misma pantalla (p.ej. `?tab=...&dim=...`).
+
+**Dónde está aplicado** (actualizar al añadir pantallas nuevas):
+
+- `src/pages/PromocionDetalle.tsx` · tabs `Overview/Availability/Agencies/...`
+- `src/pages/ContactoDetalle.tsx` · tabs `resumen/historial/...`
+- `src/pages/LeadDetalle.tsx` · tabs `actividad/emails/...`
+- `src/pages/Empresa.tsx` · tabs `home/about/agents/...`
+- `src/pages/ColaboradoresEstadisticas.tsx` · tabs `registros/ventas/eficiencia`
+
+**Excepciones** (donde `useState` sí es correcto):
+
+- Tabs internos de diálogos modales (el estado se destruye al cerrar,
+  no hay navegación de vuelta).
+- ViewToggle de listado (`list/grid/map` en Promociones/Colaboradores):
+  es preferencia de visualización, no sub-navegación. Si el usuario lo
+  pide explícitamente, migrar también.
+- Tabs controlados por props desde el padre (componentes reutilizables
+  cuyo estado pertenece al contenedor).
+
+**Checklist al añadir una pantalla con tabs:**
+
+- [ ] ¿Usé `useTabParam` en vez de `useState`?
+- [ ] ¿La tab por defecto coincide con lo que el usuario espera ver
+      primero al entrar por URL sin param?
+- [ ] ¿Probé navegar a una sub-pantalla y volver atrás · la tab se
+      restaura?
+- [ ] ¿El tuple `TAB_KEYS` tiene `as const` para que TypeScript tipe
+      la union y evite typos?
+
+---
+
+## 🔐 REGLA DE ORO · Datos sensibles requieren permiso
+
+> **Toda vista o acción que maneje información sensible DEBE declarar
+> su propia `PermissionKey` en `src/lib/permissions.ts` y protegerse
+> con `useHasPermission(...)`. Nunca confíes solo en ocultarlo de la
+> navegación o asumir que el usuario es admin.**
+
+**Qué cuenta como sensible.** Cualquiera de estas categorías dispara
+la obligación de declarar una key:
+
+- **Datos cross-empresa** · contratos, comisiones pactadas, incidencias,
+  historial de colaboración, métricas de agentes individuales.
+- **Acciones que comprometen** · enviar a firma, revocar contratos,
+  pausar colaboración, cambiar comisión.
+- **Datos financieros** · precios, márgenes, cierre de ventas, uso de
+  plan de la empresa.
+- **Configuración del workspace** · roles, miembros, integraciones
+  externas, zona crítica.
+- **Conversaciones/mensajes** de otros usuarios del workspace.
+
+**Cómo se aplica.**
+
+1. Declara la key en `PermissionKey` con comentario explicando qué
+   protege exactamente:
+   ```ts
+   | "collaboration.contracts.manage"   // subir contrato + enviar a firmar
+   ```
+2. Añádela al rol `admin` por defecto en `DEFAULT_ROLE_PERMISSIONS`.
+   `member` solo si procede (por defecto: no).
+3. En el componente, consulta con el hook:
+   ```ts
+   const canManage = useHasPermission("collaboration.contracts.manage");
+   if (!canManage) return null; // o mostrar empty state "Sin acceso"
+   ```
+4. En el catálogo canónico de `docs/permissions.md`, añade la key con
+   su default por rol y el flujo donde se aplica.
+
+**Niveles de aplicación:**
+
+- **Ruta completa** → early return con empty state "Sin acceso" si el
+  usuario no tiene la key (ver `ColaboracionPanel.tsx`).
+- **Sección** → se oculta la sección (no renderiza nada).
+- **Acción** → se oculta el botón (no renderiza).
+
+**Naming convention:** `<dominio>.<scope>.<accion>`:
+
+- `collaboration.panel.view` · ver panel entero.
+- `collaboration.contracts.view` · ver lista de contratos.
+- `collaboration.contracts.manage` · crear/enviar/revocar contratos.
+- `collaboration.incidents.view` · ver incidencias.
+
+**Por qué.** Los clientes que más peso tienen en este SaaS (promotores
+con equipos) NO quieren que su agente junior vea con qué comisión
+trabaja cada agencia, ni los contratos firmados, ni las reclamaciones
+abiertas. Si se filtra una vez, perdemos la cuenta. Mejor ser
+paranoico y declarar cada sensitive-view con su key.
+
+**Checklist al añadir una vista/acción sensible:**
+
+- [ ] ¿Declaré la key en `PermissionKey` con comentario?
+- [ ] ¿La añadí al rol `admin` por defecto?
+- [ ] ¿El componente hace `useHasPermission(key)` y oculta si no?
+- [ ] ¿La documenté en `docs/permissions.md` con default por rol?
+- [ ] Si es ruta completa · ¿tiene empty state "Sin acceso" con
+      explicación del porqué?
+
+---
+
 ## 🛡️ REGLA DE ORO · Permisos y visibilidad
 
 > **El catálogo canónico de permisos vive en `docs/permissions.md`.**
@@ -659,7 +913,15 @@ Carpeta `docs/` — cada archivo cubre un área:
 
 Si eres el agente que levanta el backend real:
 
-1. **Empieza por `docs/backend-integration.md`** — es la **fuente única
+0. **Entry point dedicado:** `docs/backend/README.md`. Contiene stack
+   recomendado, orden de implementación, env vars, webhooks, crons y
+   enlaces a los specs profundos:
+   - `docs/backend/integrations/firmafy.md` · integración completa
+     con Firmafy (contratos de colaboración firmados digitalmente).
+   - `docs/backend/domains/collaboration.md` · el pilar del producto ·
+     contratos + pagos a agencia + solicitudes de documentación.
+
+1. **Sigue con `docs/backend-integration.md`** — es la **fuente única
    de verdad** del contrato UI↔API. Cada dominio (Promociones, Anejos,
    Colaboradores, Compartir, Estadísticas, etc.) tiene su sección con
    endpoints, shapes, reglas de negocio y referencias cruzadas al

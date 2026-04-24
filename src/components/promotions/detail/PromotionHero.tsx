@@ -155,7 +155,7 @@ export function PromotionHero({ promotion: p }: { promotion: Promotion }) {
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 lg:gap-8">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight text-foreground leading-tight">
+            <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight text-foreground leading-tight">
               {p.name}
             </h1>
             <span className="text-[10px] text-muted-foreground bg-muted rounded-md px-1.5 py-0.5 tnum">

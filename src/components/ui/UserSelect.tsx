@@ -92,12 +92,13 @@ export function UserSelect({
         sideOffset={6}
         collisionPadding={8}
         className="w-[--radix-popover-trigger-width] min-w-[260px] p-0 rounded-xl border-border shadow-soft-lg overflow-hidden"
+        /* Igual que PhoneInput · evita el scroll-jump al abrir. */
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <div className="border-b border-border/60 px-3 py-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/60" />
             <input
-              autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar por nombre, email, cargo…"

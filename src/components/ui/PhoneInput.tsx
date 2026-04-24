@@ -75,6 +75,7 @@ export function PhoneInput({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   /* ─── Sincroniza desde la prop `value` cuando cambia desde fuera. ─── */
   useEffect(() => {
@@ -171,12 +172,27 @@ export function PhoneInput({
             </svg>
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-[300px] p-0 rounded-xl border-border shadow-soft-lg overflow-hidden">
+        <PopoverContent
+          align="start"
+          className="w-[300px] p-0 rounded-xl border-border shadow-soft-lg overflow-hidden"
+          /* Fix scroll-jump al abrir · Radix enfocaba el input por
+             defecto y el browser hacía scrollIntoView al viewport si
+             el popover quedaba parcialmente tapado, provocando que el
+             dialog/página pegara un salto. Bloqueamos el auto-focus
+             y enfocamos manualmente DESPUÉS del mount sin scroll. */
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            // Enfoca el input de búsqueda sin forzar scroll.
+            requestAnimationFrame(() => {
+              searchRef.current?.focus({ preventScroll: true });
+            });
+          }}
+        >
           <div className="border-b border-border/60 px-3 py-2">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/60" />
               <input
-                autoFocus
+                ref={searchRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Buscar país, prefijo o ISO…"

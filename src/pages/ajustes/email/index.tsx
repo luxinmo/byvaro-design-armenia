@@ -53,7 +53,7 @@ export default function AjustesEmailIndex() {
             <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
               Ajustes · Email
             </p>
-            <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight">Configuración del correo</h1>
+            <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight">Configuración del correo</h1>
           </div>
         </div>
         <p className="text-sm text-muted-foreground mb-6 max-w-2xl">

@@ -18,7 +18,8 @@
  */
 
 import { useMemo, useState } from "react";
-import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { useTabParam } from "@/lib/useTabParam";
 import {
   ArrowLeft, Phone, Mail, MessageCircle, CheckCircle2, XCircle,
   Clock, User, UserPlus, Tag, Copy, AlertTriangle, Home, MapPin,
@@ -73,10 +74,9 @@ export default function LeadDetalle() {
 
   const lead = useMemo(() => leads.find((l) => l.id === id), [id]);
 
-  /* Tabs del cuerpo · deep-linkables vía ?tab=. 'actividad' es el
-     default — concentra el evento de entrada + timeline y es donde
-     vive el trabajo diario del comercial. */
-  const [searchParams, setSearchParams] = useSearchParams();
+  /* Tabs del cuerpo · deep-linkables vía ?tab= (ver `useTabParam`).
+     'actividad' es el default — concentra el evento de entrada +
+     timeline y es donde vive el trabajo diario del comercial. */
   const tabs = [
     { id: "actividad",  label: "Actividad",  icon: HistoryIcon },
     { id: "emails",     label: "Emails",     icon: Mail },
@@ -84,12 +84,8 @@ export default function LeadDetalle() {
     { id: "registros",  label: "Registros",  icon: Receipt },
   ] as const;
   type TabId = typeof tabs[number]["id"];
-  const activeTab: TabId = (searchParams.get("tab") as TabId) ?? "actividad";
-  const setTab = (t: TabId) => {
-    const next = new URLSearchParams(searchParams);
-    if (t === "actividad") next.delete("tab"); else next.set("tab", t);
-    setSearchParams(next, { replace: true });
-  };
+  const TAB_IDS = tabs.map((t) => t.id) as readonly TabId[];
+  const [activeTab, setTab] = useTabParam<TabId>(TAB_IDS, "actividad");
 
   /* WhatsApp · mismo modal lateral que la ficha de contacto
      (ContactWhatsAppDialog). Reutilizamos el componente con un shim
@@ -154,7 +150,7 @@ export default function LeadDetalle() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     {lead.nationality && <span className="text-xl leading-none">{flagOf(lead.nationality)}</span>}
-                    <h1 className="text-[22px] sm:text-[26px] font-bold tracking-tight text-foreground leading-tight">
+                    <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight text-foreground leading-tight">
                       {lead.fullName}
                     </h1>
                     <span className={cn("inline-flex items-center gap-1 text-[11px] font-medium rounded-full px-2.5 py-0.5", status.badgeClass)}>

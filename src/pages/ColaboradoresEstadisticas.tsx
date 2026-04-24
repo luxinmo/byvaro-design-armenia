@@ -23,6 +23,7 @@
 
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTabParam } from "@/lib/useTabParam";
 import {
   ArrowLeft, ChevronDown, Download, Sparkles, FileText, BarChart3, Target,
   Check, AlertTriangle, Clock, Copy, ShieldCheck,
@@ -161,7 +162,8 @@ const AGENCY_META: Record<AgencyId, {
    TIPOS
    ═══════════════════════════════════════════════════════════════════ */
 
-type Tab = "registros" | "ventas" | "eficiencia";
+const TAB_KEYS = ["registros", "ventas", "eficiencia"] as const;
+type Tab = typeof TAB_KEYS[number];
 type Dim = "nacionalidad" | "promocion";
 
 type Axis = { id: string; name: string; shortLabel: string; flag?: string };
@@ -188,7 +190,7 @@ export default function ColaboradoresEstadisticas({
   embedded?: boolean;
 } = {}) {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>("registros");
+  const [tab, setTab] = useTabParam<Tab>(TAB_KEYS, "registros");
 
   /* ─── Filtros ─── */
   const [fNations, setFNations] = useState<NationId[]>([]);
@@ -249,7 +251,7 @@ export default function ColaboradoresEstadisticas({
                 <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                   Red comercial · Estadísticas
                 </p>
-                <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight text-foreground mt-1 leading-tight">
+                <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight text-foreground mt-1 leading-tight">
                   Análisis de colaboradores
                 </h1>
                 <p className="text-sm text-muted-foreground mt-1.5 max-w-[640px] leading-relaxed">

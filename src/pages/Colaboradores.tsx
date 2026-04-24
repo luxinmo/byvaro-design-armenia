@@ -290,7 +290,7 @@ export default function Colaboradores() {
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Red comercial
               </p>
-              <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight text-foreground mt-1 leading-tight">
+              <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight text-foreground mt-1 leading-tight">
                 Tus colaboradores
               </h1>
               <p className="text-sm text-muted-foreground mt-1.5 max-w-[560px] leading-relaxed">

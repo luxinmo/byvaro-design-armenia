@@ -98,7 +98,7 @@ export default function Inicio() {
         <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
             <p className="text-xs text-muted-foreground font-medium">Domingo 19 abril · Semana 16</p>
-            <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight mt-1 leading-tight">
+            <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight mt-1 leading-tight">
               Hola, {user.name.split(" ")[0]} <span className="text-muted-foreground font-medium">· resumen de tu semana</span>
             </h1>
           </div>
