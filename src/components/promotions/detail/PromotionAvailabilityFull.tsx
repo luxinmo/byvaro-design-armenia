@@ -1346,10 +1346,10 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                                       disabled={u.status !== "available"}
                                       onClick={() => onEditUnit
                                         ? onEditUnit(u.id)
-                                        : toast({ title: "Editar unidad", description: getUnitDisplayId(u) })}
+                                        : setPhotosEditUnitId(u.id)}
                                       className="gap-2 text-xs"
                                     >
-                                      <Pencil className="h-3.5 w-3.5" /> Editar
+                                      <Pencil className="h-3.5 w-3.5" /> Editar fotos
                                     </DropdownMenuItem>
                                   )}
                                   <DropdownMenuItem
