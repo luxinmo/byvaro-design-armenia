@@ -111,8 +111,9 @@ export function MarketingRulesCard({ promotionId, readOnly = false, onEdit, clas
           )}
         </div>
 
-        {/* Chips de canales prohibidos · solo tono "some" (no ensuciamos
-            cuando todo está prohibido, ni cuando nada lo está) */}
+        {/* Chips de canales prohibidos · neutros · solo el icono Ban
+            señala la prohibición. Nombre y favicon en color normal
+            para que el canal siga siendo reconocible. */}
         {tone === "some" && (
           <div className="mt-3 flex flex-wrap gap-1.5">
             {prohibitedIds.map((id) => {
@@ -121,9 +122,9 @@ export function MarketingRulesCard({ promotionId, readOnly = false, onEdit, clas
                 return (
                   <span
                     key={id}
-                    className="inline-flex items-center gap-1 rounded-full bg-destructive/10 text-destructive text-[11px] font-semibold px-2 py-0.5"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card text-[11px] font-semibold text-foreground px-2 py-0.5"
                   >
-                    <Ban className="h-2.5 w-2.5" strokeWidth={2.5} />
+                    <Ban className="h-2.5 w-2.5 text-destructive" strokeWidth={2.5} />
                     {id}
                   </span>
                 );
@@ -131,12 +132,13 @@ export function MarketingRulesCard({ promotionId, readOnly = false, onEdit, clas
               return (
                 <span
                   key={id}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/5 pl-0.5 pr-2 py-0.5"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card pl-0.5 pr-2 py-0.5"
                 >
-                  <ChannelAvatar channel={channel} prohibited size="sm" className="h-5 w-5 rounded-full" />
-                  <span className="text-[11px] font-semibold text-destructive leading-tight">
+                  <ChannelAvatar channel={channel} prohibited={false} size="sm" className="h-5 w-5 rounded-full" />
+                  <span className="text-[11px] font-semibold text-foreground leading-tight">
                     {channel.label}
                   </span>
+                  <Ban className="h-2.5 w-2.5 text-destructive shrink-0" strokeWidth={2.5} aria-label="Prohibido" />
                 </span>
               );
             })}
