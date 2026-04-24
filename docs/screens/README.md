@@ -14,8 +14,9 @@ contract, permisos, estados, enlaces salientes.
 | Promociones | `/promociones` | [`promociones.md`](promociones.md) | ✅ diseñada |
 | Crear promoción | `/crear-promocion` | [`crear-promocion.md`](crear-promocion.md) | ✅ diseñada (15 pasos) |
 | Promoción · detalle | `/promociones/:id` | [`promocion-detalle.md`](promocion-detalle.md) | ✅ diseñada |
-| Leads | `/leads` | [`leads.md`](leads.md) | ✅ diseñada |
-| Lead · detalle | `/leads/:id` | [`leads.md`](leads.md) (mismo doc) | ✅ diseñada |
+| Oportunidades | `/oportunidades` | [`oportunidades.md`](oportunidades.md) | ✅ diseñada (pipeline unificado · ADR-053) |
+| Oportunidad · ficha | `/oportunidades/:id` | [`oportunidades-ficha.md`](oportunidades-ficha.md) | ✅ diseñada (tabs + cualificación) |
+| Leads (histórico) | — | [`leads.md`](leads.md) | ⚠️ el concepto se unificó en Oportunidades, doc sigue como referencia |
 | Registros | `/registros` | (pendiente) | 🎨 placeholder |
 | Ventas | `/ventas` | (pendiente) | 🎨 placeholder |
 | Calendario | `/calendario` | (pendiente) | 🎨 placeholder |
@@ -27,6 +28,7 @@ contract, permisos, estados, enlaces salientes.
 | Contacto · ficha | `/contactos/:id` | [`contactos-ficha.md`](contactos-ficha.md) | ✅ diseñada (8 tabs) |
 | Ajustes · Tipos de relación | `/ajustes/contactos/relaciones` | [`ajustes-contactos-relaciones.md`](ajustes-contactos-relaciones.md) | ✅ diseñada |
 | Ajustes · Miembros del equipo | `/ajustes/usuarios/miembros` | [`ajustes-miembros.md`](ajustes-miembros.md) | ✅ diseñada |
+| Ajustes · Empresa > Departamentos | `/ajustes/empresa/departamentos` | [`empresa-departamentos.md`](empresa-departamentos.md) | ✅ diseñada (CRUD + store · ADR-054) |
 | Equipo (hub rich) | `/equipo` | [`equipo.md`](equipo.md) | ✅ diseñada (galería + lista + 2 flows alta) |
 | Dashboard de miembro | `/equipo/:id/estadisticas` | [`equipo-estadisticas.md`](equipo-estadisticas.md) | ✅ diseñada (4 bloques KPIs + heatmap) |
 | Microsites | `/microsites` | (pendiente) | 🎨 placeholder |

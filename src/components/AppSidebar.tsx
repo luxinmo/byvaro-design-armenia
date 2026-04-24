@@ -15,7 +15,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import {
   Home, Tag, FileText, CircleDollarSign, CalendarDays,
-  Handshake, Contact, Globe, Mail, Settings, ChevronsUpDown,
+  Handshake, Contact, Globe, Mail, Settings, ChevronsUpDown, FileSignature,
   Building2, Inbox, User as UserIcon, LogOut, Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -49,6 +49,7 @@ const groups: NavGroup[] = [
     label: "Red",
     items: [
       { title: "Colaboradores", url: "/colaboradores", icon: Handshake },
+      { title: "Contratos", url: "/contratos", icon: FileSignature },
       { title: "Contactos", url: "/contactos", icon: Contact },
     ],
   },

@@ -492,6 +492,10 @@ Ver `docs/plan-equipo-estadisticas.md §3`:
 | `POST /api/empresa/oficinas` | crear oficina |
 | `PATCH /api/empresa/oficinas/:id` | editar oficina |
 | `DELETE /api/empresa/oficinas/:id` | borrar oficina (regla: si es `esPrincipal`, promover otra automáticamente) |
+| `GET /api/workspace/departments` | lista de departamentos del workspace (array de strings). Mock hoy: `src/lib/departmentsStorage.ts` + UI en `/ajustes/empresa/departamentos`. |
+| `POST /api/workspace/departments { name }` | crear departamento (unique case-insensitive) |
+| `PATCH /api/workspace/departments/:id { name }` | renombrar (propaga a miembros con ese depto) |
+| `DELETE /api/workspace/departments/:id` | eliminar de la lista (miembros conservan su valor actual hasta edición manual) |
 
 ### Google Places API (rating público)
 

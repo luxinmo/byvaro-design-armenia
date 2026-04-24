@@ -77,6 +77,32 @@ length-2).
 Archivo: `SharePromotionDialog.tsx`. Único uso: banner del paso
 "matched" para confirmar la dirección sin exponerla.
 
+### `PHONE_COUNTRIES` · catálogo ISO 3166-1 completo
+
+`src/lib/phoneCountries.ts` · **245 países** (estados soberanos +
+territorios dependientes con prefijo propio) con:
+
+```ts
+type PhoneCountry = {
+  iso: string;       // ISO 3166-1 alpha-2
+  name: string;      // nombre en ES
+  nameEn: string;    // nombre en EN (para búsquedas)
+  prefix: string;    // prefijo sin "+"
+  flag: string;      // emoji
+};
+```
+
+Organizado por regiones. Los 25+ países NANP comparten `+1` y el
+detector `detectCountryFromPhone()` los marca `ambiguous` en la UI
+(el usuario elige manualmente). Funciones:
+
+- `findCountryByIso(iso)` · lookup directo (case-insensitive).
+- `detectCountryFromPhone(phone)` · match por prefijo más largo.
+- `stripPrefix(phone, country)` / `buildPhone(country, local)`.
+
+Consumido por `<PhoneInput>` · cada país aparece en el popover del
+selector con su bandera y nombre.
+
 ### `flagOf(code: string): string`
 
 ISO-3166-1 alpha-2 → emoji bandera. `"GB"` → `"🇬🇧"`. Código inválido
@@ -186,6 +212,8 @@ listener en `useEffect` al `storage` event.
 | `loadAssignedOverride()` / `loadRelationsOverride()` | `src/components/contacts/contactRelationsStorage.ts` | `byvaro.contact.<id>.assigned.v1`, `…related.v1` | data-model §Contact |
 | `loadRelationTypes()` / `getRelationLabel()` | `src/components/contacts/relationTypesStorage.ts` | `byvaro.contacts.relationTypes.v1` | screens/ajustes-contactos-relaciones |
 | `loadRolePermissions()` / `useHasPermission()` | `src/lib/permissions.ts` | `byvaro.workspace.rolePermissions.v1` | permissions.md |
+| `useDepartments()` + `addDepartment/renameDepartment/removeDepartment` | `src/lib/departmentsStorage.ts` | `byvaro.workspace.departments.v1` | screens/empresa-departamentos |
+| `useLeadAssignee(leadId)` / `setLeadAssignee()` | `src/components/leads/leadAssigneeStorage.ts` | `byvaro.lead.<id>.assignee.v1` | screens/oportunidades |
 
 Todos tienen `TODO(backend)` apuntando a `docs/backend-integration.md`.
 

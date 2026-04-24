@@ -378,11 +378,12 @@ Datos mock: `src/data/agencies.ts`. Helper `getContractStatus(a)` computa
 - Atribución "Basado en reseñas de Google" obligatoria al mostrar
   `googleRating` (Places API ToS).
 
-### Lead (bandeja de entrada · sin cualificar)
+### Oportunidad (antes "Lead" · unificada · ADR-053)
 
-Entrada cruda de un potencial comprador antes de ser cualificado. Se
-origina en webhooks de portales, submits del microsite, WhatsApp,
-referrals de agencias o walk-ins en oficina.
+En Byvaro **NO existe entidad "Oportunidad" separada**. Todo el ciclo
+comercial vive dentro del tipo `Lead` (se mantiene el nombre por
+historia del repo). El `status` marca la etapa del pipeline. UI expuesta
+como "Oportunidades" en sidebar y ruta `/oportunidades`.
 
 ```ts
 type LeadSource =
@@ -390,16 +391,26 @@ type LeadSource =
   | "microsite" | "referral"  | "agency"
   | "whatsapp"  | "walkin"    | "call";
 
+/** Pipeline unificado (ADR-053). Orden canónico:
+ *  solicitud → contactado → visita → evaluacion → negociando
+ *                                                          → ganada | perdida
+ *                                                          + duplicate (IA) */
 type LeadStatus =
-  | "new"          // recién entrado, sin revisar
-  | "qualified"    // revisado, cumple requisitos mínimos
-  | "contacted"    // alguien del equipo ya contactó
-  | "duplicate"    // detectado duplicado por la IA
-  | "rejected"     // descartado manualmente
-  | "converted";   // promovido a Registro
+  | "solicitud"   // entrada cruda · sin cualificar
+  | "contactado"  // equipo ya contactó (email/call/WS)
+  | "visita"      // visita programada o realizada
+  | "evaluacion"  // post-visita, cliente evaluando
+  | "negociando"  // oferta concreta en negociación
+  | "ganada"      // terminal · venta cerrada / reserva
+  | "perdida"     // terminal · descartada o no-lead
+  | "duplicate";  // IA detectó doble entrada
 
 interface Lead {
   id: string;
+  /** Referencia pública · `OPP-0001`, `OPP-0002`… Autogen en entrada,
+   *  única por workspace · se muestra en header de la ficha y en la
+   *  fila del listado. */
+  reference: string;
   fullName: string;
   email: string;
   phone: string;
@@ -424,6 +435,11 @@ interface Lead {
   tags?: string[];
 }
 ```
+
+**Responsable único** (no multi) · override por oportunidad en
+`localStorage` vía `src/components/leads/leadAssigneeStorage.ts`
+(hook reactivo `useLeadAssignee(leadId)`). El override toma precedencia
+sobre `lead.assignedTo` del seed.
 
 Datos: `src/data/leads.ts` → `leads: Lead[]`.
 

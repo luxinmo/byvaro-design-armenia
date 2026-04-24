@@ -1721,3 +1721,102 @@ Ver:
 - `src/pages/Leads.tsx` · KPIs + segmented por etapa actualizados.
 - `src/pages/LeadDetalle.tsx` · sin diálogo de conversión (queda
   pendiente la iteración de la vista de dentro).
+
+
+## 2026-04-24 · ADR-054 · Departamentos gestionables + catálogo de prefijos ISO completo
+
+**Contexto.** Dos problemas operativos que surgieron al usar los
+formularios de alta de miembro del equipo:
+
+1. Los departamentos vivían hardcodeados en un array dentro de
+   `MemberFormDialog.tsx` (`DEPARTMENT_SUGGESTIONS` con 7 valores).
+   Cada empresa tiene su propia estructura organizativa — no tiene
+   sentido obligar a usar la nuestra.
+2. El `PhoneInput` sólo tenía 74 países curados. Suficiente para el
+   mercado típico de Byvaro (España, UE, Latam, Oriente Medio,
+   Cáucaso) pero había casos reales donde faltaba algún prefijo (p. ej.
+   Liechtenstein, Mónaco, Bangladés, varios del Caribe/NANP).
+
+**Decisión.**
+
+1. **Departamentos gestionables** por el admin desde
+   `/ajustes/empresa/departamentos`. Store canónico en
+   `src/lib/departmentsStorage.ts` con CRUD + hook reactivo
+   `useDepartments()`. Los formularios (`MemberFormDialog`,
+   `InviteMemberDialog`) leen del store en lugar del array hardcodeado.
+   - Deduplicación case-insensitive conservando capitalización del admin.
+   - Eliminar un departamento NO cambia los miembros que ya lo tenían
+     asignado (ellos conservan su valor hasta edición manual).
+   - Renombrar propaga automáticamente (un solo `saveDepartments`).
+
+2. **Catálogo ISO 3166-1 completo** en `src/lib/phoneCountries.ts`:
+   de 74 → 245 países. Estados soberanos + territorios dependientes
+   con prefijo propio. Los 25+ países NANP (+1) comparten prefijo y
+   se marcan `ambiguous` en el popover del PhoneInput · el admin
+   elige manualmente.
+
+**Por qué ahora.** El admin pidió explícitamente gestionar
+departamentos desde Ajustes (iba a usar "Recursos Humanos" y no estaba
+en la lista). Y el usuario pidió "todos los prefijos sin falta" cuando
+al buscar un país no aparecía.
+
+**Implicación en backend** (TODO):
+- `GET/POST/PATCH/DELETE /api/workspace/departments` — CRUD del
+  store. Respeta el orden del admin (no ordenar alfabéticamente).
+- El catálogo de prefijos es estático client-side (como el Flag SVG).
+  No requiere endpoint.
+
+Ver:
+- `src/lib/departmentsStorage.ts` · store + hook.
+- `src/pages/ajustes/empresa/departamentos.tsx` · UI CRUD.
+- `src/lib/phoneCountries.ts` · 245 países ISO.
+- `docs/screens/empresa-departamentos.md` · spec.
+- `docs/backend-integration.md §Empresa · endpoints nuevos`.
+
+
+## 2026-04-24 · ADR-055 · Fix global del scroll en Popovers dentro de Dialogs
+
+**Contexto.** Cuando un `Popover`, `DropdownMenu` o `Select` de Radix
+se abre dentro de un `Dialog` (que también es Radix), el Dialog usa
+scroll-lock global vía `react-remove-scroll`. El popover se portalea
+al body, pero los eventos `wheel` / `touchmove` se interceptan a
+nivel document → **el scroll interno del popover no funciona**.
+
+El síntoma visual: abres el selector de países del teléfono dentro
+del `MemberFormDialog`, intentas scrollear la lista con la rueda del
+ratón y no pasa nada. El popover parecía "colgado".
+
+También había un scroll-jump al abrir: el `<input autoFocus>` dentro
+del popover hacía que el browser hiciera `scrollIntoView` del
+elemento enfocado, provocando saltos bruscos en el dialog.
+
+**Decisión.** Arreglar en los **tres wrappers canónicos** para cubrir
+todo el repo sin tocar sitios individuales:
+
+- `src/components/ui/popover.tsx`
+- `src/components/ui/dropdown-menu.tsx`
+- `src/components/ui/select.tsx`
+
+Cada wrapper:
+1. Hace `e.stopPropagation()` en `onWheel` y `onTouchMove` antes de
+   delegar al handler del caller (si lo hay).
+2. Añade `overscroll-contain` al Content para que llegar al final de
+   la lista no scrollee el viewport padre.
+3. El `onOpenAutoFocus={(e) => e.preventDefault()}` es responsabilidad
+   del caller cuando hay un input interno con `autoFocus` que pudiera
+   causar scroll-jump.
+
+**Regla viva.** Si alguien crea un Content custom con
+`@radix-ui/react-*` sin pasar por nuestros wrappers, tiene que añadir
+los `stopPropagation` + `overscroll-contain`. Regla documentada en
+`CLAUDE.md §🖱️ Popovers/Dropdowns/Selects dentro de Dialogs`.
+
+**JobTitlePicker** (cambio relacionado del mismo sprint):
+- Máx 2 cargos: el 3º se bloquea en vez de reemplazar FIFO.
+- Banner amarillo "Máximo 2 · limpia para cambiar" + CTA Limpiar.
+- Items disabled con `cursor-not-allowed` cuando se alcanza el límite.
+
+Ver:
+- `src/components/ui/popover.tsx`, `.../dropdown-menu.tsx`, `.../select.tsx`.
+- `src/components/team/JobTitlePicker.tsx` · lógica de límite estricto.
+- `CLAUDE.md §🖱️ Popovers/Dropdowns/Selects dentro de Dialogs`.

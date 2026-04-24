@@ -829,6 +829,35 @@ Implementar **antes** de quitar el modo mock de `permissions.ts`.
 
 ---
 
+## 🖱️ Popovers/Dropdowns/Selects dentro de Dialogs · fix de scroll
+
+Cuando un `Popover`, `DropdownMenu` o `Select` de Radix se abre dentro
+de un `Dialog` (que también es de Radix), el Dialog aplica scroll-lock
+global (vía `react-remove-scroll`). El popover se portalea al body,
+pero los `wheel` / `touchmove` se interceptan arriba del todo → **el
+scroll interno del popover no funciona** y parece que está "colgado".
+
+**Fix aplicado de forma global** en los tres wrappers canónicos:
+
+- `src/components/ui/popover.tsx`
+- `src/components/ui/dropdown-menu.tsx`
+- `src/components/ui/select.tsx`
+
+Cada wrapper hace `e.stopPropagation()` en `onWheel` y `onTouchMove`
+antes de delegar a cualquier handler del caller, y añade
+`overscroll-contain` al Content para que el scroll no se fugue al
+padre al llegar al final. Además, `onOpenAutoFocus={(e) =>
+e.preventDefault()}` debe usarse en popovers que tengan un `<Input>`
+dentro para evitar scroll-jump al abrir (Radix no enfoca
+automáticamente · el usuario clica el input si quiere escribir).
+
+**Regla para nuevos popovers**: si usas los wrappers canónicos, no
+tienes que hacer nada — el fix ya está. Si creas un Content custom con
+`@radix-ui/react-*` directamente (sin pasar por los wrappers), añade
+tú mismo los `stopPropagation` + `overscroll-contain`.
+
+---
+
 ## ⚙️ Settings: marcar `live` al activar
 
 Las sub-páginas de `/ajustes/*` se declaran en

@@ -174,6 +174,11 @@ export function getContractsForAgency(agencyId: string): CollaborationContract[]
   return readStore().filter((c) => c.agencyId === agencyId);
 }
 
+/** Devuelve TODOS los contratos del workspace (cruzando agencias). */
+export function getAllContracts(): CollaborationContract[] {
+  return readStore();
+}
+
 /** Subir un contrato como borrador. El PDF vive solo por su nombre
  *  (mock). Devuelve el contrato creado. */
 export function uploadContract(data: {
@@ -472,6 +477,23 @@ export function useContractsForAgency(agencyId: string): CollaborationContract[]
       window.removeEventListener("storage", cb);
     };
   }, [agencyId]);
+  return list;
+}
+
+/** Hook reactivo · todos los contratos del workspace (cruzando
+ *  agencias). Usado en la página global `/contratos`. */
+export function useAllContracts(): CollaborationContract[] {
+  const [list, setList] = useState<CollaborationContract[]>(() => getAllContracts());
+  useEffect(() => {
+    const cb = () => setList(getAllContracts());
+    cb();
+    window.addEventListener(CHANGE_EVENT, cb);
+    window.addEventListener("storage", cb);
+    return () => {
+      window.removeEventListener(CHANGE_EVENT, cb);
+      window.removeEventListener("storage", cb);
+    };
+  }, []);
   return list;
 }
 

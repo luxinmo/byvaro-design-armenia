@@ -21,10 +21,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/Switch";
 import {
-  FileSignature, FileText, Upload, X, Plus, Mail, AtSign, Phone, IdCard,
+  FileSignature, Upload, X, Plus, Mail, AtSign, Phone, IdCard, Trash2,
   Building2, Check, ArrowLeft, ArrowRight, Send, Clock, Pencil,
   GripVertical, CheckCircle2, AlertTriangle, Calendar as CalendarIcon,
 } from "lucide-react";
+import { PdfIcon } from "@/components/icons/PdfIcon";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Agency } from "@/data/agencies";
@@ -518,6 +519,27 @@ function StepDocumento({
   comision: string; setComision: (v: string) => void;
   duracion: string; setDuracion: (v: string) => void;
 }) {
+  /* Selección múltiple sobre el listado · hover revela un checkbox
+     en el sitio del icono PDF · click selecciona · con ≥1 marcado
+     aparece el botón "Quitar N". */
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  /* Cuando cambia el listado (añadidos/quitados), limpiamos índices
+     obsoletos. */
+  useEffect(() => {
+    setSelected((prev) => new Set([...prev].filter((i) => i < files.length)));
+  }, [files.length]);
+  const toggleSelect = (idx: number) => setSelected((prev) => {
+    const next = new Set(prev);
+    if (next.has(idx)) next.delete(idx); else next.add(idx);
+    return next;
+  });
+  const clearSelected = () => setSelected(new Set());
+  const removeSelected = () => {
+    /* Recortamos por orden descendente para no invalidar índices. */
+    const idxs = [...selected].sort((a, b) => b - a);
+    for (const i of idxs) onRemoveFile(i);
+    clearSelected();
+  };
   return (
     <div className="space-y-4">
       <div>
@@ -551,31 +573,88 @@ function StepDocumento({
           </p>
         </label>
 
+        {/* Toolbar selección · aparece con ≥1 marcado */}
+        {files.length > 0 && selected.size > 0 && (
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-muted/40 border border-border px-3 py-2">
+            <p className="text-[11.5px] text-foreground tabular-nums">
+              <span className="font-semibold">{selected.size}</span>{" "}
+              {selected.size === 1 ? "archivo seleccionado" : "archivos seleccionados"}
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={clearSelected}
+                className="h-7 px-2.5 inline-flex items-center rounded-full text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                Limpiar
+              </button>
+              <button
+                type="button"
+                onClick={removeSelected}
+                className="h-7 px-3 inline-flex items-center gap-1 rounded-full bg-destructive text-destructive-foreground text-[11px] font-semibold hover:bg-destructive/90 transition-colors"
+              >
+                <Trash2 className="h-3 w-3" strokeWidth={2} />
+                Quitar {selected.size}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Lista de archivos seleccionados debajo del drop zone */}
         {files.length > 0 && (
           <ul className="mt-2 space-y-1.5">
-            {files.map((f, i) => (
-              <li
-                key={`${f.name}-${f.size}-${i}`}
-                className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2"
-              >
-                <span className="h-8 w-8 rounded-lg bg-destructive/5 grid place-items-center shrink-0">
-                  <FileText className="h-4 w-4 text-destructive" strokeWidth={1.75} />
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{f.name}</p>
-                  <p className="text-[11px] text-muted-foreground tabular-nums">{formatSize(f.size)}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onRemoveFile(i)}
-                  className="h-7 w-7 inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
-                  aria-label={`Quitar ${f.name}`}
+            {files.map((f, i) => {
+              const isSelected = selected.has(i);
+              return (
+                <li
+                  key={`${f.name}-${f.size}-${i}`}
+                  className={cn(
+                    "group flex items-center gap-3 rounded-xl border px-3 py-2 transition-colors",
+                    isSelected
+                      ? "border-foreground/30 bg-foreground/5"
+                      : "border-border bg-card hover:bg-muted/30",
+                  )}
                 >
-                  <X className="h-3.5 w-3.5" strokeWidth={2} />
-                </button>
-              </li>
-            ))}
+                  {/* Icono PDF + checkbox hover · ambos ocupan el mismo slot.
+                      El checkbox aparece al pasar el ratón o cuando está
+                      seleccionado · el icono se atenúa cuando está seleccionado. */}
+                  <div className="relative h-9 w-9 shrink-0">
+                    <span className={cn(
+                      "absolute inset-0 grid place-items-center transition-opacity duration-150",
+                      isSelected ? "opacity-0" : "opacity-100 group-hover:opacity-0",
+                    )}>
+                      <PdfIcon className="h-7 w-6 text-muted-foreground/80" />
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => toggleSelect(i)}
+                      aria-pressed={isSelected}
+                      aria-label={isSelected ? `Deseleccionar ${f.name}` : `Seleccionar ${f.name}`}
+                      className={cn(
+                        "absolute inset-0 h-9 w-9 rounded-lg border grid place-items-center transition-all duration-150",
+                        isSelected
+                          ? "opacity-100 bg-foreground border-foreground text-background"
+                          : "opacity-0 group-hover:opacity-100 border-border bg-card hover:border-foreground/40 text-transparent hover:text-foreground",
+                      )}
+                    >
+                      {isSelected && <Check className="h-4 w-4" strokeWidth={3} />}
+                    </button>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{f.name}</p>
+                    <p className="text-[11px] text-muted-foreground tabular-nums">{formatSize(f.size)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onRemoveFile(i)}
+                    className="h-7 w-7 inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                    aria-label={`Quitar ${f.name}`}
+                  >
+                    <X className="h-3.5 w-3.5" strokeWidth={2} />
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
