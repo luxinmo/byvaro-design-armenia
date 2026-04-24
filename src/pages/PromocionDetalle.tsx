@@ -44,6 +44,8 @@ import { PromotionRecords } from "@/components/promotions/detail/PromotionRecord
 import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
 import { MarketingRulesDialog } from "@/components/promotions/MarketingRulesDialog";
 import { MarketingRulesCard } from "@/components/promotions/MarketingRulesCard";
+import { MarketingRulesBanner } from "@/components/promotions/MarketingRulesBanner";
+import { MarketingRulesPill } from "@/components/promotions/MarketingRulesPill";
 import { ImageLightbox } from "@/components/promotions/detail/ImageLightbox";
 import { ActivateSharingDialog } from "@/components/promotions/ActivateSharingDialog";
 import {
@@ -778,6 +780,18 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   </span>
                 );
               })()}
+
+              {/* ── VARIANTE B · PILL compacto en el header ──
+                   Siempre visible junto al estado · verde si permite
+                   todo, ámbar si hay prohibiciones. Promotor lo clicka
+                   para abrir dialog, agencia lo ve read-only. */}
+              {sharingEnabledForPromo && p.status === "active" && !isIncomplete && (
+                <MarketingRulesPill
+                  promotionId={p.id}
+                  readOnly={viewAsCollaborator}
+                  onClick={() => setMarketingRulesOpen(true)}
+                />
+              )}
             </div>
             <div className="flex items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1.5 flex-wrap">
               {/* Ubicación · oculta en móvil (menos ruido). */}
@@ -1094,6 +1108,16 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             <div className="flex gap-4 lg:flex-row flex-col w-full max-w-[1570px] min-w-0">
               {/* ── LEFT: Main content ── */}
               <div className="flex-1 min-w-0 space-y-5 order-2 lg:order-1">
+
+            {/* ── VARIANTE A · BANNER PROMINENTE arriba ──
+                 Nudge visual para descubrir la feature. Solo promotor +
+                 solo cuando la promoción se comparte con agencias. */}
+            {sharingEnabledForPromo && !viewAsCollaborator && (
+              <MarketingRulesBanner
+                promotionId={p.id}
+                onEdit={() => setMarketingRulesOpen(true)}
+              />
+            )}
 
             {/* ── 1. GALLERY ── */}
             <SectionCard title="Multimedia" stepName="Multimedia" missing={missingSet.has("Multimedia") || realMissing.has("multimedia")} onEdit={() => setEditOpen("multimedia")} hideEdit={viewAsCollaborator} flush>

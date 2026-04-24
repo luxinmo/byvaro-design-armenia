@@ -18,10 +18,11 @@
  * `hsl(var(--warning))` para el caso ámbar · nunca colores hardcoded.
  */
 
-import { Ban, CheckCircle2, Megaphone, ShieldAlert, Pencil } from "lucide-react";
+import { CheckCircle2, ShieldAlert, Pencil, Ban } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMarketingProhibitions } from "@/lib/marketingRulesStorage";
 import { getMarketingChannel } from "@/lib/marketingChannels";
+import { ChannelAvatar } from "./ChannelAvatar";
 
 interface Props {
   promotionId: string;
@@ -86,19 +87,31 @@ export function MarketingRulesCard({ promotionId, readOnly = false, onEdit, clas
           )}
         </div>
 
-        {/* Chips de canales prohibidos */}
+        {/* Chips de canales prohibidos · favicon + label + Ban */}
         {hasAny && (
           <div className="mt-3 flex flex-wrap gap-1.5">
             {prohibitedIds.map((id) => {
               const channel = getMarketingChannel(id);
-              const label = channel?.label ?? id;
+              if (!channel) {
+                return (
+                  <span
+                    key={id}
+                    className="inline-flex items-center gap-1 rounded-full bg-destructive/10 text-destructive text-[11px] font-semibold px-2 py-0.5"
+                  >
+                    <Ban className="h-2.5 w-2.5" strokeWidth={2.5} />
+                    {id}
+                  </span>
+                );
+              }
               return (
                 <span
                   key={id}
-                  className="inline-flex items-center gap-1 rounded-full bg-destructive/10 text-destructive text-[11px] font-semibold px-2 py-0.5"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/5 pl-0.5 pr-2 py-0.5"
                 >
-                  <Ban className="h-2.5 w-2.5" strokeWidth={2.5} />
-                  {label}
+                  <ChannelAvatar channel={channel} prohibited size="sm" className="h-5 w-5 rounded-full" />
+                  <span className="text-[11px] font-semibold text-destructive leading-tight">
+                    {channel.label}
+                  </span>
                 </span>
               );
             })}

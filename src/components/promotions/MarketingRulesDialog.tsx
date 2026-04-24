@@ -23,12 +23,14 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/Switch";
-import { Ban, Megaphone, ShieldAlert, Info } from "lucide-react";
+import { Megaphone, ShieldAlert, Info } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ChannelAvatar } from "./ChannelAvatar";
 import {
   MARKETING_CHANNELS,
   CATEGORY_LABEL,
+  CATEGORY_DESCRIPTION,
   groupMarketingChannels,
   type MarketingChannelCategory,
 } from "@/lib/marketingChannels";
@@ -44,7 +46,7 @@ interface Props {
   promotionName: string;
 }
 
-const CATEGORY_ORDER: MarketingChannelCategory[] = ["portales", "redes", "publicidad"];
+const CATEGORY_ORDER: MarketingChannelCategory[] = ["portales", "internacionales", "redes", "publicidad"];
 
 export function MarketingRulesDialog({ open, onOpenChange, promotionId, promotionName }: Props) {
   const [prohibited, setProhibited] = useState<Set<string>>(new Set());
@@ -138,13 +140,17 @@ export function MarketingRulesDialog({ open, onOpenChange, promotionId, promotio
             if (channels.length === 0) return null;
             return (
               <section key={cat}>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-2">
-                  {CATEGORY_LABEL[cat]}
-                </p>
+                <div className="mb-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    {CATEGORY_LABEL[cat]}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+                    {CATEGORY_DESCRIPTION[cat]}
+                  </p>
+                </div>
                 <ul className="flex flex-col gap-1.5">
                   {channels.map((c) => {
                     const isProhibited = prohibited.has(c.id);
-                    const Icon = c.icon;
                     return (
                       <li
                         key={c.id}
@@ -158,19 +164,21 @@ export function MarketingRulesDialog({ open, onOpenChange, promotionId, promotio
                         role="button"
                         aria-pressed={isProhibited}
                       >
-                        <div className={cn(
-                          "h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-colors",
-                          isProhibited ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground",
-                        )}>
-                          {isProhibited ? <Ban className="h-4 w-4" strokeWidth={2} /> : <Icon className="h-4 w-4" strokeWidth={1.75} />}
-                        </div>
+                        <ChannelAvatar channel={c} prohibited={isProhibited} size="md" />
                         <div className="min-w-0 flex-1">
-                          <p className={cn(
-                            "text-[13px] font-semibold leading-tight",
-                            isProhibited ? "text-destructive" : "text-foreground",
-                          )}>
-                            {c.label}
-                          </p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className={cn(
+                              "text-[13px] font-semibold leading-tight",
+                              isProhibited ? "text-destructive" : "text-foreground",
+                            )}>
+                              {c.label}
+                            </p>
+                            {c.hint && (
+                              <span className="text-[10px] font-medium text-muted-foreground rounded-full bg-muted px-1.5 py-0.5">
+                                {c.hint}
+                              </span>
+                            )}
+                          </div>
                           {c.domain && (
                             <p className="text-[10.5px] text-muted-foreground mt-0.5 truncate">{c.domain}</p>
                           )}
