@@ -124,7 +124,7 @@ export default function ColaboradorHistorial() {
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Historial conmigo
           </p>
-          <h1 className="text-[22px] sm:text-[26px] font-bold tracking-tight text-foreground leading-tight mt-1">
+          <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight text-foreground leading-tight mt-1">
             {agency.name}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">

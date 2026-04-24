@@ -62,6 +62,15 @@ export type Agency = {
   solicitudPendiente?: boolean;
   /** Mensaje opcional que la agencia envió al solicitar colaboración. */
   mensajeSolicitud?: string;
+  /** Promociones concretas a las que la agencia solicita colaborar.
+   *  Si viene vacío o undefined, la solicitud es global (al promotor
+   *  entero, no a una promoción). Las solicitudes GLOBALES solo
+   *  aparecen en `/colaboradores` — en la tab Agencias de una
+   *  promoción solo se muestran las que tienen esta promoción en
+   *  `requestedPromotionIds`.
+   *  TODO(backend): migrar a tabla `CollaborationRequest(agency_id,
+   *  promotion_id?, message, created_at)`. */
+  requestedPromotionIds?: string[];
 
   /* ─── Contrato firmado con el promotor ─── */
   /** Fecha de firma del contrato (ISO yyyy-mm-dd). */
@@ -332,6 +341,7 @@ export const agencies: Agency[] = [
     solicitudPendiente: true,
     mensajeSolicitud:
       "Nos especializamos en compradores portugueses y brasileños con presupuesto premium. Nos encantaría colaborar en las promociones de la Costa del Sol.",
+    requestedPromotionIds: ["dev-1", "dev-2"],
   },
   {
     id: "ag-6",
@@ -359,6 +369,160 @@ export const agencies: Agency[] = [
     solicitudPendiente: true,
     mensajeSolicitud:
       "Buscamos partnerships en Costa Blanca para nuestra red de clientes escandinavos. Ya colaboramos con 3 promotores en España.",
+    requestedPromotionIds: ["dev-3"],
+  },
+  /* ─── Seeds de volumen para dev-1 ("Villa Serena") · completan 5 solicitudes
+   *  entrantes en esa promoción para ver cómo escala el dialog. */
+  {
+    id: "ag-7",
+    name: "Mediterranean Lux Homes",
+    logo: "https://api.dicebear.com/9.x/shapes/svg?seed=med-lux&backgroundColor=a855f7&size=120",
+    cover: "https://images.unsplash.com/photo-1600566753376-12c8ab7fb75b?w=600&h=200&fit=crop",
+    location: "Nice, France",
+    type: "Agency",
+    description: "Boutique inmobiliaria en la Costa Azul con cartera de clientes franceses de alto poder adquisitivo.",
+    visitsCount: 0,
+    registrations: 0,
+    salesVolume: 0,
+    status: "pending",
+    offices: [
+      { city: "Nice", address: "12 Promenade des Anglais, 06000 Nice" },
+      { city: "Cannes", address: "48 Boulevard de la Croisette, 06400 Cannes" },
+    ],
+    promotionsCollaborating: [],
+    totalPromotionsAvailable: 4,
+    isNewRequest: true,
+    origen: "marketplace",
+    estadoColaboracion: "contrato-pendiente",
+    registrosAportados: 0,
+    ventasCerradas: 0,
+    comisionMedia: 0,
+    teamSize: 6,
+    especialidad: "luxury",
+    mercados: ["FR", "CH", "MC"],
+    contactoPrincipal: {
+      nombre: "Élodie Laurent", rol: "Partner",
+      email: "elodie@medluxhomes.fr", telefono: "+33 4 92 12 34 56",
+    },
+    googleRating: 4.7,
+    googleRatingsTotal: 134,
+    solicitudPendiente: true,
+    mensajeSolicitud:
+      "Hemos cerrado 12 operaciones en Villa Serena el año pasado a través de otros brokers. Queremos trabajar directos con ustedes.",
+    requestedPromotionIds: ["dev-1"],
+  },
+  {
+    id: "ag-8",
+    name: "Moscow Estates",
+    logo: "https://api.dicebear.com/9.x/shapes/svg?seed=moscow-estates&backgroundColor=dc2626&size=120",
+    cover: "https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=600&h=200&fit=crop",
+    location: "Moscow, Russia",
+    type: "Broker",
+    description: "Broker ruso enfocado en clientela VIP que busca segunda residencia en España y Portugal.",
+    visitsCount: 0,
+    registrations: 0,
+    salesVolume: 0,
+    status: "pending",
+    offices: [
+      { city: "Moscow", address: "Tverskaya 25, 125009 Moscow" },
+    ],
+    promotionsCollaborating: [],
+    totalPromotionsAvailable: 4,
+    isNewRequest: true,
+    origen: "marketplace",
+    estadoColaboracion: "contrato-pendiente",
+    registrosAportados: 0,
+    ventasCerradas: 0,
+    comisionMedia: 0,
+    teamSize: 9,
+    especialidad: "luxury",
+    mercados: ["RU", "KZ", "AE"],
+    contactoPrincipal: {
+      nombre: "Dmitri Volkov", rol: "Managing Broker",
+      email: "dmitri@moscowestates.ru", telefono: "+7 495 123 4567",
+    },
+    googleRating: 4.4,
+    googleRatingsTotal: 68,
+    solicitudPendiente: true,
+    mensajeSolicitud:
+      "Nuestros clientes compran al contado y buscan villas > 2M€. Podemos aportar 20+ leads cualificados al trimestre.",
+    requestedPromotionIds: ["dev-1"],
+  },
+  {
+    id: "ag-9",
+    name: "Alpine Living",
+    logo: "https://api.dicebear.com/9.x/shapes/svg?seed=alpine-living&backgroundColor=0ea5e9&size=120",
+    cover: "https://images.unsplash.com/photo-1519741497674-611481863552?w=600&h=200&fit=crop",
+    location: "Zurich, Switzerland",
+    type: "Network",
+    description: "Red suiza con oficinas en los cantones alpinos, especializada en segunda residencia mediterránea.",
+    visitsCount: 0,
+    registrations: 0,
+    salesVolume: 0,
+    status: "pending",
+    offices: [
+      { city: "Zurich", address: "Bahnhofstrasse 45, 8001 Zurich" },
+      { city: "Geneva", address: "Rue du Rhône 30, 1204 Geneva" },
+      { city: "Basel", address: "Freie Strasse 78, 4001 Basel" },
+    ],
+    promotionsCollaborating: [],
+    totalPromotionsAvailable: 4,
+    isNewRequest: true,
+    origen: "marketplace",
+    estadoColaboracion: "contrato-pendiente",
+    registrosAportados: 0,
+    ventasCerradas: 0,
+    comisionMedia: 0,
+    teamSize: 18,
+    especialidad: "second-home",
+    mercados: ["CH", "DE", "AT", "LI"],
+    contactoPrincipal: {
+      nombre: "Markus Zimmermann", rol: "Director Internacional",
+      email: "markus@alpineliving.ch", telefono: "+41 44 123 4567",
+    },
+    googleRating: 4.9,
+    googleRatingsTotal: 312,
+    solicitudPendiente: true,
+    mensajeSolicitud:
+      "Operamos en 3 cantones suizos. Nuestros clientes DACH tienen presupuestos desde 800K€ y cierran rápido.",
+    requestedPromotionIds: ["dev-1"],
+  },
+  {
+    id: "ag-10",
+    name: "Gulf Premium Realty",
+    logo: "https://api.dicebear.com/9.x/shapes/svg?seed=gulf-premium&backgroundColor=eab308&size=120",
+    cover: "https://images.unsplash.com/photo-1583422409516-2895a77efded?w=600&h=200&fit=crop",
+    location: "Dubai, UAE",
+    type: "Agency",
+    description: "Agencia con sede en Dubai y red de clientes GCC con intereses en Europa del Sur.",
+    visitsCount: 0,
+    registrations: 0,
+    salesVolume: 0,
+    status: "pending",
+    offices: [
+      { city: "Dubai", address: "Sheikh Zayed Road 200, DIFC, Dubai" },
+    ],
+    promotionsCollaborating: [],
+    totalPromotionsAvailable: 4,
+    isNewRequest: true,
+    origen: "marketplace",
+    estadoColaboracion: "contrato-pendiente",
+    registrosAportados: 0,
+    ventasCerradas: 0,
+    comisionMedia: 0,
+    teamSize: 14,
+    especialidad: "luxury",
+    mercados: ["AE", "SA", "QA", "KW"],
+    contactoPrincipal: {
+      nombre: "Khalid Al-Rashid", rol: "Sales Director",
+      email: "khalid@gulfpremium.ae", telefono: "+971 4 123 4567",
+    },
+    googleRating: 4.6,
+    googleRatingsTotal: 89,
+    solicitudPendiente: true,
+    mensajeSolicitud:
+      "Trabajamos con family offices y HNWI del Golfo. La Costa del Sol es prioridad para nuestros clientes.",
+    requestedPromotionIds: ["dev-1"],
   },
 ];
 

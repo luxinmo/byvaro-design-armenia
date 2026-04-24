@@ -76,6 +76,7 @@ import {
 // Datos mock — reemplazar por llamadas al backend cuando esté disponible
 import { unitsByPromotion } from "@/data/units";
 import { agencies } from "@/data/agencies";
+import { promotions } from "@/data/promotions";
 import { useCurrentUser } from "@/lib/currentUser";
 // Popover para selector de plantilla, idioma y destinatarios
 import {
@@ -83,7 +84,7 @@ import {
 } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/Switch";
 
-type Step = "audience" | "collab-mode" | "collab-pick" | "collab-invite" | "template" | "compose";
+type Step = "audience" | "collab-mode" | "collab-pick" | "collab-invite" | "template" | "promo-pick" | "compose";
 type SendMode = "promotion" | "unit" | "free";
 
 interface SendEmailDialogProps {
@@ -97,6 +98,11 @@ interface SendEmailDialogProps {
   mode?: SendMode;
   /** Specific unit id when mode='unit' */
   unitId?: string;
+  /** Agencias preseleccionadas (IDs). Cuando viene, se salta el picker
+   *  de audiencia/plantilla y aterriza directo en compose con esos
+   *  recipients marcados. Útil desde la tab Agencias de la ficha de
+   *  promoción cuando el promotor selecciona N filas y pulsa "Email". */
+  preselectedAgencyIds?: string[];
 }
 
 /** In-app fake clients (no concept of "favorite" for clients) */
@@ -136,6 +142,7 @@ export function SendEmailDialog({
   promotionId,
   mode = "free",
   unitId,
+  preselectedAgencyIds,
 }: SendEmailDialogProps) {
   const { toast } = useToast();
   const { ids: FAVORITE_AGENCY_IDS } = useFavoriteAgencies();
@@ -227,8 +234,12 @@ export function SendEmailDialog({
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
-      setStep(initialStepFor(effectiveDefaultAudience));
-      setAudience(effectiveDefaultAudience ?? "client");
+      const hasPreselected = !!(preselectedAgencyIds && preselectedAgencyIds.length > 0);
+      // Si vienen agencias pre-seleccionadas, saltamos el picker de
+      // audiencia y el de modo (collab-mode) y aterrizamos en "template"
+      // para que el usuario elija la plantilla antes del compose.
+      setStep(hasPreselected ? "template" : initialStepFor(effectiveDefaultAudience));
+      setAudience(hasPreselected ? "collaborator" : (effectiveDefaultAudience ?? "client"));
       const tid: TemplateId = forcedDefaultTemplateId ?? "new-availability";
       setTemplateId(tid);
       const tpl = getTemplate(tid);
@@ -238,18 +249,31 @@ export function SendEmailDialog({
       });
       setSubject(defaultLangSubject(tid, "es", isAgencyUser));
       setLanguage("es");
-      setSelectedRecipients([]);
+      setSelectedRecipients(hasPreselected ? [...preselectedAgencyIds!] : []);
       setExternalRecipients([]);
       setRecipientSearch("");
       setPickerTab("all");
-      setRecipientMode(null);
-      // editMode is always true now (inline editing always on)
+      setRecipientMode(hasPreselected ? "pick" : null);
       setIncludeSignature(true);
       setIncludeAvailability(true);
+      setActivePromotionId(promotionId);
     }
-  }, [open, effectiveDefaultAudience, forcedDefaultTemplateId]);
+  }, [open, effectiveDefaultAudience, forcedDefaultTemplateId, preselectedAgencyIds, promotionId]);
+
+  /** Promoción elegida dentro del flujo de email. Para templates que
+   *  se anclan a una promoción (ej. `new-launch` · "Nuevo lanzamiento"),
+   *  si el caller no la pasó como prop, el usuario la elige en el
+   *  step `promo-pick`. Si venía `promotionId` por prop, se usa ese. */
+  const [activePromotionId, setActivePromotionId] = useState<string | undefined>(promotionId);
 
   const selectTemplate = (id: TemplateId) => {
+    // "Nuevo lanzamiento" debe anclarse a una promoción concreta · si
+    // no hay promoción preseleccionada, saltamos al picker primero.
+    if (id === "new-launch" && !activePromotionId) {
+      setTemplateId(id);
+      setStep("promo-pick");
+      return;
+    }
     const tpl = getTemplate(id);
     setTemplateId(id);
     setBlocksByLang({
@@ -257,6 +281,19 @@ export function SendEmailDialog({
       en: applyAgencyVoice(id, { ...tpl.defaultBlocks.en }, "en"),
     });
     setSubject(defaultLangSubject(id, language, isAgencyUser));
+    setStep("compose");
+  };
+
+  /** Confirmar la promoción elegida en el picker → cargar plantilla y
+   *  pasar a compose. */
+  const confirmPromotion = (promoId: string) => {
+    setActivePromotionId(promoId);
+    const tpl = getTemplate(templateId);
+    setBlocksByLang({
+      es: applyAgencyVoice(templateId, { ...tpl.defaultBlocks.es }, "es"),
+      en: applyAgencyVoice(templateId, { ...tpl.defaultBlocks.en }, "en"),
+    });
+    setSubject(defaultLangSubject(templateId, language, isAgencyUser));
     setStep("compose");
   };
 
@@ -875,6 +912,63 @@ export function SendEmailDialog({
                   </button>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* ─────── STEP 2.5 · PROMO-PICK (solo new-launch sin promo
+            preseleccionada) ─────── */}
+        {step === "promo-pick" && (
+          <div className="flex-1 overflow-y-auto p-5 sm:p-7">
+            <button
+              onClick={() => setStep("template")}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-4 transition-colors"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.5} /> Volver a plantillas
+            </button>
+            <h2 className="text-base font-semibold mb-1">¿Qué promoción lanzamos?</h2>
+            <p className="text-xs text-muted-foreground mb-5">
+              Elige la promoción que quieres anunciar. El email llevará su nombre, imagen y unidades disponibles.
+            </p>
+
+            <div className="space-y-2.5">
+              {promotions
+                .filter((pr) => pr.status === "active")
+                .map((pr) => (
+                  <button
+                    key={pr.id}
+                    onClick={() => confirmPromotion(pr.id)}
+                    className="w-full bg-card border border-border/40 rounded-2xl p-3 flex items-center gap-3 text-left transition-all hover:border-foreground/30 hover:shadow-soft group"
+                  >
+                    {pr.image ? (
+                      <img src={pr.image} alt="" className="w-16 h-12 object-cover rounded-lg shrink-0" />
+                    ) : (
+                      <div className="w-16 h-12 rounded-lg bg-muted shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">{pr.name}</p>
+                      <p className="text-[11.5px] text-muted-foreground truncate">
+                        {pr.location}
+                        {pr.code ? ` · ${pr.code}` : ""}
+                        {typeof pr.availableUnits === "number"
+                          ? ` · ${pr.availableUnits} disponibles`
+                          : ""}
+                      </p>
+                    </div>
+                    <ChevronRight
+                      className="h-4 w-4 text-muted-foreground/50 group-hover:text-foreground transition-colors shrink-0"
+                      strokeWidth={1.5}
+                    />
+                  </button>
+                ))}
+              {promotions.filter((pr) => pr.status === "active").length === 0 && (
+                <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
+                  <p className="text-sm font-medium text-foreground">Sin promociones activas</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Publica una promoción antes de anunciarla a tus colaboradores.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -16,6 +16,8 @@
  */
 
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useTabParam } from "@/lib/useTabParam";
 import {
   Eye, AlertTriangle, CheckCircle2, Camera, Image as ImageIcon,
 } from "lucide-react";
@@ -30,7 +32,8 @@ import { ImageCropModal } from "@/components/empresa/ImageCropModal";
 import { HeroSocialIcons } from "@/components/empresa/HeroSocialIcons";
 import { Toaster } from "sonner";
 
-type Tab = "home" | "about" | "agents" | "statistics";
+const TAB_KEYS = ["home", "about", "agents", "statistics"] as const;
+type Tab = typeof TAB_KEYS[number];
 
 /**
  * Props opcionales:
@@ -57,12 +60,30 @@ export default function Empresa({
    * ficha de la propia agencia (no la del promotor). Se carga como
    * visitor hasta que añadamos edición multi-tenant — mejor que
    * filtrar datos del promotor. */
+  const navigate = useNavigate();
   const currentUser = useCurrentUser();
   const isAgencyUser = currentUser.accountType === "agency";
+
+  /** Back que respeta el historial real · si el usuario llegó desde la
+   *  tab Agencias de una promoción, vuelve ahí; si llegó desde el
+   *  listado general `/colaboradores`, vuelve ahí. Solo si no hay
+   *  historial (deep link directo) cae al listado. */
+  const handleBack = () => {
+    // window.history.length incluye otras pestañas/sesiones, así que
+    // usamos navigate(-1) y un fallback si no hay referrer propio.
+    const hasSameOriginReferrer = typeof document !== "undefined"
+      && document.referrer
+      && document.referrer.startsWith(window.location.origin);
+    if (hasSameOriginReferrer || window.history.length > 2) {
+      navigate(-1);
+    } else {
+      navigate("/colaboradores");
+    }
+  };
   const effectiveTenantId = tenantId ?? (isAgencyUser ? currentUser.agencyId : undefined);
   const { empresa, update, isVisitor } = useEmpresa(effectiveTenantId);
   const { oficinas } = useOficinas();
-  const [tab, setTab] = useState<Tab>("home");
+  const [tab, setTab] = useTabParam<Tab>(TAB_KEYS, "home");
   const [viewMode, setViewMode] = useState<"edit" | "preview">(isVisitor ? "preview" : "edit");
   const [editingImage, setEditingImage] = useState<"logo" | "cover" | null>(null);
 
@@ -137,16 +158,17 @@ export default function Empresa({
           <div>
             {isVisitor ? (
               <>
-                <a
-                  href="/colaboradores"
+                <button
+                  type="button"
+                  onClick={handleBack}
                   className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-1"
                 >
-                  ← Colaboradores
-                </a>
+                  ← Volver
+                </button>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                   Ficha de agencia
                 </p>
-                <h1 className="text-[22px] sm:text-[24px] font-bold tracking-tight leading-tight mt-1">
+                <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight leading-tight mt-1">
                   {empresa.nombreComercial}
                 </h1>
               </>
@@ -155,7 +177,7 @@ export default function Empresa({
                 <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                   Administración
                 </p>
-                <h1 className="text-[22px] sm:text-[24px] font-bold tracking-tight leading-tight mt-1">
+                <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight leading-tight mt-1">
                   Mi empresa
                   {empresa.nombreComercial && (
                     <span className="text-muted-foreground font-normal ml-2">· {empresa.nombreComercial}</span>
@@ -239,7 +261,7 @@ export default function Empresa({
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pt-[56px] sm:pt-[68px] pb-4">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-[20px] sm:text-[24px] font-bold text-foreground leading-tight tracking-tight">
+                  <h1 className="text-[19px] sm:text-[22px] font-bold text-foreground leading-tight tracking-tight">
                     {empresa.nombreComercial || "Tu empresa"}
                   </h1>
                   {empresa.verificada && (

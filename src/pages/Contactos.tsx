@@ -294,7 +294,7 @@ export default function Contactos() {
       <div className="px-3 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-3">
         <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
           <div className="shrink-0 min-w-0">
-            <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight leading-tight">
+            <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight leading-tight">
               Contactos
             </h1>
           </div>

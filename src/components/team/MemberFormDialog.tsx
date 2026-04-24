@@ -58,16 +58,15 @@ type Props = {
   onRemove?: () => void;
 };
 
-/* Sugerencias de departamentos y cargos · consistentes con /ajustes/perfil. */
-const DEPARTMENT_SUGGESTIONS = [
-  "Comercial", "Marketing", "Operaciones", "Administración",
-  "Dirección", "Atención al cliente", "Legal",
-];
+/* Departamentos · ahora vienen del store gestionado por el admin en
+ * `/ajustes/empresa/departamentos`. Antes eran un array hardcoded. */
+import { useDepartments } from "@/lib/departmentsStorage";
 
 export function MemberFormDialog({
   open, onClose, member, onSave, onDeactivate, onReactivate, onRemove,
 }: Props) {
   const confirm = useConfirm();
+  const departmentList = useDepartments();
 
   /* ─── Form state ─── */
   const [name, setName] = useState("");
@@ -307,18 +306,31 @@ export function MemberFormDialog({
                         )}
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-[280px] p-1.5" align="start">
+                    <PopoverContent
+                      className="w-[280px] p-1.5"
+                      align="start"
+                      /* Evita que Radix haga scrollIntoView del elemento
+                         enfocado al abrir · el input tenía autoFocus y
+                         el Dialog hacía un salto de scroll desagradable.
+                         Quitamos el autoFocus y bloqueamos también el
+                         auto-focus por Radix · el usuario escribe sólo
+                         si lo pide (y el input sigue editable). */
+                      onOpenAutoFocus={(e) => e.preventDefault()}
+                    >
                       <div className="px-2 pt-1 pb-2">
                         <Input
-                          autoFocus
                           value={department}
                           onChange={(e) => { setDepartment(e.target.value); setDepartmentTouched(true); }}
                           placeholder="Escribe un departamento…"
                           className="h-9 text-sm"
                         />
                       </div>
-                      <div className="max-h-60 overflow-y-auto">
-                        {DEPARTMENT_SUGGESTIONS.map((d) => (
+                      <div
+                        className="max-h-60 overflow-y-auto overscroll-contain"
+                        onWheel={(e) => e.stopPropagation()}
+                        onTouchMove={(e) => e.stopPropagation()}
+                      >
+                        {departmentList.map((d) => (
                           <button
                             key={d}
                             type="button"

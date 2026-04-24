@@ -14,7 +14,8 @@
  */
 
 import { useMemo } from "react";
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { useTabParam } from "@/lib/useTabParam";
 import {
   ArrowLeft, Pencil, Camera, Plus, X,
   Flame, Sparkles, Calendar as CalendarIcon, FileText,
@@ -63,12 +64,12 @@ const TABS = [
 ] as const;
 
 type TabId = typeof TABS[number]["id"];
+const TAB_IDS = TABS.map((t) => t.id) as readonly TabId[];
 
 export default function ContactoDetalle() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab: TabId = (searchParams.get("tab") as TabId) ?? "resumen";
+  const [activeTab, setTabParam] = useTabParam<TabId>(TAB_IDS, "resumen");
 
   /* Universo: importados primero (más recientes) + mocks. */
   const allContacts = useMemo(() => {
@@ -117,10 +118,7 @@ export default function ContactoDetalle() {
       setWhatsappOpen(true);
       return;
     }
-    const params = new URLSearchParams(searchParams);
-    if (t === "resumen") params.delete("tab");
-    else params.set("tab", t);
-    setSearchParams(params);
+    setTabParam(t);
   };
 
   return (

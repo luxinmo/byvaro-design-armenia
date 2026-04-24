@@ -26,7 +26,28 @@ export type PermissionKey =
   /** Ver / editar etiquetas de organización. */
   | "contacts.editOrgTags"
   /** Eliminar contactos. */
-  | "contacts.delete";
+  | "contacts.delete"
+  /** Ver el PANEL OPERATIVO de colaboración con una agencia
+   *  (`/colaboradores/:id?from=<promoId>`). Contiene datos sensibles:
+   *  contratos, comisiones, incidencias, top agentes. */
+  | "collaboration.panel.view"
+  /** Ver la lista de contratos de colaboración con una agencia. */
+  | "collaboration.contracts.view"
+  /** Subir un PDF de contrato y enviarlo a firmar vía Firmafy. */
+  | "collaboration.contracts.manage"
+  /** Ver incidencias (duplicados, cancelaciones, reclamaciones) entre
+   *  empresas · datos delicados. */
+  | "collaboration.incidents.view"
+  /** Ver calendario de pagos y facturas de la agencia. Datos
+   *  financieros: cuánto se le debe, cuánto se ha pagado, qué está
+   *  bloqueado. */
+  | "collaboration.payments.view"
+  /** Marcar pagos como pagados, poner on-hold, cancelar, subir
+   *  comprobante interno. */
+  | "collaboration.payments.manage"
+  /** Solicitar documentos a la agencia (factura, IBAN, certificados
+   *  fiscales) + aprobar/rechazar los subidos. */
+  | "collaboration.documents.manage";
 
 const STORAGE_KEY = "byvaro.workspace.rolePermissions.v1";
 
@@ -36,6 +57,10 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
   admin: [
     "whatsapp.viewAll", "whatsapp.viewOwn", "whatsapp.manageChannel",
     "contacts.editOrgTags", "contacts.delete",
+    "collaboration.panel.view", "collaboration.contracts.view",
+    "collaboration.contracts.manage", "collaboration.incidents.view",
+    "collaboration.payments.view", "collaboration.payments.manage",
+    "collaboration.documents.manage",
   ],
   member: [
     "whatsapp.viewOwn",

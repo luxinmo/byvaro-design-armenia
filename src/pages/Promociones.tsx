@@ -520,6 +520,7 @@ export default function Promociones() {
   const statusFilterOptions = [
     { key: "all", label: "Todas", mobile: false },
     { key: "active", label: "Activas", mobile: true },
+    { key: "published", label: "Publicadas", mobile: true },
     { key: "incomplete", label: "Incompletas", mobile: true },
     { key: "sold-out", label: "Vendidas", mobile: true },
   ] as const;
@@ -528,8 +529,15 @@ export default function Promociones() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return allPromotions.filter(p => {
-      // Estado (tabs)
-      if (statusFilter !== "all" && p.status !== statusFilter) return false;
+      // Estado (tabs) · "published" es derivado (status=active + requisitos
+      // de publicación OK + canShareWithAgencies !== false).
+      if (statusFilter === "published") {
+        if (p.status !== "active") return false;
+        if (!canPublishPromotion(p as unknown as Promotion)) return false;
+        if ((p as DevPromotion).canShareWithAgencies === false) return false;
+      } else if (statusFilter !== "all" && p.status !== statusFilter) {
+        return false;
+      }
 
       // Búsqueda textual (nombre, ubicación, código, developer)
       if (q) {
@@ -645,7 +653,7 @@ export default function Promociones() {
           {/* Title · visible en todos los breakpoints, tamaño igual a Inicio */}
           <div className="shrink-0 min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground leading-none">Comercial</p>
-            <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight leading-tight mt-1">Promociones</h1>
+            <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight leading-tight mt-1">Promociones</h1>
           </div>
 
           {/* Controles: búsqueda + FILTROS (al lado) + CTA */}

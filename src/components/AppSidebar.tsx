@@ -15,7 +15,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import {
   Home, Tag, FileText, CircleDollarSign, CalendarDays,
-  Handshake, Contact, Globe, Mail, Settings, ChevronsUpDown,
+  Handshake, Contact, Globe, Mail, Settings, ChevronsUpDown, FileSignature,
   Building2, Inbox, User as UserIcon, LogOut, Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -39,7 +39,7 @@ const groups: NavGroup[] = [
     label: "Comercial",
     items: [
       { title: "Promociones", url: "/promociones", icon: Tag, badge: 12 },
-      { title: "Leads", url: "/leads", icon: Inbox, badge: 24, accent: true },
+      { title: "Oportunidades", url: "/oportunidades", icon: Inbox, badge: 24, accent: true },
       { title: "Registros", url: "/registros", icon: FileText, badge: 8 },
       { title: "Ventas", url: "/ventas", icon: CircleDollarSign },
       { title: "Calendario", url: "/calendario", icon: CalendarDays },
@@ -49,6 +49,7 @@ const groups: NavGroup[] = [
     label: "Red",
     items: [
       { title: "Colaboradores", url: "/colaboradores", icon: Handshake },
+      { title: "Contratos", url: "/contratos", icon: FileSignature },
       { title: "Contactos", url: "/contactos", icon: Contact },
     ],
   },
@@ -93,7 +94,7 @@ export function AppSidebar() {
   const agencyHiddenRoutes = new Set([
     "/colaboradores",
     "/microsites",
-    "/leads",
+    "/oportunidades",
     "/emails",
   ]);
   const visibleGroups = isAgencyUser

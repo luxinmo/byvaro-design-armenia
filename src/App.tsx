@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AppLayout } from "@/components/AppLayout";
 import { ConfirmDialogHost } from "@/components/ui/ConfirmDialog";
+import { ScrollToTop } from "@/components/ScrollToTop";
 import Inicio from "@/pages/Inicio";
 import Promociones from "@/pages/Promociones";
 import Registros from "@/pages/Registros";
@@ -11,6 +12,7 @@ import Ventas from "@/pages/Ventas";
 import Calendario from "@/pages/Calendario";
 import Colaboradores from "@/pages/Colaboradores";
 import AgenciaDetalle from "@/pages/AgenciaDetalle";
+import ColaboracionPanel from "@/pages/ColaboracionPanel";
 import ColaboradorHistorial from "@/pages/ColaboradorHistorial";
 import ColaboradoresEstadisticas from "@/pages/ColaboradoresEstadisticas";
 import Contactos from "@/pages/Contactos";
@@ -26,6 +28,7 @@ import AjustesEmailFirma from "@/pages/ajustes/email/firma";
 import AjustesEmailPlantillas from "@/pages/ajustes/email/plantillas";
 import AjustesEmailAutoRespuesta from "@/pages/ajustes/email/auto-respuesta";
 import AjustesEmailSmtp from "@/pages/ajustes/email/smtp";
+import AjustesPlantillas from "@/pages/ajustes/plantillas";
 import AjustesContactosEtiquetas from "@/pages/ajustes/contactos/etiquetas";
 import AjustesContactosOrigenes from "@/pages/ajustes/contactos/origenes";
 import AjustesContactosCampos from "@/pages/ajustes/contactos/campos";
@@ -42,6 +45,7 @@ import AjustesEmpresaDatos from "@/pages/ajustes/empresa/datos";
 import AjustesEmpresaOficinas from "@/pages/ajustes/empresa/oficinas";
 import AjustesEmpresaVerificacion from "@/pages/ajustes/empresa/verificacion";
 import AjustesEmpresaSuscripcion from "@/pages/ajustes/empresa/suscripcion";
+import AjustesEmpresaDepartamentos from "@/pages/ajustes/empresa/departamentos";
 import AjustesUsuariosMiembros from "@/pages/ajustes/usuarios/miembros";
 import AjustesUsuariosRoles from "@/pages/ajustes/usuarios/roles";
 import AjustesUsuariosInvitaciones from "@/pages/ajustes/usuarios/invitaciones";
@@ -92,6 +96,9 @@ function PromotorOnly({ children }: { children: JSX.Element }) {
 export default function App() {
   return (
     <BrowserRouter>
+      {/* Resetea el scroll al top en cada cambio de pathname. Regla
+       * global · ver docs/scroll-restoration.md y CLAUDE.md. */}
+      <ScrollToTop />
       {/* Toasts globales (sonner). Antes faltaba → todas las llamadas
        * a toast.success/info/error eran silenciosas. */}
       <Toaster position="top-right" richColors closeButton />
@@ -126,6 +133,7 @@ export default function App() {
                 <Route path="empresa/oficinas" element={<AjustesEmpresaOficinas />} />
                 <Route path="empresa/verificacion" element={<AjustesEmpresaVerificacion />} />
                 <Route path="empresa/suscripcion" element={<AjustesEmpresaSuscripcion />} />
+                <Route path="empresa/departamentos" element={<AjustesEmpresaDepartamentos />} />
                 <Route path="usuarios/miembros" element={<AjustesUsuariosMiembros />} />
                 <Route path="usuarios/roles" element={<AjustesUsuariosRoles />} />
                 <Route path="usuarios/invitaciones" element={<AjustesUsuariosInvitaciones />} />
@@ -157,6 +165,7 @@ export default function App() {
                 <Route path="idioma-region/zona-horaria" element={<AjustesZonaHoraria />} />
                 <Route path="idioma-region/formato-fecha" element={<AjustesFormatoFecha />} />
                 <Route path="idioma-region/moneda" element={<AjustesMoneda />} />
+                <Route path="plantillas" element={<AjustesPlantillas />} />
                 <Route path="email" element={<AjustesEmailIndex />} />
                 <Route path="email/firma" element={<AjustesEmailFirma />} />
                 <Route path="email/plantillas" element={<AjustesEmailPlantillas />} />
@@ -187,14 +196,16 @@ export default function App() {
                 <Route path="/inicio" element={<Inicio />} />
                 <Route path="/promociones" element={<Promociones />} />
                 <Route path="/promociones/:id" element={<PromocionDetalle />} />
-                <Route path="/leads" element={<PromotorOnly><Leads /></PromotorOnly>} />
-                <Route path="/leads/:id" element={<PromotorOnly><LeadDetalle /></PromotorOnly>} />
+                <Route path="/oportunidades" element={<PromotorOnly><Leads /></PromotorOnly>} />
+                <Route path="/oportunidades/:id" element={<PromotorOnly><LeadDetalle /></PromotorOnly>} />
                 <Route path="/registros" element={<Registros />} />
                 <Route path="/ventas" element={<Ventas />} />
                 <Route path="/calendario" element={<Calendario />} />
                 <Route path="/colaboradores" element={<PromotorOnly><Colaboradores /></PromotorOnly>} />
                 <Route path="/colaboradores/estadisticas" element={<PromotorOnly><ColaboradoresEstadisticas /></PromotorOnly>} />
                 <Route path="/colaboradores/:id" element={<PromotorOnly><AgenciaDetalle /></PromotorOnly>} />
+                <Route path="/colaboradores/:id/ficha" element={<PromotorOnly><AgenciaDetalle /></PromotorOnly>} />
+                <Route path="/colaboradores/:id/panel" element={<PromotorOnly><ColaboracionPanel /></PromotorOnly>} />
                 <Route path="/colaboradores/:id/historial" element={<PromotorOnly><ColaboradorHistorial /></PromotorOnly>} />
                 <Route path="/contactos" element={<Contactos />} />
                 <Route path="/contactos/:id" element={<ContactoDetalle />} />

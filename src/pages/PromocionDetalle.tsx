@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useTabParam } from "@/lib/useTabParam";
 import { getDraft, saveDraft as persistDraft, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { WizardState, FotoItem, FotoCategoria } from "@/components/crear-promocion/types";
@@ -9,7 +10,6 @@ import type { Unit } from "@/data/units";
 import { promotions, getBuildingTypeLabel } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion, type Comercial, type ComercialPermissions } from "@/data/developerPromotions";
 import { agencies, countAgenciesForPromotion, type Agency } from "@/data/agencies";
-import { AgenciasPendientesDialog } from "@/components/promotions/detail/AgenciasPendientesDialog";
 import { AgenciasTabStats } from "@/components/promotions/detail/AgenciasTabStats";
 import { FeatureCardV3 } from "@/pages/Colaboradores";
 import ColaboradoresEstadisticas from "@/pages/ColaboradoresEstadisticas";
@@ -179,7 +179,20 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const { id } = useParams();
   const navigate = useNavigate();
   const confirm = useConfirm();
-  const [activeTab, setActiveTab] = useState(0);
+  /* Tab activa sincronizada con ?tab=<key> vía `useTabParam`. Al
+     navegar a una sub-pantalla (ficha de agencia, etc.) y volver
+     atrás, el historial del navegador restaura la tab. Internamente
+     seguimos trabajando con índices para no tocar todo el JSX. */
+  const [activeTabKeyFromUrl, setActiveTabKeyFromUrl] = useTabParam(
+    tabKeys as readonly string[],
+    tabKeys[0],
+  );
+  const activeTab = Math.max(0, tabKeys.indexOf(activeTabKeyFromUrl));
+  const setActiveTab = (next: number | ((cur: number) => number)) => {
+    const resolved = typeof next === "function" ? next(activeTab) : next;
+    const key = tabKeys[resolved] ?? tabKeys[0];
+    setActiveTabKeyFromUrl(key);
+  };
   /* Contactos comerciales del footer · derivados de TEAM_MEMBERS reactivo.
    * Filtro idéntico al que usa /empresa (visibleOnProfile + active). */
   const teamMembers = useTeamMembersReactive();
@@ -239,7 +252,6 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const [priceListOpen, setPriceListOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [activateSharingOpen, setActivateSharingOpen] = useState(false);
-  const [pendientesOpen, setPendientesOpen] = useState(false);
   /** El brochure puede eliminarse desde su card. Al eliminarlo, la sección
    *  se oculta y la acción rápida "Brochure" queda deshabilitada. */
   const [brochureRemoved, setBrochureRemoved] = useState(false);
@@ -608,7 +620,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   };
 
   return (
-    <div className="h-full overflow-auto bg-background">
+    <div className="h-full overflow-auto bg-background" data-scroll-container>
       {/* ── Collaborator preview banner — solo cuando es el PROMOTOR quien
            está previsualizando la vista colaborador. Si el usuario ya es una
            agencia (via AccountSwitcher) o es ruta de agente, no hay banner. */}
@@ -637,24 +649,24 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             con fondo. El <Separator> desaparece porque el borde inferior
             del <nav> hace de separador visual. */}
       <header className="px-3 sm:px-8 lg:px-10 pt-4 sm:pt-6 pb-0">
-        {/* Breadcrumb / eyebrow · sólo desde sm+. En móvil el back
-            arrow del MobileHeader sustituye esta ruta. */}
-        <div className="hidden sm:flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-3">
-          <button
-            onClick={() => navigate(agentMode ? "/promotions-agent" : "/developer-promotions")}
-            className="hover:text-foreground transition-colors"
-          >
-            Promociones
-          </button>
-          <ChevronRight className="h-3 w-3" />
-          <span className="text-foreground/70 tnum">{p.code}</span>
-        </div>
+        {/* Back link · visible en todos los tamaños. En móvil el
+            MobileHeader también pone una flecha, pero aquí damos
+            un camino de vuelta explícito dentro del contenido. */}
+        <button
+          onClick={() => navigate("/promociones")}
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+          Promociones
+          <span className="text-muted-foreground/50 mx-1">·</span>
+          <span className="text-foreground/60 tnum">{p.code}</span>
+        </button>
 
         {/* Título + acciones · relative para posicionar el ojo en móvil. */}
         <div className="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-4 sm:mb-5">
           <div className="min-w-0">
             <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-[20px] sm:text-[28px] font-bold tracking-tight text-foreground leading-tight">
+              <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight text-foreground leading-tight">
                 {p.name}
               </h1>
               {/* Badge de estado de publicación · visible para promotor.
@@ -905,7 +917,13 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         {/* Tabs · subrayado Byvaro (patrón de /empresa) */}
         <nav className="flex items-center gap-1 border-b border-border overflow-x-auto no-scrollbar -mx-3 sm:-mx-8 lg:-mx-10 px-3 sm:px-8 lg:px-10">
           {visibleTabs.map((tab, i) => {
-            const requestCount = !viewAsCollaborator && tab === "Agencies" ? agencies.filter(a => a.isNewRequest).length : 0;
+            /* Badge de la tab Agencias · SOLO solicitudes dirigidas a
+               ESTA promoción (ver `requestedPromotionIds` en
+               `src/data/agencies.ts`). Las solicitudes globales viven
+               en `/colaboradores`, no aquí. */
+            const requestCount = !viewAsCollaborator && tab === "Agencies"
+              ? agencies.filter(a => a.isNewRequest && a.requestedPromotionIds?.includes(p.id)).length
+              : 0;
             const active = activeTab === i;
             return (
               <button
@@ -1656,9 +1674,14 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           <AgenciasTabStats
             promotion={p}
             canShare={canShare}
+            sharingEnabled={sharingEnabledForPromo}
+            isIncomplete={isIncomplete}
+            isDraft={isDraft}
             onInvitar={() => setShareOpen(true)}
             onOpenStats={() => setStatsOverlayOpen(true)}
-            onOpenPendientes={() => setPendientesOpen(true)}
+            onActivateSharing={() => setActivateSharingOpen(true)}
+            onOpenPendientes={() => { /* solicitudes e invitaciones ya se
+              muestran inline en la tab Agencias; el dialog queda deprecado */ }}
           />
         )}
 
@@ -1915,16 +1938,6 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       <SharePromotionDialog
         open={shareOpen}
         onOpenChange={setShareOpen}
-        promotionId={p.id}
-        promotionName={p.name}
-      />
-
-      {/* Agencias pendientes · dialog compartido con solicitudes
-          entrantes + invitaciones enviadas. Se abre desde el botón
-          "Pendientes · N" de la tab Agencias. */}
-      <AgenciasPendientesDialog
-        open={pendientesOpen}
-        onOpenChange={setPendientesOpen}
         promotionId={p.id}
         promotionName={p.name}
       />

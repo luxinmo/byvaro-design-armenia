@@ -42,12 +42,11 @@ export function JobTitlePicker({
       onChange(value.filter((v) => v !== key));
       return;
     }
-    /* Si ya hay `max`, reemplazamos el primero (FIFO) — UX típica de
-     * limit=2 donde no quieres bloquear al usuario con un toast. */
-    if (value.length >= max) {
-      onChange([...value.slice(1), key]);
-      return;
-    }
+    /* Si ya hay `max`, NO permitimos añadir más · el usuario tiene
+     * que usar "Limpiar" o deseleccionar uno primero. Sin reemplazo
+     * silencioso · evita elegir algo y perder una selección anterior
+     * sin enterarse. */
+    if (value.length >= max) return;
     onChange([...value, key]);
   };
 
@@ -70,7 +69,35 @@ export function JobTitlePicker({
             <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground shrink-0 transition-transform", open && "rotate-180")} />
           </button>
         </PopoverTrigger>
-        <PopoverContent className="w-[320px] p-1.5 max-h-[380px] overflow-y-auto" align="start">
+        <PopoverContent
+          className="w-[320px] p-1.5 max-h-[380px] overflow-y-auto overscroll-contain"
+          align="start"
+          /* Evita que Radix fuerce scroll al abrir para enfocar algo
+             interno · el padre (ej. MemberFormDialog) tenía saltos. */
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          /* Fix scroll interno · el Dialog padre usa scroll-lock
+             global (react-remove-scroll) y wheel events no llegan al
+             popover. Stop-propagation lo soluciona. */
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+        >
+          {/* Aviso cuando se alcanza el máximo — bloqueamos selección y
+             pedimos explícitamente limpiar. */}
+          {value.length >= max && (
+            <div className="mx-1 mb-1 rounded-lg bg-warning/10 border border-warning/25 px-2.5 py-1.5 flex items-center justify-between gap-2">
+              <p className="text-[11px] text-warning font-medium truncate">
+                Máximo {max} cargos · limpia para cambiar
+              </p>
+              <button
+                type="button"
+                onClick={() => onChange([])}
+                className="shrink-0 text-[11px] font-semibold text-warning hover:underline"
+              >
+                Limpiar
+              </button>
+            </div>
+          )}
+
           {(Object.keys(JOB_TITLES_BY_GROUP) as JobTitleGroup[]).map((group) => {
             const titles = JOB_TITLES_BY_GROUP[group];
             return (
@@ -86,12 +113,14 @@ export function JobTitlePicker({
                       key={t.key}
                       type="button"
                       onClick={() => toggle(t.key)}
+                      disabled={atLimit}
+                      aria-disabled={atLimit}
                       className={cn(
                         "w-full text-left px-2.5 py-1.5 text-sm rounded-lg flex items-center justify-between gap-2 transition-colors",
                         active
                           ? "bg-primary/10 text-primary font-medium"
                           : atLimit
-                            ? "text-muted-foreground/50 cursor-default hover:bg-transparent"
+                            ? "text-muted-foreground/40 cursor-not-allowed"
                             : "text-foreground hover:bg-muted",
                       )}
                     >

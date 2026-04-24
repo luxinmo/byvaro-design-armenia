@@ -152,8 +152,16 @@ Ficha de contacto completa con 8 tabs operativos. Spec en
 - ✅ Catálogo dinámico de tipos de relación (`/ajustes/contactos/relaciones` · ADR-044)
 - ✅ Documentación canónica de permisos ([`docs/permissions.md`](docs/permissions.md))
 - ⬜ Listado `/contactos` con filtros + visibilidad por ownership
-- ⬜ Vista de detalle de Oportunidad (`/oportunidades/:id`)
-- ⬜ `AddOpportunityDialog` (CTA stub en Operaciones)
+- ✅ Pipeline unificado dentro de Lead · sin entidad Oportunidad separada (ADR-053 · revierte ADR-052)
+- ✅ UI renombrada a "Oportunidades" · ruta `/oportunidades` · Lead ya no existe como concepto (ADR-053)
+- ✅ Listado `/oportunidades` con KPIs clickeables por etapa · segmented · thumbnail promoción · responsable único · referencia `OPP-XXXX`
+- ✅ Ficha interior `/oportunidades/:id` con tabs (Actividad/Emails/Docs/Registros) + LeadEntryEvent con foto 125×85 + 3 botones No/Sí/Interés · pipeline bar queda como mejora futura
+- ✅ Email + WhatsApp del header replican ContactSummaryTab (Link a /emails + ContactWhatsAppDialog modal)
+- ✅ Departamentos gestionables en `/ajustes/empresa/departamentos` + hook canónico `useDepartments()` (ADR-054)
+- ✅ Catálogo ISO 3166-1 completo (245 países) en `phoneCountries.ts` (ADR-054)
+- ✅ Fix global del scroll en Popover/Dropdown/Select dentro de Dialogs · 3 wrappers canónicos (ADR-055)
+- ✅ JobTitlePicker bloquea 3º selección con banner + Limpiar (ADR-055)
+- ⬜ Pipeline bar visual + selector de etapa en la ficha de oportunidad
 - ⬜ Implementar gating de permisos por ownership en todos los listados (deuda en `docs/permissions.md` §6)
 
 ### ⬜ Fase 10 — Calendario

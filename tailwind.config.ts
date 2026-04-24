@@ -90,9 +90,32 @@ export default {
           from: { opacity: "0", transform: "translateY(6px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
+        /* Entrada de los quick action tiles · combina fade + ligero slide
+         * desde abajo para dirigir la mirada del usuario a los pendientes. */
+        "quick-tile-in": {
+          "0%":   { opacity: "0", transform: "translateY(8px) scale(0.98)" },
+          "60%":  { opacity: "1", transform: "translateY(0) scale(1.01)" },
+          "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        /* Halo que se expande dos veces al entrar para captar atención,
+         * luego se apaga · no se repite en loop. */
+        "attention-pulse": {
+          "0%":   { boxShadow: "0 0 0 0 hsl(var(--warning) / 0.45)" },
+          "60%":  { boxShadow: "0 0 0 10px hsl(var(--warning) / 0)" },
+          "100%": { boxShadow: "0 0 0 0 hsl(var(--warning) / 0)" },
+        },
+        /* Ping sutil del dot indicador · continuo (ritmo lento). */
+        "ping-slow": {
+          "0%":   { transform: "scale(1)",   opacity: "0.9" },
+          "80%":  { transform: "scale(2.2)", opacity: "0" },
+          "100%": { transform: "scale(2.2)", opacity: "0" },
+        },
       },
       animation: {
-        "fade-up": "fade-up 0.4s ease both",
+        "fade-up":         "fade-up 0.4s ease both",
+        "quick-tile-in":   "quick-tile-in 0.55s cubic-bezier(0.2,0.8,0.2,1) both",
+        "attention-pulse": "attention-pulse 1.8s ease-out 0.3s 2",
+        "ping-slow":       "ping-slow 2s cubic-bezier(0,0,0.2,1) infinite",
       },
     },
   },

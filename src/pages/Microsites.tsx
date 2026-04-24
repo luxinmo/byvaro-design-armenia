@@ -173,7 +173,7 @@ export default function Microsites() {
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground leading-none">Contenido</p>
             <div className="flex items-baseline gap-3 mt-1">
-              <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight leading-tight">Microsites</h1>
+              <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight leading-tight">Microsites</h1>
               <p className="text-sm text-muted-foreground">
                 <span className="font-semibold text-foreground tabular-nums">{kpis.active}</span> activos
                 <span className="mx-1.5 text-border">·</span>

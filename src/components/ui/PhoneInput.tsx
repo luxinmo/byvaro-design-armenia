@@ -75,6 +75,7 @@ export function PhoneInput({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   /* ─── Sincroniza desde la prop `value` cuando cambia desde fuera. ─── */
   useEffect(() => {
@@ -171,12 +172,23 @@ export function PhoneInput({
             </svg>
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-[300px] p-0 rounded-xl border-border shadow-soft-lg overflow-hidden">
+        <PopoverContent
+          align="start"
+          className="w-[300px] p-0 rounded-xl border-border shadow-soft-lg overflow-hidden"
+          /* Fix scroll-jump al abrir · el input de búsqueda llevaba
+             autoFocus natural del HTML + Radix intentaba enfocar el
+             primer focusable al montarse → el browser hacía
+             scrollIntoView para "ver" el input y el dialog saltaba.
+             Bloqueamos el auto-focus de Radix sin tocar el scroll
+             interno ni el scroll manual con rueda/touch. El usuario
+             puede clicar el input para escribir. */
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
           <div className="border-b border-border/60 px-3 py-2">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/60" />
               <input
-                autoFocus
+                ref={searchRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Buscar país, prefijo o ISO…"
@@ -184,7 +196,17 @@ export function PhoneInput({
               />
             </div>
           </div>
-          <div className="max-h-[300px] overflow-y-auto py-1">
+          <div
+            className="max-h-[300px] overflow-y-auto overscroll-contain py-1"
+            /* Fix scroll · cuando el Popover está dentro de un Dialog,
+               Radix aplica scroll-lock global (react-remove-scroll) y
+               los wheel/touch events no llegan al elemento con
+               overflow del popover. Stop-propagation para que el
+               scroll de ESTE contenedor funcione aunque el body esté
+               bloqueado. */
+            onWheel={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+          >
             {filtered.length === 0 ? (
               <p className="text-[11px] text-muted-foreground italic text-center py-3">
                 Sin coincidencias

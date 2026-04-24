@@ -1650,3 +1650,173 @@ Ver: `src/lib/assetOwnership.ts`,
 `src/components/team/DeactivateUserDialog.tsx`,
 `src/pages/Equipo.tsx:toggleActive + handleDeactivateConfirm`,
 `docs/screens/equipo.md §Desactivar miembro`.
+
+
+## 2026-04-23 · ADR-052 · ~~Oportunidades como entidad standalone~~ · **REVERTIDO**
+
+> **Status: SUPERSEDED por ADR-053**. Esta decisión se revirtió el
+> mismo día tras probar el diseño: la distinción Lead/Oportunidad
+> añadía fricción sin aportar claridad. Se vuelve a una sola entidad
+> **Lead** con pipeline interno de etapas (ver ADR-053).
+
+**Contexto original.** Se diseñaron Leads + Oportunidades como dos
+entidades separadas con una pantalla cada una (`/leads` + `/oportunidades`),
+un seed propio (`src/data/opportunities.ts`), conversión manual
+`Lead → Oportunidad` con diálogo de confirmación y settings en
+`/ajustes/leads-oportunidades` para alternar el flow-mode.
+
+**Por qué se revirtió.** Al usar la UI quedó claro que para el tamaño
+del equipo y la operativa del promotor inmobiliario no hace falta la
+separación. "Está contactado", "en visita" o "negociando" son estados
+del mismo lead, no conceptos distintos. Mantener dos listados + dos
+fichas + una conversión manual era peso muerto: el comercial salta
+entre pantallas para seguir al mismo cliente.
+
+Decisión nueva: pipeline interno en la entidad Lead (ADR-053).
+
+**Archivos borrados en el revert.**
+- `src/data/opportunities.ts`
+- `src/pages/Oportunidades.tsx`
+- `src/pages/OportunidadDetalle.tsx`
+- `src/pages/ajustes/leads-oportunidades.tsx`
+- `docs/screens/oportunidades.md`
+- `docs/screens/oportunidad-detalle.md`
+- §7.3 de `docs/backend-integration.md`
+
+## 2026-04-23 · ADR-053 · Pipeline unificado dentro de Lead (sin entidad Oportunidad)
+
+**Decisión.** En Byvaro no existe una entidad "Oportunidad" separada.
+Todo cliente potencial vive en la lista de **Leads** y avanza por un
+pipeline de 5 etapas + 2 terminales:
+
+```
+solicitud → contactado → visita → evaluacion → negociando → ganada | perdida
+                                                           + duplicate (IA)
+```
+
+- La etapa se guarda en `lead.status` (ampliación del enum
+  `LeadStatus` en `src/data/leads.ts`).
+- No hay conversión manual ni botón "Convertir a oportunidad" — el
+  comercial simplemente cambia la etapa desde la ficha del lead.
+- Un solo listado (`/leads`), una sola ficha (`/leads/:id`), un solo
+  pipeline. La ficha interior se diseñará en una iteración siguiente
+  con la barra de etapas, matching e historial dentro del mismo lead.
+
+**Por qué.** Fricción. La distinción Lead/Oportunidad pertenece a
+CRMs grandes con equipos segmentados (SDR → AE). Para un promotor
+inmobiliario, es el mismo comercial quien lleva al cliente desde que
+entra hasta que firma — separarlo en dos entidades solo duplica UI y
+obliga a una conversión manual que no aporta.
+
+**Implicación en mocks / backend.**
+- Los 12 leads del seed cubren ahora las 5 etapas (distribuidos para
+  demo: solicitud · contactado · visita · evaluacion · negociando ·
+  ganada · perdida · duplicate).
+- Backend: `PATCH /api/leads/:id { status }` para avanzar etapa.
+  Cuando toque, cada cambio emitirá evento en el timeline del lead y
+  en el historial del contacto (regla §🥇).
+
+Ver:
+- `src/data/leads.ts` · `LeadStatus` + `leadStatusConfig`.
+- `src/pages/Leads.tsx` · KPIs + segmented por etapa actualizados.
+- `src/pages/LeadDetalle.tsx` · sin diálogo de conversión (queda
+  pendiente la iteración de la vista de dentro).
+
+
+## 2026-04-24 · ADR-054 · Departamentos gestionables + catálogo de prefijos ISO completo
+
+**Contexto.** Dos problemas operativos que surgieron al usar los
+formularios de alta de miembro del equipo:
+
+1. Los departamentos vivían hardcodeados en un array dentro de
+   `MemberFormDialog.tsx` (`DEPARTMENT_SUGGESTIONS` con 7 valores).
+   Cada empresa tiene su propia estructura organizativa — no tiene
+   sentido obligar a usar la nuestra.
+2. El `PhoneInput` sólo tenía 74 países curados. Suficiente para el
+   mercado típico de Byvaro (España, UE, Latam, Oriente Medio,
+   Cáucaso) pero había casos reales donde faltaba algún prefijo (p. ej.
+   Liechtenstein, Mónaco, Bangladés, varios del Caribe/NANP).
+
+**Decisión.**
+
+1. **Departamentos gestionables** por el admin desde
+   `/ajustes/empresa/departamentos`. Store canónico en
+   `src/lib/departmentsStorage.ts` con CRUD + hook reactivo
+   `useDepartments()`. Los formularios (`MemberFormDialog`,
+   `InviteMemberDialog`) leen del store en lugar del array hardcodeado.
+   - Deduplicación case-insensitive conservando capitalización del admin.
+   - Eliminar un departamento NO cambia los miembros que ya lo tenían
+     asignado (ellos conservan su valor hasta edición manual).
+   - Renombrar propaga automáticamente (un solo `saveDepartments`).
+
+2. **Catálogo ISO 3166-1 completo** en `src/lib/phoneCountries.ts`:
+   de 74 → 245 países. Estados soberanos + territorios dependientes
+   con prefijo propio. Los 25+ países NANP (+1) comparten prefijo y
+   se marcan `ambiguous` en el popover del PhoneInput · el admin
+   elige manualmente.
+
+**Por qué ahora.** El admin pidió explícitamente gestionar
+departamentos desde Ajustes (iba a usar "Recursos Humanos" y no estaba
+en la lista). Y el usuario pidió "todos los prefijos sin falta" cuando
+al buscar un país no aparecía.
+
+**Implicación en backend** (TODO):
+- `GET/POST/PATCH/DELETE /api/workspace/departments` — CRUD del
+  store. Respeta el orden del admin (no ordenar alfabéticamente).
+- El catálogo de prefijos es estático client-side (como el Flag SVG).
+  No requiere endpoint.
+
+Ver:
+- `src/lib/departmentsStorage.ts` · store + hook.
+- `src/pages/ajustes/empresa/departamentos.tsx` · UI CRUD.
+- `src/lib/phoneCountries.ts` · 245 países ISO.
+- `docs/screens/empresa-departamentos.md` · spec.
+- `docs/backend-integration.md §Empresa · endpoints nuevos`.
+
+
+## 2026-04-24 · ADR-055 · Fix global del scroll en Popovers dentro de Dialogs
+
+**Contexto.** Cuando un `Popover`, `DropdownMenu` o `Select` de Radix
+se abre dentro de un `Dialog` (que también es Radix), el Dialog usa
+scroll-lock global vía `react-remove-scroll`. El popover se portalea
+al body, pero los eventos `wheel` / `touchmove` se interceptan a
+nivel document → **el scroll interno del popover no funciona**.
+
+El síntoma visual: abres el selector de países del teléfono dentro
+del `MemberFormDialog`, intentas scrollear la lista con la rueda del
+ratón y no pasa nada. El popover parecía "colgado".
+
+También había un scroll-jump al abrir: el `<input autoFocus>` dentro
+del popover hacía que el browser hiciera `scrollIntoView` del
+elemento enfocado, provocando saltos bruscos en el dialog.
+
+**Decisión.** Arreglar en los **tres wrappers canónicos** para cubrir
+todo el repo sin tocar sitios individuales:
+
+- `src/components/ui/popover.tsx`
+- `src/components/ui/dropdown-menu.tsx`
+- `src/components/ui/select.tsx`
+
+Cada wrapper:
+1. Hace `e.stopPropagation()` en `onWheel` y `onTouchMove` antes de
+   delegar al handler del caller (si lo hay).
+2. Añade `overscroll-contain` al Content para que llegar al final de
+   la lista no scrollee el viewport padre.
+3. El `onOpenAutoFocus={(e) => e.preventDefault()}` es responsabilidad
+   del caller cuando hay un input interno con `autoFocus` que pudiera
+   causar scroll-jump.
+
+**Regla viva.** Si alguien crea un Content custom con
+`@radix-ui/react-*` sin pasar por nuestros wrappers, tiene que añadir
+los `stopPropagation` + `overscroll-contain`. Regla documentada en
+`CLAUDE.md §🖱️ Popovers/Dropdowns/Selects dentro de Dialogs`.
+
+**JobTitlePicker** (cambio relacionado del mismo sprint):
+- Máx 2 cargos: el 3º se bloquea en vez de reemplazar FIFO.
+- Banner amarillo "Máximo 2 · limpia para cambiar" + CTA Limpiar.
+- Items disabled con `cursor-not-allowed` cuando se alcanza el límite.
+
+Ver:
+- `src/components/ui/popover.tsx`, `.../dropdown-menu.tsx`, `.../select.tsx`.
+- `src/components/team/JobTitlePicker.tsx` · lógica de límite estricto.
+- `CLAUDE.md §🖱️ Popovers/Dropdowns/Selects dentro de Dialogs`.
