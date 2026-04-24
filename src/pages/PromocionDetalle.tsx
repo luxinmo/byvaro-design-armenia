@@ -1640,13 +1640,14 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             })()}
 
             {/* ── 7.5 REGLAS DE MARKETING ──
-                 Solo tiene sentido mostrarlas cuando la promoción está
-                 compartida con agencias. Si es de uso interno
-                 (`canShareWithAgencies === false`) la sección se oculta
-                 · el promotor no necesita reglas que aplican a "nadie".
+                 Solo aparecen cuando la promoción ESTÁ PUBLICADA
+                 (status=active + completa). Antes de publicar no
+                 tiene sentido · la promo aún no se comparte con
+                 ninguna agencia. Y si es de uso interno
+                 (`canShareWithAgencies === false`) tampoco.
                  Tanto promotor como agencia ven la tarjeta; solo el
                  promotor puede editarla (botón oculto en modo collab). */}
-            {sharingEnabledForPromo && (
+            {p.status === "active" && !isIncomplete && sharingEnabledForPromo && (
               <MarketingRulesCard
                 promotionId={p.id}
                 readOnly={viewAsCollaborator}
@@ -1671,9 +1672,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               {/* ── RIGHT RAIL: dock de acciones rápidas (compartido con
                    la tab Disponibilidad para UX consistente) + tarjeta
                    de reglas de marketing debajo (2xl+ · animada la
-                   primera vez, se apaga al configurar). */}
+                   primera vez, se apaga al configurar).
+                   · Solo aparece cuando la promoción está PUBLICADA
+                     (status=active + completa). Antes de publicar no
+                     se comparte con nadie, la regla no aplica. */}
               {renderQuickActionsRail(
-                sharingEnabledForPromo && !viewAsCollaborator ? (
+                p.status === "active" && !isIncomplete && sharingEnabledForPromo && !viewAsCollaborator ? (
                   <MarketingRulesSidebarCard
                     promotionId={p.id}
                     onEdit={() => setMarketingRulesOpen(true)}
@@ -1731,9 +1735,10 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               />
             </div>
 
-            {/* Right rail · mismo dock + SidebarCard que en Vista general */}
+            {/* Right rail · mismo dock + SidebarCard que en Vista general
+                (solo si está publicada · ver gate en Vista general). */}
             {renderQuickActionsRail(
-              sharingEnabledForPromo && !viewAsCollaborator ? (
+              p.status === "active" && !isIncomplete && sharingEnabledForPromo && !viewAsCollaborator ? (
                 <MarketingRulesSidebarCard
                   promotionId={p.id}
                   onEdit={() => setMarketingRulesOpen(true)}
