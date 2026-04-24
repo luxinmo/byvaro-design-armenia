@@ -27,8 +27,11 @@
 import { useMemo, useState } from "react";
 import {
   Mail, Send, UserPlus, Shield, ShieldCheck, Copy, Check, AlertCircle,
-  RefreshCw, Eye, EyeOff, KeyRound,
+  RefreshCw, Eye, EyeOff, KeyRound, ChevronDown,
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useDepartments } from "@/lib/departmentsStorage";
+import { cn } from "@/lib/utils";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   DialogFooter,
@@ -45,7 +48,6 @@ import type { TeamMember } from "@/lib/team";
 import { renderTeamInvitation } from "@/lib/teamInvitationEmail";
 import { useCurrentUser } from "@/lib/currentUser";
 import { useEmpresa } from "@/lib/empresa";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 type Mode = "invite" | "create";
@@ -96,6 +98,8 @@ function generatePassword(): string {
 
 export function InviteMemberDialog({ open, onClose, onInvite, onCreate }: Props) {
   const [mode, setMode] = useState<Mode>("invite");
+  const departmentList = useDepartments();
+  const [deptPickerOpen, setDeptPickerOpen] = useState(false);
   const currentUser = useCurrentUser();
   const { empresa } = useEmpresa();
   const [personalMessage, setPersonalMessage] = useState("");
@@ -342,11 +346,55 @@ export function InviteMemberDialog({ open, onClose, onInvite, onCreate }: Props)
                   />
                 </Field>
                 <Field label="Departamento" className="sm:col-span-2">
-                  <Input
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                    placeholder="Auto desde el cargo"
-                  />
+                  {/* Popover con sugerencias del workspace + input libre ·
+                     misma UX que MemberFormDialog. Gestionable desde
+                     /ajustes/empresa/departamentos. */}
+                  <Popover open={deptPickerOpen} onOpenChange={setDeptPickerOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="w-full flex items-center justify-between h-10 px-3 rounded-xl border border-border bg-card text-sm text-foreground hover:border-foreground/30 transition-colors gap-2"
+                      >
+                        <span className={cn("truncate", !department && "text-muted-foreground")}>
+                          {department || "Selecciona o escribe…"}
+                        </span>
+                        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-[280px] p-1.5"
+                      align="start"
+                      onOpenAutoFocus={(e) => e.preventDefault()}
+                    >
+                      <div className="px-2 pt-1 pb-2">
+                        <Input
+                          value={department}
+                          onChange={(e) => setDepartment(e.target.value)}
+                          placeholder="Escribe un departamento…"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                      {departmentList.length > 0 ? (
+                        <div className="max-h-60 overflow-y-auto overscroll-contain">
+                          {departmentList.map((d) => (
+                            <button
+                              key={d}
+                              type="button"
+                              onClick={() => { setDepartment(d); setDeptPickerOpen(false); }}
+                              className="w-full text-left px-2.5 py-1.5 text-sm rounded-lg hover:bg-muted flex items-center justify-between"
+                            >
+                              <span className="truncate">{d}</span>
+                              {department === d && <Check className="h-3.5 w-3.5 text-foreground shrink-0" />}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground italic text-center py-2 px-2">
+                          Sin departamentos · añade desde /ajustes/empresa/departamentos
+                        </p>
+                      )}
+                    </PopoverContent>
+                  </Popover>
                 </Field>
               </div>
 

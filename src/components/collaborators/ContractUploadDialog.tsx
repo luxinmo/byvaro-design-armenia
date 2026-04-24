@@ -21,7 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/Switch";
 import {
-  FileSignature, Upload, X, Plus, Mail, AtSign, Phone, IdCard,
+  FileSignature, FileText, Upload, X, Plus, Mail, AtSign, Phone, IdCard,
   Building2, Check, ArrowLeft, ArrowRight, Send, Clock, Pencil,
   GripVertical, CheckCircle2, AlertTriangle, Calendar as CalendarIcon,
 } from "lucide-react";
@@ -153,8 +153,10 @@ interface Props {
 export function ContractUploadDialog({ open, onOpenChange, agency, actor }: Props) {
   const [step, setStep] = useState<Step>("documento");
 
-  /* Paso 1 · Documento */
-  const [file, setFile] = useState<File | null>(null);
+  /* Paso 1 · Documento(s) · permitimos subir varios PDFs · cada
+     uno se convierte en un contrato independiente que comparte
+     firmantes + metadata del wizard. */
+  const [files, setFiles] = useState<File[]>([]);
   const [title, setTitle] = useState("");
   const [comision, setComision] = useState<string>("");
   const [duracionMeses, setDuracionMeses] = useState<string>("12");
@@ -178,7 +180,7 @@ export function ContractUploadDialog({ open, onOpenChange, agency, actor }: Prop
   useEffect(() => {
     if (!open) return;
     setStep("documento");
-    setFile(null);
+    setFiles([]);
     setTitle(`Contrato de colaboración · ${agency.name}`);
     setComision(agency.comisionMedia ? String(agency.comisionMedia) : "");
     setDuracionMeses("12");
@@ -196,13 +198,23 @@ export function ContractUploadDialog({ open, onOpenChange, agency, actor }: Prop
     setEditingIdx(null);
   }, [open, agency.id, agency.name, agency.comisionMedia]);
 
-  const pickFile = (f: File | null) => {
-    if (!f) return;
-    if (f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) {
-      toast.error("Solo se permiten archivos PDF."); return;
-    }
-    setFile(f);
+  /** Añade uno o varios PDFs al listado. Dedupe por nombre+tamaño. */
+  const addFiles = (list: FileList | File[] | null) => {
+    if (!list) return;
+    const arr = Array.from(list).filter((f) => {
+      if (f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) {
+        toast.error(`${f.name} no es un PDF`); return false;
+      }
+      return true;
+    });
+    if (arr.length === 0) return;
+    setFiles((prev) => {
+      const key = (f: File) => `${f.name}·${f.size}`;
+      const existing = new Set(prev.map(key));
+      return [...prev, ...arr.filter((f) => !existing.has(key(f)))];
+    });
   };
+  const removeFile = (idx: number) => setFiles((prev) => prev.filter((_, i) => i !== idx));
 
   /* ─── Idioma · cambio silencioso si no has editado el texto ─── */
   const handleLangChange = (next: Lang) => {
@@ -252,7 +264,7 @@ export function ContractUploadDialog({ open, onOpenChange, agency, actor }: Prop
     [signers],
   );
   const validSigners = signerValidity.filter((x) => x.valid);
-  const canContinueStep1 = !!file && title.trim().length > 0;
+  const canContinueStep1 = files.length > 0 && title.trim().length > 0;
   const canContinueStep2 = validSigners.length > 0;
   const canSendStep3 = subject.trim().length > 0 && message.trim().length > 0;
 
@@ -282,30 +294,41 @@ export function ContractUploadDialog({ open, onOpenChange, agency, actor }: Prop
 
   /* ─── A · Enviar a firmar via Firmafy (flujo normal) ─── */
   const handleSendToFirmafy = () => {
-    if (!file) return;
+    if (files.length === 0) return;
     const finalSigners = buildFinalSigners();
-    const ct = uploadContract({
-      agencyId: agency.id,
-      title: title.trim(),
-      pdfFilename: file.name,
-      pdfSize: file.size,
-      signers: finalSigners,
-      comision: comision ? Number(comision) : undefined,
-      duracionMeses: duracionMeses ? Number(duracionMeses) : undefined,
-      subject: subject.trim() || undefined,
-      message: message.trim() || undefined,
-      language,
-      signerPriority,
-      expiresAt: expiresAtMs ?? undefined,
-      actor,
-    });
-    sendContractToSign(ct.id, actor);
-    recordContractSent(agency.id, actor ?? { name: "Sistema" }, ct.title);
-    recordCompanyAny(agency.id, "contract_sent", "Contrato enviado a firmar",
-      `${ct.title} · firmantes: ${finalSigners.map((s) => s.email).join(", ")}`, actor);
-    toast.success("Contrato enviado a firmar", {
-      description: finalSigners.map((s) => s.email).join(", "),
-    });
+    const baseTitle = title.trim();
+    /* Un contrato por PDF · si hay varios, el título incluye el
+       nombre del fichero para distinguirlos. */
+    for (const f of files) {
+      const ctTitle = files.length === 1
+        ? baseTitle
+        : `${baseTitle} · ${f.name.replace(/\.pdf$/i, "")}`;
+      const ct = uploadContract({
+        agencyId: agency.id,
+        title: ctTitle,
+        pdfFilename: f.name,
+        pdfSize: f.size,
+        signers: finalSigners,
+        comision: comision ? Number(comision) : undefined,
+        duracionMeses: duracionMeses ? Number(duracionMeses) : undefined,
+        subject: subject.trim() || undefined,
+        message: message.trim() || undefined,
+        language,
+        signerPriority,
+        expiresAt: expiresAtMs ?? undefined,
+        actor,
+      });
+      sendContractToSign(ct.id, actor);
+      recordContractSent(agency.id, actor ?? { name: "Sistema" }, ct.title);
+      recordCompanyAny(agency.id, "contract_sent", "Contrato enviado a firmar",
+        `${ct.title} · firmantes: ${finalSigners.map((s) => s.email).join(", ")}`, actor);
+    }
+    toast.success(
+      files.length === 1
+        ? "Contrato enviado a firmar"
+        : `${files.length} contratos enviados a firmar`,
+      { description: finalSigners.map((s) => s.email).join(", ") },
+    );
     onOpenChange(false);
   };
 
@@ -350,7 +373,10 @@ export function ContractUploadDialog({ open, onOpenChange, agency, actor }: Prop
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5">
           {step === "documento"  && (
             <StepDocumento
-              file={file} onFile={pickFile} dragging={dragging} setDragging={setDragging}
+              files={files}
+              onAddFiles={addFiles}
+              onRemoveFile={removeFile}
+              dragging={dragging} setDragging={setDragging}
               title={title} setTitle={setTitle}
               comision={comision} setComision={setComision}
               duracion={duracionMeses} setDuracion={setDuracionMeses}
@@ -480,11 +506,12 @@ function Stepper({ current }: { current: Step }) {
  * ════════════════════════════════════════════════════════════════ */
 
 function StepDocumento({
-  file, onFile, dragging, setDragging,
+  files, onAddFiles, onRemoveFile, dragging, setDragging,
   title, setTitle, comision, setComision, duracion, setDuracion,
 }: {
-  file: File | null;
-  onFile: (f: File | null) => void;
+  files: File[];
+  onAddFiles: (list: FileList | File[] | null) => void;
+  onRemoveFile: (idx: number) => void;
   dragging: boolean;
   setDragging: (v: boolean) => void;
   title: string; setTitle: (v: string) => void;
@@ -494,52 +521,69 @@ function StepDocumento({
   return (
     <div className="space-y-4">
       <div>
-        <Label>Archivo PDF</Label>
+        <Label>
+          {files.length === 0
+            ? "Archivos PDF"
+            : `${files.length} ${files.length === 1 ? "archivo PDF" : "archivos PDF"}`}
+        </Label>
         <label
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
-          onDrop={(e) => { e.preventDefault(); setDragging(false); onFile(e.dataTransfer.files?.[0] ?? null); }}
+          onDrop={(e) => { e.preventDefault(); setDragging(false); onAddFiles(e.dataTransfer.files); }}
           className={cn(
-            "mt-1.5 block cursor-pointer rounded-2xl border-2 border-dashed px-4 py-6 text-center transition-colors",
+            "mt-1.5 block cursor-pointer rounded-2xl border-2 border-dashed px-4 py-5 text-center transition-colors",
             dragging ? "border-foreground/40 bg-muted/40" : "border-border bg-muted/20 hover:border-foreground/20",
           )}
         >
           <input
             type="file"
             accept=".pdf,application/pdf"
-            onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+            multiple
+            onChange={(e) => { onAddFiles(e.target.files); e.target.value = ""; }}
             className="sr-only"
           />
-          {file ? (
-            <div className="flex items-center gap-3 justify-center">
-              <span className="h-10 w-10 rounded-lg bg-foreground/5 grid place-items-center">
-                <FileSignature className="h-5 w-5 text-foreground" strokeWidth={1.75} />
-              </span>
-              <div className="text-left min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate">{file.name}</p>
-                <p className="text-[11px] text-muted-foreground tabular-nums">{formatSize(file.size)}</p>
-              </div>
-              <button
-                type="button"
-                onClick={(e) => { e.preventDefault(); onFile(null); }}
-                className="h-7 w-7 inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
-                aria-label="Quitar archivo"
-              >
-                <X className="h-3.5 w-3.5" strokeWidth={2} />
-              </button>
-            </div>
-          ) : (
-            <>
-              <Upload className="h-6 w-6 text-muted-foreground/60 mx-auto mb-2" strokeWidth={1.5} />
-              <p className="text-sm font-medium text-foreground">Arrastra el PDF aquí o haz click</p>
-              <p className="text-[11px] text-muted-foreground mt-1">Formato A4 · máx 20 MB</p>
-            </>
-          )}
+          <Upload className="h-5 w-5 text-muted-foreground/60 mx-auto mb-1.5" strokeWidth={1.5} />
+          <p className="text-sm font-medium text-foreground">
+            {files.length === 0 ? "Arrastra PDFs aquí o haz click" : "Añadir más archivos"}
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Puedes seleccionar uno o varios · cada PDF se convierte en un contrato independiente.
+          </p>
         </label>
+
+        {/* Lista de archivos seleccionados debajo del drop zone */}
+        {files.length > 0 && (
+          <ul className="mt-2 space-y-1.5">
+            {files.map((f, i) => (
+              <li
+                key={`${f.name}-${f.size}-${i}`}
+                className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2"
+              >
+                <span className="h-8 w-8 rounded-lg bg-destructive/5 grid place-items-center shrink-0">
+                  <FileText className="h-4 w-4 text-destructive" strokeWidth={1.75} />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{f.name}</p>
+                  <p className="text-[11px] text-muted-foreground tabular-nums">{formatSize(f.size)}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onRemoveFile(i)}
+                  className="h-7 w-7 inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
+                  aria-label={`Quitar ${f.name}`}
+                >
+                  <X className="h-3.5 w-3.5" strokeWidth={2} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div>
-        <Label>Título del contrato</Label>
+        <Label>
+          {files.length > 1 ? "Título base (se añadirá el nombre de cada PDF)" : "Título del contrato"}
+        </Label>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}

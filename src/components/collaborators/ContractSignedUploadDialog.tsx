@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
-  FileSignature, Upload, X, Plus, Calendar as CalendarIcon, Pencil,
+  FileSignature, FileText, Upload, X, Plus, Calendar as CalendarIcon, Pencil,
   CheckCircle2, AlertTriangle, ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -67,7 +67,7 @@ interface Props {
 }
 
 export function ContractSignedUploadDialog({ open, onOpenChange, agency, actor }: Props) {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [title, setTitle] = useState("");
   const [comision, setComision] = useState<string>("");
   const [duracionMeses, setDuracionMeses] = useState<string>("12");
@@ -79,7 +79,7 @@ export function ContractSignedUploadDialog({ open, onOpenChange, agency, actor }
 
   useEffect(() => {
     if (!open) return;
-    setFile(null);
+    setFiles([]);
     setTitle(`Contrato firmado · ${agency.name}`);
     setComision(agency.comisionMedia ? String(agency.comisionMedia) : "");
     setDuracionMeses("12");
@@ -89,13 +89,23 @@ export function ContractSignedUploadDialog({ open, onOpenChange, agency, actor }
     setEditingIdx(null);
   }, [open, agency.id, agency.name, agency.comisionMedia]);
 
-  const pickFile = (f: File | null) => {
-    if (!f) return;
-    if (f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) {
-      toast.error("Solo se permiten archivos PDF."); return;
-    }
-    setFile(f);
+  /** Añade uno o varios PDFs al listado (dedupe). */
+  const addFiles = (list: FileList | File[] | null) => {
+    if (!list) return;
+    const arr = Array.from(list).filter((f) => {
+      if (f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) {
+        toast.error(`${f.name} no es un PDF`); return false;
+      }
+      return true;
+    });
+    if (arr.length === 0) return;
+    setFiles((prev) => {
+      const key = (f: File) => `${f.name}·${f.size}`;
+      const existing = new Set(prev.map(key));
+      return [...prev, ...arr.filter((f) => !existing.has(key(f)))];
+    });
   };
+  const removeFile = (idx: number) => setFiles((prev) => prev.filter((_, i) => i !== idx));
 
   /* Archivo ya firmado · firmantes OPCIONALES. Solo exigimos nombre
      si el usuario añade alguno (no ensuciamos la lista con entries
@@ -109,7 +119,7 @@ export function ContractSignedUploadDialog({ open, onOpenChange, agency, actor }
     [signers],
   );
   const validSigners = signerValidity.filter((x) => x.valid);
-  const canSubmit = !!file && title.trim().length > 0 && !!signedDate;
+  const canSubmit = files.length > 0 && title.trim().length > 0 && !!signedDate;
 
   const handlePickerAdd = (signer: ContractSigner) => {
     const draft: Draft = { ...signer, juridica: !!(signer.empresa || signer.cif) };
@@ -122,7 +132,7 @@ export function ContractSignedUploadDialog({ open, onOpenChange, agency, actor }
   };
 
   const handleSubmit = () => {
-    if (!file) return;
+    if (files.length === 0) return;
     const finalSigners: ContractSigner[] = validSigners.map((x) => {
       const s = x.signer;
       return {
@@ -137,26 +147,37 @@ export function ContractSignedUploadDialog({ open, onOpenChange, agency, actor }
       };
     });
     const signedAt = new Date(`${signedDate}T12:00:00`).getTime();
-    const ct = uploadContract({
-      agencyId: agency.id,
-      title: title.trim(),
-      pdfFilename: file.name,
-      pdfSize: file.size,
-      signers: finalSigners,
-      comision: comision ? Number(comision) : undefined,
-      duracionMeses: duracionMeses ? Number(duracionMeses) : undefined,
-      alreadySignedAt: signedAt,
-      /* Por defecto marcamos todos los firmantes como firmados ·
-         representamos un contrato histórico firmado entero. */
-      actor,
-    });
-    recordContractSigned(agency.id, actor ?? { name: "Fuera de Byvaro" }, ct.title);
-    recordCompanyAny(agency.id, "contract_signed",
-      "Contrato archivado como firmado",
-      `${ct.title} · firmado fuera de Byvaro`, actor);
-    toast.success("Archivado como firmado", {
-      description: `${ct.title} · ${finalSigners.length} firmante${finalSigners.length === 1 ? "" : "s"}`,
-    });
+    const baseTitle = title.trim();
+    /* Un contrato por PDF · si hay varios, sufijamos con el nombre
+       del fichero para distinguirlos en la lista. */
+    for (const f of files) {
+      const ctTitle = files.length === 1
+        ? baseTitle
+        : `${baseTitle} · ${f.name.replace(/\.pdf$/i, "")}`;
+      const ct = uploadContract({
+        agencyId: agency.id,
+        title: ctTitle,
+        pdfFilename: f.name,
+        pdfSize: f.size,
+        signers: finalSigners,
+        comision: comision ? Number(comision) : undefined,
+        duracionMeses: duracionMeses ? Number(duracionMeses) : undefined,
+        alreadySignedAt: signedAt,
+        actor,
+      });
+      recordContractSigned(agency.id, actor ?? { name: "Fuera de Byvaro" }, ct.title);
+      recordCompanyAny(agency.id, "contract_signed",
+        "Contrato archivado como firmado",
+        `${ct.title} · firmado fuera de Byvaro`, actor);
+    }
+    toast.success(
+      files.length === 1
+        ? "Archivado como firmado"
+        : `${files.length} contratos archivados como firmados`,
+      { description: finalSigners.length > 0
+          ? `${finalSigners.length} firmante${finalSigners.length === 1 ? "" : "s"}`
+          : "Sin firmantes declarados" },
+    );
     onOpenChange(false);
   };
 
