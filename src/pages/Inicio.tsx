@@ -17,7 +17,7 @@
  * home (`AgencyHome`).
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   CalendarDays, FileText, Home, Phone, Mail, MessageSquare,
@@ -36,6 +36,7 @@ import {
 import { eventsInDay, formatTime, isToday as isTodayDate } from "@/lib/calendarHelpers";
 import { registros } from "@/data/records";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
+import { getAllTeamMembers, memberInitials, getMemberAvatarUrl } from "@/lib/team";
 
 /* ═══════════════════════════════════════════════════════════════════
    PAGE
@@ -114,33 +115,54 @@ type ActivitySummary = {
 
 function ActividadesPendientes() {
   const allEvents = useCalendarEvents();
+  const teamMembers = useMemo(
+    () => getAllTeamMembers().filter((m) => !m.status || m.status === "active"),
+    [],
+  );
+  /* Filtro por usuario · null = todo el equipo. */
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const summaries = useMemo<ActivitySummary[]>(() => {
     const today = new Date();
+    const byUser = (ev: CalendarEvent) =>
+      !selectedUserId || ev.assigneeUserId === selectedUserId;
 
-    /* Registros pendientes */
-    const regs = registros.filter((r) => r.estado === "pendiente");
+    /* Registros pendientes · son cola compartida del promotor · no
+       tienen assigneeUserId natural hasta que se decide. Si filtro
+       por usuario, muestro sólo los que YA están siendo trabajados
+       por ese usuario (decidedByUserId) · si no hay filtro, todos. */
+    const regs = registros.filter((r) => {
+      if (r.estado !== "pendiente") return false;
+      if (!selectedUserId) return true;
+      return r.decidedByUserId === selectedUserId;
+    });
     const regsDup = regs.filter((r) => r.matchPercentage >= 70).length;
 
-    /* Visitas pending + sin evaluar */
+    /* Visitas pending + sin evaluar (filtradas por usuario). */
     const vPending = allEvents.filter(
-      (ev) => ev.type === "visit" && ev.status === "pending-confirmation",
+      (ev) => ev.type === "visit" && ev.status === "pending-confirmation" && byUser(ev),
     );
     const vNoEval = allEvents.filter(
-      (ev) => ev.type === "visit" && ev.status === "done" && !(ev as any).evaluation,
+      (ev) => ev.type === "visit" && ev.status === "done" && !(ev as any).evaluation && byUser(ev),
     );
     const visitasTotal = vPending.length + vNoEval.length;
 
-    /* Llamadas de hoy pendientes */
+    /* Llamadas de hoy pendientes (filtradas por usuario). */
     const calls = eventsInDay(allEvents, today).filter(
-      (ev) => ev.type === "call" && ev.status !== "cancelled" && ev.status !== "done",
+      (ev) => ev.type === "call" && ev.status !== "cancelled" && ev.status !== "done" && byUser(ev),
     );
 
-    /* Mock counts */
-    const emails = 4;
-    const whatsapps = 2;
-    const tareasTotal = 3;
-    const tareasVencidas = 1;
+    /* Mock counts · si hay filtro por usuario, dividimos los counts
+       por el número de miembros para que no sea visualmente confuso. */
+    const emailsAll = 4;
+    const whatsappsAll = 2;
+    const tareasTotalAll = 3;
+    const tareasVencidasAll = 1;
+    const divisor = selectedUserId ? Math.max(1, teamMembers.length) : 1;
+    const emails = Math.ceil(emailsAll / divisor);
+    const whatsapps = Math.ceil(whatsappsAll / divisor);
+    const tareasTotal = Math.ceil(tareasTotalAll / divisor);
+    const tareasVencidas = selectedUserId ? Math.min(1, tareasVencidasAll) : tareasVencidasAll;
 
     return [
       {
@@ -193,21 +215,73 @@ function ActividadesPendientes() {
         tone: tareasVencidas > 0 ? "destructive" : "primary",
       },
     ];
-  }, [allEvents]);
+  }, [allEvents, selectedUserId, teamMembers.length]);
 
   const totalAll = summaries.reduce((s, x) => s + x.count, 0);
+  const selectedMember = selectedUserId
+    ? teamMembers.find((m) => m.id === selectedUserId)
+    : null;
 
   return (
     <section className="bg-card border border-border rounded-2xl shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
-      <header className="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-border">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold flex items-center gap-2">
-            <AlertCircle className="h-3.5 w-3.5 text-warning shrink-0" strokeWidth={1.75} />
-            Actividades pendientes
-          </h3>
-          <p className="text-[11.5px] text-muted-foreground mt-0.5 tabular-nums">
-            {totalAll} en total · agrupadas por tipo
-          </p>
+      <header className="px-4 sm:px-5 py-4 border-b border-border">
+        <div className="flex items-center justify-between gap-3 min-w-0">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <AlertCircle className="h-3.5 w-3.5 text-warning shrink-0" strokeWidth={1.75} />
+              Actividades pendientes
+            </h3>
+            <p className="text-[11.5px] text-muted-foreground mt-0.5 tabular-nums">
+              {totalAll} en total · {selectedMember ? selectedMember.name.split(" ")[0] : "todo el equipo"}
+            </p>
+          </div>
+        </div>
+
+        {/* Stripe de usuarios · click filtra los contadores. */}
+        <div className="mt-3 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          <button
+            onClick={() => setSelectedUserId(null)}
+            className={cn(
+              "inline-flex items-center gap-1.5 h-8 pl-2 pr-3 rounded-full border text-[11px] font-medium transition-colors shrink-0",
+              selectedUserId === null
+                ? "bg-foreground text-background border-foreground"
+                : "bg-card text-muted-foreground border-border hover:bg-muted",
+            )}
+          >
+            <div className="h-5 w-5 rounded-full bg-muted grid place-items-center shrink-0">
+              <Users className={cn(
+                "h-3 w-3",
+                selectedUserId === null ? "text-background" : "text-muted-foreground",
+              )} strokeWidth={1.75} />
+            </div>
+            Todo el equipo
+          </button>
+          {teamMembers.map((m) => {
+            const active = selectedUserId === m.id;
+            const url = getMemberAvatarUrl(m);
+            return (
+              <button
+                key={m.id}
+                onClick={() => setSelectedUserId(active ? null : m.id)}
+                title={m.name}
+                className={cn(
+                  "inline-flex items-center gap-1.5 h-8 pl-1 pr-3 rounded-full border text-[11px] font-medium transition-colors shrink-0",
+                  active
+                    ? "bg-foreground text-background border-foreground"
+                    : "bg-card text-muted-foreground border-border hover:bg-muted",
+                )}
+              >
+                {url ? (
+                  <img src={url} alt="" className="h-6 w-6 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className="h-6 w-6 rounded-full bg-muted grid place-items-center text-[9px] font-bold shrink-0">
+                    {memberInitials(m)}
+                  </div>
+                )}
+                {m.name.split(" ")[0]}
+              </button>
+            );
+          })}
         </div>
       </header>
 
