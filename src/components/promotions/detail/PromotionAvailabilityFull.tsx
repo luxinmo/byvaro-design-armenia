@@ -1698,6 +1698,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
         onOpenChange={(v) => !v && setDetailUnitId(null)}
         unit={detailUnitId ? allUnits.find((u) => u.id === detailUnitId) ?? null : null}
         isCollaboratorView={isCollaboratorView}
+        onEdit={(u) => setEditUnitId(u.id)}
         onEditPhotos={(u) => setEditUnitId(u.id)}
         onUpdateUnit={handleUnitUpdate}
         promotionCtx={promotionCtx}

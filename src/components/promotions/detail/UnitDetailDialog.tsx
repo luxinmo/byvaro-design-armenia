@@ -735,31 +735,19 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
                   </Button>
                   {!isCollaboratorView && unit.status !== "sold" && unit.status !== "withdrawn" && (
                     <>
-                      {/* Editar unidad · activa editMode (edición inline
-                          de datos) + destapa el botón "Editar fotos" de
-                          la galería que abre UnitEditDialog.
-                          Si el caller inyecta un onEdit custom (p. ej.
-                          un wizard), se llama antes de togglear. */}
+                      {/* Editar unidad · abre el UnitEditDialog completo
+                          (mismo modal que al crear la unidad en el
+                          wizard) via el prop onEdit / onEditPhotos. */}
                       <Button
-                        variant={editMode ? "default" : "outline"}
+                        variant="outline"
                         onClick={() => {
                           if (onEdit) onEdit(unit);
-                          setEditMode((v) => !v);
+                          else if (onEditPhotos) onEditPhotos(unit);
                         }}
                         className="rounded-full h-10 text-xs gap-1.5 border-border/60"
                       >
-                        <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} />
-                        {editMode ? "Terminar edición" : "Editar unidad"}
+                        <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} /> Editar unidad
                       </Button>
-                      {editMode && onEditPhotos && (
-                        <Button
-                          variant="outline"
-                          onClick={() => onEditPhotos(unit)}
-                          className="rounded-full h-10 text-xs gap-1.5 border-border/60"
-                        >
-                          <ImageIcon className="h-3.5 w-3.5" strokeWidth={1.5} /> Editar fotos
-                        </Button>
-                      )}
                       {unit.status === "available" && (
                         <Button variant="secondary" className="rounded-full h-10 text-xs gap-1.5">
                           <Bookmark className="h-3.5 w-3.5" strokeWidth={1.5} /> Reservar
