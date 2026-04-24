@@ -24,7 +24,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ChevronLeft, ChevronRight, Plus, Home, Phone, Users, Ban, Bell,
-  CalendarDays, CalendarCheck2, Filter, X,
+  CalendarDays, Filter, X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -81,11 +81,8 @@ export default function Calendario() {
   /* En mobile, vista Mes muestra además la lista del día seleccionado
      abajo (estilo Apple Calendar). */
   const [mobileSelectedDay, setMobileSelectedDay] = useState<Date>(() => new Date());
-  /* Sidebar de agentes · drawer en mobile. */
-  const [mobileAgentsOpen, setMobileAgentsOpen] = useState(false);
-  /* Focus filter · si hay un usuario seleccionado, se ignoran los
-     toggles individuales de la sidebar y se muestra SOLO ese miembro.
-     Es un shortcut para el caso "quiero ver lo de Laura". */
+  /* Focus filter · UserContextSwitcher del header.
+     `null` = todo el equipo. `<id>` = solo ese agente. */
   const [focusUserId, setFocusUserId] = useState<string | null>(null);
   /* Al cambiar entre mobile y desktop, ajusta vistas que no encajan. */
   useEffect(() => {
@@ -94,43 +91,20 @@ export default function Calendario() {
     }
   }, [isMobile, viewMode]);
 
-  /* ─── Multi-calendario · qué agentes se muestran.
-     Por defecto: todos los miembros activos encendidos. */
-  const [enabledAgents, setEnabledAgents] = useState<Set<string>>(() => {
-    return new Set(
-      teamMembers
-        .filter((m) => !m.status || m.status === "active")
-        .map((m) => m.id),
-    );
-  });
-  const toggleAgent = (id: string) => {
-    setEnabledAgents((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
   /* ─── Filtros ─── */
   const [typeFilter, setTypeFilter] = useState<Set<CalendarEventType>>(new Set());
   const [statusFilter, setStatusFilter] = useState<Set<CalendarEventStatus>>(new Set());
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
 
-  /* ─── Eventos filtrados · todas las vistas los consumen.
-     · Si hay focusUserId, solo ese agente (shortcut del switcher).
-     · Si no, respeta los toggles de la sidebar multi-calendario. ─── */
+  /* ─── Eventos filtrados · todas las vistas los consumen. ─── */
   const filteredEvents = useMemo(() => {
     return allEvents.filter((ev) => {
-      if (focusUserId) {
-        if (ev.assigneeUserId !== focusUserId) return false;
-      } else if (!enabledAgents.has(ev.assigneeUserId)) {
-        return false;
-      }
+      if (focusUserId && ev.assigneeUserId !== focusUserId) return false;
       if (typeFilter.size > 0 && !typeFilter.has(ev.type)) return false;
       if (statusFilter.size > 0 && !statusFilter.has(ev.status)) return false;
       return true;
     });
-  }, [allEvents, enabledAgents, typeFilter, statusFilter, focusUserId]);
+  }, [allEvents, typeFilter, statusFilter, focusUserId]);
 
   /* ─── Navegación ─── */
   const goToday = () => setViewDate(new Date());
@@ -250,15 +224,6 @@ export default function Calendario() {
             <p className="text-sm font-semibold text-foreground ml-1 sm:ml-2 capitalize truncate flex-1 min-w-0">
               {headerTitle}
             </p>
-            {/* Botón 'Agentes' mobile · abre drawer con los calendarios */}
-            <button
-              onClick={() => setMobileAgentsOpen(true)}
-              className="lg:hidden inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-border bg-card text-[12px] font-medium hover:bg-muted"
-              aria-label="Agentes"
-            >
-              <Users className="h-3 w-3" strokeWidth={1.75} />
-              {enabledAgents.size}
-            </button>
           </div>
 
           {/* Fila 2 mobile · segmented + filtros */}
@@ -326,21 +291,10 @@ export default function Calendario() {
         </div>
       </section>
 
-      {/* ══════ Cuerpo · sidebar + vista ══════ */}
+      {/* ══════ Cuerpo · vista a ancho completo. El filtro por agente
+         vive ahora en el UserContextSwitcher del header. ══════ */}
       <section className="px-4 sm:px-6 lg:px-8 mt-5 pb-10">
-        <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-4">
-          {/* Sidebar · multi-calendario (desktop) */}
-          <AgentSidebar
-            teamMembers={teamMembers}
-            enabledAgents={enabledAgents}
-            toggleAgent={toggleAgent}
-            onEnableAll={() =>
-              setEnabledAgents(new Set(teamMembers.filter((m) => !m.status || m.status === "active").map((m) => m.id)))
-            }
-            onDisableAll={() => setEnabledAgents(new Set())}
-          />
-
-          {/* Panel de la vista */}
+        <div className="max-w-[1600px] mx-auto">
           <div className="min-w-0">
             {viewMode === "semana" && (
               <WeekView
@@ -388,40 +342,6 @@ export default function Calendario() {
         </div>
       </section>
 
-      {/* Drawer de Agentes · solo mobile · backdrop simple. */}
-      {mobileAgentsOpen && (
-        <div
-          className="lg:hidden fixed inset-0 z-40 bg-foreground/40 backdrop-blur-sm"
-          onClick={() => setMobileAgentsOpen(false)}
-        >
-          <div
-            className="absolute left-0 top-0 bottom-0 w-[280px] bg-card shadow-soft-lg overflow-y-auto overscroll-contain p-3"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold">Mis calendarios</h3>
-              <button
-                onClick={() => setMobileAgentsOpen(false)}
-                className="h-8 w-8 inline-flex items-center justify-center rounded-full hover:bg-muted"
-                aria-label="Cerrar"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <AgentSidebar
-              teamMembers={teamMembers}
-              enabledAgents={enabledAgents}
-              toggleAgent={toggleAgent}
-              onEnableAll={() =>
-                setEnabledAgents(new Set(teamMembers.filter((m) => !m.status || m.status === "active").map((m) => m.id)))
-              }
-              onDisableAll={() => setEnabledAgents(new Set())}
-              compact
-            />
-          </div>
-        </div>
-      )}
-
       {/* FAB de crear · solo mobile · esquina inferior derecha.
          En desktop el CTA vive en el header (hidden lg:flex). */}
       <button
@@ -440,110 +360,6 @@ export default function Calendario() {
         preset={createPreset}
       />
     </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   SIDEBAR · multi-calendario (agentes)
-   ═══════════════════════════════════════════════════════════════════ */
-
-function AgentSidebar({
-  teamMembers, enabledAgents, toggleAgent, onEnableAll, onDisableAll, compact,
-}: {
-  teamMembers: ReturnType<typeof getAllTeamMembers>;
-  enabledAgents: Set<string>;
-  toggleAgent: (id: string) => void;
-  onEnableAll: () => void;
-  onDisableAll: () => void;
-  /** Si true, el componente no añade `hidden lg:block` · se usa dentro
-   *  del drawer mobile. */
-  compact?: boolean;
-}) {
-  const actives = teamMembers.filter((m) => !m.status || m.status === "active");
-
-  return (
-    <aside className={cn(compact ? "block" : "hidden lg:block")}>
-      <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
-        <header className="px-4 py-3 border-b border-border flex items-center justify-between">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Mis calendarios
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={enabledAgents.size === actives.length ? onDisableAll : onEnableAll}
-              className="text-[10.5px] font-medium text-muted-foreground hover:text-foreground"
-            >
-              {enabledAgents.size === actives.length ? "Ninguno" : "Todos"}
-            </button>
-          </div>
-        </header>
-
-        <ul className="py-1.5">
-          {actives.map((m) => {
-            const color = getMemberCalendarColor(m.id);
-            const on = enabledAgents.has(m.id);
-            return (
-              <li key={m.id}>
-                <button
-                  onClick={() => toggleAgent(m.id)}
-                  className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-muted/40 transition-colors"
-                >
-                  <span
-                    className={cn(
-                      "h-3.5 w-3.5 rounded-[4px] border-2 border-transparent transition-colors shrink-0",
-                      on ? color : "bg-muted border-border",
-                    )}
-                  />
-                  {getMemberAvatarUrl(m) ? (
-                    <img src={getMemberAvatarUrl(m)!} alt="" className="h-6 w-6 rounded-full object-cover shrink-0" />
-                  ) : (
-                    <div className="h-6 w-6 rounded-full bg-muted grid place-items-center text-[9px] font-bold shrink-0">
-                      {memberInitials(m)}
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1 text-left">
-                    <p className={cn("text-[12px] font-medium truncate", on ? "text-foreground" : "text-muted-foreground/60 line-through")}>
-                      {m.name}
-                    </p>
-                    {m.jobTitle && (
-                      <p className="text-[10px] text-muted-foreground/70 truncate">{m.jobTitle}</p>
-                    )}
-                  </div>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-
-        <footer className="px-3 py-2.5 border-t border-border bg-muted/30">
-          <button
-            onClick={() => toast.info("Conectar Google Calendar · disponible al enlazar backend (TODO)")}
-            className="w-full inline-flex items-center justify-center gap-1.5 h-8 rounded-full border border-dashed border-border bg-card text-[11px] font-medium text-foreground hover:bg-muted transition-colors"
-          >
-            <CalendarCheck2 className="h-3 w-3" strokeWidth={1.75} />
-            Conectar Google Calendar
-          </button>
-        </footer>
-      </div>
-
-      {/* Leyenda tipos · ayuda a leer colores en las vistas densas */}
-      <div className="mt-3 rounded-2xl border border-border bg-card p-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-          Tipos de evento
-        </p>
-        <ul className="space-y-1.5">
-          {(Object.keys(eventTypeConfig) as CalendarEventType[]).map((t) => {
-            const cfg = eventTypeConfig[t];
-            return (
-              <li key={t} className="flex items-center gap-2 text-[11.5px] text-foreground">
-                <span className={cn("h-2 w-2 rounded-full", cfg.dotClass)} />
-                {cfg.label}
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    </aside>
   );
 }
 

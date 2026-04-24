@@ -42,6 +42,11 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   promotionName: string;
   promotionId: string;
+  /** Si se indica, el dialog arranca directamente en el paso
+   *  "conditions" con la agencia preseleccionada — útil cuando se
+   *  invoca desde la ficha de una agencia (p.ej. click en "Compartir
+   *  con Nordic" sobre una promoción concreta). */
+  defaultAgencyId?: string;
 }
 
 type Step = "choose" | "email" | "matched" | "pick" | "conditions" | "crosssell";
@@ -122,7 +127,7 @@ const maskEmail = (email: string): string => {
   return `${local[0]}${"*".repeat(Math.max(3, local.length - 2))}${local[local.length - 1]}@${domain}`;
 };
 
-export function SharePromotionDialog({ open, onOpenChange, promotionName, promotionId }: Props) {
+export function SharePromotionDialog({ open, onOpenChange, promotionName, promotionId, defaultAgencyId }: Props) {
   const { invitar } = useInvitaciones();
   const { ids: favoriteIds } = useFavoriteAgencies();
   const [step, setStep] = useState<Step>("choose");
@@ -153,13 +158,17 @@ export function SharePromotionDialog({ open, onOpenChange, promotionName, promot
 
   useEffect(() => {
     if (open) {
-      setStep("choose");
+      /* Si viene con agencia preseleccionada (flujo "compartir con
+         esta agencia" desde la ficha), saltamos al paso de
+         condiciones · la comisión por defecto ya sale aquí. */
+      const preselectOne = !!defaultAgencyId;
+      setStep(preselectOne ? "conditions" : "choose");
       setEmail("");
       setAgencyNameInput("");
       setMatchedAgency(null);
       setPickSource("collaborators");
       setPickQuery("");
-      setSelectedAgencyIds(new Set());
+      setSelectedAgencyIds(preselectOne ? new Set([defaultAgencyId!]) : new Set());
       setPickSort("registros-desc");
       setPickVisibleCount(PICK_PAGE_SIZE);
       setDuration("12");
@@ -170,7 +179,7 @@ export function SharePromotionDialog({ open, onOpenChange, promotionName, promot
       setSplitsEditing(false);
       setCrossSelection(new Set());
     }
-  }, [open]);
+  }, [open, defaultAgencyId]);
 
   const durationLabel = duration === "custom"
     ? `${customDuration} ${customDuration === 1 ? "mes" : "meses"}`

@@ -373,26 +373,16 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
             )}
           </>
         )}
+        </div>
       </section>
 
       {/* ═══════════════════ BLOQUE 2 · Aún sin compartir ═══════════════════ */}
       {notSharedPromos.length > 0 && (
         <section>
           <BlockHeader
-            eyebrow="Bloque 2"
             title="Aún sin compartir"
             subtitle={`${notSharedPromos.length} promoción${notSharedPromos.length === 1 ? "" : "es"} activa${notSharedPromos.length === 1 ? "" : "s"} donde podrías invitar a ${a.name}`}
             tone="primary"
-            right={
-              <button
-                type="button"
-                onClick={() => toast.info("Compartir promoción · próximamente")}
-                className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-foreground text-background text-xs font-semibold hover:bg-foreground/90 transition-colors"
-              >
-                <Share2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-                Compartir varias
-              </button>
-            }
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {notSharedPromos.map((p) => (
