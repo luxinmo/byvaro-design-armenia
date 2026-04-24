@@ -17,7 +17,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   ChevronRight, FileSignature, Home, Plus, Share2,
-  Upload, ArrowRight, Check, MoreHorizontal,
+  Upload, ArrowRight, Check, MoreHorizontal, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -93,6 +93,23 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
     [docRequests],
   );
 
+  /* Cobertura contractual · una promoción está "cubierta" si existe un
+     contrato firmado, no archivado y no expirado/revocado, cuyo `scopePromotionIds`
+     la incluye (o es vacío = cubre todo). El resto son promociones SIN CONTRATO ·
+     trabajar sin marco legal es la incidencia real. */
+  const { uncoveredPromos, hasBlanketSigned } = useMemo(() => {
+    const signed = contracts.filter((c) => !c.archived && c.status === "signed");
+    const blanket = signed.some((c) => !c.scopePromotionIds || c.scopePromotionIds.length === 0);
+    const coveredIds = new Set<string>();
+    if (!blanket) {
+      for (const c of signed) for (const id of c.scopePromotionIds ?? []) coveredIds.add(id);
+    }
+    const uncovered = blanket
+      ? []
+      : sharedPromos.filter((p) => p.active && !coveredIds.has(p.id));
+    return { uncoveredPromos: uncovered, hasBlanketSigned: blanket };
+  }, [contracts, sharedPromos]);
+
   const upcomingVisits = useMemo(() => {
     const base: Record<string, Array<{ when: number; client: string; promo: string; unit: string; status: "confirmada" | "pendiente" }>> = {
       "ag-1": [
@@ -110,7 +127,10 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
   /* "En curso" = trámites normales (contratos + docs a entregar). No
      son incidencias · son trabajo-en-vuelo que avanza solo. */
   const inFlightCount = pendingContracts.length + pendingDocs.length;
-  const pendingCount = inFlightCount + notSharedPromos.length;
+  /* Total accionable que se muestra en el hero · incluye incidencias
+     reales (promos sin contrato), trámites en curso y oportunidades
+     de compartir. */
+  const pendingCount = inFlightCount + notSharedPromos.length + uncoveredPromos.length;
 
   /* ════════════════════════════════════════════════════════════════ */
 
@@ -123,12 +143,12 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
           Estado de la colaboración
         </p>
         <h2 className="text-[15px] sm:text-[17px] font-bold tracking-tight text-foreground leading-snug mt-1">
-          Trabaja en{" "}
+          Compartes{" "}
           <span className="tabular-nums">{sharedActiveCount}</span>
           <span className="text-muted-foreground"> de </span>
           <span className="tabular-nums">{activePromos.length}</span>
           <span className="text-muted-foreground">
-            {activePromos.length === 1 ? " promoción" : " promociones"} activas
+            {activePromos.length === 1 ? " promoción" : " promociones"}
           </span>
           {pendingCount > 0 ? (
             <>
@@ -155,9 +175,11 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
           subtitle={
             sharedPromos.length === 0
               ? "Aún no comparte ninguna promoción"
-              : `${sharedPromos.length} promoción${sharedPromos.length === 1 ? "" : "es"} · ${inFlightCount === 0 ? "sin trámites abiertos" : `${inFlightCount} trámite${inFlightCount === 1 ? "" : "s"} en curso`}`
+              : uncoveredPromos.length > 0
+                ? `${sharedPromos.length} promoción${sharedPromos.length === 1 ? "" : "es"} · ${uncoveredPromos.length} sin contrato firmado`
+                : `${sharedPromos.length} promoción${sharedPromos.length === 1 ? "" : "es"} · ${inFlightCount === 0 ? "todo cubierto y al día" : `${inFlightCount} trámite${inFlightCount === 1 ? "" : "s"} en curso`}`
           }
-          tone={inFlightCount > 0 ? "primary" : "success"}
+          tone={uncoveredPromos.length > 0 ? "warning" : inFlightCount > 0 ? "primary" : "success"}
         />
 
         {sharedPromos.length === 0 ? (
@@ -168,34 +190,79 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
           />
         ) : (
           <>
-            {/* Promociones compartidas · grid */}
+            {/* ⚠ Incidencia real · promociones sin contrato que cubra */}
+            {uncoveredPromos.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onGoTo("documentacion")}
+                className="w-full text-left rounded-2xl border border-warning/30 bg-warning/5 hover:bg-warning/10 p-4 mb-3 transition-colors"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="h-9 w-9 rounded-xl bg-warning/15 text-warning grid place-items-center shrink-0">
+                    <AlertTriangle className="h-4.5 w-4.5" strokeWidth={2} />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground">
+                      {uncoveredPromos.length} promoción{uncoveredPromos.length === 1 ? "" : "es"} sin contrato firmado
+                    </p>
+                    <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-relaxed">
+                      {uncoveredPromos.slice(0, 3).map((p) => p.name).join(" · ")}
+                      {uncoveredPromos.length > 3 ? ` · y ${uncoveredPromos.length - 3} más` : ""}.
+                      Está trabajando sin marco legal que os cubra — sube un contrato y envíalo a firmar.
+                    </p>
+                    <span className="mt-2 inline-flex items-center gap-1 h-7 px-3 rounded-full bg-foreground text-background text-[11.5px] font-semibold">
+                      <Upload className="h-3 w-3" strokeWidth={2.25} />
+                      Subir contrato ahora
+                    </span>
+                  </div>
+                </div>
+              </button>
+            )}
+
+            {/* Promociones compartidas · grid · cada card declara cobertura */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {sharedPromos.map((p) => (
-                <Link
-                  key={p.id}
-                  to={`/promociones/${p.id}?tab=Agencies`}
-                  className="group rounded-2xl border border-border bg-card shadow-soft p-4 hover:-translate-y-0.5 hover:shadow-soft-lg transition-all"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="h-8 w-8 rounded-lg bg-success/10 text-success grid place-items-center shrink-0">
-                      <Check className="h-4 w-4" strokeWidth={2.25} />
-                    </span>
-                    <span className="inline-flex items-center h-5 px-2 rounded-full border border-success/25 bg-success/10 text-[10px] font-medium text-success shrink-0">
-                      Activa
-                    </span>
-                  </div>
-                  <p className="text-sm font-semibold text-foreground mt-3 truncate group-hover:underline">
-                    {p.name}
-                  </p>
-                  {!p.active && (
-                    <p className="text-[11px] text-muted-foreground mt-0.5">Promoción cerrada</p>
-                  )}
-                  <div className="mt-2 inline-flex items-center gap-0.5 text-[11px] text-muted-foreground group-hover:text-foreground transition-colors">
-                    Ver en promoción
-                    <ArrowRight className="h-3 w-3" />
-                  </div>
-                </Link>
-              ))}
+              {sharedPromos.map((p) => {
+                const isUncovered = !hasBlanketSigned && p.active && uncoveredPromos.some((u) => u.id === p.id);
+                return (
+                  <Link
+                    key={p.id}
+                    to={`/promociones/${p.id}?tab=Agencies`}
+                    className={cn(
+                      "group rounded-2xl border bg-card shadow-soft p-4 hover:-translate-y-0.5 hover:shadow-soft-lg transition-all",
+                      isUncovered ? "border-warning/30" : "border-border",
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className={cn(
+                        "h-8 w-8 rounded-lg grid place-items-center shrink-0",
+                        isUncovered ? "bg-warning/10 text-warning" : "bg-success/10 text-success",
+                      )}>
+                        {isUncovered
+                          ? <AlertTriangle className="h-4 w-4" strokeWidth={2} />
+                          : <Check className="h-4 w-4" strokeWidth={2.25} />}
+                      </span>
+                      <span className={cn(
+                        "inline-flex items-center h-5 px-2 rounded-full border text-[10px] font-medium shrink-0",
+                        isUncovered
+                          ? "border-warning/30 bg-warning/10 text-warning"
+                          : "border-success/25 bg-success/10 text-success",
+                      )}>
+                        {isUncovered ? "Sin contrato" : "Cubierta"}
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-foreground mt-3 truncate group-hover:underline">
+                      {p.name}
+                    </p>
+                    {!p.active && (
+                      <p className="text-[11px] text-muted-foreground mt-0.5">Promoción cerrada</p>
+                    )}
+                    <div className="mt-2 inline-flex items-center gap-0.5 text-[11px] text-muted-foreground group-hover:text-foreground transition-colors">
+                      Ver en promoción
+                      <ArrowRight className="h-3 w-3" />
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
 
             {/* Estado · trámites normales en curso (no incidencias) */}

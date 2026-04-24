@@ -26,7 +26,7 @@ import {
 } from "react-router-dom";
 import {
   ArrowLeft, ArrowUpRight, Eye, Mail, Share2, Shield,
-  LayoutGrid, FileSignature, CreditCard, History,
+  LayoutGrid, FileSignature, CreditCard, History, Building2, Receipt,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -39,15 +39,17 @@ import {
 import { promotions } from "@/data/promotions";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { ResumenTab } from "@/components/collaborators/panel/ResumenTab";
+import { DatosTab } from "@/components/collaborators/panel/DatosTab";
 import { DocumentacionTab } from "@/components/collaborators/panel/DocumentacionTab";
 import { PagosTab } from "@/components/collaborators/panel/PagosTab";
+import { FacturasTab } from "@/components/collaborators/panel/FacturasTab";
 import { HistorialTab } from "@/components/collaborators/panel/HistorialTab";
 
 function initials(name: string): string {
   return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
 }
 
-const PANEL_TABS = ["resumen", "documentacion", "pagos", "historial"] as const;
+const PANEL_TABS = ["resumen", "datos", "documentacion", "pagos", "facturas", "historial"] as const;
 type PanelTab = typeof PANEL_TABS[number];
 
 export default function ColaboracionPanel() {
@@ -100,8 +102,10 @@ export default function ColaboracionPanel() {
 
   const tabDefs: Array<{ id: PanelTab; label: string; icon: typeof LayoutGrid }> = [
     { id: "resumen",       label: "Resumen",       icon: LayoutGrid },
+    { id: "datos",         label: "Datos",         icon: Building2 },
     { id: "documentacion", label: "Documentación", icon: FileSignature },
     { id: "pagos",         label: "Pagos",         icon: CreditCard },
+    { id: "facturas",      label: "Facturas",      icon: Receipt },
     { id: "historial",     label: "Historial",     icon: History },
   ];
 
@@ -224,8 +228,10 @@ export default function ColaboracionPanel() {
             onGoTo={(t) => setTab(t)}
           />
         )}
+        {tab === "datos" && <DatosTab agency={a} />}
         {tab === "documentacion" && <DocumentacionTab agency={a} />}
         {tab === "pagos" && <PagosTab agency={a} />}
+        {tab === "facturas" && <FacturasTab agency={a} />}
         {tab === "historial" && <HistorialTab agency={a} />}
       </div>
     </div>

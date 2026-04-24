@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Toaster, toast } from "sonner";
-import { agencies as baseAgencies, getContractStatus, type Agency } from "@/data/agencies";
+import { agencies as baseAgencies, getContractStatus, getAgencyShareStats, type Agency } from "@/data/agencies";
 import { InvitarAgenciaModal } from "@/components/empresa/InvitarAgenciaModal";
 import { useInvitaciones, invitacionToSyntheticAgency } from "@/lib/invitaciones";
 import { useFavoriteAgencies } from "@/lib/favoriteAgencies";

@@ -4,6 +4,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { ConfirmDialogHost } from "@/components/ui/ConfirmDialog";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import Inicio from "@/pages/Inicio";
+import Estadisticas from "@/pages/Estadisticas";
 import Promociones from "@/pages/Promociones";
 import Registros from "@/pages/Registros";
 import Leads from "@/pages/Leads";
@@ -197,6 +198,7 @@ export default function App() {
               <Routes>
                 <Route path="/" element={<Navigate to="/inicio" replace />} />
                 <Route path="/inicio" element={<Inicio />} />
+                <Route path="/estadisticas" element={<Estadisticas />} />
                 <Route path="/promociones" element={<Promociones />} />
                 <Route path="/promociones/:id" element={<PromocionDetalle />} />
                 <Route path="/oportunidades" element={<PromotorOnly><Leads /></PromotorOnly>} />

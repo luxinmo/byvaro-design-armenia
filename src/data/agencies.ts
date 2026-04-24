@@ -542,3 +542,41 @@ export const agencies: Agency[] = [
 export function countAgenciesForPromotion(promotionId: string): number {
   return agencies.filter((a) => a.promotionsCollaborating.includes(promotionId)).length;
 }
+
+/**
+ * Estadísticas de colaboración de UNA agencia respecto al catálogo
+ * real de promociones del promotor.
+ *
+ * `Agency.totalPromotionsAvailable` es mock histórico y mentía — cuenta
+ * genérica puesta a mano en cada agency. La fuente de verdad debe
+ * derivarse del catálogo de `developerOnlyPromotions`:
+ *   - `activeTotal`  · nº de promociones ACTIVAS (publicables) del promotor.
+ *   - `sharedActive` · cuántas de ellas están efectivamente compartidas.
+ *   - `sharedDeclared` · cuántas tiene declaradas en
+ *                        `promotionsCollaborating` aunque algunas ya
+ *                        estén cerradas/incomplete.
+ *
+ * Importa perezoso para evitar ciclo (developerPromotions importa
+ * tipos de promotions; si agencias.ts lo importa arriba podría romper).
+ *
+ * TODO(backend): al conectar, `GET /api/agencias/:id/share-stats`
+ * sustituye esto con números precalculados en el backend.
+ */
+export function getAgencyShareStats(agency: Agency): {
+  activeTotal: number;
+  sharedActive: number;
+  sharedDeclared: number;
+} {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const { developerOnlyPromotions } =
+    require("./developerPromotions") as typeof import("./developerPromotions");
+  const activePromos = developerOnlyPromotions.filter((p) => p.status === "active");
+  const activeIds = new Set(activePromos.map((p) => p.id));
+  const declared = agency.promotionsCollaborating ?? [];
+  const sharedActive = declared.filter((id) => activeIds.has(id)).length;
+  return {
+    activeTotal: activePromos.length,
+    sharedActive,
+    sharedDeclared: declared.length,
+  };
+}

@@ -59,6 +59,7 @@ import { MatchRing } from "@/components/registros/MatchRing";
 import { DuplicateResult } from "@/components/registros/DuplicateResult";
 import { ActivityTimeline } from "@/components/registros/ActivityTimeline";
 import { GracePeriodBanner } from "@/components/registros/GracePeriodBanner";
+import { onRegistroApproved, onRegistroRejected } from "@/lib/registroVisitaLink";
 
 /* ═══════════════════════════════════════════════════════════════════
    Helpers visuales
@@ -223,7 +224,14 @@ export default function Registros() {
       decidedBy: currentUser.name,
       decidedByRole: currentUser.jobTitle,
     } : r));
-    toast.success("Registro aprobado", { description: "Tienes 5 min para revertir antes de notificar a la agencia." });
+    /* Si el registro era de tipo "registration_visit" y tiene una
+       visita pendiente linkada en el calendario, la confirmamos. */
+    const { visitUpdated } = onRegistroApproved(id);
+    toast.success("Registro aprobado", {
+      description: visitUpdated
+        ? "Visita asociada confirmada en el calendario. 5 min para revertir."
+        : "Tienes 5 min para revertir antes de notificar a la agencia.",
+    });
   };
   const reject = (id: string) => {
     const now = new Date().toISOString();
@@ -233,7 +241,13 @@ export default function Registros() {
       decidedBy: currentUser.name,
       decidedByRole: currentUser.jobTitle,
     } : r));
-    toast.error("Registro rechazado", { description: "Tienes 5 min para revertir antes de notificar a la agencia." });
+    /* Si el registro tenía visita pendiente, se cancela. */
+    const { visitUpdated } = onRegistroRejected(id);
+    toast.error("Registro rechazado", {
+      description: visitUpdated
+        ? "Visita asociada cancelada en el calendario. 5 min para revertir."
+        : "Tienes 5 min para revertir antes de notificar a la agencia.",
+    });
   };
 
   /** Revierte una decisión dentro del grace period (devuelve a pending). */
