@@ -80,6 +80,8 @@ export default function Calendario() {
   /* En mobile, vista Mes muestra además la lista del día seleccionado
      abajo (estilo Apple Calendar). */
   const [mobileSelectedDay, setMobileSelectedDay] = useState<Date>(() => new Date());
+  /* Sidebar de agentes · drawer en mobile. */
+  const [mobileAgentsOpen, setMobileAgentsOpen] = useState(false);
   /* Al cambiar entre mobile y desktop, ajusta vistas que no encajan. */
   useEffect(() => {
     if (isMobile && (viewMode === "semana" || viewMode === "dia")) {
@@ -187,7 +189,8 @@ export default function Calendario() {
             </div>
           </div>
 
-          {/* Toolbar · navegación + segmented */}
+          {/* Toolbar · navegación · en mobile va en 2 filas para no
+             amontonarse. Fila 1: nav + título. Fila 2: segmented + filtros. */}
           <div className="mt-5 flex items-center gap-2 flex-wrap">
             <button
               onClick={goToday}
@@ -211,13 +214,25 @@ export default function Calendario() {
                 <ChevronRight className="h-3.5 w-3.5" />
               </button>
             </div>
-            <p className="text-sm font-semibold text-foreground ml-2 capitalize">
+            <p className="text-sm font-semibold text-foreground ml-1 sm:ml-2 capitalize truncate flex-1 min-w-0">
               {headerTitle}
             </p>
+            {/* Botón 'Agentes' mobile · abre drawer con los calendarios */}
+            <button
+              onClick={() => setMobileAgentsOpen(true)}
+              className="lg:hidden inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-border bg-card text-[12px] font-medium hover:bg-muted"
+              aria-label="Agentes"
+            >
+              <Users className="h-3 w-3" strokeWidth={1.75} />
+              {enabledAgents.size}
+            </button>
+          </div>
 
+          {/* Fila 2 mobile · segmented + filtros */}
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
             {/* Segmented vistas · en mobile se ofrecen solo Mes/Agenda
                (Semana y Día son densas y no leen bien en 375px). */}
-            <div className="ml-auto inline-flex items-center bg-muted rounded-full p-1 gap-0.5">
+            <div className="inline-flex items-center bg-muted rounded-full p-1 gap-0.5">
               {(isMobile
                 ? ([
                     { key: "mes"    as const, label: "Mes" },
@@ -248,11 +263,11 @@ export default function Calendario() {
               })}
             </div>
 
-            {/* Más filtros */}
+            {/* Más filtros · ml-auto lo empuja a la derecha en desktop */}
             <button
               onClick={() => setMoreFiltersOpen((v) => !v)}
               className={cn(
-                "inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full border text-[12.5px] font-medium transition-colors",
+                "ml-auto inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full border text-[12.5px] font-medium transition-colors",
                 (typeFilter.size + statusFilter.size > 0 || moreFiltersOpen)
                   ? "bg-foreground text-background border-foreground"
                   : "border-border bg-card text-foreground hover:bg-muted",
@@ -340,6 +355,40 @@ export default function Calendario() {
         </div>
       </section>
 
+      {/* Drawer de Agentes · solo mobile · backdrop simple. */}
+      {mobileAgentsOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-foreground/40 backdrop-blur-sm"
+          onClick={() => setMobileAgentsOpen(false)}
+        >
+          <div
+            className="absolute left-0 top-0 bottom-0 w-[280px] bg-card shadow-soft-lg overflow-y-auto overscroll-contain p-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold">Mis calendarios</h3>
+              <button
+                onClick={() => setMobileAgentsOpen(false)}
+                className="h-8 w-8 inline-flex items-center justify-center rounded-full hover:bg-muted"
+                aria-label="Cerrar"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <AgentSidebar
+              teamMembers={teamMembers}
+              enabledAgents={enabledAgents}
+              toggleAgent={toggleAgent}
+              onEnableAll={() =>
+                setEnabledAgents(new Set(teamMembers.filter((m) => !m.status || m.status === "active").map((m) => m.id)))
+              }
+              onDisableAll={() => setEnabledAgents(new Set())}
+              compact
+            />
+          </div>
+        </div>
+      )}
+
       {/* FAB de crear · solo mobile · esquina inferior derecha.
          En desktop el CTA vive en el header (hidden lg:flex). */}
       <button
@@ -366,18 +415,21 @@ export default function Calendario() {
    ═══════════════════════════════════════════════════════════════════ */
 
 function AgentSidebar({
-  teamMembers, enabledAgents, toggleAgent, onEnableAll, onDisableAll,
+  teamMembers, enabledAgents, toggleAgent, onEnableAll, onDisableAll, compact,
 }: {
   teamMembers: ReturnType<typeof getAllTeamMembers>;
   enabledAgents: Set<string>;
   toggleAgent: (id: string) => void;
   onEnableAll: () => void;
   onDisableAll: () => void;
+  /** Si true, el componente no añade `hidden lg:block` · se usa dentro
+   *  del drawer mobile. */
+  compact?: boolean;
 }) {
   const actives = teamMembers.filter((m) => !m.status || m.status === "active");
 
   return (
-    <aside className="hidden lg:block">
+    <aside className={cn(compact ? "block" : "hidden lg:block")}>
       <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
         <header className="px-4 py-3 border-b border-border flex items-center justify-between">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

@@ -1,17 +1,16 @@
 /**
  * Tab "Resumen" del panel de colaboración.
  *
- * Vista hero operativa: al entrar, el promotor debe captar en 2
- * segundos cómo está la relación con esta agencia y qué hay que
- * resolver. No hay estadísticas — todo son señales accionables.
+ * Vista hero operativa en dos bloques:
  *
- * Estructura:
- *   1. Hero · frase grande con el estado de la colaboración
- *      (ej. "Trabaja en 2 de 5 promociones · 3 cosas pendientes").
- *   2. Pendiente · tiles destacados (si hay algo) con CTA directo.
- *   3. Promociones · grid de chips · visibles las compartidas y
- *      huecos punteados para las que faltan por compartir.
- *   4. Próximas visitas · lista compacta · si hay.
+ *   1. Hero · frase grande con el estado de la colaboración.
+ *   2. Bloque "En colaboración" · promociones que YA comparte + estado
+ *      de lo que falta (contratos sin firmar, documentos pendientes).
+ *   3. Bloque "Aún sin compartir" · promociones activas del promotor
+ *      donde la agencia aún no está · oportunidad para ampliar.
+ *   4. Próximas visitas (si hay).
+ *
+ * No hay KPIs — todo son señales accionables.
  */
 
 import { useMemo } from "react";
@@ -102,8 +101,8 @@ export function ResumenTab({ agency: a, fromPromoId, onGoTo }: Props) {
     return (base[a.id] ?? []).slice(0, 3);
   }, [a.id]);
 
-  /* Señal total · lo que decide el tono del hero. */
-  const pendingCount = pendingContracts.length + pendingDocs.length + notSharedPromos.length;
+  const blockerCount = pendingContracts.length + pendingDocs.length;
+  const pendingCount = blockerCount + notSharedPromos.length;
 
   const createSale = () => {
     const params = new URLSearchParams({ agencyId: a.id });
@@ -114,11 +113,10 @@ export function ResumenTab({ agency: a, fromPromoId, onGoTo }: Props) {
   /* ════════════════════════════════════════════════════════════════ */
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
 
-      {/* ══════════════════ HERO ══════════════════ */}
+      {/* ═══════════════════ HERO ═══════════════════ */}
       <section className="relative rounded-3xl border border-border bg-gradient-to-br from-card via-card to-muted/30 p-5 sm:p-7 overflow-hidden shadow-soft">
-        {/* Blob decorativo */}
         <div className="absolute -top-20 -right-16 h-48 w-48 rounded-full bg-foreground/[0.03] blur-3xl pointer-events-none" />
 
         <div className="relative flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
@@ -190,94 +188,106 @@ export function ResumenTab({ agency: a, fromPromoId, onGoTo }: Props) {
         </div>
       </section>
 
-      {/* ══════════════════ Pendiente · tiles ══════════════════ */}
-      {pendingCount > 0 && (
-        <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <PendingTile
-            tone={notSharedPromos.length > 0 ? "primary" : "done"}
-            icon={Share2}
-            value={notSharedPromos.length}
-            label={notSharedPromos.length === 1 ? "promoción sin compartir" : "promociones sin compartir"}
-            doneLabel="Todas compartidas"
-            onClick={notSharedPromos.length > 0 ? () => toast.info("Compartir promoción · próximamente") : undefined}
-          />
-          <PendingTile
-            tone={pendingContracts.length > 0 ? "muted" : "done"}
-            icon={FileSignature}
-            value={pendingContracts.length}
-            label={pendingContracts.length === 1 ? "contrato sin firmar" : "contratos sin firmar"}
-            doneLabel="Contratos al día"
-            onClick={pendingContracts.length > 0 ? () => onGoTo("documentacion") : undefined}
-          />
-          <PendingTile
-            tone={pendingDocs.length > 0 ? "warning" : "done"}
-            icon={Upload}
-            value={pendingDocs.length}
-            label={pendingDocs.length === 1 ? "documento pendiente" : "documentos pendientes"}
-            doneLabel="Documentación al día"
-            onClick={pendingDocs.length > 0 ? () => onGoTo("documentacion") : undefined}
-          />
-        </section>
-      )}
-
-      {/* ══════════════════ Promociones ══════════════════ */}
+      {/* ═══════════════════ BLOQUE 1 · En colaboración ═══════════════════ */}
       <section>
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Promociones
-          </h3>
-          {notSharedPromos.length > 0 && (
-            <button
-              type="button"
-              onClick={() => toast.info("Compartir promoción · próximamente")}
-              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-0.5"
-            >
-              Compartir más
-              <ChevronRight className="h-3 w-3" />
-            </button>
-          )}
-        </div>
+        <BlockHeader
+          eyebrow="Bloque 1"
+          title="En colaboración"
+          subtitle={
+            sharedPromos.length === 0
+              ? "Aún no comparte ninguna promoción"
+              : `${sharedPromos.length} promoción${sharedPromos.length === 1 ? "" : "es"} · ${blockerCount === 0 ? "todo al día" : `${blockerCount} cosa${blockerCount === 1 ? "" : "s"} por resolver`}`
+          }
+          tone={blockerCount > 0 ? "warning" : "success"}
+        />
 
-        {sharedPromos.length === 0 && notSharedPromos.length === 0 ? (
+        {sharedPromos.length === 0 ? (
           <EmptyCard
             icon={Share2}
-            title="No hay promociones activas"
-            body="Cuando publiques una promoción activa aparecerá aquí para compartirla."
+            title="No colabora en ninguna promoción todavía"
+            body="Cuando compartas una promoción con esta agencia aparecerá aquí."
           />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {sharedPromos.map((p) => (
-              <Link
-                key={p.id}
-                to={`/promociones/${p.id}?tab=Agencies`}
-                className="group rounded-2xl border border-border bg-card shadow-soft p-4 hover:-translate-y-0.5 hover:shadow-soft-lg transition-all"
+          <>
+            {/* Promociones compartidas · grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {sharedPromos.map((p) => (
+                <Link
+                  key={p.id}
+                  to={`/promociones/${p.id}?tab=Agencies`}
+                  className="group rounded-2xl border border-border bg-card shadow-soft p-4 hover:-translate-y-0.5 hover:shadow-soft-lg transition-all"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="h-8 w-8 rounded-lg bg-success/10 text-success grid place-items-center shrink-0">
+                      <Check className="h-4 w-4" strokeWidth={2.25} />
+                    </span>
+                    <span className="inline-flex items-center h-5 px-2 rounded-full border border-success/25 bg-success/10 text-[10px] font-medium text-success shrink-0">
+                      Activa
+                    </span>
+                  </div>
+                  <p className="text-sm font-semibold text-foreground mt-3 truncate group-hover:underline">
+                    {p.name}
+                  </p>
+                  {!p.active && (
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Promoción cerrada</p>
+                  )}
+                  <div className="mt-2 inline-flex items-center gap-0.5 text-[11px] text-muted-foreground group-hover:text-foreground transition-colors">
+                    Ver en promoción
+                    <ArrowRight className="h-3 w-3" />
+                  </div>
+                </Link>
+              ))}
+            </div>
+
+            {/* Estado · blockers por resolver (si hay) */}
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <StatusTile
+                icon={FileSignature}
+                value={pendingContracts.length}
+                label={pendingContracts.length === 1 ? "contrato sin firmar" : "contratos sin firmar"}
+                doneLabel="Contratos al día"
+                tone={pendingContracts.length > 0 ? "muted" : "done"}
+                onClick={pendingContracts.length > 0 ? () => onGoTo("documentacion") : undefined}
+              />
+              <StatusTile
+                icon={Upload}
+                value={pendingDocs.length}
+                label={pendingDocs.length === 1 ? "documento pendiente" : "documentos pendientes"}
+                doneLabel="Documentación al día"
+                tone={pendingDocs.length > 0 ? "warning" : "done"}
+                onClick={pendingDocs.length > 0 ? () => onGoTo("documentacion") : undefined}
+              />
+            </div>
+          </>
+        )}
+      </section>
+
+      {/* ═══════════════════ BLOQUE 2 · Aún sin compartir ═══════════════════ */}
+      {notSharedPromos.length > 0 && (
+        <section>
+          <BlockHeader
+            eyebrow="Bloque 2"
+            title="Aún sin compartir"
+            subtitle={`${notSharedPromos.length} promoción${notSharedPromos.length === 1 ? "" : "es"} activa${notSharedPromos.length === 1 ? "" : "s"} donde podrías invitar a ${a.name}`}
+            tone="primary"
+            right={
+              <button
+                type="button"
+                onClick={() => toast.info("Compartir promoción · próximamente")}
+                className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-foreground text-background text-xs font-semibold hover:bg-foreground/90 transition-colors"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="h-8 w-8 rounded-lg bg-success/10 text-success grid place-items-center shrink-0">
-                    <Check className="h-4 w-4" strokeWidth={2.25} />
-                  </span>
-                  <span className="inline-flex items-center h-5 px-2 rounded-full border border-success/25 bg-success/10 text-[10px] font-medium text-success shrink-0">
-                    Compartida
-                  </span>
-                </div>
-                <p className="text-sm font-semibold text-foreground mt-3 truncate group-hover:underline">
-                  {p.name}
-                </p>
-                {!p.active && (
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Promoción cerrada</p>
-                )}
-                <div className="mt-2 inline-flex items-center gap-0.5 text-[11px] text-muted-foreground group-hover:text-foreground transition-colors">
-                  Ver en promoción
-                  <ArrowRight className="h-3 w-3" />
-                </div>
-              </Link>
-            ))}
+                <Share2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                Compartir varias
+              </button>
+            }
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {notSharedPromos.map((p) => (
               <button
                 type="button"
                 key={p.id}
-                onClick={() => toast.info("Compartir promoción · próximamente")}
-                className="group text-left rounded-2xl border border-dashed border-border bg-card/50 p-4 hover:bg-card hover:border-foreground/30 transition-all"
+                onClick={() => toast.info(`Compartir "${p.name}" · próximamente`)}
+                className="group text-left rounded-2xl border border-dashed border-border bg-card/50 p-4 hover:bg-card hover:border-foreground/40 hover:shadow-soft transition-all"
               >
                 <div className="flex items-start justify-between gap-2">
                   <span className="h-8 w-8 rounded-lg bg-muted text-muted-foreground grid place-items-center shrink-0">
@@ -289,31 +299,32 @@ export function ResumenTab({ agency: a, fromPromoId, onGoTo }: Props) {
                 </div>
                 <p className="text-sm font-semibold text-foreground mt-3 truncate">{p.name}</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">{p.location ?? "—"}</p>
-                <div className="mt-2 inline-flex items-center gap-0.5 text-[11px] text-foreground font-medium">
+                <div className="mt-2 inline-flex items-center gap-1 text-[11px] text-foreground font-medium group-hover:gap-1.5 transition-all">
                   <Plus className="h-3 w-3" strokeWidth={2.25} />
                   Compartir con {a.name.split(" ")[0]}
                 </div>
               </button>
             ))}
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
-      {/* ══════════════════ Próximas visitas ══════════════════ */}
+      {/* ═══════════════════ Próximas visitas ═══════════════════ */}
       {upcomingVisits.length > 0 && (
         <section>
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Próximas visitas
-            </h3>
-            <Link
-              to="/calendario"
-              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-0.5"
-            >
-              Ver calendario
-              <ChevronRight className="h-3 w-3" />
-            </Link>
-          </div>
+          <BlockHeader
+            title="Próximas visitas"
+            subtitle={`${upcomingVisits.length} visita${upcomingVisits.length === 1 ? "" : "s"} programada${upcomingVisits.length === 1 ? "" : "s"}`}
+            right={
+              <Link
+                to="/calendario"
+                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-0.5"
+              >
+                Ver calendario
+                <ChevronRight className="h-3 w-3" />
+              </Link>
+            }
+          />
           <ul className="rounded-2xl border border-border bg-card shadow-soft divide-y divide-border/50 overflow-hidden">
             {upcomingVisits.map((v, i) => {
               const w = formatWhen(v.when);
@@ -346,7 +357,7 @@ export function ResumenTab({ agency: a, fromPromoId, onGoTo }: Props) {
         </section>
       )}
 
-      {/* ══════════════════ Más ══════════════════ */}
+      {/* ═══ Ver actividad ═══ */}
       <div className="flex flex-wrap gap-2 pt-2">
         <Link
           to={`/colaboradores/${a.id}?tab=historial`}
@@ -362,67 +373,92 @@ export function ResumenTab({ agency: a, fromPromoId, onGoTo }: Props) {
 
 /* ═══════════════ Sub-componentes ═══════════════ */
 
-function PendingTile({
-  tone, icon: Icon, value, label, doneLabel, onClick,
+function BlockHeader({
+  eyebrow, title, subtitle, right, tone,
 }: {
-  tone: "primary" | "warning" | "muted" | "done";
+  eyebrow?: string;
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+  tone?: "success" | "warning" | "primary";
+}) {
+  const dotCls = {
+    success: "bg-success",
+    warning: "bg-warning",
+    primary: "bg-primary",
+  }[tone ?? "success"];
+  return (
+    <div className="flex items-start justify-between gap-3 mb-3">
+      <div className="min-w-0 flex items-start gap-3">
+        {tone && <span className={cn("mt-[7px] h-2 w-2 rounded-full shrink-0", dotCls)} />}
+        <div className="min-w-0">
+          {eyebrow && (
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/80">
+              {eyebrow}
+            </p>
+          )}
+          <h3 className="text-[15px] font-bold text-foreground tracking-tight">{title}</h3>
+          {subtitle && <p className="text-[11.5px] text-muted-foreground mt-0.5">{subtitle}</p>}
+        </div>
+      </div>
+      {right && <div className="shrink-0">{right}</div>}
+    </div>
+  );
+}
+
+function StatusTile({
+  icon: Icon, value, label, doneLabel, tone, onClick,
+}: {
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   value: number;
   label: string;
   doneLabel: string;
+  tone: "warning" | "muted" | "done";
   onClick?: () => void;
 }) {
   const cls = {
-    primary: "border-primary/30 bg-primary/5 hover:bg-primary/10",
     warning: "border-warning/30 bg-warning/5 hover:bg-warning/10",
     muted:   "border-border bg-card hover:bg-muted/40",
     done:    "border-border/60 bg-muted/20",
   }[tone];
   const iconCls = {
-    primary: "bg-primary/15 text-primary",
     warning: "bg-warning/15 text-warning",
     muted:   "bg-muted text-muted-foreground",
     done:    "bg-success/10 text-success",
   }[tone];
-
   const isDone = tone === "done";
   const Wrapper: any = onClick ? "button" : "div";
   const wrapperProps = onClick ? { type: "button", onClick } : {};
-
   return (
     <Wrapper
       {...wrapperProps}
       className={cn(
-        "rounded-2xl border p-4 text-left transition-all shadow-soft",
+        "rounded-2xl border p-4 text-left transition-all shadow-soft flex items-center gap-3",
         cls,
         onClick && "hover:-translate-y-0.5 hover:shadow-soft-lg cursor-pointer",
       )}
     >
-      <div className="flex items-center justify-between gap-3">
-        <span className={cn("h-9 w-9 rounded-xl grid place-items-center shrink-0", iconCls)}>
-          {isDone ? <Check className="h-4 w-4" strokeWidth={2.25} /> : <Icon className="h-4 w-4" strokeWidth={1.75} />}
-        </span>
-        <span className={cn(
-          "text-[28px] font-bold tabular-nums leading-none",
-          tone === "primary" && "text-primary",
+      <span className={cn("h-10 w-10 rounded-xl grid place-items-center shrink-0", iconCls)}>
+        {isDone ? <Check className="h-5 w-5" strokeWidth={2.25} /> : <Icon className="h-5 w-5" strokeWidth={1.75} />}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className={cn(
+          "text-[22px] font-bold tabular-nums leading-none",
           tone === "warning" && "text-warning",
           tone === "muted" && "text-foreground",
           tone === "done" && "text-success",
         )}>
           {isDone ? "✓" : value}
-        </span>
+        </p>
+        <p className={cn(
+          "text-xs mt-1.5",
+          isDone ? "text-muted-foreground" : "text-foreground font-medium",
+        )}>
+          {isDone ? doneLabel : label}
+        </p>
       </div>
-      <p className={cn(
-        "text-xs mt-3",
-        isDone ? "text-muted-foreground" : "text-foreground font-medium",
-      )}>
-        {isDone ? doneLabel : label}
-      </p>
-      {onClick && (
-        <div className="mt-1 inline-flex items-center gap-0.5 text-[11px] text-muted-foreground">
-          Resolver
-          <ChevronRight className="h-3 w-3" />
-        </div>
+      {onClick && !isDone && (
+        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={1.75} />
       )}
     </Wrapper>
   );
