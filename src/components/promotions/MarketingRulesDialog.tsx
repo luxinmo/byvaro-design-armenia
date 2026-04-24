@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/Switch";
-import { Megaphone, ShieldAlert, Info } from "lucide-react";
+import { Megaphone, ShieldAlert, Info, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ChannelAvatar } from "./ChannelAvatar";
@@ -50,16 +50,38 @@ const CATEGORY_ORDER: MarketingChannelCategory[] = ["portales", "internacionales
 
 export function MarketingRulesDialog({ open, onOpenChange, promotionId, promotionName }: Props) {
   const [prohibited, setProhibited] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState("");
   const initial = useMemo(() => new Set(getMarketingProhibitions(promotionId)), [promotionId, open]);
 
-  // Al abrir · sincroniza con storage real (por si otro usuario editó).
+  // Al abrir · sincroniza con storage real (por si otro usuario editó) +
+  // limpia la búsqueda para que no se quede colgada entre aperturas.
   useEffect(() => {
-    if (open) setProhibited(new Set(initial));
+    if (open) {
+      setProhibited(new Set(initial));
+      setQuery("");
+    }
   }, [open, initial]);
 
-  const grouped = useMemo(() => groupMarketingChannels(), []);
+  const groupedAll = useMemo(() => groupMarketingChannels(), []);
   const total = MARKETING_CHANNELS.length;
   const prohibCount = prohibited.size;
+
+  /* Filtro por query · busca en label, hint y domain (todos case-insensitive).
+   * Agrupa el resultado por categoría manteniendo el orden declarado. */
+  const grouped = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return groupedAll;
+    const matches = (text?: string) => !!text && text.toLowerCase().includes(q);
+    const out: typeof groupedAll = { portales: [], internacionales: [], redes: [], publicidad: [] };
+    for (const cat of CATEGORY_ORDER) {
+      out[cat] = groupedAll[cat].filter(
+        (c) => matches(c.label) || matches(c.hint) || matches(c.domain),
+      );
+    }
+    return out;
+  }, [groupedAll, query]);
+
+  const filteredTotal = CATEGORY_ORDER.reduce((acc, cat) => acc + grouped[cat].length, 0);
 
   const dirty = useMemo(() => {
     if (prohibited.size !== initial.size) return true;
@@ -105,13 +127,40 @@ export function MarketingRulesDialog({ open, onOpenChange, promotionId, promotio
           </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {/* Buscador · filtra por label, domain o hint */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.75} />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar portal, red social o dominio…"
+              className="w-full h-9 pl-9 pr-9 rounded-xl border border-border bg-card text-[13px] text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-foreground/20 transition-colors"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 h-5 w-5 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted grid place-items-center"
+                aria-label="Limpiar búsqueda"
+              >
+                <X className="h-3 w-3" strokeWidth={2} />
+              </button>
+            )}
+          </div>
+
           {/* Toolbar · contador + atajos */}
           <div className="flex items-center justify-between gap-3">
             <p className="text-[12px] text-muted-foreground">
               <span className="font-semibold text-foreground tabular-nums">{prohibCount}</span>
               {" / "}
               <span className="tabular-nums">{total}</span> canales prohibidos
+              {query && filteredTotal !== total && (
+                <span className="ml-1.5">
+                  · <span className="font-semibold text-foreground tabular-nums">{filteredTotal}</span> en resultado
+                </span>
+              )}
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -133,6 +182,24 @@ export function MarketingRulesDialog({ open, onOpenChange, promotionId, promotio
               </button>
             </div>
           </div>
+
+          {/* Empty state cuando la búsqueda no devuelve nada */}
+          {filteredTotal === 0 && query && (
+            <div className="rounded-2xl border border-dashed border-border bg-muted/20 py-10 px-6 text-center">
+              <Search className="h-6 w-6 text-muted-foreground/40 mx-auto mb-2" strokeWidth={1.5} />
+              <p className="text-[13px] font-medium text-foreground">Sin resultados</p>
+              <p className="text-[11.5px] text-muted-foreground mt-1">
+                No hay canales que coincidan con "{query}".
+              </p>
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] font-medium text-primary hover:text-primary/80 transition-colors"
+              >
+                Limpiar búsqueda
+              </button>
+            </div>
+          )}
 
           {/* Grupos */}
           {CATEGORY_ORDER.map((cat) => {

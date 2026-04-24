@@ -18,10 +18,10 @@
  * `hsl(var(--warning))` para el caso ámbar · nunca colores hardcoded.
  */
 
-import { CheckCircle2, ShieldAlert, Pencil, Ban } from "lucide-react";
+import { CheckCircle2, ShieldAlert, Pencil, Ban, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMarketingProhibitions } from "@/lib/marketingRulesStorage";
-import { getMarketingChannel } from "@/lib/marketingChannels";
+import { getMarketingChannel, TOTAL_CHANNELS } from "@/lib/marketingChannels";
 import { ChannelAvatar } from "./ChannelAvatar";
 
 interface Props {
@@ -36,24 +36,42 @@ interface Props {
 export function MarketingRulesCard({ promotionId, readOnly = false, onEdit, className }: Props) {
   const prohibitedIds = useMarketingProhibitions(promotionId);
   const hasAny = prohibitedIds.length > 0;
+  const allProhibited = prohibitedIds.length === TOTAL_CHANNELS;
+
+  /* Tres estados visuales:
+   *   · NONE (verde)   · todo permitido.
+   *   · SOME (ámbar)   · lista de canales prohibidos con favicon.
+   *   · ALL  (rojo)    · sólo uso interno · una frase, sin chips. */
+  const tone: "none" | "some" | "all" = !hasAny ? "none" : allProhibited ? "all" : "some";
+
+  const containerCls =
+    tone === "all"
+      ? "border-destructive/30 bg-destructive/5"
+      : tone === "some"
+      ? "border-warning/30 bg-warning/5"
+      : "border-success/30 bg-success/5";
+
+  const iconBoxCls =
+    tone === "all"
+      ? "bg-destructive/15 text-destructive"
+      : tone === "some"
+      ? "bg-warning/15 text-warning"
+      : "bg-success/15 text-success";
 
   return (
     <div
       className={cn(
         "rounded-2xl border shadow-soft overflow-hidden",
-        hasAny
-          ? "border-warning/30 bg-warning/5"
-          : "border-success/30 bg-success/5",
+        containerCls,
         className,
       )}
     >
       <div className="px-4 sm:px-5 py-4">
         <div className="flex items-start gap-3">
-          <div className={cn(
-            "h-9 w-9 rounded-xl flex items-center justify-center shrink-0",
-            hasAny ? "bg-warning/15 text-warning" : "bg-success/15 text-success",
-          )}>
-            {hasAny ? <ShieldAlert className="h-4 w-4" strokeWidth={2} /> : <CheckCircle2 className="h-4 w-4" strokeWidth={2} />}
+          <div className={cn("h-9 w-9 rounded-xl flex items-center justify-center shrink-0", iconBoxCls)}>
+            {tone === "all" ? <Lock className="h-4 w-4" strokeWidth={2} /> :
+             tone === "some" ? <ShieldAlert className="h-4 w-4" strokeWidth={2} /> :
+             <CheckCircle2 className="h-4 w-4" strokeWidth={2} />}
           </div>
 
           <div className="min-w-0 flex-1">
@@ -63,13 +81,19 @@ export function MarketingRulesCard({ promotionId, readOnly = false, onEdit, clas
               </p>
               <span className={cn(
                 "inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider rounded-full px-1.5 py-0.5",
-                hasAny ? "bg-warning/15 text-warning" : "bg-success/15 text-success",
+                tone === "all" ? "bg-destructive/15 text-destructive"
+                  : tone === "some" ? "bg-warning/15 text-warning"
+                  : "bg-success/15 text-success",
               )}>
-                {hasAny ? `${prohibitedIds.length} restricción${prohibitedIds.length === 1 ? "" : "es"}` : "Sin restricciones"}
+                {tone === "all" ? "Solo uso interno"
+                  : tone === "some" ? `${prohibitedIds.length} restricción${prohibitedIds.length === 1 ? "" : "es"}`
+                  : "Sin restricciones"}
               </span>
             </div>
             <p className="text-[12px] text-muted-foreground mt-1 leading-relaxed">
-              {hasAny
+              {tone === "all"
+                ? "No está permitido publicar en ningún canal externo. Esta promoción es de uso interno."
+                : tone === "some"
                 ? "Permitido publicar en portales y redes sociales excepto en los canales listados."
                 : "Permitido publicar en portales y redes sociales."}
             </p>
@@ -87,8 +111,9 @@ export function MarketingRulesCard({ promotionId, readOnly = false, onEdit, clas
           )}
         </div>
 
-        {/* Chips de canales prohibidos · favicon + label + Ban */}
-        {hasAny && (
+        {/* Chips de canales prohibidos · solo tono "some" (no ensuciamos
+            cuando todo está prohibido, ni cuando nada lo está) */}
+        {tone === "some" && (
           <div className="mt-3 flex flex-wrap gap-1.5">
             {prohibitedIds.map((id) => {
               const channel = getMarketingChannel(id);
@@ -118,11 +143,18 @@ export function MarketingRulesCard({ promotionId, readOnly = false, onEdit, clas
           </div>
         )}
 
-        {/* Nota legal · solo cuando hay restricciones */}
-        {hasAny && (
-          <div className="mt-3 pt-3 border-t border-warning/20">
+        {/* Nota legal · aplica tanto a "some" como a "all" (ambos casos
+            imponen obligación contractual a la agencia). */}
+        {tone !== "none" && (
+          <div className={cn(
+            "mt-3 pt-3 border-t",
+            tone === "all" ? "border-destructive/20" : "border-warning/20",
+          )}>
             <p className="text-[11px] text-foreground/80 leading-relaxed">
-              <span className="font-semibold text-warning">Importante:</span>{" "}
+              <span className={cn(
+                "font-semibold",
+                tone === "all" ? "text-destructive" : "text-warning",
+              )}>Importante:</span>{" "}
               La violación de esta regla puede llevar a la extinción del contrato de colaboración.
             </p>
           </div>
