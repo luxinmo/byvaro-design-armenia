@@ -43,6 +43,7 @@ import {
   eventsInDay, eventsInMonth, WEEKDAY_SHORT_ES,
 } from "@/lib/calendarHelpers";
 import { findTeamMember, getAllTeamMembers, memberInitials, getMemberAvatarUrl } from "@/lib/team";
+import { useCurrentUser } from "@/lib/currentUser";
 import { CreateCalendarEventDialog } from "@/components/calendar/CreateCalendarEventDialog";
 import { UserContextSwitcher } from "@/components/ui/UserContextSwitcher";
 import { cn } from "@/lib/utils";
@@ -69,7 +70,32 @@ function useIsMobile(breakpoint = 1024): boolean {
 
 export default function Calendario() {
   const navigate = useNavigate();
-  const allEvents = useCalendarEvents();
+  const rawEvents = useCalendarEvents();
+  const currentUser = useCurrentUser();
+  const isAgencyUser = currentUser.accountType === "agency";
+
+  /* DUAL-ROLE filter · una agencia colaboradora NO debe ver eventos
+   * de otros agentes del promotor ni de otras agencias rivales. Solo
+   * sus propios eventos · matched por `assigneeUserId === user.id` o
+   * por `agencyId` cuando el evento lleva ese campo.
+   *
+   * TODO(backend): replicar este filtrado en RLS sobre `calendar_events`
+   *   · ver docs/backend-integration.md §1.5.1 / §7.5.
+   *   · POLICY agency_calendar_view ON calendar_events FOR SELECT USING (
+   *       account_type = 'developer' AND tenant_id = me.tenant_id
+   *       OR (account_type = 'agency'
+   *           AND (assignee_user_id = me.id OR agency_id = me.agency_id)));
+   */
+  const allEvents = useMemo(() => {
+    if (!isAgencyUser) return rawEvents;
+    return rawEvents.filter((ev) => {
+      if (ev.assigneeUserId && ev.assigneeUserId === currentUser.id) return true;
+      const evAgencyId = (ev as { agencyId?: string }).agencyId;
+      if (evAgencyId && currentUser.agencyId && evAgencyId === currentUser.agencyId) return true;
+      return false;
+    });
+  }, [rawEvents, isAgencyUser, currentUser.id, currentUser.agencyId]);
+
   const teamMembers = useMemo(() => getAllTeamMembers(), []);
 
   /* ─── Estado de vista ─── */
