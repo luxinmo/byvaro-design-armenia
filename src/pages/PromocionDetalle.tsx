@@ -40,7 +40,7 @@ import { PromotionAvailabilitySummary } from "@/components/promotions/detail/Pro
 import { PromotionAvailabilityFull } from "@/components/promotions/detail/PromotionAvailabilityFull";
 import { unitsByPromotion } from "@/data/units";
 import { ClientRegistrationDialog } from "@/components/promotions/detail/ClientRegistrationDialog";
-import { PromotionRecords } from "@/components/promotions/detail/PromotionRecords";
+import { RegistrosEmbedded } from "@/components/registros/RegistrosEmbedded";
 import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
 import { MarketingRulesDialog } from "@/components/promotions/MarketingRulesDialog";
 import { MarketingRulesCard } from "@/components/promotions/MarketingRulesCard";
@@ -1922,9 +1922,15 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           </div>
         )}
 
-        {/* ═══ TAB: RECORDS ═══ */}
+        {/* ═══ TAB: RECORDS ═══
+             Misma vista que /registros · filtrada por esta promoción.
+             Reusa RegistrosEmbedded · single source of truth. */}
         {activeTabKey === "Records" && !viewAsCollaborator && (
-          <PromotionRecords embedded />
+          <RegistrosEmbedded
+            filterPromotionId={p.id}
+            emptyTitle="Sin registros para esta promoción"
+            emptyDescription={`Cuando una agencia registre un cliente para ${p.name}, aparecerá aquí. Click en cualquier registro para abrirlo en la bandeja completa.`}
+          />
         )}
 
         {/* ═══ TAB: DOCUMENTS ═══ */}
