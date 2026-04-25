@@ -93,6 +93,7 @@ import { ColumnCustomizer, type ColumnDef } from "@/components/ui/column-customi
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { UnitDetailPanel } from "./UnitDetailPanel";
 import { UnitDetailDialog } from "./UnitDetailDialog";
+import { UnitEditDialog } from "./UnitEditDialog";
 import { SendEmailDialog } from "@/components/email/SendEmailDialog";
 import { registerUnsavedGuard } from "@/lib/unsavedGuard";
 import { cn, priceForDisplay } from "@/lib/utils";
@@ -305,6 +306,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null);
   // Nueva vista de unidad · modal centrado (opción 2).
   const [detailUnitId, setDetailUnitId] = useState<string | null>(null);
+  const [editUnitId, setEditUnitId] = useState<string | null>(null);
   const [emailUnitId, setEmailUnitId] = useState<string | null>(null);
   const [blockNames, setBlockNames] = useState<Record<string, string>>({});
   const [editingBlock, setEditingBlock] = useState<string | null>(null);
@@ -1344,10 +1346,10 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                                       disabled={u.status !== "available"}
                                       onClick={() => onEditUnit
                                         ? onEditUnit(u.id)
-                                        : toast({ title: "Editar unidad", description: getUnitDisplayId(u) })}
+                                        : setEditUnitId(u.id)}
                                       className="gap-2 text-xs"
                                     >
-                                      <Pencil className="h-3.5 w-3.5" /> Editar
+                                      <Pencil className="h-3.5 w-3.5" /> Editar fotos
                                     </DropdownMenuItem>
                                   )}
                                   <DropdownMenuItem
@@ -1696,8 +1698,23 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
         onOpenChange={(v) => !v && setDetailUnitId(null)}
         unit={detailUnitId ? allUnits.find((u) => u.id === detailUnitId) ?? null : null}
         isCollaboratorView={isCollaboratorView}
+        onEdit={(u) => setEditUnitId(u.id)}
+        onEditPhotos={(u) => setEditUnitId(u.id)}
         onUpdateUnit={handleUnitUpdate}
         promotionCtx={promotionCtx}
+      />
+
+      {/* Modal COMPLETO de edición de unidad · mismo UX que en el wizard
+          de Crear Promoción (UnitSimpleEditDialog) via adapter.
+          Se abre desde "Editar unidad" del UnitDetailDialog, desde el
+          kebab "Editar" de la lista, y desde "Editar fotos" del hero. */}
+      <UnitEditDialog
+        open={!!editUnitId}
+        onOpenChange={(v) => !v && setEditUnitId(null)}
+        unit={editUnitId ? allUnits.find((u) => u.id === editUnitId) ?? null : null}
+        promotionCtx={promotionCtx}
+        promotionPhotos={[]}
+        onUpdateUnit={handleUnitUpdate}
       />
     </div>
   );

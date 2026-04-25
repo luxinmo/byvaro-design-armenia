@@ -37,13 +37,16 @@ interface UnitDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   isCollaboratorView?: boolean;
   onEdit?: (unit: Unit) => void;
+  /** Abre el modal dedicado a edición de fotos · se invoca desde
+   *  "Editar unidad" y desde "Subir fotos" / "×" de la galería hero. */
+  onEditPhotos?: (unit: Unit) => void;
   onUpdateUnit?: (unitId: string, updates: Partial<Unit>) => void;
   /** Contexto heredado de la promoción · dirección, amenities, plan
    *  de pagos, descripción, certificado, año entrega. */
   promotionCtx?: PromotionContext;
 }
 
-export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView = false, onEdit, onUpdateUnit, promotionCtx }: UnitDetailDialogProps) {
+export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView = false, onEdit, onEditPhotos, onUpdateUnit, promotionCtx }: UnitDetailDialogProps) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [sendOpen, setSendOpen] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -67,6 +70,10 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
 
   const photos = useMemo(() => {
     if (!unit) return [];
+    // Si la unidad tiene fotos propias (editadas vía UnitEditDialog),
+    // usarlas. Si no, fallback mock · se usarán como baseline si el
+    // promotor abre el editor por primera vez.
+    if (unit.photos && unit.photos.length > 0) return unit.photos;
     return Array.from({ length: 10 }, (_, i) => `https://picsum.photos/seed/${unit.id}-${i}/1600/1000`);
   }, [unit]);
 
@@ -246,12 +253,14 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
                     </button>
-                    {editMode && (
+                    {editMode && onEditPhotos && (
                       <button
+                        onClick={() => onEditPhotos(unit)}
                         className="absolute top-2 right-2 h-7 w-7 rounded-full bg-destructive/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive"
-                        aria-label="Eliminar foto"
+                        aria-label="Editar fotos"
+                        title="Editar fotos · abre el modal de fotos"
                       >
-                        <span className="text-base leading-none">×</span>
+                        <Pencil className="h-3 w-3" strokeWidth={2} />
                       </button>
                     )}
                   </div>
@@ -268,9 +277,12 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
                   Ver todas las fotos ({photos.length})
                 </button>
                 <div className="hidden sm:flex items-center gap-2">
-                  {editMode && (
-                    <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity">
-                      <ImageIcon className="h-3.5 w-3.5" strokeWidth={1.5} /> Subir fotos
+                  {editMode && onEditPhotos && (
+                    <button
+                      onClick={() => onEditPhotos(unit)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+                    >
+                      <ImageIcon className="h-3.5 w-3.5" strokeWidth={1.5} /> Editar fotos
                     </button>
                   )}
                   <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors">
@@ -723,9 +735,15 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
                   </Button>
                   {!isCollaboratorView && unit.status !== "sold" && unit.status !== "withdrawn" && (
                     <>
+                      {/* Editar unidad · abre el UnitEditDialog completo
+                          (mismo modal que al crear la unidad en el
+                          wizard) via el prop onEdit / onEditPhotos. */}
                       <Button
                         variant="outline"
-                        onClick={() => onEdit?.(unit)}
+                        onClick={() => {
+                          if (onEdit) onEdit(unit);
+                          else if (onEditPhotos) onEditPhotos(unit);
+                        }}
                         className="rounded-full h-10 text-xs gap-1.5 border-border/60"
                       >
                         <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} /> Editar unidad

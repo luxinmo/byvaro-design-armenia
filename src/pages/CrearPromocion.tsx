@@ -19,7 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, X, Sparkles, Rocket, SkipForward } from "lucide-react";
-import { Toaster, toast } from "sonner";
+import { toast } from "sonner"; // Toaster global en App.tsx
 
 import type {
   StepId, WizardState, RoleOption, TipoPromocion,
@@ -298,7 +298,12 @@ export default function CrearPromocion() {
       case "config_edificio": return s.numBloques >= 1 && s.plantas >= 1 && s.aptosPorPlanta >= 1;
       case "extras": return true; // siempre opcional
       case "estado": return !!s.estado;
-      case "detalles": return !!s.tipoEntrega; // asumimos completo si hay entrega
+      case "detalles":
+        // Si ya está terminado, la entrega ya ocurrió y DetallesStep oculta
+        // el selector de tipoEntrega · el paso queda completo sin requerirlo
+        // (idéntico al predicado de publicationRequirements §6).
+        if (s.estado === "terminado") return true;
+        return !!s.tipoEntrega || !!s.fechaEntrega || !!s.trimestreEntrega;
       case "info_basica":
         return !!s.nombrePromocion.trim()
           && !!s.direccionPromocion.pais.trim()
@@ -347,34 +352,22 @@ export default function CrearPromocion() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* Validación de "Siguiente" por paso */
+  /* Validación de "Siguiente" por paso.
+   *
+   * UNA SOLA fuente de verdad: delega en `isStepComplete` para cada
+   * paso (el mismo predicado que alimenta la timeline y el modo
+   * "onlyMissing"). Evita que avance-vs-completo diverjan.
+   *
+   * Excepciones:
+   *   · `extras`   · opcional · siempre avanza.
+   *   · `detalles` · opcional si el estado está terminado (lo resuelve
+   *                  el propio isStepComplete).
+   *   · `revision` · exige `canPublishWizard` (chequeo completo).
+   */
   const canContinue = () => {
-    if (step === "role") return !!state.role;
-    if (step === "tipo") return !!state.tipo;
-    if (step === "sub_uni") return !!state.subUni;
-    if (step === "sub_varias") {
-      if (isVariasUni) {
-        return state.tipologiasSeleccionadas.length > 0 && state.estilosSeleccionados.length > 0;
-      }
-      return !!state.subVarias && !!state.estiloVivienda;
-    }
-    if (step === "config_edificio") return state.numBloques >= 1;
     if (step === "extras") return true;
-    if (step === "estado") return !!state.estado;
-    if (step === "detalles") return true;
-    if (step === "info_basica") {
-      // Mínimos: nombre + país + ciudad
-      return !!state.nombrePromocion.trim()
-        && !!state.direccionPromocion.pais.trim()
-        && !!state.direccionPromocion.ciudad.trim();
-    }
-    if (step === "revision") {
-      // El botón Publicar solo se habilita si se cumplen TODOS los
-      // requisitos obligatorios (ver src/lib/publicationRequirements.ts).
-      return canPublishWizard(state);
-    }
-    // Pasos aún no portados: siempre permitimos pasar
-    return true;
+    if (step === "revision") return canPublishWizard(state);
+    return isStepComplete(state, step);
   };
 
   /* Handlers */
@@ -388,6 +381,20 @@ export default function CrearPromocion() {
       toast.success("Listo · vuelve a la ficha para publicar");
       navigate(returnTo);
     } else {
+      // Publicación final del wizard (llegamos aquí desde el paso
+      // "revision" con `canPublishWizard(state) === true`).
+      //
+      // TODO(backend): POST /api/promociones con WizardState (shape
+      //   completo) → { id: string, code: string }. Ver
+      //   docs/backend-integration.md §3 "Promociones · Endpoints".
+      //   La respuesta debe devolver el id nuevo para poder
+      //   redirigir a la ficha (`navigate(\`/promociones/${id}\`)`).
+      //   El backend valida los mismos 7 requisitos que
+      //   `canPublishWizard` (publicationRequirements.ts §WizardState);
+      //   si falla, devuelve 422 con `missing[]` y el cliente re-abre
+      //   el wizard en modo `onlyMissing`.
+      // TODO(backend): borrar el borrador server-side al confirmar
+      //   (ver drafts.ts). Hoy solo se borra el localStorage local.
       if (draftId) deleteDraft(draftId);
       toast.success("Promoción creada correctamente");
       navigate("/promociones");
@@ -470,7 +477,6 @@ export default function CrearPromocion() {
 
   return (
     <div className="fixed inset-0 z-40 flex bg-background">
-      <Toaster position="top-center" richColors />
 
       {/* ═══════════ Sidebar · PhaseTimeline ═══════════ */}
       <aside className="hidden lg:flex w-[300px] shrink-0 flex-col border-r border-border bg-card">

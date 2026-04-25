@@ -22,7 +22,8 @@ contract, permisos, estados, enlaces salientes.
 | Ventas | `/ventas` | (pendiente) | 🎨 placeholder |
 | Calendario | `/calendario` | (pendiente) | 🎨 placeholder |
 | Colaboradores | `/colaboradores` | [`colaboradores.md`](colaboradores.md) | ✅ diseñada (versión única) |
-| Agencia · detalle | `/colaboradores/:id` | [`agencia-detalle.md`](agencia-detalle.md) | ✅ diseñada |
+| Agencia · detalle (ficha pública) | `/colaboradores/:id` | [`agencia-detalle.md`](agencia-detalle.md) | ✅ diseñada |
+| Colaborador · panel operativo | `/colaboradores/:id/panel` | [`colaborador-panel.md`](colaborador-panel.md) | ✅ diseñada (9 tabs · ADR-057) |
 | Estadísticas de colaboradores | `/colaboradores/estadisticas` | [`colaboradores-estadisticas.md`](colaboradores-estadisticas.md) | ✅ diseñada |
 | Compartir promoción (flujo) | modal desde `/promociones` y ficha | [`compartir-promocion.md`](compartir-promocion.md) | ✅ diseñada |
 | Contactos | `/contactos` | (pendiente · listado) | 🎨 placeholder |

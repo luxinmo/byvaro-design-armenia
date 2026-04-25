@@ -60,7 +60,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { toast, Toaster } from "sonner"; // feedback no bloqueante post-submit
+import { toast } from "sonner"; // Toaster global en App.tsx
 import {
   Mail, Lock, User, Building2, Users, Home, Crown, Eye, EyeOff,
   Loader2, AlertCircle, Check, Phone, ArrowLeft, CheckCircle2,
@@ -227,7 +227,6 @@ export default function Register() {
   if (requestSent && matchedCompany) {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center px-5 py-10">
-        <Toaster position="top-center" richColors closeButton />
         <Link to="/" className="mb-10">
           <BrandLogo variant="lockup" iconSize={40} wordmarkHeight={20} />
         </Link>
@@ -257,7 +256,6 @@ export default function Register() {
   // ══ Pantalla normal: wizard ══
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <Toaster position="top-center" richColors closeButton />
 
       <div className="min-h-screen grid lg:grid-cols-2">
         {/* ══════ COLUMNA FORM ══════ */}

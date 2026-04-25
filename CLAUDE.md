@@ -117,6 +117,82 @@ hex ni colores literales en componentes. Usa siempre los tokens semánticos:
 
 ---
 
+## 📱 REGLA DE ORO · Responsive móvil sin popovers
+
+> **En móvil (<lg, <1024px) NO usamos popovers ni dropdowns flotantes
+> para nada que tenga más de un par de items.** Cualquier interacción
+> que en desktop se haría con un popover (filtros, selectores, listas
+> largas, formularios) se convierte en **pantalla completa** o
+> **bottom-sheet** (sube de abajo arriba). Las pantallas mobile son
+> compactas y limpias precisamente porque la complejidad se mueve a
+> capas superiores en pleno fullscreen, no flotando sobre la pantalla.
+
+**Por qué.**
+
+- Los popovers en móvil tapan parcialmente la pantalla, dificultan el
+  scroll dentro y se cierran al primer toque mal-puesto. Pantalla
+  completa o bottom-sheet siguen el mental model nativo (iOS/Android).
+- Permite que la pantalla principal sea **densa de contenido** sin
+  preocuparse de "no hay sitio para el popover".
+- Patrón homogéneo · el usuario siempre sabe cómo cerrar (botón X
+  arriba o swipe-down).
+
+**Cómo se aplica.**
+
+- **Filtros de listado** (`/registros`, `/promociones`, `/contactos`,
+  `/colaboradores`, etc.): drawer lateral derecho en desktop ≥lg ·
+  full-screen overlay en móvil. Siempre header con título + cerrar +
+  contador de filtros, body scroll-able, footer sticky con "Limpiar
+  todo" + "Ver N resultados".
+- **Selectores con búsqueda** (UserSelect, AgencyPicker, locations,
+  etc.): popover en desktop · bottom-sheet en móvil con altura
+  ajustada al contenido (max ~85vh).
+- **Wizards / dialogs largos**: full-screen siempre, también en
+  desktop si tienen más de 4 secciones (ej. crear promoción).
+- **Confirmaciones simples** (sí/no, snooze): popover/dialog está bien
+  en ambos · no merecen pantalla completa.
+
+**Implementación recomendada.**
+
+```tsx
+// Pattern · drawer responsive con framer-motion
+<AnimatePresence>
+  {open && (
+    <>
+      <motion.div /* backdrop */ className="fixed inset-0 z-40 bg-black/25 backdrop-blur-sm" />
+      <motion.aside
+        initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+        className={cn(
+          "fixed top-0 bottom-0 right-0 z-50 bg-card border-l border-border flex flex-col",
+          // Desktop: panel lateral 440px · Mobile: full-screen
+          "w-full lg:w-[440px]",
+        )}
+      >
+        <header /> <main /> <footer />
+      </motion.aside>
+    </>
+  )}
+</AnimatePresence>
+```
+
+Para bottom-sheet en móvil, alternativa con `initial={{ y: "100%" }}`
+y `bottom-0 inset-x-0 max-h-[85vh] rounded-t-2xl`.
+
+**Checklist al añadir un selector/filtro nuevo:**
+
+- [ ] ¿En móvil ocupa pantalla completa o sube de abajo?
+- [ ] ¿Tiene header con título + botón cerrar + contador?
+- [ ] ¿El body es scroll-able con `overflow-y-auto overscroll-contain`?
+- [ ] ¿El footer sticky con la acción primaria queda siempre visible?
+- [ ] ¿Funciona el back gesture / swipe-down en mobile?
+
+**Ejemplo de referencia:** `src/pages/Promociones.tsx` · drawer de
+filtros con motion + Filter primitives. Reusable kit pendiente de
+extraer a `src/components/ui/FilterDrawer.tsx` cuando haya 3
+implementaciones.
+
+---
+
 ## 🔄 Patrones recurrentes
 
 1. **Dual-mode pages**: mismas pantallas sirven a Promotor y Agencia con
@@ -986,6 +1062,66 @@ useCurrentUser()        // src/lib/currentUser.ts
 **Para el agente que monte el backend**: el contrato (esquema SQL, JWT
 claims, RLS policies, endpoints) está en `docs/permissions.md` §4.
 Implementar **antes** de quitar el modo mock de `permissions.ts`.
+
+---
+
+## 📣 REGLA DE ORO · Reglas de marketing por promoción
+
+> **Toda promoción compartida con agencias lleva reglas de
+> marketing/publicación.** El promotor define qué canales (portales
+> inmobiliarios, redes sociales, ads) quedan PROHIBIDOS; la agencia
+> los ve en la ficha y DEBE respetarlos. Violarlos puede extinguir
+> el contrato.
+
+**Cómo se aplica hoy (mock).**
+
+- Catálogo canónico en `src/lib/marketingChannels.ts` (15 canales · 3
+  categorías · portales · redes · publicidad). Ids estables — si
+  Byvaro integra un portal nuevo, se añade entrada; nunca se
+  renombran ids existentes.
+- Storage por promoción en `src/lib/marketingRulesStorage.ts`
+  (localStorage · hook reactivo `useMarketingProhibitions(id)`).
+- UI en la ficha:
+  - Entrada en el dock "Acciones rápidas" de la derecha
+    (`PromocionDetalle.tsx` → `renderQuickActionsRail`) · icono
+    `Megaphone`.
+  - Tarjeta `<MarketingRulesCard>` al pie del tab Vista general
+    (solo si `sharingEnabledForPromo`) · verde cuando no hay
+    restricciones · ámbar con chips `<Ban>` cuando las hay · nota
+    legal sobre extinción de contrato.
+  - Dialog de edición `<MarketingRulesDialog>` · switches por canal
+    agrupados por categoría · solo lo ve el promotor (el botón
+    "Editar" se oculta con `viewAsCollaborator`).
+
+**Cómo se aplicará con backend real.**
+
+- `PATCH /api/promociones/:id { marketingProhibitions: string[] }`.
+- Cuando se enchufen los conectores de portales
+  (`src/lib/portalIntegrations/*` · fase futura), el dispatcher de
+  publicación DEBE rechazar con 422 `channel_prohibited` si la
+  agencia intenta publicar a un canal prohibido, y la UI del lado
+  agencia debe deshabilitar ese botón con tooltip "El promotor ha
+  prohibido este canal".
+- Incidencias por violación · webhook del portal → registra evento
+  `marketing.violation` en el historial cross-empresa
+  (`recordCompanyEvent`) + notifica al admin.
+- La cláusula de marketing del contrato de colaboración debe
+  referenciar la regla textualmente · plantilla en
+  `/ajustes/plantillas` categoría "Documentos → contratos".
+
+**Obligaciones al añadir feature nueva que toque publicación/canal:**
+
+1. ¿Hay un canal nuevo (portal o red)? → añadirlo al catálogo
+   `marketingChannels.ts` con id kebab-case estable.
+2. ¿La feature hace push a un portal desde el lado agencia? →
+   consumir `isChannelProhibited(promotionId, channelId)` antes de
+   habilitar el botón/acción. Documentar con `TODO(backend)` el
+   gate server-side.
+3. ¿Añades icono de "prohibido" en UI? → usa `<Ban>` de Lucide con
+   `text-destructive` (coherente con `MarketingRulesCard` y
+   `MarketingRulesDialog`).
+
+Ver `docs/backend-integration.md §4.3` para el contrato completo.
 
 ---
 

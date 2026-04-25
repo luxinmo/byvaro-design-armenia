@@ -18,7 +18,7 @@ import {
   Tag, SlidersHorizontal, Check,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Toaster, toast } from "sonner";
+import { toast } from "sonner"; // Toaster global en App.tsx
 import { agencies as baseAgencies, getContractStatus, getAgencyShareStats, type Agency } from "@/data/agencies";
 import { isAgencyVerified } from "@/lib/licenses";
 import { getAgencyLicenses } from "@/lib/agencyLicenses";
@@ -275,8 +275,6 @@ export default function Colaboradores() {
 
   return (
     <div className="flex flex-col min-h-full bg-background">
-      <Toaster position="top-center" richColors closeButton />
-
       {/* Header limpio */}
       <section className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8">
         <div className="max-w-[1400px] mx-auto">

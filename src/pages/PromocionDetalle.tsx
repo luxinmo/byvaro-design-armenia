@@ -23,6 +23,7 @@ import {
   Check, X, ExternalLink, Zap, Star, Search, ChevronDown, Info,
   Lock, Unlock, FolderOpen, Folder, Download, BookOpen, Upload, MoreHorizontal, FilePlus, ArrowRight,
   Trophy, Sparkles, ArrowUpRight, FileCheck2, Rocket, BarChart3,
+  Megaphone,
 } from "lucide-react";
 import { getMissingForPromotion } from "@/lib/publicationRequirements"; // fuente única de verdad de requisitos para publicar
 import { Button } from "@/components/ui/button";
@@ -39,8 +40,11 @@ import { PromotionAvailabilitySummary } from "@/components/promotions/detail/Pro
 import { PromotionAvailabilityFull } from "@/components/promotions/detail/PromotionAvailabilityFull";
 import { unitsByPromotion } from "@/data/units";
 import { ClientRegistrationDialog } from "@/components/promotions/detail/ClientRegistrationDialog";
-import { PromotionRecords } from "@/components/promotions/detail/PromotionRecords";
+import { RegistrosEmbedded } from "@/components/registros/RegistrosEmbedded";
 import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
+import { MarketingRulesDialog } from "@/components/promotions/MarketingRulesDialog";
+import { MarketingRulesCard } from "@/components/promotions/MarketingRulesCard";
+import { MarketingRulesSidebarCard } from "@/components/promotions/MarketingRulesSidebarCard";
 import { ImageLightbox } from "@/components/promotions/detail/ImageLightbox";
 import { ActivateSharingDialog } from "@/components/promotions/ActivateSharingDialog";
 import {
@@ -263,6 +267,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const [priceListOpen, setPriceListOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [activateSharingOpen, setActivateSharingOpen] = useState(false);
+  const [marketingRulesOpen, setMarketingRulesOpen] = useState(false);
   /** El brochure puede eliminarse desde su card. Al eliminarlo, la sección
    *  se oculta y la acción rápida "Brochure" queda deshabilitada. */
   const [brochureRemoved, setBrochureRemoved] = useState(false);
@@ -439,9 +444,9 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
    * con tooltips + labeled card en 2xl). Los items reflejan el estado
    * actual (promoción publicada, brochure eliminado, permisos de share).
    */
-  const renderQuickActionsRail = () => {
+  const renderQuickActionsRail = (extras?: React.ReactNode) => {
     const isPublished = p.status === "active" && !isIncomplete;
-    const items: { icon: typeof Users; label: string; hint?: string; onClick?: () => void; danger?: boolean; info?: boolean; disabled?: boolean }[] = [
+    const items: { icon: typeof Users; label: string; hint?: string; onClick?: () => void; danger?: boolean; info?: boolean; disabled?: boolean; compactOnly?: boolean }[] = [
       ...(!viewAsCollaborator && isPublished ? [
         {
           icon: Users,
@@ -450,6 +455,15 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           onClick: canShare ? () => setShareOpen(true) : undefined,
           disabled: !canShare,
         },
+        // Visible solo en el dock compacto (md/lg) · en 2xl+ la
+        // MarketingRulesSidebarCard hace el mismo trabajo debajo.
+        ...(sharingEnabledForPromo ? [{
+          icon: Megaphone,
+          label: "Reglas de marketing",
+          hint: "Dónde puede (o no) promocionarse esta promoción",
+          onClick: () => setMarketingRulesOpen(true),
+          compactOnly: true,
+        }] : []),
       ] : []),
       ...(isPublished ? [
         {
@@ -466,7 +480,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     return (
       <TooltipProvider delayDuration={150}>
         <aside className="hidden lg:block w-full lg:w-12 2xl:w-[260px] lg:shrink-0 order-1 lg:order-2 lg:self-start lg:sticky lg:top-4">
-          <div className="lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto no-scrollbar">
+          <div className="lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto no-scrollbar space-y-3">
             {/* Compact dock — visible md/lg, hidden on 2xl */}
             <div className="2xl:hidden flex lg:flex-col gap-1.5 rounded-2xl bg-card border border-border shadow-soft p-1.5">
               {items.map((item, i) => (
@@ -493,7 +507,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Acciones rápidas</p>
               </div>
               <div className="px-2 pb-2 flex flex-col gap-0.5">
-                {items.filter(i => !i.info && !i.danger).map((item, i) => (
+                {items.filter(i => !i.info && !i.danger && !i.compactOnly).map((item, i) => (
                   <button
                     key={i}
                     onClick={item.onClick}
@@ -546,6 +560,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 </>
               )}
             </div>
+
+            {/* Extras opcionales debajo del dock · p. ej. MarketingRulesSidebarCard
+                · visible solo en 2xl (igual que el labeled dock) para que en
+                md/lg no ensucien las filas de iconos compactos. */}
+            {extras && <div className="hidden 2xl:block">{extras}</div>}
           </div>
         </aside>
       </TooltipProvider>
@@ -1620,6 +1639,22 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               );
             })()}
 
+            {/* ── 7.5 REGLAS DE MARKETING ──
+                 Solo aparecen cuando la promoción ESTÁ PUBLICADA
+                 (status=active + completa). Antes de publicar no
+                 tiene sentido · la promo aún no se comparte con
+                 ninguna agencia. Y si es de uso interno
+                 (`canShareWithAgencies === false`) tampoco.
+                 Tanto promotor como agencia ven la tarjeta; solo el
+                 promotor puede editarla (botón oculto en modo collab). */}
+            {p.status === "active" && !isIncomplete && sharingEnabledForPromo && (
+              <MarketingRulesCard
+                promotionId={p.id}
+                readOnly={viewAsCollaborator}
+                onEdit={viewAsCollaborator ? undefined : () => setMarketingRulesOpen(true)}
+              />
+            )}
+
             {/* ── 8. CONTACTOS (al final) ── */}
             <ContactFooter
               contacts={contacts}
@@ -1635,8 +1670,20 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               {/* ── END LEFT COLUMN ── */}
 
               {/* ── RIGHT RAIL: dock de acciones rápidas (compartido con
-                   la tab Disponibilidad para UX consistente). */}
-              {renderQuickActionsRail()}
+                   la tab Disponibilidad para UX consistente) + tarjeta
+                   de reglas de marketing debajo (2xl+ · animada la
+                   primera vez, se apaga al configurar).
+                   · Solo aparece cuando la promoción está PUBLICADA
+                     (status=active + completa). Antes de publicar no
+                     se comparte con nadie, la regla no aplica. */}
+              {renderQuickActionsRail(
+                p.status === "active" && !isIncomplete && sharingEnabledForPromo && !viewAsCollaborator ? (
+                  <MarketingRulesSidebarCard
+                    promotionId={p.id}
+                    onEdit={() => setMarketingRulesOpen(true)}
+                  />
+                ) : undefined
+              )}
             </div>
 
           </>
@@ -1688,8 +1735,16 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               />
             </div>
 
-            {/* Right rail · mismo dock de acciones rápidas que en Vista general */}
-            {renderQuickActionsRail()}
+            {/* Right rail · mismo dock + SidebarCard que en Vista general
+                (solo si está publicada · ver gate en Vista general). */}
+            {renderQuickActionsRail(
+              p.status === "active" && !isIncomplete && sharingEnabledForPromo && !viewAsCollaborator ? (
+                <MarketingRulesSidebarCard
+                  promotionId={p.id}
+                  onEdit={() => setMarketingRulesOpen(true)}
+                />
+              ) : undefined
+            )}
           </div>
         )}
 
@@ -1867,9 +1922,15 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           </div>
         )}
 
-        {/* ═══ TAB: RECORDS ═══ */}
+        {/* ═══ TAB: RECORDS ═══
+             Misma vista que /registros · filtrada por esta promoción.
+             Reusa RegistrosEmbedded · single source of truth. */}
         {activeTabKey === "Records" && !viewAsCollaborator && (
-          <PromotionRecords embedded />
+          <RegistrosEmbedded
+            filterPromotionId={p.id}
+            emptyTitle="Sin registros para esta promoción"
+            emptyDescription={`Cuando una agencia registre un cliente para ${p.name}, aparecerá aquí. Click en cualquier registro para abrirlo en la bandeja completa.`}
+          />
         )}
 
         {/* ═══ TAB: DOCUMENTS ═══ */}
@@ -1961,6 +2022,14 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       <SharePromotionDialog
         open={shareOpen}
         onOpenChange={setShareOpen}
+        promotionId={p.id}
+        promotionName={p.name}
+      />
+
+      {/* Reglas de marketing · qué canales NO pueden usar las agencias */}
+      <MarketingRulesDialog
+        open={marketingRulesOpen}
+        onOpenChange={setMarketingRulesOpen}
         promotionId={p.id}
         promotionName={p.name}
       />

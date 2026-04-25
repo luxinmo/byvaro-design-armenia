@@ -31,6 +31,12 @@ export type Unit = {
   hitosPagoOverride?: { porcentaje: number; descripcion: string }[];
   deliveryYearOverride?: string;
   energyCertOverride?: string;
+  /** Fotos propias de la unidad. Si `undefined`, la ficha usa un
+   *  fallback mock (Picsum). Primera foto = principal.
+   *  TODO(backend): POST /api/units/:id/photos (upload multipart) →
+   *    { url } · PATCH /api/units/:id { photos: string[] } para
+   *    reordenar / borrar. */
+  photos?: string[];
 };
 
 /** Contexto de promoción inyectado en la ficha de unidad para mostrar

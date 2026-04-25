@@ -472,6 +472,135 @@ Ver `docs/plan-equipo-estadisticas.md §3`:
 
 ---
 
+## 1.10 · Dashboard de actividad (`/actividad` · admin-only)
+
+**Pantalla**: `src/pages/Actividad.tsx` (1564 líneas). Se consume
+cuando el admin entra a `/actividad`. Gate por
+`useHasPermission("activity.dashboard.view")` — ver
+`docs/permissions.md §Dashboard de actividad`. Agentes no ven el
+link en sidebar ni la ruta responde con datos.
+
+**Regla dura**: toda KPI que hable de "ventas" debe declarar en UI si
+cuenta **cerradas** (`contratada ∨ escriturada`) o **terminadas**
+(solo `escriturada`). Es la regla de oro "venta cerrada vs
+terminada" (CLAUDE.md). El backend aplica el mismo filtrado.
+
+### Endpoint único
+
+```
+GET /api/activity/dashboard
+  ?window=7d|30d|90d|year|custom
+  &from=YYYY-MM-DD               (solo custom)
+  &to=YYYY-MM-DD                 (solo custom)
+  &userId=<memberId>             (opcional · filtra a 1 miembro)
+```
+
+### Shape de respuesta
+
+```ts
+{
+  window: { from: string; to: string };   // ISO dates del rango resuelto
+  previous: { from: string; to: string }; // rango previo para deltas
+
+  kpis: {
+    pipelineCierreEur: number;       // reservadas vivas (stock €)
+    pipelineCobroEur: number;        // contratadas vivas (stock €)
+    ventasCerradasCount: number;     // sales con fechaContrato en rango
+    ventasCerradasEur: number;
+    ventasTerminadasCount: number;   // sales con fechaEscritura en rango
+    ventasTerminadasEur: number;
+    visitas: number;                 // calendar events type=visit + done
+    avgResponseMin: number | null;   // ms entre registro.fecha y .decidedAt
+    conversionPct: number;           // visitas / nuevosLeads · 0-100
+    nuevosLeads: number;             // registros con .fecha en rango
+  };
+  kpisPrevious: typeof kpis;         // MISMO shape · rango previo para delta
+
+  funnel: {
+    leads: number;
+    aprobados: number;
+    visitas: number;
+    reservas: number;
+    cerradas: number;                // contratada + escriturada
+    terminadas: number;              // solo escriturada
+  };
+
+  velocity: {
+    leadToApproved: number | null;   // días medios
+    approvedToVisit: number | null;
+    visitToReserva: number | null;
+    reservaToContrato: number | null;
+    contratoToEscritura: number | null;
+  };
+
+  mix: {
+    byOrigin: Array<{ key: "direct" | "collaborator"; count: number; pct: number }>;
+    byAgencia: Array<{ agencyId: string; name: string; count: number }>;
+    byPromocion: Array<{ promotionId: string; name: string; count: number }>;
+  };
+
+  heatmap: number[][];               // 7×24 · [dow][hour] · eventos del rango
+
+  team: {
+    members: Array<{
+      userId: string;
+      name: string;
+      avatarUrl?: string;
+      score: number;                 // 0-100 · composite health
+      signals: {
+        leadsDecididos: number;
+        visitasCumplidas: number;
+        avgResponseMin: number | null;
+        conversionPct: number;
+        lastActivityAt: string | null;
+      };
+    }>;
+  };
+
+  rankings: {
+    topAgenciasByRegistros: Array<{ agencyId: string; name: string; count: number }>;
+    topAgenciasByVentas: Array<{ agencyId: string; name: string; count: number; volumenEur: number }>;
+    topMiembrosByClosed: Array<{ userId: string; name: string; count: number; volumenEur: number }>;
+  };
+}
+```
+
+### Reglas server-side (vinculantes)
+
+1. **Gate**: el handler rechaza con 403 si el JWT no trae
+   `activity.dashboard.view` (no depender solo de la UI).
+2. **Ventas cerradas** = `status IN ('contratada', 'escriturada')` ·
+   nunca solo `escriturada`.
+3. **Ventas terminadas** = `status = 'escriturada'` exclusivo.
+4. **Rango previo** = mismo tamaño que `window` justo antes (ej.
+   ventana 30d → 30 días anteriores). Para `custom`, el backend
+   calcula `to_previous = from - 1 día; from_previous = to_previous
+   - (to - from)`.
+5. **`userId` filter**: cuando se filtra por miembro, TODOS los
+   arrays (`funnel`, `mix`, `rankings.topMiembrosByClosed`,
+   `heatmap`) se recalculan contra ese miembro. El backend NO
+   devuelve otras personas del equipo.
+6. **Caché**: resultado cacheable 60 segundos por `(tenantId,
+   window, userId)`. Los movimientos de negocio son "near-real-time"
+   pero no hace falta sub-minuto.
+
+### Mock actual
+
+El frontend calcula todo client-side desde:
+- `src/data/records.ts` (registros)
+- `src/data/sales.ts` (ventas)
+- `src/lib/calendarStorage.ts` (visitas)
+- `src/lib/team.ts` (miembros)
+- `src/data/agencies.ts` (agencias)
+
+Al conectar backend, el computo server-side debe coincidir con las
+fórmulas de `computeKpis()`, `computeFunnel()`, `computeVelocity()`,
+`computeHeatmap()`, `computeTeamHealth()` del archivo `Actividad.tsx`.
+Idealmente: tests E2E que comparen `mock vs backend` para una ventana
+fija antes de quitar los mocks.
+
+---
+
 ## 2 · Empresa (perfil del tenant)
 
 **Tipo completo**: `src/lib/empresa.ts:32` (interface `Empresa`).
@@ -604,6 +733,126 @@ Disponibilidad aparece condicionalmente).
 | `POST /api/collaborators/:id/pause` | pausar colaboración | `src/pages/Colaboradores.tsx:200` |
 | `POST /api/collaborators/:id/resume` | reanudar colaboración | idem |
 | `GET /api/agencias/:id/email-contacto` | email de contacto para invitaciones | `src/components/promotions/SharePromotionDialog.tsx:203` |
+
+### 4.0 · Panel operativo del colaborador (ADR-057)
+
+Endpoints que consumen los 9 tabs de `/colaboradores/:id/panel`
+(`src/pages/ColaboracionPanel.tsx`). Todos tras gate
+`collaboration.panel.view` (ver `docs/permissions.md §Colaboradores`).
+El backend **debe** devolver 403 si el caller no tiene la key, no
+depender solo del hide-on-UI.
+
+| Tab | Endpoint | Permiso | Fuente en UI |
+|---|---|---|---|
+| Resumen | `GET /api/agencias/:id/panel/summary` | `collaboration.panel.view` | `ResumenTab.tsx` |
+| Datos | `GET /api/empresas/:id/public` | `collaboration.panel.view` | `DatosTab.tsx` vía `useEmpresa(id)` |
+| Visitas | `GET /api/agencias/:id/visits?status=...` | `collaboration.panel.view` | `VisitasTab.tsx` |
+| Registros | `GET /api/agencias/:id/registrations?status=...` | `collaboration.panel.view` | `RegistrosTab.tsx` |
+| Ventas | `GET /api/agencias/:id/sales?stage=...` | `collaboration.panel.view` | `VentasTab.tsx` |
+| Documentación · contratos | `GET /api/agencias/:id/contracts` | `collaboration.contracts.view` | `DocumentacionTab.tsx` bloque 1 |
+| Documentación · requests | `GET /api/agencias/:id/doc-requests` | `collaboration.documents.manage` | `DocumentacionTab.tsx` bloque 2 |
+| Pagos | `GET /api/agencias/:id/payments` | `collaboration.payments.view` | `PagosTab.tsx` |
+| Facturas | `GET /api/agencias/:id/invoices` | `collaboration.payments.view` | `FacturasTab.tsx` |
+| Historial | `GET /api/agencias/:id/company-events` | `collaboration.panel.view` · admin | `HistorialTab.tsx` |
+
+#### Resumen · shape
+
+```ts
+GET /api/agencias/:id/panel/summary → {
+  status: "activa" | "contrato-pendiente" | "pausada";
+  enColaboracion: Array<{
+    promotionId: string;
+    promotionName: string;
+    coverUrl?: string;
+    contratoEnVigor: boolean;   // true si hay contrato firmado con
+                                // este promotionId en scopePromotionIds
+    docsPendientes: number;     // doc-requests abiertos
+    registros30d: number;
+    visitasProximas: number;
+  }>;
+  sinCompartir: Array<{         // promos activas + canShareWithAgencies
+    promotionId: string;
+    promotionName: string;
+    coverUrl?: string;
+  }>;
+  proximasVisitas: Array<{
+    visitId: string;
+    clientName: string;
+    promotionName: string;
+    scheduledAt: string;
+    agentName: string;
+  }>;
+  incidencias: { duplicados: number; cancelaciones: number; reclamaciones: number };
+}
+```
+
+#### Contratos per-promoción (Firmafy-style)
+
+`POST /api/contracts` — subir PDF + enviar a firmar.
+
+```ts
+{
+  agencyId: string;
+  scopePromotionIds: string[];   // OBLIGATORIO · contratos per-promoción
+  signers: Array<{ email: string; name: string; role: "promotor"|"agencia" }>;
+  file: File;                    // PDF · multipart
+  expiresAt?: string;            // caducidad del contrato firmado
+}
+→ { contractId: string; firmafySessionUrl: string }
+```
+
+`PATCH /api/contracts/:id` — actualizar scope, marcar firmado
+manualmente, revocar. Ver `docs/backend/integrations/firmafy.md` para
+el webhook de confirmación de firma.
+
+**Regla crítica**: al firmarse, emitir `CollaborationContractSigned`
++ marcar `contratoEnVigor: true` en cada `promotionId` de
+`scopePromotionIds`. La UI lee ese flag para pintar el badge
+"Contrato en vigor" en `AgenciasTabStats` y `ResumenTab`.
+
+#### Pagos · mutaciones
+
+```
+POST /api/agencias/:id/payments/:paymentId/mark-paid
+POST /api/agencias/:id/payments/:paymentId/hold
+POST /api/agencias/:id/payments/:paymentId/release
+POST /api/agencias/:id/payments/:paymentId/cancel
+POST /api/agencias/:id/payments/:paymentId/proof    (multipart)
+```
+
+Todas requieren `collaboration.payments.manage` y emiten
+`recordCompanyEvent({ type: "payment.*" })` para el historial.
+
+#### Doc requests
+
+```
+POST /api/agencias/:id/doc-requests
+  → { type: "invoice"|"iban"|"tax-cert"|"quarterly"|"insurance"|"custom", title, dueDate? }
+POST /api/agencias/:id/doc-requests/:rid/approve
+POST /api/agencias/:id/doc-requests/:rid/reject   { reason }
+```
+
+La agencia sube los PDFs desde su workspace (fase futura); el promotor
+aprueba/rechaza desde aquí.
+
+#### Invitaciones (Fase 11)
+
+```
+POST /api/invitations                     { promotionId, agencyId, message? }
+POST /api/invitations/:id/accept          → genera Collaboration activa
+POST /api/invitations/:id/reject          { reason? }
+GET  /api/invitations?scope=agency|promotor
+```
+
+**Gate server-side obligatorio**: rechazar (`422`) si la promo no es
+`status === "active" && canShareWithAgencies !== false`. El frontend
+ya filtra pero el backend **debe** replicar la regla — es la única
+defensa contra datos corruptos que el self-heal del cliente no puede
+resolver.
+
+Al aceptar, emitir `CollaborationStarted` y registrar entrada en el
+historial cross-empresa (`recordCompanyEvent` del lado promotor y del
+lado agencia cuando exista `workspaceId` de agencia).
 
 ### Campos clave del `Agency`
 
@@ -785,6 +1034,54 @@ Las tres se derivan con reglas deterministas en
 `ColaboradoresEstadisticas.tsx` (`deriveInsights` y `deriveOportunidades`).
 Cuando el dataset crezca y las reglas se compliquen, mover al servidor
 con endpoint dedicado `GET .../estadisticas/insights`.
+
+### 4.3 · Reglas de marketing por promoción
+
+El promotor define, por promoción, qué canales (portales inmobiliarios,
+redes sociales, ads) quedan PROHIBIDOS para las agencias
+colaboradoras. La agencia ve la misma regla en la ficha y debe
+respetarla — violarla puede llevar a extinción del contrato.
+
+**Tipo** · `Promotion.marketingProhibitions?: string[]` (ids del
+catálogo). Ausencia = "todo permitido".
+
+**Catálogo** · `src/lib/marketingChannels.ts` (15 canales agrupados
+en 3 categorías · portales · redes · publicidad). Los ids son
+estables — nunca renombrar.
+
+**Storage actual** · localStorage clave
+`byvaro.promotion.marketingProhibitions.v1:<id>`
+(`src/lib/marketingRulesStorage.ts`).
+
+**Endpoints esperados**:
+
+| Endpoint | Propósito |
+|---|---|
+| `GET /api/promociones/:id` | respuesta ya trae `marketingProhibitions: string[]` |
+| `PATCH /api/promociones/:id` | body incluye `marketingProhibitions?: string[]` |
+| `GET /api/marketing/channels` | catálogo del backend (sobrescribe al mock cliente; incluirá qué integraciones están activas en el tenant para UI) |
+
+**Integración con conectores de portales** (fase futura ·
+`src/lib/portalIntegrations/*`):
+
+1. **Gate duro en dispatcher** · al publicar desde la agencia, el
+   dispatcher de portal DEBE leer `marketingProhibitions` antes de
+   hacer push. Si el canal está prohibido → 422
+   `channel_prohibited` + UI de la agencia muestra botón bloqueado
+   con tooltip "El promotor ha prohibido este canal".
+2. **Detección post-hoc** · si un portal notifica (webhook) una
+   publicación fuera del flujo (agencia publicó a mano), el sistema
+   registra incidencia en historial cross-empresa:
+   `recordCompanyEvent({ type: "marketing.violation", channelId,
+   promotionId })` + notifica al admin del promotor por email +
+   push.
+3. **Contrato** · la cláusula de marketing del contrato de
+   colaboración debe referenciar esta regla textualmente (plantilla
+   en `/ajustes/plantillas` categoría "Documentos → contratos").
+
+**Visibilidad** · admin y agente del promotor la editan (no hay gate
+de permiso específico por ahora · la edita quien edita la promoción);
+la agencia la ve read-only en su vista de ficha.
 
 ---
 

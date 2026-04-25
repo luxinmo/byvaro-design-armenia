@@ -125,6 +125,34 @@ Las claves siguen el patrón `<dominio>.<acción>`. Un permiso `viewAll`
 - `agencies.invite` — invitar nuevas agencias a colaborar.
 - `agencies.removeCollaborator` — desvincular una agencia colaboradora.
 
+### Panel operativo del colaborador · `collaboration.*` (ADR-057)
+
+Gating del panel `/colaboradores/:id/panel` y sus tabs. Todo el bloque
+contiene **datos sensibles cross-empresa** (contratos, comisiones,
+incidencias, financiero). Admin-only por defecto.
+
+- `collaboration.panel.view` — ver el panel completo. Sin esta key,
+  la ruta muestra empty state "Sin acceso".
+- `collaboration.contracts.view` — ver la lista de contratos de la tab
+  Documentación. Gate de la sección.
+- `collaboration.contracts.manage` — subir PDF nuevo · enviar a firmar
+  (Firmafy) · marcar como firmado manualmente · revocar. Gate del
+  botón primario.
+- `collaboration.incidents.view` — ver incidencias (duplicados,
+  cancelaciones, reclamaciones) en la tab Resumen/Historial.
+- `collaboration.payments.view` — ver la tab Pagos (calendario de
+  pagos pendientes, pagados, bloqueados) + KPIs financieros.
+- `collaboration.payments.manage` — marcar pagado · poner on-hold ·
+  liberar · cancelar · subir comprobante interno.
+- `collaboration.documents.manage` — solicitar documentos a la agencia
+  (factura, IBAN, certificados) · aprobar/rechazar los subidos.
+
+### Dashboard de actividad · `activity.*`
+
+- `activity.dashboard.view` — ver `/actividad` (KPIs financieros,
+  embudo de conversión, rankings, heatmap). Datos sensibles de negocio
+  y desempeño interno. Admin-only por defecto.
+
 ### Calendario · `calendar.*`
 - `calendar.viewOwn` — ver solo eventos donde es organizador o invitado.
 - `calendar.viewAll` — ver toda la agenda del workspace.
@@ -149,6 +177,19 @@ Las claves siguen el patrón `<dominio>.<acción>`. Un permiso `viewAll`
 > `src/lib/permissions.ts` y se persiste en `localStorage` mientras no
 > haya backend. En producción vive en la tabla `role_permissions` y se
 > resuelve server-side.
+
+### Defaults por rol · keys sensibles cross-empresa
+
+| Key | admin | member | Notas |
+|---|:-:|:-:|---|
+| `collaboration.panel.view` | ✅ | ❌ | Solo admin · datos cross-empresa |
+| `collaboration.contracts.view` | ✅ | ❌ | |
+| `collaboration.contracts.manage` | ✅ | ❌ | Acción destructiva |
+| `collaboration.incidents.view` | ✅ | ❌ | |
+| `collaboration.payments.view` | ✅ | ❌ | Financiero |
+| `collaboration.payments.manage` | ✅ | ❌ | |
+| `collaboration.documents.manage` | ✅ | ❌ | |
+| `activity.dashboard.view` | ✅ | ❌ | KPIs globales |
 
 ### `admin` — TODOS los permisos por defecto.
 

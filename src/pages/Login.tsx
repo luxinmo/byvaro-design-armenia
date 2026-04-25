@@ -36,7 +36,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { toast, Toaster } from "sonner"; // feedback no bloqueante post-submit
+import { toast } from "sonner"; // Toaster global en App.tsx
 import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, Building2, Handshake } from "lucide-react"; // iconos inline en inputs y estados
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/BrandLogo"; // isotipo + wordmark oficial (SVG inline)
@@ -131,9 +131,6 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Toaster local — la app raíz no lo monta aún en /login */}
-      <Toaster position="top-center" richColors closeButton />
-
       <div className="min-h-screen grid lg:grid-cols-2">
         {/* ══════ COLUMNA FORM ══════ */}
         <section className="flex flex-col px-5 py-8 sm:px-8 lg:px-12">

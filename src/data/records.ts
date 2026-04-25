@@ -50,10 +50,16 @@ export type RegistroOrigen = "direct" | "collaborator";
 
 export type RegistroCliente = {
   nombre: string;
-  email: string;
+  /** Email del cliente · OPCIONAL. Solo se captura si la promoción
+   *  incluye `"email_completo"` en `CondicionRegistro`. En flujos
+   *  colaborador, la UI lo enmascara hasta que el promotor aprueba. */
+  email?: string;
   telefono: string;
-  /** DNI / NIE / pasaporte — string libre para mocks. */
-  dni: string;
+  /** DNI / NIE / pasaporte — OPCIONAL en fase registro. Solo se exige
+   *  en la transición a reserva (minimización GDPR · menor fricción
+   *  inicial). `CondicionRegistro` en `types/promotion-config.ts` ya
+   *  excluye "dni" de las opciones configurables por el promotor. */
+  dni?: string;
   /** Nacionalidad en español. Emoji opcional: el pipeline real lo deduce. */
   nacionalidad: string;
   flag?: string;
@@ -63,8 +69,39 @@ export type RegistroCliente = {
  * Tipo de registro:
  *   - "registration"        → solicitud sólo de registro (apartado).
  *   - "registration_visit"  → registro + visita programada solicitada.
+ *   - "visit_only"          → SOLO visita · el cliente ya estaba
+ *                              registrado previamente (aprobado) y
+ *                              ahora se propone una visita nueva.
+ *                              Salta todos los checks de cliente y
+ *                              pasa directo al flujo de visita.
  */
-export type RegistroTipo = "registration" | "registration_visit";
+export type RegistroTipo = "registration" | "registration_visit" | "visit_only";
+
+/**
+ * Relación posible detectada por el backend al cruzar el cliente
+ * entrante con el CRM del promotor. Permite avisar de vínculos que
+ * el agente podría no conocer (pareja, familiar) antes de aprobar el
+ * registro · si se confirma, queda como relación en la ficha del
+ * contacto (bidireccional).
+ *
+ * TODO(backend): detectar automáticamente a partir de coincidencias
+ * de dirección + apellido + teléfonos compartidos + registros
+ * anteriores cruzados. Ver `docs/backend-integration.md`.
+ */
+export type PossibleRelation = {
+  /** Nombre del contacto/cliente existente · datos sensibles solo
+   *  visibles con `records.matchDetails.view`. */
+  contactName: string;
+  /** Id del contacto existente (para linkar bidireccional). */
+  contactId?: string;
+  /** Tipo de relación sugerida: "pareja" | "familiar" | "socio" | ... */
+  relation: string;
+  /** Confianza 0-100. A partir de 70% se muestra el aviso. */
+  confidence: number;
+  /** Motivos que dispararon la detección (ej. "Mismo teléfono
+   *  registrado en ficha", "Mismo apellido y dirección"). */
+  reasons: string[];
+};
 
 /**
  * Evento del ciclo de vida del Registro · ActivityTimeline.
@@ -157,6 +194,29 @@ export type Registro = {
    *  cuándo, dispositivo, zona horaria, versión de términos aceptada.
    *  Se populará con `captureFingerprint()` (ver `src/lib/audit.ts`). */
   audit?: import("@/lib/audit").ActionFingerprint;
+  /** Relación posible detectada por el backend (pareja, familiar). Si
+   *  aparece, el flujo de aprobación la confirma/descarta antes de
+   *  marcar el registro como aprobado. */
+  possibleRelation?: PossibleRelation;
+  /** Id del registro original · solo en `tipo === "visit_only"` · el
+   *  cliente ya fue aprobado en ese registro. */
+  originRegistroId?: string;
+  /* TODO(fase-2) · "Pedir más datos a la agencia". No es un one-shot
+   * sino un thread bidireccional · hay que decidir canal (in-app /
+   * email híbrido tipo Intercom/Stripe / WhatsApp). Ver nota abajo.
+   *
+   *   infoRequests?: Array<{
+   *     id: string;
+   *     at: string;
+   *     by: { userId: string; name: string };
+   *     message: string;
+   *     response?: { at: string; by: { userId: string; name: string }; message: string };
+   *   }>;
+   *
+   * Cada mensaje dispara evento en timeline del registro + del
+   * contacto (regla CLAUDE.md §🥇). Notificación entrega via email
+   * + WhatsApp + bell in-app. Mientras hay requests abiertas, la
+   * card pinta un pill "Info pedida" en vez de "Pendiente". */
 };
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -230,6 +290,20 @@ export const registros: Registro[] = [
     estado: "pendiente",
     matchPercentage: 0,
     consent: true,
+    /* El backend detectó relación posible con un contacto existente
+     * (mismo apellido + tel compartido) · el agente debe confirmar
+     * antes de aprobar. */
+    possibleRelation: {
+      contactName: "Sophie van der Berg",
+      contactId: "c-nl-007",
+      relation: "pareja",
+      confidence: 82,
+      reasons: [
+        "Mismo teléfono registrado en su ficha",
+        "Misma dirección fiscal",
+        "Apellido coincidente",
+      ],
+    },
   },
   {
     id: "reg-004",
@@ -692,6 +766,59 @@ export const registros: Registro[] = [
     decidedAt: minsAgo(45),
     decidedBy: "Promotor",
     matchPercentage: 0,
+    consent: true,
+  },
+
+  /* ───── Cross-promoción · mismo email que reg-005 (James O'Connor,
+     pendiente en promoción 2) pero aprobado en promoción 4 con otra
+     agencia. Sirve para probar el banner CrossPromotionWarning.
+     En producción esto reflejaría un cliente que ya está activo con
+     otra agencia en otra promoción · conflicto potencial de comisión. ───── */
+  {
+    id: "reg-024",
+    origen: "collaborator",
+    promotionId: "4",
+    agencyId: "ag-3",
+    cliente: {
+      nombre: "James O'Connor",
+      email: "james.oconnor@gmail.com",
+      telefono: "+44 7700 900 301",
+      nacionalidad: "Reino Unido",
+      flag: "🇬🇧",
+    },
+    fecha: daysAgo(30),
+    estado: "aprobado",
+    decidedAt: daysAgo(29),
+    decidedByUserId: "u1",
+    decidedBy: "Arman Rahmanov",
+    matchPercentage: 0,
+    consent: true,
+    notas: "Cliente registrado y activo en Residencial Costa Brava.",
+  },
+
+  /* ───── Solo visita · cliente ya aprobado · agencia propone una
+     visita nueva sobre la misma promoción. Flujo salta los checks de
+     cliente y pasa directo a confirmar visita + agente. ───── */
+  {
+    id: "reg-023",
+    tipo: "visit_only",
+    originRegistroId: "reg-004",
+    visitDate: "2026-04-30",
+    visitTime: "17:00",
+    origen: "collaborator",
+    promotionId: "1",
+    agencyId: "ag-2",
+    cliente: {
+      nombre: "Anna-Liisa Virtanen",
+      email: "anna.virtanen@outlook.fi",
+      telefono: "+358 40 555 2211",
+      nacionalidad: "Finlandia",
+      flag: "🇫🇮",
+    },
+    fecha: minsAgo(30),
+    estado: "pendiente",
+    matchPercentage: 0,
+    recommendation: "Cliente ya aprobado previamente · solo confirma la visita.",
     consent: true,
   },
 ];
