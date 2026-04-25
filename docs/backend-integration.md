@@ -208,6 +208,144 @@ plantillas server-side — cuando migre, replicar la lógica de
 
 ---
 
+## 1.5.2 · Auditoría dual-role · checklist anti-fugas (vinculante backend)
+
+> Esta sección es **el mapa que el backend tiene que aplicar** para
+> que la separación de datos entre promotor y agencia colaboradora sea
+> hermética. La UI ya filtra · pero la UI nunca es la única defensa.
+> Cada bullet aquí debe traducirse a una RLS policy o un check en
+> middleware.
+
+### Tabla maestra · qué ve cada rol
+
+| Pantalla | Promotor admin | Promotor agente | Agencia (admin/agente) |
+|---|---|---|---|
+| `/inicio` | dashboard global | dashboard scoped a su ownership | home agencia simplificado |
+| `/actividad` | KPIs financieros + rankings | ❌ (sin permission `activity.dashboard.view`) | ❌ ruta protegida `<PromotorOnly>` |
+| `/promociones` | todas las del tenant | todas las del tenant (read filtrado por viewOwn) | solo donde colabora · filtro por `Collaboration.estadoColaboracion = 'activa'` |
+| `/promociones/:id` (Overview) | datos completos | datos completos | datos REDACTED · sin `commission`, sin `comerciales[]`, sin `agencias[]`, sin `marketingProhibitions` (gating UI ya existe, falta backend) |
+| `/promociones/:id` (tab Agencies) | listado completo | listado completo | ❌ tab oculto |
+| `/promociones/:id` (tab Comisiones) | datos completos | datos completos | redacted (su % comisión solo, no las del resto) |
+| `/registros` | todos del tenant | filtrado por `assigned_to.includes(user.id)` (TODO) | solo `agency_id = me.agency_id` |
+| `/registros/:id` (deep-link) | OK si pertenece al tenant | OK si es suyo | rechazo 403 si `agency_id !== me.agency_id` |
+| `/ventas` | todas | filtrado viewOwn | solo donde la agencia es interviniente |
+| `/contactos` | todos | viewOwn | **NUNCA** ve los del promotor · cada tenant tiene los suyos |
+| `/calendario` | todo el equipo | viewOwn (eventos donde es asignado) | solo eventos con `assignee_user_id = me.id` o `agency_id = me.agency_id` |
+| `/colaboradores` (listado · panel · estadísticas · ficha · contratos · historial) | todo | todo | ❌ rutas con `<PromotorOnly>` |
+| `/oportunidades` (Leads) | todo | viewOwn | ❌ ruta promotor-only |
+| `/microsites` | edición | edición | ❌ ruta promotor-only |
+| `/emails` | bandeja del workspace | sus cuentas | ❌ ruta promotor-only · agencia tiene su propio cliente cuando exista |
+| `/empresa` | edita su empresa | edita su empresa | edita SU agencia (visitor mode con tenantId distinto) |
+| `/equipo` | gestiona equipo | ve equipo | ❌ ruta promotor-only |
+| `/contratos` | todos cross-empresa | gateado por permission | ❌ ruta promotor-only |
+| `/sugerencias` | todo | todo | ❌ ruta promotor-only |
+| `/ajustes/*` | todo el workspace | parcial | mismo árbol pero scoped al tenant agencia |
+
+### Reglas RLS canónicas (PostgreSQL)
+
+```sql
+-- Multi-tenant primero · cada tabla lleva tenant_id
+CREATE POLICY tenant_isolation ON <tabla>
+  FOR ALL USING (tenant_id = current_setting('app.tenant_id')::uuid);
+
+-- Promociones · scope por colaboración para agencias
+CREATE POLICY promociones_agency_view ON promociones FOR SELECT USING (
+  current_setting('app.account_type') = 'developer'
+  OR EXISTS (
+    SELECT 1 FROM collaborations c
+    WHERE c.promotion_id = promociones.id
+      AND c.agency_id = current_setting('app.tenant_id')::uuid
+      AND c.estado = 'activa'
+  )
+);
+
+-- Calendario · agencia solo ve sus propios eventos
+CREATE POLICY calendar_agency_view ON calendar_events FOR SELECT USING (
+  current_setting('app.account_type') = 'developer'
+    AND tenant_id = current_setting('app.tenant_id')::uuid
+  OR (
+    current_setting('app.account_type') = 'agency'
+    AND (
+      assignee_user_id = current_setting('app.user_id')::uuid
+      OR agency_id = current_setting('app.tenant_id')::uuid
+    )
+  )
+);
+
+-- Registros · agencia ve solo los que aportó ella
+CREATE POLICY registros_agency_view ON registros FOR SELECT USING (
+  current_setting('app.account_type') = 'developer'
+    AND EXISTS (SELECT 1 FROM promociones p WHERE p.id = registros.promotion_id AND p.tenant_id = current_setting('app.tenant_id')::uuid)
+  OR (
+    current_setting('app.account_type') = 'agency'
+    AND agency_id = current_setting('app.tenant_id')::uuid
+  )
+);
+
+-- Contactos · NUNCA cross-tenant
+CREATE POLICY contactos_strict_tenant ON contactos FOR ALL USING (
+  tenant_id = current_setting('app.tenant_id')::uuid
+);
+```
+
+### Endpoints redacted · campos que NO viajan al cliente cuando rol = agency
+
+```ts
+// GET /api/promociones/:id  ·  resp con shape Promotion
+// Si JWT.accountType === "agency" Y la agencia NO está activa en esa promo,
+//   → 404 Not Found (no se filtra · se rechaza entero).
+// Si la agencia está activa, redactar:
+omitForAgency = [
+  "commission",                  // % de comisión del promotor (puede ser distinto al pactado con esta agencia)
+  "collaboration.comisionInternacional",
+  "collaboration.comisionNacional",
+  "collaboration.diferenciarComisiones",
+  "collaboration.hitosComision",  // se sustituye por los de SU contrato
+  "comerciales",                  // agentes del promotor
+  "puntosDeVenta",                // showroom interno
+  "agencias",                     // listado de agencias rivales en la misma promo
+  "marketingProhibitions",        // SE ENVIA · necesita conocerlo (regla a respetar)
+  "missingSteps",                 // info interna del promotor
+];
+
+// El backend devuelve además los campos PROPIOS de SU contrato:
+addForAgency = {
+  myCommission: number,            // su % pactado
+  myMilestones: HitoComision[],    // sus hitos de pago
+  myDocuments: [...],              // contratos firmados con ella
+}
+```
+
+### Validación server-side · checks de middleware
+
+1. **Toda ruta `/api/developer/*`** rechaza con 403 si `JWT.accountType !== "developer"`.
+2. **Toda ruta `/api/agency/*`** rechaza con 403 si `JWT.accountType !== "agency"`.
+3. **Rutas compartidas**: el handler aplica RLS · NUNCA confía en query params para scope.
+4. **Deep-links** (`/api/X/:id`): validar que `:id` pertenece al scope antes de devolver el shape · si no, 404 (no 403, para no leak existencia).
+
+### Hooks/utilidades del frontend ya cableados
+
+- `useCurrentUser()` → `{ id, accountType, agencyId, ... }` desde `sessionStorage` (mock) · futuro: del JWT decodificado.
+- `<PromotorOnly>` (`src/App.tsx:95`) · wrapper de ruta · redirige a `/inicio` si agencia.
+- `viewAsCollaborator` · pattern usado en pantallas mixtas para esconder controles del promotor.
+- `useHasPermission(key)` · gates de feature dentro del rol.
+- Filtros locales canónicos:
+  - `Calendario.tsx:72` · agencia solo ve sus eventos
+  - `Registros.tsx:143` · agencia solo ve sus registros
+  - `Ventas.tsx:122` · agencia solo ve sus ventas
+  - `Contactos.tsx:119` · agencia solo ve sus contactos
+  - `Promociones.tsx` · `useFilteredPromotions()` por rol
+
+### Checklist al añadir una pantalla nueva
+
+- [ ] ¿La pantalla muestra datos de OTRO tenant en algún caso?
+- [ ] ¿Está la ruta detrás de `<PromotorOnly>` o tiene filtro `accountType` interno?
+- [ ] ¿Cada llamada al backend especifica el scope esperado?
+- [ ] ¿La RLS de las tablas que toca contempla este nuevo flujo?
+- [ ] ¿La sección de la tabla maestra de arriba se ha actualizado con el nuevo screen?
+
+---
+
 ## 1.6 · Contactos (ficha completa)
 
 > Spec UI canónica: `docs/screens/contactos-ficha.md`. Tipos en
