@@ -12,12 +12,21 @@
  * "sin coincidencias" la pantalla padre muestra otro empty state.
  */
 
-import { Check, X, AlertTriangle, ArrowRight } from "lucide-react";
+import { Check, X, AlertTriangle, ArrowRight, ShieldOff } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { MatchRing } from "./MatchRing";
 import type { Registro } from "@/data/records";
 
-export function DuplicateResult({ record }: { record: Registro }) {
+type Props = {
+  record: Registro;
+  /** Callback opcional · si se pasa, aparece el botón "No es duplicado"
+   *  que permite al promotor descartar el match (feedback loop IA). */
+  onDismissMatch?: () => void;
+};
+
+export function DuplicateResult({ record, onDismissMatch }: Props) {
+  const navigate = useNavigate();
   if (!record.matchCliente || record.matchPercentage === 0) return null;
 
   const pct = record.matchPercentage;
@@ -82,7 +91,10 @@ export function DuplicateResult({ record }: { record: Registro }) {
               {f.existingValue || "—"}
             </span>
             <div className="flex justify-center">
-              {f.match ? (
+              {f.neutral ? (
+                // Campo informativo · sin indicador de coincidencia.
+                <span aria-hidden />
+              ) : f.match ? (
                 <span className="h-5 w-5 rounded-full bg-success/15 grid place-items-center">
                   <Check className="h-3 w-3 text-success dark:text-success" strokeWidth={2.5} />
                 </span>
@@ -124,8 +136,15 @@ export function DuplicateResult({ record }: { record: Registro }) {
                 type="button"
                 className="text-[11px] font-semibold text-foreground hover:underline mt-1 inline-flex items-center gap-1"
                 onClick={() => {
-                  /* TODO(ui): cuando exista el deep-link al contacto
-                   * dueño del duplicado, navegar a /contactos/:id. */
+                  /* Deep-link a `/contactos` con el email (o nombre)
+                   *  del contacto coincidente como query. La página
+                   *  `Contactos.tsx` lee `?q=` y precarga el search.
+                   *  TODO(backend): cuando Contact tenga `id` en el
+                   *  matchCliente, navegar directo a `/contactos/:id`. */
+                  const q = record.matchCliente?.email
+                    ?? record.matchCliente?.nombre
+                    ?? "";
+                  navigate(`/contactos?q=${encodeURIComponent(q)}`);
                 }}
               >
                 Ver histórico del cliente <ArrowRight className="h-3 w-3" />
@@ -134,23 +153,71 @@ export function DuplicateResult({ record }: { record: Registro }) {
           </div>
         </div>
       )}
+
+      {/* Feedback loop · el promotor puede descartar el match si
+          conoce que son personas distintas (ej. hermanos con mismo
+          apellido y dirección) · señal de entrenamiento para la IA. */}
+      {onDismissMatch && (
+        <div className="pt-2 border-t border-border/30 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            ¿La IA se ha equivocado? Descarta el match para que aprenda.
+          </p>
+          <button
+            type="button"
+            onClick={onDismissMatch}
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-border bg-card text-[11.5px] font-medium text-foreground hover:bg-muted transition-colors shrink-0"
+          >
+            <ShieldOff className="h-3.5 w-3.5" strokeWidth={1.75} />
+            No es duplicado
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-/** Construye las filas de la tabla a partir de cliente vs matchCliente. */
+/** Si el registro viene de colaborador, enmascara el teléfono
+ *  dejando prefijo + últimos 4 dígitos (regla de privacidad: la
+ *  agencia posee el contacto hasta que se aprueba el registro). */
+function maskPhoneIfCollab(telefono: string, origen: Registro["origen"]): string {
+  if (origen === "direct") return telefono;
+  const digits = telefono.replace(/\D/g, "");
+  if (digits.length <= 4) return telefono;
+  const last4 = digits.slice(-4);
+  const prefix = telefono.match(/^\+\d+/)?.[0];
+  return prefix ? `${prefix} ··· ··· ${last4}` : `··· ··· ${last4}`;
+}
+
+/** Construye las filas de la tabla a partir de cliente vs matchCliente.
+ *  DNI ya no se muestra (no se pide en fase registro · ver
+ *  CLAUDE.md + types/promotion-config.ts::CondicionRegistro). El
+ *  teléfono del registro entrante se enmascara si es colaborador.
+ *  La nacionalidad NO se evalúa como coincidencia (millones comparten
+ *  el mismo país · es contexto, no señal de duplicado) · se marca
+ *  como `neutral`. */
 function buildMatchFields(r: Registro): Array<{
   field: string;
   newValue: string;
   existingValue: string;
   match: boolean;
+  /** Si true, no se pinta ni check ni X · el campo es informativo. */
+  neutral?: boolean;
 }> {
   const m = r.matchCliente ?? {};
+  const maskedPhone = maskPhoneIfCollab(r.cliente.telefono, r.origen);
+  // Nacionalidad con bandera · si matchCliente no trae flag propia
+  // pero la nacionalidad coincide, reutilizamos la del entrante.
+  const natNew = r.cliente.flag
+    ? `${r.cliente.flag} ${r.cliente.nacionalidad}`
+    : r.cliente.nacionalidad;
+  const existingFlag = m.flag
+    ?? (m.nacionalidad === r.cliente.nacionalidad ? r.cliente.flag : undefined);
+  const natExisting = m.nacionalidad
+    ? (existingFlag ? `${existingFlag} ${m.nacionalidad}` : m.nacionalidad)
+    : "";
   return [
     { field: "Nombre",       newValue: r.cliente.nombre,       existingValue: m.nombre       ?? "", match: m.nombre       === r.cliente.nombre },
-    { field: "Email",        newValue: r.cliente.email,        existingValue: m.email        ?? "", match: m.email        === r.cliente.email },
-    { field: "Teléfono",     newValue: r.cliente.telefono,     existingValue: m.telefono     ?? "", match: m.telefono     === r.cliente.telefono },
-    { field: "DNI / NIE",    newValue: r.cliente.dni,          existingValue: m.dni          ?? "", match: m.dni          === r.cliente.dni },
-    { field: "Nacionalidad", newValue: r.cliente.nacionalidad, existingValue: m.nacionalidad ?? "", match: m.nacionalidad === r.cliente.nacionalidad },
+    { field: "Teléfono",     newValue: maskedPhone,            existingValue: m.telefono     ?? "", match: m.telefono     === r.cliente.telefono },
+    { field: "Nacionalidad", newValue: natNew,                 existingValue: natExisting,         match: false, neutral: true },
   ];
 }

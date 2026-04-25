@@ -26,6 +26,8 @@ import { useInvitaciones } from "@/lib/invitaciones";
 import { agencies } from "@/data/agencies";
 import { useHasPermission } from "@/lib/permissions";
 import { logout } from "@/lib/accountType";
+import { registros as seedRegistros } from "@/data/records";
+import { useCreatedRegistros } from "@/lib/registrosStorage";
 
 type NavItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }>; badge?: string | number; accent?: boolean; accentColor?: "primary" | "destructive" };
 type NavGroup = { label: string; items: NavItem[] };
@@ -117,6 +119,17 @@ export function AppSidebar() {
   /* Invitaciones pendientes del agente · red pill en /promociones.
      Solo aplica a cuentas de agencia. Match por agencyId OR email. */
   const { pendientes: allPendientes } = useInvitaciones();
+
+  /* Registros pendientes · badge rojo dinámico en el nav.
+     Para agencia: solo los que envió ella. Para promotor: todos. */
+  const createdRegs = useCreatedRegistros();
+  const pendingRegistrosCount = useMemo(() => {
+    const all = [...createdRegs, ...seedRegistros];
+    const scope = isAgencyUser && currentUser.agencyId
+      ? all.filter((r) => r.agencyId === currentUser.agencyId)
+      : all;
+    return scope.filter((r) => r.estado === "pendiente").length;
+  }, [createdRegs, isAgencyUser, currentUser.agencyId]);
   const agencyEmail = useMemo(() => {
     if (!isAgencyUser || !currentUser.agencyId) return null;
     const a = agencies.find((x) => x.id === currentUser.agencyId);
@@ -149,6 +162,15 @@ export function AppSidebar() {
               ...it,
               badge: pendingInvitations > 0 ? pendingInvitations : undefined,
               accent: pendingInvitations > 0,
+              accentColor: "destructive" as const,
+            };
+          }
+          /* Registros · badge rojo con el nº real de pendientes. */
+          if (it.url === "/registros") {
+            return {
+              ...it,
+              badge: pendingRegistrosCount > 0 ? pendingRegistrosCount : undefined,
+              accent: pendingRegistrosCount > 0,
               accentColor: "destructive" as const,
             };
           }

@@ -30,8 +30,7 @@ import { EmpresaAgentsTab } from "@/components/empresa/EmpresaAgentsTab";
 import { EmpresaSidebar } from "@/components/empresa/EmpresaSidebar";
 import { ImageCropModal } from "@/components/empresa/ImageCropModal";
 import { HeroSocialIcons } from "@/components/empresa/HeroSocialIcons";
-import { Toaster } from "sonner";
-import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
+import { VerifiedBadge } from "@/components/ui/VerifiedBadge"; // Toaster global en App.tsx
 
 const TAB_KEYS = ["home", "about", "agents", "statistics"] as const;
 type Tab = typeof TAB_KEYS[number];
@@ -134,8 +133,6 @@ export default function Empresa({
 
   return (
     <div className="flex flex-col min-h-full bg-background">
-      <Toaster position="top-center" richColors />
-
       {/* ═════ Banner onboarding (solo dueño, no visitor) ═════ */}
       {!isVisitor && isIncomplete && viewMode === "edit" && (
         <div className="bg-warning/10 border-b border-warning/30 px-4 sm:px-6 lg:px-10 py-3 flex items-center gap-3 flex-wrap">

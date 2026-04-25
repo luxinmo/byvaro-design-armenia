@@ -11,7 +11,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Plus, X, Sparkles, CalendarCheck, SlidersHorizontal, Upload,
@@ -83,7 +83,12 @@ const opportunityOptions = [
 
 export default function Contactos() {
   const navigate = useNavigate();
-  const [search, setSearch] = useState("");
+  /* Deep-link ?q=... · usado desde `/registros` (DuplicateResult)
+     para abrir la lista con un filtro precargado (ej. email del
+     contacto duplicado). */
+  const [searchParams] = useSearchParams();
+  const initialQ = searchParams.get("q") ?? "";
+  const [search, setSearch] = useState(initialQ);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [sort, setSort] = useState("recent");

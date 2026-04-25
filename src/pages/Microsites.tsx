@@ -33,7 +33,7 @@ import {
   Smartphone, Monitor, Tablet, Type, LayoutTemplate,
   Image as ImageIcon, Upload, AlertTriangle,
 } from "lucide-react";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner"; // Toaster global en App.tsx
 import {
   microsites as initialMicrosites,
   countActiveMicrosites,
@@ -165,7 +165,6 @@ export default function Microsites() {
 
   return (
     <div className="flex flex-col min-h-full bg-background">
-      <Toaster richColors position="top-right" />
 
       {/* ═══════════ HEADER ═══════════ */}
       <div className="px-3 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-4">

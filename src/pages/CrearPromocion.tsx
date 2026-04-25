@@ -19,7 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, X, Sparkles, Rocket, SkipForward } from "lucide-react";
-import { Toaster, toast } from "sonner";
+import { toast } from "sonner"; // Toaster global en App.tsx
 
 import type {
   StepId, WizardState, RoleOption, TipoPromocion,
@@ -477,7 +477,6 @@ export default function CrearPromocion() {
 
   return (
     <div className="fixed inset-0 z-40 flex bg-background">
-      <Toaster position="top-center" richColors />
 
       {/* ═══════════ Sidebar · PhaseTimeline ═══════════ */}
       <aside className="hidden lg:flex w-[300px] shrink-0 flex-col border-r border-border bg-card">

@@ -23,7 +23,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   Pause, Play, Trash2, Share2, Mail,
 } from "lucide-react";
-import { Toaster, toast } from "sonner";
+import { toast } from "sonner"; // Toaster global en App.tsx
 import Empresa from "./Empresa";
 import { agencies, type Agency } from "@/data/agencies";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -51,7 +51,6 @@ export default function AgenciaDetalle() {
   if (!id || !agency) {
     return (
       <div className="flex flex-col min-h-full bg-background items-center justify-center px-4 py-10 text-center">
-        <Toaster position="top-center" richColors closeButton />
         <h1 className="text-xl font-bold text-foreground mb-1">Agencia no encontrada</h1>
         <p className="text-sm text-muted-foreground mb-6 max-w-md">
           La agencia que buscas no existe o ha sido eliminada de tu red.

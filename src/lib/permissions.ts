@@ -53,7 +53,12 @@ export type PermissionKey =
    *  rankings de miembros y agencias, salud del equipo,
    *  heatmap. Datos sensibles de negocio y de desempeño interno.
    *  Admin-only por defecto. */
-  | "activity.dashboard.view";
+  | "activity.dashboard.view"
+  /** Ver datos sensibles del cliente con el que coincide un
+   *  registro entrante en el diálogo de confirmación de match
+   *  (nombre completo · email). Sin este permiso se muestra solo
+   *  "un contacto existente" sin identificarlo. Admin-only. */
+  | "records.matchDetails.view";
 
 const STORAGE_KEY = "byvaro.workspace.rolePermissions.v1";
 
@@ -68,6 +73,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
     "collaboration.payments.view", "collaboration.payments.manage",
     "collaboration.documents.manage",
     "activity.dashboard.view",
+    "records.matchDetails.view",
   ],
   member: [
     "whatsapp.viewOwn",

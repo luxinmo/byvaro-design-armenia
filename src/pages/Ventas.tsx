@@ -24,7 +24,7 @@ import {
   TrendingUp, TrendingDown, ArrowRight, CircleDollarSign, Calendar as CalendarIcon,
   ClipboardCheck, Hammer, Flag, CircleDot, AlertTriangle, type LucideIcon,
 } from "lucide-react";
-import { Toaster, toast } from "sonner";
+import { toast } from "sonner"; // Toaster global en App.tsx
 
 import {
   sales as salesMock, estadoLabel, metodoPagoLabel, getComisionImporte,
@@ -235,7 +235,6 @@ export default function Ventas() {
 
   return (
     <div className="flex flex-col min-h-full bg-background">
-      <Toaster position="top-center" richColors closeButton />
 
       {/* ═══════════ HEADER ═══════════ */}
       <div className="px-3 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-3">
