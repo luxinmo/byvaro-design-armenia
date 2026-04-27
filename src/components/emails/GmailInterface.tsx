@@ -24,12 +24,13 @@ import {
   Trash2, Plus, RefreshCw, MoreVertical, ChevronLeft, FileText,
   Archive, MailOpen, Reply, Forward, Paperclip, Image as ImageIcon,
   Smile, Link2, X, Minus, Maximize2, Sparkles, Pencil,
-  ArrowLeft, Menu, Check, Printer, Flag, Eye, MousePointerClick,
+  ArrowLeft, Menu, Check, Printer, Flag as FlagIcon, Eye, MousePointerClick,
   AlertTriangle, CheckCircle2, SlidersHorizontal,
   Bold, Italic, Underline, List, ListOrdered, RemoveFormatting,
   CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Flag } from "@/components/ui/Flag";
 import { Link, useSearchParams } from "react-router-dom";
 import { consumePendingAttachments, type PendingAttachment } from "@/lib/pendingAttachments";
 import { MOCK_CONTACTS } from "@/components/contacts/data";
@@ -572,7 +573,7 @@ export default function GmailInterface({
     const all = [...loadCreatedContacts(), ...loadImportedContacts(), ...MOCK_CONTACTS];
     return all
       .filter((c) => c.email)
-      .map((c) => ({ id: c.id, name: c.name, email: c.email, flag: c.flag }));
+      .map((c) => ({ id: c.id, name: c.name, email: c.email, nationalityIso: c.nationalityIso }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactsVersion]);
   const [composeMode, setComposeMode] = useState<ComposeMode>("new");
@@ -2162,7 +2163,7 @@ function EmailDetail({
               onClick={onToggleImportant}
               className="w-full text-left px-3 py-2 rounded-md text-sm hover:bg-muted flex items-center gap-2"
             >
-              <Flag
+              <FlagIcon
                 className={cn(
                   "h-4 w-4",
                   email.important ? "fill-warning text-warning" : "text-muted-foreground",
@@ -2386,7 +2387,7 @@ function Compose({
   onRemovePrefilledAttachment?: (idx: number) => void;
   /** Catálogo de contactos del workspace para el autocomplete del
    *  campo "Para". */
-  contactSuggestions?: { id: string; name: string; email?: string; flag?: string }[];
+  contactSuggestions?: { id: string; name: string; email?: string; nationalityIso?: string }[];
   /** Callback cuando el usuario escribe un email/nombre que NO existe
    *  en `contactSuggestions` y pulsa "Crear contacto". El padre debe
    *  abrir el dialog de crear contacto pre-rellenado y, al guardar,
@@ -3006,7 +3007,7 @@ function RecipientAutocomplete({
   onAdd: () => void;
   onRemoveLast: () => void;
   onPickContact: (email: string) => void;
-  contactSuggestions: { id: string; name: string; email?: string; flag?: string }[];
+  contactSuggestions: { id: string; name: string; email?: string; nationalityIso?: string }[];
   onCreateContact?: (initial: { email?: string; name?: string }) => void;
 }) {
   const [focused, setFocused] = useState(false);
@@ -3117,8 +3118,8 @@ function RecipientAutocomplete({
                       active ? "bg-muted" : "hover:bg-muted/40",
                     )}
                   >
-                    <div className="h-7 w-7 rounded-full bg-foreground/10 grid place-items-center text-foreground font-semibold text-[10px] shrink-0">
-                      {c.flag ? <span className="text-base leading-none">{c.flag}</span> : initials}
+                    <div className="h-7 w-7 rounded-full bg-foreground/10 grid place-items-center text-foreground font-semibold text-[10px] shrink-0 overflow-hidden">
+                      {c.nationalityIso ? <Flag iso={c.nationalityIso} size={16} /> : initials}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-foreground truncate">{c.name}</p>

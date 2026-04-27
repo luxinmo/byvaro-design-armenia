@@ -42,13 +42,15 @@ import { OriginsPill } from "@/components/contacts/OriginsPill";
 import { ActivityFreshness } from "@/components/contacts/ActivityFreshness";
 import { useCurrentUser, isAdmin } from "@/lib/currentUser";
 import { Flag } from "@/components/ui/Flag";
+import { resolveNationality } from "@/data/nationalities";
 
 /* ══════ Helpers ══════ */
 
-/** Flag emoji por nombre de país — derivado de los mocks. */
-function nationalityFlag(name: string): string | undefined {
+/** ISO 3166-1 alpha-2 por nombre de país — derivado de los mocks o
+ *  resolveNationality() como fallback. Usar con `<Flag iso={iso} />`. */
+function nationalityIso(name: string): string | undefined {
   const c = MOCK_CONTACTS.find((c) => c.nationality === name);
-  return c?.flag;
+  return c?.nationalityIso ?? resolveNationality(name).iso;
 }
 
 /** Iniciales de un nombre como string (ej. "Arman Rahmanov" → "AR"). */
@@ -481,7 +483,7 @@ export default function Contactos() {
                       options={allNationalities.map((n) => ({
                         value: n,
                         label: n,
-                        prefix: nationalityFlag(n),
+                        prefix: <Flag iso={nationalityIso(n)} size={14} />,
                       }))}
                       selected={nationalityFilter}
                       onChange={setNationalityFilter}

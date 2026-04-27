@@ -158,11 +158,12 @@ const CATEGORIES: TemplateCategory[] = [
       {
         id: "auth-agency-invitation",
         label: "Invitación a agencia colaboradora",
-        description: "El promotor invita a una agencia a colaborar en sus promociones. Link de aceptación con 30d de validez.",
+        description: "El promotor invita a una agencia a colaborar en sus promociones. HTML email-safe (tablas + estilos inline) con hero de la promoción, comisión, duración, forma de pago y CTA. Link con 30d de validez. Generado por `getInvitacionHtml()` · ver `src/lib/invitaciones.ts`.",
         icon: Handshake,
-        status: "planned",
+        status: "live",
         usedIn: [
-          "Ficha de promoción · Invitar agencia",
+          "Empresa · Invitar agencia",
+          "Ficha de promoción · Compartir con agencia",
           "Colaboradores · Invitar agencia",
         ],
       },

@@ -140,8 +140,8 @@ export function upsertContactFromRegistro(
     name: registro.cliente.nombre,
     email: registro.cliente.email,
     phone: registro.cliente.telefono,
-    flag: registro.cliente.flag,
     nationality: registro.cliente.nacionalidad,
+    nationalityIso: registro.cliente.nationalityIso,
     tags: [],
     source: sourceLabel,             // legacy · alias de primarySource.label
     sourceType: "registration",       // legacy

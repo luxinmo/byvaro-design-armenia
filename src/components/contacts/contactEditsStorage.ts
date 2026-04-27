@@ -17,7 +17,7 @@ export type ContactEdits = Partial<Pick<
   ContactDetail,
   "name" | "kind" | "companyName" | "tradeName" | "companyTaxId" |
   "nif" | "birthDate" | "address" |
-  "nationality" | "flag" | "languages" | "notes" | "source" |
+  "nationality" | "nationalityIso" | "languages" | "notes" | "source" |
   "phone" | "email"
 >> & {
   /** Multi-teléfonos del Resumen. Si está presente, sustituye el array

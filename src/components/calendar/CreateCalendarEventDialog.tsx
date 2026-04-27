@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { UserSelect } from "@/components/ui/UserSelect";
+import { Flag } from "@/components/ui/Flag";
 import {
   AlertTriangle, ArrowRight, MapPin, Home, Phone, Users, Ban, Bell,
   ChevronDown, Check, Search, UserPlus, Building2, FileCheck2,
@@ -645,8 +646,9 @@ function ContactPicker({
                 {c.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[12.5px] font-medium text-foreground truncate">
-                  {c.flag ? `${c.flag} ` : ""}{c.name}
+                <p className="text-[12.5px] font-medium text-foreground truncate inline-flex items-center gap-1.5">
+                  <Flag iso={c.nationalityIso} size={12} />
+                  <span className="truncate">{c.name}</span>
                 </p>
                 {c.email && (
                   <p className="text-[10.5px] text-muted-foreground truncate">{c.email}</p>

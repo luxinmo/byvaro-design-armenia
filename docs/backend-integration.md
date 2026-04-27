@@ -1977,6 +1977,250 @@ es server-side y este apartado deja de aplicar.
 
 ---
 
+## 15 · Envío de emails (Resend / SMTP) y plantilla de invitación
+
+> **Decisión.** Toda comunicación que sale al exterior (invitaciones,
+> bienvenida, reseteo, transaccionales) la envía el **sistema de Byvaro**
+> con su propia configuración (FROM, DKIM, SPF, return-path). El
+> promotor NO usa su SMTP propio para esto · es Byvaro hablando "en
+> nombre de" cada promotor (`from: noreply@byvaro.com` con
+> `replyTo: <promotor>@<dominio>` y `From-Name: "{promotor} via
+> Byvaro"`).
+
+### 15.1 · Estado actual (mock)
+
+- Generador HTML canónico · `getInvitacionHtml()` en
+  `src/lib/invitaciones.ts:436`. Devuelve `{ asunto, html }` con
+  HTML email-safe (tablas + estilos inline) y media queries para
+  cliente móvil.
+- Persistencia local del envío · `recordSentInvitationEmail()` en
+  `src/lib/sentEmails.ts`. Cap a 100 entradas. Visible en el botón
+  "Ver email completo (HTML)" del modal `InvitarAgenciaModal`.
+- **No existe envío real** · al pulsar "Enviar por email" se abre el
+  HTML renderizado en una pestaña nueva como demo visual.
+- El snapshot estático `email-previews/invitacion-agencia.html`
+  fue eliminado el 2026-04-25 porque drifteaba con la función real.
+  El preview canónico es el botón "Ver email completo (HTML)" en el
+  modal de invitación.
+
+### 15.2 · Endpoints backend necesarios
+
+```http
+POST /api/emails/send                          (interno · usado por handlers)
+  body: {
+    to:       string,             # destino
+    from:     string,             # "noreply@byvaro.com" o dominio del tenant
+    fromName: string,             # "{promotor} via Byvaro"
+    replyTo?: string,             # email del promotor para respuestas
+    subject:  string,
+    html:     string,             # generado por la plantilla del kind
+    kind:     "invitation" | "registration_approved" | ...
+    refId?:   string              # invitacionId, registroId
+  }
+  → 200 { messageId }             # id del proveedor (Resend / SES / SendGrid)
+  → 4xx { code: "invalid_recipient" | "rate_limited" | "blocked" }
+
+GET /api/emails/sent                           (admin · futuro)
+  → 200 { items: SentEmail[] }    # log auditable, ver §1.8 webhooks
+```
+
+### 15.3 · Configuración del proveedor
+
+| Variable | Valor recomendado | Por qué |
+|---|---|---|
+| Proveedor | **Resend** (primero) · SES como fallback | Resend tiene API limpia + DKIM asistido + buenos logs. SES como backup multirregión. |
+| FROM canónico | `noreply@byvaro.com` | Single-source de reputación de envío. |
+| DKIM | sí, gestionado por proveedor | Sin DKIM los emails caen en spam (Gmail/Outlook 2024+). |
+| SPF | `v=spf1 include:_spf.resend.com -all` | Autoriza al proveedor. |
+| DMARC | `v=DMARC1; p=quarantine; rua=mailto:dmarc@byvaro.com` | Protege la marca. |
+| Return-path | `bounces@byvaro.com` (gestionado por proveedor) | Bounces gestionados sin contaminar inbox real. |
+| List-Unsubscribe | header obligatorio para envíos masivos | Cumple RFC 8058 + Gmail/Yahoo 2024 bulk sender. |
+| Subdomain | `mail.byvaro.com` opcional para warmup | Aísla la reputación de envío del dominio comercial. |
+
+### 15.4 · Plantillas registradas
+
+Catálogo único en `/ajustes/plantillas`
+(`src/pages/ajustes/plantillas/index.tsx`) — REGLA DE ORO `CLAUDE.md`.
+Hoy `live`:
+
+- `auth-agency-invitation` · invitación a agencia colaboradora ·
+  generada por `getInvitacionHtml()` · disparada desde
+  `InvitarAgenciaModal` y `SharePromotionDialog`.
+
+Pendientes de implementar (`status: "planned"`):
+
+- `auth-welcome`, `auth-password-reset`, `auth-email-verification`,
+  `auth-member-invitation`, todas las `tx-*` (registration approved/
+  rejected, visit scheduled/reminder, contract sent/signed, sale
+  closed). Ver hub para detalle.
+
+### 15.5 · Webhooks (delivered / bounced / opened)
+
+Ver §1.8 · cada email tracked debe registrar `delivered_at`,
+`opened_at`, `bounced_at` en la fila correspondiente del
+`sent_emails`. La invitación además marca `invitations.delivered_at`
+para que la UI muestre "Entregado · hace 2 min".
+
+### 15.6 · Referencias frontend
+
+- `src/lib/invitaciones.ts:436` · `getInvitacionHtml()` (HTML canónico).
+- `src/lib/sentEmails.ts` · log local mock.
+- `src/components/empresa/InvitarAgenciaModal.tsx:98` · `handleSend` ·
+  contiene `TODO(backend)` para el POST real.
+- `src/pages/ajustes/plantillas/index.tsx` · catálogo de plantillas.
+
+---
+
+## 16 · Contactos bidireccionales en colaboración promotor ↔ agencia
+
+> **Regla.** Cuando se establece una relación promotor ↔ agencia (vía
+> invitación), CADA lado tiene en su CRM un Contact `kind: "company"`
+> que representa al otro. El admin abre el contacto y ve actividad,
+> registros aportados, ventas cerradas, etc., como si fuese cualquier
+> otra empresa relacionada.
+
+### 16.1 · Cuándo se crean
+
+| Evento | Lado promotor | Lado agencia |
+|---|---|---|
+| Promotor envía invitación | **Crea Contact de la agencia** (`status: pending`) | nada |
+| Agencia acepta invitación | (sin cambio · ya existía) | **Crea Contact del promotor** (`status: active`) |
+| Agencia rechaza invitación | actualiza el `latestSource` con label "Rechazada" (futuro) | nada |
+| Caducidad sin respuesta | actualiza el `status` del Contact a `cold` (futuro) | nada |
+
+Idempotencia · si el Contact ya existe (mismo `email` o
+`companyTaxId` o referencia a la misma `invitacionId`), se reutiliza.
+
+### 16.2 · Shape del Contact creado
+
+**Lado promotor (agencia como contacto):**
+
+```ts
+{
+  kind: "company",
+  companyName: agency.name,
+  tradeName: agency.name,
+  email: invitation.emailAgencia,
+  avatarUrl: agency.logo,
+  primarySource: {
+    source: "agency",
+    label: "Invitación enviada · {agency.name}",
+    occurredAt: invitation.createdAt,
+    agencyId: agency.id,
+    refId: invitation.id,
+    refType: "manual",
+    promotionId: invitation.promocionId,
+    meta: { invitacionId: invitation.id }
+  },
+  status: "pending",
+  ownerAgencyId: undefined  // pertenece al tenant del promotor
+}
+```
+
+**Lado agencia (promotor como contacto):**
+
+```ts
+{
+  kind: "company",
+  companyName: empresa.nombreComercial,
+  tradeName: empresa.nombreComercial,
+  companyTaxId: empresa.cif,
+  email: empresa.email,
+  phone: empresa.telefono,
+  avatarUrl: empresa.logoUrl,
+  primarySource: {
+    source: "referral",
+    label: "Promotor · invitación aceptada",
+    occurredAt: acceptedAt,
+    refId: invitation.id,
+    refType: "manual",
+    meta: { invitacionId: invitation.id, promotor: empresa.nombreComercial }
+  },
+  status: "active",
+  ownerAgencyId: agency.id  // RLS · solo visible dentro de la agencia
+}
+```
+
+### 16.3 · Endpoints backend (transaccional)
+
+```http
+POST /api/agencies/invite                      (promotor)
+  body: { agencyId? | emailAgencia, nombreAgencia, comision, ... }
+  → 200 {
+      invitation: Invitation,
+      promoterContact: Contact   # creado/encontrado lado promotor
+    }
+  Lado server: TRANSACCIÓN · upsert(invitation) + upsert(promoter_contact).
+  Si falla cualquiera, rollback ambos.
+
+POST /api/invitations/:id/accept               (agencia)
+  → 200 {
+      invitation: Invitation,        # estado=aceptada
+      agencyContact: Contact,        # creado lado agencia (promotor como company)
+      collaboration: Collaboration   # registro en agency.promotionsCollaborating
+    }
+  Lado server: TRANSACCIÓN · UPDATE invitation + INSERT agency_contact +
+  INSERT collaboration. Idempotente: si agency_contact ya existe (por CIF
+  + ownerAgencyId), se reutiliza.
+```
+
+### 16.4 · RLS · multi-tenant boundaries
+
+- Lado promotor: el Contact creado tiene `owner_agency_id = NULL` y
+  `organization_id = promoter_org_id`. Solo visible dentro del tenant
+  del promotor.
+- Lado agencia: el Contact creado tiene `owner_agency_id = agency.id`
+  y `organization_id = agency.id`. Solo visible dentro de la agencia ·
+  el promotor NO ve este contacto cross-tenant.
+- Nunca se replica el shape entero del otro lado · cada tenant tiene
+  SU contacto, con SUS notas, SUS tags, SU timeline · son entidades
+  separadas que apuntan a la misma `invitacionId`.
+
+### 16.5 · Estado actual (mock)
+
+- Helper canónico · `src/lib/invitationContacts.ts`:
+  - `ensurePromoterContactForAgency()` · idempotente por
+    `email + invitacionId`.
+  - `ensureAgencyContactForPromoter()` · idempotente por
+    `cif + invitacionId + ownerAgencyId`.
+- Disparadores hoy:
+  - `InvitarAgenciaModal.handleSend()` (linea ~135) · llama
+    a `ensurePromoterContactForAgency()`.
+  - `PromocionDetalle.AgencyInvitationBanner.handleAccept()`
+    (linea ~3735) · llama a `ensureAgencyContactForPromoter()`.
+- Persistencia · `byvaro.contacts.created.v1` (localStorage,
+  compartido entre roles en demo single-tenant). En backend cada
+  tenant tendrá su tabla aislada.
+
+### 16.6 · Eventos cross-empresa relacionados (§4)
+
+Cuando exista el log cross-empresa real, AL ENVIAR la invitación se
+debe disparar también:
+
+```ts
+recordCompanyEvent(agencyId, {
+  type: "invitation_sent",
+  by: { name: promoter.name },
+  promotionId,
+  meta: { invitacionId, comision }
+});
+```
+
+Y al aceptar:
+
+```ts
+recordCompanyEvent(agencyId, {
+  type: "invitation_accepted",
+  by: { name: agency.contactoPrincipal.nombre }
+});
+```
+
+Ambos lados (Contact + CompanyEvent) son COMPLEMENTARIOS · el Contact
+es la representación del partner como entidad CRM, el CompanyEvent es
+el log de auditoría de la relación.
+
+---
+
 ## Historial de cambios
 
 | Fecha | Cambio |
@@ -1988,3 +2232,4 @@ es server-side y este apartado deja de aplicar.
 | 2026-04-27 | Phase 2 frontend Bloque H: Conflict resolution UI enriquecido (DuplicateContext + OverrideConfirmDialog). `Registro.overrideNote/At/ByUserId` campos nuevos. Backend pendiente: persistir en companyEvent log cross-empresa para auditar disputas de comisión. |
 | 2026-04-27 | §14 · Auth gate `<RequireAuth>` · login obligatorio en todas las rutas excepto `/login` y `/register`. Soporte `?next=` para redirect post-login. Backend pendiente: 4 endpoints + cookie httpOnly + RLS server-side. |
 | 2026-04-27 | Auth · password común para todas las cuentas demo (`Luxinmo2026Byvaro`). 12 cuentas total (2 promoters + 10 agencies = 5 admin + 5 member). Click en card de demo NO auto-loguea · solo pre-rellena email y focusea el campo password. Phase 1A privacy gate. |
+| 2026-04-25 | §15 · Envío de emails (Resend / SMTP, FROM canónico, DKIM, SPF, DMARC) y plantilla `auth-agency-invitation` registrada como `live` en `/ajustes/plantillas`. §16 · Contactos bidireccionales en colaboración promotor ↔ agencia · helpers `ensurePromoterContactForAgency` / `ensureAgencyContactForPromoter` en `src/lib/invitationContacts.ts`. Disparados en `InvitarAgenciaModal.handleSend` (lado promotor) y `PromocionDetalle.AgencyInvitationBanner.handleAccept` (lado agencia). Idempotente. |

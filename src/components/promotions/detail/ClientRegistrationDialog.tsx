@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Flag } from "@/components/ui/Flag";
 import {
   Search, UserPlus, Check, User, Phone, Globe, ArrowLeft, Clock,
   Users, Building2, AlertTriangle, Mail, Send, ShieldCheck, ChevronDown,
@@ -412,13 +413,14 @@ export function ClientRegistrationDialog({
 
   /** Busca la bandera emoji que corresponde a una nacionalidad por su label
    *  (o code). Retorna string vacío si no encuentra match. */
-  const flagFor = (nationality: string): string => {
-    if (!nationality) return "";
+  /** ISO 3166-1 alpha-2 para una nacionalidad · alimenta `<Flag iso={isoFor(...)}>`. */
+  const isoFor = (nationality: string): string | undefined => {
+    if (!nationality) return undefined;
     const lc = nationality.trim().toLowerCase();
     const match = NATIONALITIES.find(
       (n) => n.label.toLowerCase() === lc || n.code.toLowerCase() === lc,
     );
-    return match?.flag ?? "";
+    return match?.code;
   };
 
   /** Evalúa si cada condición de registro está cumplida con los datos
@@ -553,10 +555,10 @@ export function ClientRegistrationDialog({
         termsAcceptedAt: termsAcceptedAt ?? new Date().toISOString(),
       });
       const newPublicRef = generatePublicRef("registration", allRegistrosForRef);
-      /* Bandera derivada del nombre de la nacionalidad para que el
-         registro lleve el emoji desde el inicio · evita que el header
-         del detalle salga sin bandera ("jaun carlos" sin 🇪🇸). */
-      const inferredFlag = resolveNationality(effectiveNationality).flag;
+      /* ISO derivado del nombre de la nacionalidad para que el registro
+         lleve la bandera SVG desde el inicio · evita que el header del
+         detalle salga sin bandera ("jaun carlos" sin ES). */
+      const inferredIso = resolveNationality(effectiveNationality).iso;
       const registroBase: Registro = isAgencyUser
         ? {
             id: `reg-local-${Date.now()}`,
@@ -564,7 +566,7 @@ export function ClientRegistrationDialog({
             origen: "collaborator",
             promotionId,
             agencyId: currentUser.agencyId,
-            cliente: { nombre: effectiveName, email, telefono, dni: "", nacionalidad: effectiveNationality, flag: inferredFlag },
+            cliente: { nombre: effectiveName, email, telefono, dni: "", nacionalidad: effectiveNationality, nationalityIso: inferredIso },
             fecha: new Date().toISOString(),
             estado: "pendiente",
             matchPercentage: 0,
@@ -577,7 +579,7 @@ export function ClientRegistrationDialog({
             publicRef: newPublicRef,
             origen: "direct",
             promotionId,
-            cliente: { nombre: effectiveName, email, telefono, dni: "", nacionalidad: effectiveNationality, flag: inferredFlag },
+            cliente: { nombre: effectiveName, email, telefono, dni: "", nacionalidad: effectiveNationality, nationalityIso: inferredIso },
             fecha: new Date().toISOString(),
             estado: "pendiente",
             matchPercentage: 0,
@@ -798,7 +800,7 @@ export function ClientRegistrationDialog({
         origen: "collaborator",
         promotionId,
         agencyId: collabSelection.agencyId,
-        cliente: { nombre, email, telefono, dni: "", nacionalidad, flag: resolveNationality(nacionalidad).flag },
+        cliente: { nombre, email, telefono, dni: "", nacionalidad, nationalityIso: resolveNationality(nacionalidad).iso },
         fecha: new Date().toISOString(),
         estado: "pendiente",
         matchPercentage: 0,
@@ -1076,7 +1078,7 @@ export function ClientRegistrationDialog({
                       <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
                       {newClient.nationality ? (
                         <span className="flex items-center gap-2 truncate">
-                          {NATIONALITIES.find(n => n.label === newClient.nationality)?.flag}
+                          <Flag iso={NATIONALITIES.find(n => n.label === newClient.nationality)?.code} size={14} />
                           <span className="truncate">{newClient.nationality}</span>
                         </span>
                       ) : (
@@ -1113,7 +1115,7 @@ export function ClientRegistrationDialog({
                             }}
                             className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-left hover:bg-muted/50 transition-colors"
                           >
-                            <span className="text-base leading-none">{n.flag}</span>
+                            <Flag iso={n.code} size={14} />
                             <span className="flex-1">{n.label}</span>
                             {newClient.nationality === n.label && (
                               <Check className="h-3.5 w-3.5 text-foreground" strokeWidth={2} />
@@ -1405,8 +1407,8 @@ export function ClientRegistrationDialog({
                           !confirmNationality && "text-muted-foreground",
                         )}
                       >
-                        {confirmNationality && flagFor(confirmNationality) && (
-                          <span className="text-base leading-none shrink-0">{flagFor(confirmNationality)}</span>
+                        {confirmNationality && (
+                          <Flag iso={isoFor(confirmNationality)} size={14} />
                         )}
                         <span className="truncate font-medium flex-1">
                           {confirmNationality || "Selecciona..."}
@@ -1438,7 +1440,7 @@ export function ClientRegistrationDialog({
                               confirmNationality === n.label && "bg-muted/60 font-medium",
                             )}
                           >
-                            <span className="text-sm leading-none shrink-0">{n.flag}</span>
+                            <Flag iso={n.code} size={14} />
                             <span className="truncate">{n.label}</span>
                           </button>
                         ))}

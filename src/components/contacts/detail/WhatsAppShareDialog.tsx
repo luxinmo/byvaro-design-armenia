@@ -18,6 +18,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Flag } from "@/components/ui/Flag";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/lib/currentUser";
@@ -159,8 +160,8 @@ export function WhatsAppShareDialog({
                     </svg>
                   )}
                 </div>
-                <div className="h-8 w-8 rounded-full bg-foreground/10 grid place-items-center text-foreground font-semibold text-[10px] shrink-0 relative">
-                  {c.flag ? <span className="text-base leading-none">{c.flag}</span> : initials}
+                <div className="h-8 w-8 rounded-full bg-foreground/10 grid place-items-center text-foreground font-semibold text-[10px] shrink-0 relative overflow-hidden">
+                  {c.nationalityIso ? <Flag iso={c.nationalityIso} size={18} /> : initials}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground truncate">{c.name}</p>

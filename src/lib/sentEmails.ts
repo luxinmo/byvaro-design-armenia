@@ -1,0 +1,90 @@
+/**
+ * sentEmails.ts · Log local de emails "enviados" (mock).
+ *
+ * Mientras no hay backend que envíe emails reales, cada vez que la
+ * UI dispara un envío (invitación a agencia, T&C aceptado, registro
+ * aprobado…) llamamos a `recordSentEmail()` para guardar el HTML
+ * renderizado + metadata. Visible en `/ajustes/email/historial`
+ * (futuro) o abriendo el HTML en una pestaña nueva.
+ *
+ * TODO(backend): POST /api/emails/send + tabla `sent_emails`. El
+ * frontend ya genera el HTML correcto con las plantillas oficiales ·
+ * el backend solo retransmite vía Resend / SendGrid / similar.
+ */
+
+const STORAGE_KEY = "byvaro.sent-emails.v1";
+const MAX_LOG = 100;
+
+export type SentEmail = {
+  id: string;
+  to: string;
+  subject: string;
+  html: string;
+  /** Tipo del email · facilita filtros en el log futuro. */
+  kind: "invitation" | "registration_approved" | "registration_rejected" | "other";
+  /** Referencia opcional al recurso · ej. invitacionId, registroId. */
+  refId?: string;
+  /** ISO timestamp. */
+  sentAt: string;
+};
+
+function read(): SentEmail[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as SentEmail[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function write(list: SentEmail[]) {
+  /* Cap a MAX_LOG · descarta los más antiguos. */
+  const trimmed = list.slice(0, MAX_LOG);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+}
+
+export function recordSentEmail(input: Omit<SentEmail, "id" | "sentAt">): SentEmail {
+  const sent: SentEmail = {
+    ...input,
+    id: `email-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    sentAt: new Date().toISOString(),
+  };
+  write([sent, ...read()]);
+  return sent;
+}
+
+/** Helper específico para invitación de agencia. */
+export function recordSentInvitationEmail(input: {
+  to: string;
+  subject: string;
+  html: string;
+  invitacionId: string;
+}): SentEmail {
+  return recordSentEmail({
+    to: input.to,
+    subject: input.subject,
+    html: input.html,
+    kind: "invitation",
+    refId: input.invitacionId,
+  });
+}
+
+export function listSentEmails(): SentEmail[] {
+  return read();
+}
+
+/**
+ * Abre el HTML del email en una pestaña nueva del navegador.
+ * Útil para preview · usuario ve cómo quedaría el email real.
+ */
+export function openSentEmailInNewTab(html: string): void {
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank", "noopener,noreferrer");
+  /* Liberamos el objectURL tras un momento · el navegador ya tiene
+     el contenido cargado en la pestaña, no lo necesitamos colgando. */
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}

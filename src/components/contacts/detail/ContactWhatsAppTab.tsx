@@ -31,6 +31,7 @@ import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Flag } from "@/components/ui/Flag";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/lib/currentUser";
@@ -593,7 +594,7 @@ function ChatView({
          *  iniciales mientras tanto) + nombre + estado conexión. */}
         <header className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-border/40">
           <div className="flex items-center gap-3 min-w-0">
-            <ContactAvatar name={detail.name} flag={detail.flag} />
+            <ContactAvatar name={detail.name} iso={detail.nationalityIso} />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground truncate">{detail.name}</p>
               <p className="text-[11px] text-muted-foreground truncate inline-flex items-center gap-1">
@@ -1090,7 +1091,7 @@ function formatDuration(seconds: number): string {
 /* ══════ Bubble + helpers ══════ */
 
 /** Avatar del cliente (foto real cuando exista, fallback iniciales + bandera). */
-function ContactAvatar({ name, flag, size = 40 }: { name: string; flag?: string; size?: number }) {
+function ContactAvatar({ name, iso, size = 40 }: { name: string; iso?: string; size?: number }) {
   const initials = name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
   return (
     <div
@@ -1100,12 +1101,12 @@ function ContactAvatar({ name, flag, size = 40 }: { name: string; flag?: string;
       {/* TODO(backend): cuando el modelo tenga `avatarUrl`, reemplazar
        *  iniciales por <img src={avatarUrl} className="w-full h-full object-cover" /> */}
       <span>{initials}</span>
-      {flag && (
+      {iso && (
         <span
-          className="absolute -bottom-0.5 -right-0.5 rounded-full bg-card border border-border/60 grid place-items-center"
-          style={{ width: size * 0.45, height: size * 0.45, fontSize: size * 0.32 }}
+          className="absolute -bottom-0.5 -right-0.5 rounded-full bg-card border border-border/60 grid place-items-center overflow-hidden"
+          style={{ width: size * 0.45, height: size * 0.45 }}
         >
-          {flag}
+          <Flag iso={iso} size={Math.round(size * 0.36)} shape="circle" />
         </span>
       )}
     </div>

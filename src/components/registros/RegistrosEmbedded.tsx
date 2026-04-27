@@ -25,6 +25,8 @@ import { Link } from "react-router-dom";
 import { ArrowRight, FileText, Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tag } from "@/components/ui/Tag";
+import { Flag } from "@/components/ui/Flag";
+import { resolveNationality } from "@/data/nationalities";
 import { MatchRing } from "@/components/registros/MatchRing";
 import {
   registros as registrosMock,
@@ -169,7 +171,7 @@ export function RegistrosEmbedded({
 
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-foreground truncate inline-flex items-center gap-1.5">
-                    {r.cliente.flag && <span>{r.cliente.flag}</span>}
+                    <Flag iso={r.cliente.nationalityIso ?? resolveNationality(r.cliente.nacionalidad).iso} size={14} />
                     <span className="truncate">{r.cliente.nombre}</span>
                     {r.tipo === "registration_visit" && (
                       <span className="text-primary text-[10px] font-semibold uppercase tracking-wide shrink-0">

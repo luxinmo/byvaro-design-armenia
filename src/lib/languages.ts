@@ -1,45 +1,50 @@
 /**
- * Catálogo de idiomas con su código BCP 47 corto y bandera del país
- * más representativo. Pensado para multi-select con chips visuales
- * (en la ficha de contacto, importer, etc).
+ * Catálogo de idiomas con su código BCP 47 corto y el ISO 3166-1
+ * alpha-2 del país más representativo (para servir la bandera SVG
+ * desde `public/flags/` vía `<Flag iso={countryIso} />`).
+ *
+ * Pensado para multi-select con chips visuales (ficha de contacto,
+ * importer, etc).
+ *
+ * NUNCA emojis · Windows no renderiza los emoji de bandera (Segoe UI
+ * Emoji no incluye regional indicators). Usa siempre el componente
+ * `<Flag>` de `src/components/ui/Flag.tsx`.
  */
 
 export type Language = {
-  /** Código corto (BCP 47 base): "es", "en", "fr"… (mayúscula). */
+  /** Código corto (BCP 47 base): "ES", "EN", "FR"… (mayúscula). */
   code: string;
   /** Nombre en español. */
   name: string;
-  /** Bandera emoji · se mantiene como fallback pero preferir `<Flag iso={countryIso}>` . */
-  flag: string;
   /** ISO 3166-1 alpha-2 del país más representativo del idioma.
    *  Se usa con `<Flag iso={countryIso} />` (ver src/components/ui/Flag.tsx). */
   countryIso: string;
 };
 
 export const LANGUAGES: Language[] = [
-  { code: "ES", name: "Español",          flag: "🇪🇸", countryIso: "ES" },
-  { code: "EN", name: "Inglés",           flag: "🇬🇧", countryIso: "GB" },
-  { code: "FR", name: "Francés",          flag: "🇫🇷", countryIso: "FR" },
-  { code: "DE", name: "Alemán",           flag: "🇩🇪", countryIso: "DE" },
-  { code: "IT", name: "Italiano",         flag: "🇮🇹", countryIso: "IT" },
-  { code: "PT", name: "Portugués",        flag: "🇵🇹", countryIso: "PT" },
-  { code: "NL", name: "Neerlandés",       flag: "🇳🇱", countryIso: "NL" },
-  { code: "RU", name: "Ruso",             flag: "🇷🇺", countryIso: "RU" },
-  { code: "UK", name: "Ucraniano",        flag: "🇺🇦", countryIso: "UA" },
-  { code: "PL", name: "Polaco",           flag: "🇵🇱", countryIso: "PL" },
-  { code: "RO", name: "Rumano",           flag: "🇷🇴", countryIso: "RO" },
-  { code: "SV", name: "Sueco",            flag: "🇸🇪", countryIso: "SE" },
-  { code: "NO", name: "Noruego",          flag: "🇳🇴", countryIso: "NO" },
-  { code: "DA", name: "Danés",            flag: "🇩🇰", countryIso: "DK" },
-  { code: "FI", name: "Finés",            flag: "🇫🇮", countryIso: "FI" },
-  { code: "TR", name: "Turco",            flag: "🇹🇷", countryIso: "TR" },
-  { code: "HY", name: "Armenio",          flag: "🇦🇲", countryIso: "AM" },
-  { code: "KA", name: "Georgiano",        flag: "🇬🇪", countryIso: "GE" },
-  { code: "AR", name: "Árabe",            flag: "🇸🇦", countryIso: "SA" },
-  { code: "HE", name: "Hebreo",           flag: "🇮🇱", countryIso: "IL" },
-  { code: "ZH", name: "Chino",            flag: "🇨🇳", countryIso: "CN" },
-  { code: "JA", name: "Japonés",          flag: "🇯🇵", countryIso: "JP" },
-  { code: "KO", name: "Coreano",          flag: "🇰🇷", countryIso: "KR" },
+  { code: "ES", name: "Español",          countryIso: "ES" },
+  { code: "EN", name: "Inglés",           countryIso: "GB" },
+  { code: "FR", name: "Francés",          countryIso: "FR" },
+  { code: "DE", name: "Alemán",           countryIso: "DE" },
+  { code: "IT", name: "Italiano",         countryIso: "IT" },
+  { code: "PT", name: "Portugués",        countryIso: "PT" },
+  { code: "NL", name: "Neerlandés",       countryIso: "NL" },
+  { code: "RU", name: "Ruso",             countryIso: "RU" },
+  { code: "UK", name: "Ucraniano",        countryIso: "UA" },
+  { code: "PL", name: "Polaco",           countryIso: "PL" },
+  { code: "RO", name: "Rumano",           countryIso: "RO" },
+  { code: "SV", name: "Sueco",            countryIso: "SE" },
+  { code: "NO", name: "Noruego",          countryIso: "NO" },
+  { code: "DA", name: "Danés",            countryIso: "DK" },
+  { code: "FI", name: "Finés",            countryIso: "FI" },
+  { code: "TR", name: "Turco",            countryIso: "TR" },
+  { code: "HY", name: "Armenio",          countryIso: "AM" },
+  { code: "KA", name: "Georgiano",        countryIso: "GE" },
+  { code: "AR", name: "Árabe",            countryIso: "SA" },
+  { code: "HE", name: "Hebreo",           countryIso: "IL" },
+  { code: "ZH", name: "Chino",            countryIso: "CN" },
+  { code: "JA", name: "Japonés",          countryIso: "JP" },
+  { code: "KO", name: "Coreano",          countryIso: "KR" },
 ];
 
 export function findLanguageByCode(code: string): Language | undefined {
@@ -47,9 +52,9 @@ export function findLanguageByCode(code: string): Language | undefined {
   return LANGUAGES.find((l) => l.code === upper);
 }
 
-/** Bandera emoji para un código — fallback 🏳️ si el código es desconocido. */
-export function languageFlag(code: string): string {
-  return findLanguageByCode(code)?.flag ?? "🏳️";
+/** ISO del país representativo · pásalo a `<Flag iso={languageCountryIso(code)} />`. */
+export function languageCountryIso(code: string): string | undefined {
+  return findLanguageByCode(code)?.countryIso;
 }
 
 /** Nombre en español del idioma — fallback al propio código. */
