@@ -223,7 +223,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     ? agencies.find((ag) => ag.id === currentUser.agencyId) ?? null
     : null;
   const carteraSet = useAgencyCartera(activeAgencyForCartera ?? ({ id: "", promotionsCollaborating: [] } as unknown as Agency));
-  const inCartera = !isAgencyUser || (!!activeAgencyForCartera && carteraSet.has(p.id));
+  /* `inCartera` cruza la cartera con la promoción actual. Usamos `id`
+     de URL params (línea 185) en lugar de `p.id` porque `p` se declara
+     más abajo (línea ~392) · referenciarlo aquí es TDZ. `id` es el
+     mismo valor — `p` se busca por `promo.id === id`. */
+  const inCartera = !isAgencyUser || (!!activeAgencyForCartera && !!id && carteraSet.has(id));
   // FAB móvil — abre un menú con las acciones principales de la ficha.
   const [mobileFabOpen, setMobileFabOpen] = useState(false);
   // Swipe horizontal entre tabs · sólo activa en móvil (<640px).

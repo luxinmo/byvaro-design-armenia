@@ -31,7 +31,21 @@
  *   vendrán del backend; el frontend solo los renderiza.
  */
 
-export type RegistroEstado = "pendiente" | "aprobado" | "rechazado" | "duplicado";
+/**
+ * Estados del Registro · Phase 1 incluye `preregistro_activo` para
+ * promociones con `modoValidacionRegistro: "por_visita"`. Cuando la
+ * visita asociada se marca como realizada, transita a `aprobado`.
+ *
+ * Phase 2 · estados adicionales `preregistro_pendiente`, `caducado`
+ * y `desplazado` (necesitan crons backend · ver
+ * `docs/registration-system.md §2`).
+ */
+export type RegistroEstado =
+  | "pendiente"
+  | "preregistro_activo"
+  | "aprobado"
+  | "rechazado"
+  | "duplicado";
 
 /**
  * Origen del registro.
@@ -134,6 +148,12 @@ export type RegistroTimelineEvent = {
 
 export type Registro = {
   id: string;
+  /** Referencia pública del registro · formato `reXXXXXX` · inmutable
+   *  durante toda la vida del registro (mantiene la misma ref al
+   *  transitar entre `pendiente → preregistro_activo → aprobado`).
+   *  Único por organización · uso humano solo. UUID `id` sigue siendo
+   *  PK técnica. Ver `docs/public-references-audit.md`. */
+  publicRef: string;
   /** "registration" por defecto · "registration_visit" si la solicitud
    *  incluye proponer una visita. */
   tipo?: RegistroTipo;
@@ -229,8 +249,29 @@ const daysAgo = (d: number) => new Date(now - d * 24 * 60 * 60 * 1000).toISOStri
 
 /* ═══════════════════════════════════════════════════════════════════
    Mocks — mezcla variada de limpios, ambiguos y duplicados claros.
+
+   BACKFILL · Phase 1 Core
+     Cada seed se escribe sin `publicRef` y el wrapper
+     `enrichLegacyRegistroSeed` lo asigna ordenado por fecha ASC ·
+     evita reescribir ~25 entries a mano.
    ═══════════════════════════════════════════════════════════════════ */
-export const registros: Registro[] = [
+
+type LegacyRegistroSeed = Omit<Registro, "publicRef">;
+
+function enrichLegacyRegistroSeeds(seeds: LegacyRegistroSeed[]): Registro[] {
+  /* Asignamos publicRef por orden cronológico ASC (el más antiguo es
+     re000001) · así futuros registros nuevos siempre tienen ref mayor. */
+  const sorted = [...seeds].sort(
+    (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
+  );
+  const refMap = new Map<string, string>();
+  sorted.forEach((s, i) => {
+    refMap.set(s.id, `re${String(i + 1).padStart(6, "0")}`);
+  });
+  return seeds.map((s) => ({ ...s, publicRef: refMap.get(s.id)! }));
+}
+
+const RAW_REGISTROS: LegacyRegistroSeed[] = [
   /* ───── Limpios (matchPercentage = 0) ───── */
   {
     id: "reg-001",
@@ -823,6 +864,9 @@ export const registros: Registro[] = [
   },
 ];
 
+/** Export final · cada Registro recibe `publicRef` ordenado por fecha. */
+export const registros: Registro[] = enrichLegacyRegistroSeeds(RAW_REGISTROS);
+
 /* ═══════════════════════════════════════════════════════════════════
    Helpers derivados
    ═══════════════════════════════════════════════════════════════════ */
@@ -838,6 +882,7 @@ export function getMatchLevel(pct: number): "none" | "low" | "medium" | "high" {
 /** Label humano del estado. */
 export const estadoLabel: Record<RegistroEstado, string> = {
   pendiente: "Pendiente",
+  preregistro_activo: "Preregistro",
   aprobado: "Aprobado",
   rechazado: "Rechazado",
   duplicado: "Duplicado",

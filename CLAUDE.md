@@ -11,6 +11,234 @@
 
 ---
 
+## 🚀 FASE 1 · Backend real · Single Source of Truth
+
+> Bloque obligatorio para cualquier agente que toque plan, paywall, billing,
+> contadores de uso, mutaciones de promociones/agencias/registros, o
+> endpoints del backend. Si tu tarea no aplica, sáltalo · pero léelo igual
+> para no romper invariantes.
+
+### 1 · Project context · prototipo vs producción
+
+Byvaro **comenzó como un prototipo frontend** (Vite + React + TypeScript)
+sobre mocks en `localStorage` y archivos seed `.ts`. Esa capa es útil para
+iterar UX y validar el modelo, pero **NO es producción** y **NO es la fuente
+de verdad** del paywall.
+
+- ❌ `localStorage.byvaro.plan.v1` → mock de prototipo · no confiable.
+- ❌ Counters de `src/lib/usage.ts` derivados de seeds → no representan
+  estado real.
+- ❌ `useUsageGuard()` cliente → solo advisory · **un cliente puede mentir**.
+- ❌ `subscribeToPromoter249()` mock que muta localStorage → no procesa pago.
+- ✅ **El backend es la única fuente de verdad** del plan, los counters y los
+  gates. Valida siempre en servidor; asume que el cliente puede haber sido
+  manipulado (`devtools`, `localStorage.setItem('byvaro.plan.v1', 'promoter_249')`).
+
+El backend **no está implementado todavía**. El contrato completo vive en
+`docs/backend-integration.md §12` y debe seguirse al pie de la letra cuando
+se implemente.
+
+### 2 · Modelo de negocio · SOURCE OF TRUTH
+
+- **Promotores (developers) pagan 249€/mes + IVA** · postpago · sin permanencia.
+- **Agencias gratis en Fase 1** · ningún gate aplica a `kind='agency'`.
+- **Plan vive a nivel `organization` (workspace)** · nunca por `user`.
+- **Solo developers se monetizan** en Fase 1.
+- **El counter `acceptRegistro` cuenta SOLO registros con `origen: "collaborator"`** (de agencias). Walk-ins del promotor, portales (Idealista, Fotocasa…) y registros directos NO consumen cupo · son leads del propio promotor. Ver `docs/portal-leads-integration.md`.
+
+| Tier | Promociones activas | Agencias invitadas | Registros recibidos |
+|---|---:|---:|---:|
+| `trial` | 2 | 5 | 40 |
+| `promoter_249` | 5 (cap producto) | ∞ | ∞ |
+
+**Stripe es la única autoridad que activa `promoter_249`** (vía webhook
+`customer.subscription.created`). Ningún path de aplicación lo activa.
+
+### 3 · Frontend vs Backend · responsabilidades
+
+| Lógica | Vive en |
+|---|---|
+| Renderizar `<UpgradeModal>` con `{ trigger, used, limit }` | Frontend |
+| Pintar `<UsagePill>` ámbar al ≥80% | Frontend |
+| Hint `useUsageGuard()` para deshabilitar UI | **Frontend (advisory)** |
+| **Decidir si una mutación se permite** | **Backend** |
+| **Contar promociones / agencias / registros** | **Backend** (`workspace_usage()`) |
+| **Tier vigente del workspace** | **Backend** (`workspace_plans`) |
+| **Cobrar 249€** | **Stripe Checkout + webhook backend** |
+| Persistir `paywall_events` (tracking) | Backend |
+| Idempotencia de webhooks Stripe | Backend (`stripe_events_processed`) |
+
+**Regla**: la lógica del cliente NO es de confianza.
+
+### 4 · Paywall enforcement · NON-NEGOTIABLE
+
+Cada endpoint mutante que consume cuota debe:
+1. Resolver `(orgId, userId)` desde auth.
+2. Si `org.kind !== 'developer'` → skip gate (agencias gratis).
+3. Else: leer tier de `workspace_plans` y counters de `workspace_usage(orgId)`.
+4. Si `used >= limit` → responder con HTTP 402 en el shape canónico:
+
+```http
+HTTP/1.1 402 Payment Required
+Content-Type: application/json
+```
+```json
+{
+  "code": "limit_exceeded",
+  "trigger": "createPromotion" | "inviteAgency" | "acceptRegistro",
+  "tier": "trial" | "promoter_249",
+  "used": 2,
+  "limit": 2
+}
+```
+
+5. Else: continuar con la acción.
+
+El cliente lee el 402 y abre `<UpgradeModal>` con `{ trigger, used, limit }`.
+**El shape es fijo** · no inventes campos.
+
+#### Endpoints con gate
+
+| Endpoint | Trigger | Trial | Pagado |
+|---|---|---:|---:|
+| `POST /api/promotions` (status=active) o `PATCH /api/promotions/:id` (transición a active) | `createPromotion` | 2 | 5 |
+| `POST /api/agency-invitations` | `inviteAgency` | 5 | ∞ |
+| `POST /api/registrations` | `acceptRegistro` | 40 | ∞ |
+
+`createPromotion` es race-sensitive (margen 0 entre 2 y 3) · usar
+`SERIALIZABLE` o `pg_advisory_xact_lock`. Los otros dos toleran `read
+committed` con check pre-insert.
+
+### 5 · Architecture principles
+
+- **Multi-tenancy vía `organizations`.** Cada fila tiene `organization_id` ·
+  RLS Postgres + `app.current_org` per request.
+- **Plan en `organizations`, nunca en `users`.** Un usuario con 2
+  memberships tiene 2 planes independientes.
+- **Stripe = única fuente de verdad de billing.** Solo el webhook muta `tier`.
+  Webhook idempotente con `stripe_events_processed`.
+- **Counters server-side on-demand.** `count(*)` desde tablas reales con
+  índices · jamás cachear en cliente. No materializar en Fase 1.
+- **Solo developers gated.** `kind='agency'` early-return en
+  `assertWithinLimit`.
+- **Backend es la única autoridad.** Frontend mirror, nunca al revés.
+- **Plan downgrade · grandfather.** Cancelar `promoter_249` con 4 promos
+  activas mantiene las 4. Solo se bloquea la siguiente.
+
+### 6 · Implementation protocol · MANDATORY
+
+Antes de escribir código para una feature nueva:
+
+1. **Validar contra el modelo de negocio.** ¿Sirve a "promotores pagan
+   249€/mes"? Si no, stop.
+2. **Verificar scope Fase 1.** Si pertenece a Phase 2+, deferir.
+3. **Decidir si necesita enforcement backend.** Toda acción que consuma
+   cuota requiere `assertWithinLimit()` server-side.
+4. **Asegurar que el paywall no se puede bypassear.** Gate en endpoint
+   mutante, no solo en UI.
+5. **Mantener implementación mínima.** Cero abstracciones nuevas, cero
+   optimización prematura, cero limpieza no relacionada.
+
+Si una decisión es ambigua, stop y pregunta. Añádela a
+`docs/open-questions.md` en el mismo PR.
+
+### 7 · DO NOT · reglas estrictas
+
+- ❌ Replicar lógica de localStorage en el backend.
+- ❌ Confiar en counters/plan que vengan del cliente.
+- ❌ Añadir nuevos pricing models (anuales, descuentos, proration,
+  multi-currency).
+- ❌ Añadir personas nuevas (property owners, marketplace, commercializers).
+- ❌ Expandir más allá de Fase 1 (AI, contratos firmados, advanced
+  analytics).
+- ❌ Sobre-ingeniería (counters materializados prematuros, microservicios,
+  CQRS, event sourcing en Fase 1).
+- ❌ Activar `tier='promoter_249'` desde cualquier sitio que no sea el
+  webhook Stripe.
+- ❌ Aplicar gates a agencias.
+
+### 8 · Backend status
+
+**El backend NO está implementado.** Solo existe el prototipo frontend.
+
+La spec completa está en:
+- `docs/backend-integration.md §12` — DDL, endpoints, webhooks, enforcement,
+  migration plan.
+- `docs/screens/ajustes-plan.md` — contrato UI de `/ajustes/facturacion/plan`.
+- `DECISIONS.md` ADR-058 — razones del diseño.
+
+El backend debe incluir:
+
+| Componente | Propósito |
+|---|---|
+| `organizations`, `users`, `memberships` | Multi-tenancy + auth |
+| `workspace_plans` | Estado del plan |
+| `promotions`, `agency_invitations`, `registrations` | Entidades counted |
+| `workspace_usage()` SQL function | Única fuente de los counters |
+| `assertWithinLimit()` middleware | Enforcement en los 3 mutantes |
+| Stripe Checkout + Customer Portal + webhook | Billing |
+| `paywall_events` | Tracking de validación |
+| `stripe_events_processed` | Webhook idempotency |
+| RLS en cada tabla multi-tenant | Aislamiento de datos |
+
+Estimado: ~6 días de un backend engineer hasta production-ready.
+
+### 9 · Validation first · IMPORTANT
+
+Antes de invertir en backend, **validar willingness-to-pay** con el
+prototipo frontend. **Tracking ya implementado** en
+`src/lib/analytics.ts` con 4 eventos:
+
+| Evento | Origen |
+|---|---|
+| `paywall.shown` | `<UpgradeModal>` al abrir |
+| `paywall.subscribe_clicked` | CTA "Suscribirme · 249€/mes" |
+| `paywall.dismissed` | X / "Más adelante" / overlay / ESC |
+| `usage_pill.clicked` | `<UsagePill>` ámbar del header |
+
+Cada evento incluye `{ trigger, tier, used, limit, route, userRole,
+organizationId, timestamp }`.
+
+Despacho actual: `console.info` siempre + `window.posthog.capture()` si
+el snippet está cargado. Para activar PostHog en producción ver
+**`docs/validation/paywall-validation.md`** (instrucciones de cableado +
+métricas + umbrales de decisión).
+
+**Umbrales de decisión** (resumen · spec completa en el doc):
+- Conversion `subscribe_clicked / shown` ≥ **20-30%** sostenido 14 días →
+  arrancar Phase 1B (backend real + Stripe).
+- < 20% → iterar copy/límites/oferta antes de escribir backend.
+
+El CTA del prototipo hoy mockea `setPlan('promoter_249')` · mantenerlo
+así durante validación. Billing real es Phase 1B.
+
+### 10 · Final goal · qué define éxito en Fase 1
+
+El sistema debe:
+
+→ **Enforce el paywall correctamente** (servidor = única fuente de verdad)
+→ **Permitir que los promotores paguen** (Stripe + 249€/mes funcional)
+→ **Garantizar la integridad de datos** (RLS + transacciones + multi-tenancy)
+
+**Nada más importa en Fase 1.** Cualquier propuesta que no contribuya
+directamente a uno de estos 3 puntos queda fuera de scope.
+
+### Referencias canónicas
+
+- `docs/backend-integration.md §12` · contrato backend completo.
+- `docs/screens/ajustes-plan.md` · spec de la pantalla.
+- `DECISIONS.md` ADR-058 · paywall Phase 1.
+- Prototipo frontend (NO replicar lógica al backend):
+  - `src/lib/plan.ts`, `src/lib/usage.ts`, `src/lib/usageGuard.ts`,
+    `src/lib/usagePressure.ts`
+  - `src/components/paywall/{UpgradeModal,UsagePill}.tsx`
+  - `src/pages/ajustes/facturacion/plan.tsx`
+  - `src/pages/CrearPromocion.tsx` · gate `createPromotion`
+  - `src/components/empresa/InvitarAgenciaModal.tsx` · gate `inviteAgency`
+  - `src/pages/Registros.tsx` · gate `acceptRegistro`
+
+---
+
 ## 🎯 Qué es Byvaro
 
 SaaS para promotores inmobiliarios de obra nueva. Dos problemas clave que

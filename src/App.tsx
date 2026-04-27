@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AppLayout } from "@/components/AppLayout";
 import { ConfirmDialogHost } from "@/components/ui/ConfirmDialog";
+import { UpgradeModal } from "@/components/paywall/UpgradeModal";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import Inicio from "@/pages/Inicio";
 import Actividad from "@/pages/Actividad";
@@ -108,6 +109,9 @@ export default function App() {
        * a toast.success/info/error eran silenciosas. */}
       <Toaster position="top-right" richColors closeButton />
       <ConfirmDialogHost />
+      {/* Paywall global · CLAUDE.md §"Paywall validación". Cualquier
+       *  componente dispara con `useUsageGuard(...).openUpgrade()`. */}
+      <UpgradeModal />
       <Routes>
         {/* Auth · fullscreen (sin AppLayout) — ver docs/screens/auth.md */}
         <Route path="/login" element={<Login />} />

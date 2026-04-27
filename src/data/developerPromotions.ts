@@ -1,5 +1,6 @@
 import { type Promotion } from "./promotions";
 import type { FormaPagoComision, ClasificacionCliente, CondicionRegistro, HitoComision } from "@/types/promotion-config";
+import type { ModoValidacionRegistro } from "@/components/crear-promocion/types";
 
 export type CollaborationConfig = {
   comisionInternacional: number;
@@ -13,6 +14,12 @@ export type CollaborationConfig = {
   ivaIncluido: boolean;
   condicionesRegistro: CondicionRegistro[];
   validezRegistroDias: number; // 0 = no expira
+  /** Modo de validación · "directo" o "por_visita". Opcional en seed
+   *  para retro-compatibilidad: cuando falta, asumir "por_visita" (el
+   *  default histórico de la copy del wizard).
+   *  TODO(logic): la lógica que actúa sobre este flag aún no existe ·
+   *  ver `docs/registration-system.md §2`. */
+  modoValidacionRegistro?: ModoValidacionRegistro;
 };
 
 export type PuntoDeVenta = {

@@ -20,6 +20,7 @@
 
 import { useEffect, useState } from "react";
 import { registros as SEED_REGISTROS, type Registro } from "@/data/records";
+import { generatePublicRef } from "@/lib/publicRef";
 
 const STORAGE_KEY = "byvaro.registros.created.v1";
 const CHANGE_EVENT = "byvaro:registros-change";
@@ -50,9 +51,16 @@ function normPhone(s?: string): string {
   return (s ?? "").replace(/\D/g, "");
 }
 
-/** Busca un registro PENDIENTE existente con el mismo cliente
- *  (email o teléfono normalizados) en la MISMA promoción.
- *  Cruza la lista creada + el seed.
+/** Busca un registro EN CURSO existente con el mismo cliente (email o
+ *  teléfono normalizados) en la MISMA promoción · bloquea creaciones
+ *  posteriores como `duplicado` (regla first-come silent).
+ *
+ *  Phase 1 Core · estados que bloquean:
+ *    · `pendiente` · esperando decisión del promotor.
+ *    · `preregistro_activo` · aprobado pero esperando visita ·
+ *      la visita programada protege el cliente.
+ *  No bloquean: aprobado (es atribución final, gestionado por
+ *  cross-promo warning); rechazado/duplicado (ya invalidados).
  *
  *  IMPORTANTE: la regla "first-come silent" aplica SOLO dentro de
  *  la misma promoción. Un mismo cliente puede tener registros en
@@ -66,7 +74,7 @@ function findPendingDuplicate(input: Registro): Registro | undefined {
   if (!email && !phone) return undefined;
   const all = [...read(), ...SEED_REGISTROS];
   return all.find((r) => {
-    if (r.estado !== "pendiente") return false;
+    if (r.estado !== "pendiente" && r.estado !== "preregistro_activo") return false;
     if (r.promotionId !== input.promotionId) return false; // distinta promo · no es conflicto
     if (r.id === input.id) return false; // evita match consigo mismo
     if (email && normEmail(r.cliente.email) === email) return true;
@@ -87,16 +95,24 @@ function findPendingDuplicate(input: Registro): Registro | undefined {
  *   · El perdedor solo aparece si filtra por estado "Duplicados".
  */
 export function addCreatedRegistro(r: Registro) {
-  const winner = findPendingDuplicate(r);
+  /* Defensa · si el caller no generó publicRef, generamos uno aquí
+     escaneando el storage actual + seeds. Garantiza que ningún
+     Registro queda sin ref pública. */
+  const ensured: Registro = r.publicRef
+    ? r
+    : { ...r, publicRef: generatePublicRef("registration", [...read(), ...SEED_REGISTROS]) };
+  const winner = findPendingDuplicate(ensured);
   const finalRegistro: Registro = winner
     ? {
-        ...r,
+        ...ensured,
         estado: "duplicado",
         matchPercentage: 100,
-        matchWith: `Registrado primero por ${winner.id}`,
+        /* `matchWith` muestra el publicRef humano (`re000042`) en
+           lugar del id técnico · más legible en banners. */
+        matchWith: `Registrado primero por ${winner.publicRef}`,
         matchCliente: { ...winner.cliente },
       }
-    : r;
+    : ensured;
   const list = read();
   write([finalRegistro, ...list]);
 }

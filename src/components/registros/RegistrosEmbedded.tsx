@@ -52,9 +52,10 @@ interface Props {
 
 const ESTADO_VARIANT: Record<RegistroEstado, "warning" | "success" | "danger" | "muted"> = {
   pendiente: "warning",
+  preregistro_activo: "warning",
   aprobado: "success",
   rechazado: "danger",
-  caducado: "muted",
+  duplicado: "muted",
 };
 
 function relativeDate(iso: string): string {
@@ -105,7 +106,9 @@ export function RegistrosEmbedded({
 
   const counts = useMemo(() => {
     const c: Record<RegistroEstado | "total", number> = {
-      total: filtered.length, pendiente: 0, aprobado: 0, rechazado: 0, caducado: 0,
+      total: filtered.length,
+      pendiente: 0, preregistro_activo: 0,
+      aprobado: 0, rechazado: 0, duplicado: 0,
     };
     for (const r of filtered) c[r.estado] += 1;
     return c;

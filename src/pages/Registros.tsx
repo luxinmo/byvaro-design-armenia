@@ -32,7 +32,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import {
   Search, X, Check, ChevronDown, Filter, AlertTriangle, Shield,
-  Phone, Flag, Building2, Users,
+  Phone, Flag, Building2, Users, Info,
   ArrowLeft, Clock, CheckCircle2, XCircle, FileText, ArrowUpDown,
   ExternalLink, Sparkles, Eye, Handshake, UserCheck,
 } from "lucide-react";
@@ -48,13 +48,19 @@ import {
   estadoLabel,
 } from "@/data/records";
 import { promotions } from "@/data/promotions";
+import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { agencies } from "@/data/agencies";
 import { Switch } from "@/components/ui/Switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { motion, AnimatePresence } from "framer-motion";
 import { agencies as ALL_AGENCIES } from "@/data/agencies";
 import { useCurrentUser } from "@/lib/currentUser";
 import { useCreatedRegistros } from "@/lib/registrosStorage";
+import { useUsageGuard } from "@/lib/usageGuard";
+import { PublicRefBadge } from "@/components/ui/PublicRefBadge";
+import { resolveNationality } from "@/data/nationalities";
 import { Tag } from "@/components/ui/Tag";
 import { cn } from "@/lib/utils";
 import { MatchRing } from "@/components/registros/MatchRing";
@@ -120,6 +126,7 @@ function matchBadgeClasses(pct: number): string {
 /** Tag variant del estado para `<Tag>`. */
 function estadoTagVariant(e: RegistroEstado): "warning" | "success" | "danger" | "muted" {
   if (e === "pendiente") return "warning";
+  if (e === "preregistro_activo") return "warning";
   if (e === "aprobado") return "success";
   if (e === "rechazado" || e === "duplicado") return "danger";
   return "muted";
@@ -137,6 +144,11 @@ export default function Registros() {
   /* Registros creados en vivo desde "Registrar cliente" (localStorage mock).
    * Se combinan con los del seed para que los tests end-to-end sean visibles. */
   const createdRegistros = useCreatedRegistros();
+
+  /* Paywall guard · Fase 1 · 40 registros en trial. Solo aplica al
+     promotor (currentUser.accountType === "developer"); para agencia
+     siempre devuelve `blocked: false`. */
+  const acceptGuard = useUsageGuard("acceptRegistro");
 
   const scopedList = useMemo(() => {
     const combined = [...createdRegistros, ...registrosMock];
@@ -187,10 +199,18 @@ export default function Registros() {
     [],
   );
 
-  /* ─── Mapas de lookup (para pintar nombres rápido) ─── */
+  /* ─── Mapas de lookup (para pintar nombres rápido) ───
+     Une `promotions` (catálogo público con tarjetas) + `developerOnlyPromotions`
+     (catálogo más rico que usa el wizard moderno · cuando una agencia
+     registra desde una de estas, el id no está en `promotions` · si no
+     unimos aquí, la cabecera del registro muestra "—" en vez del nombre
+     de la promoción). En caso de id duplicado entre ambos catálogos,
+     prevalece la última inserción · `developerOnlyPromotions` se considera
+     más fresca porque incluye campos del wizard. */
   const promotionById = useMemo(() => {
     const m = new Map<string, (typeof promotions)[number]>();
     promotions.forEach((p) => m.set(p.id, p));
+    developerOnlyPromotions.forEach((p) => m.set(p.id, p));
     return m;
   }, []);
   const agencyById = useMemo(() => {
@@ -268,15 +288,20 @@ export default function Registros() {
     return copy;
   }, [filtered, sortBy]);
 
-  /* ─── Mantener activeId válido ante cambios de filtro ─── */
+  /* ─── Mantener activeId válido ante cambios de filtro ───
+   *  Solo limpiamos si el registro ya no existe en `records` (borrado).
+   *  Si solo cae fuera de `filtered` (p. ej. acabas de aprobar y el
+   *  tab está en "Pendientes"), mantenemos el detalle abierto para que
+   *  el promotor vea la transición · botones → countdown → pill final
+   *  sin que la pantalla salte al siguiente registro. */
   useEffect(() => {
-    if (activeId && !filtered.some((r) => r.id === activeId)) {
-      setActiveId(filtered[0]?.id ?? null);
+    if (activeId && !records.some((r) => r.id === activeId)) {
+      setActiveId(null);
     }
     if (!activeId && filtered.length > 0 && typeof window !== "undefined" && window.innerWidth >= 1024) {
       setActiveId(filtered[0]!.id);
     }
-  }, [filtered, activeId]);
+  }, [records, filtered, activeId]);
 
   /* ─── Derivados de contadores ─── */
   const pendientesCount = records.filter((r) => r.estado === "pendiente").length;
@@ -343,12 +368,36 @@ export default function Registros() {
    *  + guarda el `decidedByUserId` del usuario actual (fuente única de la
    *  autoría · el nombre se resuelve en render vía TEAM_MEMBERS).
    *  TODO(backend): POST /api/records/:id/approve|reject programa la
-   *  notificación con delay 5min y la cancela si llega /revert antes. */
+   *  notificación con delay 5min y la cancela si llega /revert antes.
+   *  TODO(backend): el endpoint devolverá 402 con `{trigger,used,limit}`
+   *  cuando el workspace en plan trial llegue a 40 registros · la UI
+   *  ya tiene el guard local que abre el UpgradeModal antes de llamar. */
   const approve = (id: string) => {
+    /* Paywall · si el plan trial ya cubrió el cupo de registros, el
+     *  promotor NO puede aprobar · el registro permanece "pendiente"
+     *  hasta que actualice el plan. Sin pérdida de datos. */
+    if (acceptGuard.blocked) {
+      acceptGuard.openUpgrade();
+      return;
+    }
     const now = new Date().toISOString();
     const record = records.find((r) => r.id === id);
+    /* Modo de validación de la promoción · `directo` o `por_visita`.
+     * En modo `por_visita`, el registro entra como `preregistro_activo`
+     * y se confirmará a `aprobado` cuando la visita asociada se marque
+     * como realizada (`onVisitCompleted` en registroVisitaLink.ts).
+     * Default `por_visita` si la promo no lo declara explícitamente. */
+    const promo = record ? promotionById.get(record.promotionId) : undefined;
+    const modo = promo?.modoValidacionRegistro ?? "por_visita";
+    /* `visit_only` es un caso especial: el cliente ya estaba aprobado
+     * antes · solo se programa visita nueva · siempre va directo a
+     * `aprobado` independientemente del modo de la promo. */
+    const targetEstado: RegistroEstado =
+      modo === "por_visita" && record?.tipo !== "visit_only"
+        ? "preregistro_activo"
+        : "aprobado";
     setRecords((prev) => prev.map((r) => r.id === id ? {
-      ...r, estado: "aprobado", decidedAt: now,
+      ...r, estado: targetEstado, decidedAt: now,
       decidedByUserId: currentUser.id,
       /* Snapshot legacy para fallback si el miembro es eliminado más adelante. */
       decidedBy: currentUser.name,
@@ -365,7 +414,7 @@ export default function Registros() {
     if (record) {
       try {
         contactInfo = upsertContactFromRegistro(
-          { ...record, estado: "aprobado", decidedAt: now,
+          { ...record, estado: targetEstado, decidedAt: now,
             decidedByUserId: currentUser.id, decidedBy: currentUser.name },
           { name: currentUser.name, email: currentUser.email },
         );
@@ -377,6 +426,9 @@ export default function Registros() {
       }
     }
     const description = [
+      targetEstado === "preregistro_activo"
+        ? "Preregistro activo · se confirmará tras la primera visita realizada."
+        : null,
       visitUpdated ? "Visita asociada confirmada en el calendario." : null,
       contactInfo?.created
         ? `Contacto creado: ${contactInfo.contactName}.`
@@ -385,7 +437,10 @@ export default function Registros() {
           : null,
       "5 min para revertir antes de notificar a la agencia.",
     ].filter(Boolean).join(" ");
-    toast.success("Registro aprobado", { description });
+    toast.success(
+      targetEstado === "preregistro_activo" ? "Preregistro activado" : "Registro aprobado",
+      { description },
+    );
   };
   const reject = (id: string, decisionNote: string) => {
     const now = new Date().toISOString();
@@ -523,6 +578,7 @@ export default function Registros() {
   const estadoTabs: Array<{ value: RegistroEstado | "todos"; label: string }> = [
     { value: "todos", label: "Todos" },
     { value: "pendiente", label: "Pendientes" },
+    { value: "preregistro_activo", label: "Preregistros" },
     { value: "aprobado", label: "Aprobados" },
     { value: "rechazado", label: "Rechazados" },
     { value: "duplicado", label: "Duplicados" },
@@ -672,7 +728,9 @@ export default function Registros() {
                       {/* Contenido minimalista · nombre + contexto + fecha/estado */}
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-foreground truncate inline-flex items-center gap-1.5">
-                          {r.cliente.flag && <span>{r.cliente.flag}</span>}
+                          {(r.cliente.flag ?? resolveNationality(r.cliente.nacionalidad).flag) && (
+                            <span>{r.cliente.flag ?? resolveNationality(r.cliente.nacionalidad).flag}</span>
+                          )}
                           <span className="truncate">{r.cliente.nombre}</span>
                           {r.tipo === "registration_visit" && (
                             <span className="text-primary text-[10px] font-semibold uppercase tracking-wide shrink-0">
@@ -691,7 +749,10 @@ export default function Registros() {
                               </>
                             )}
                           </span>
-                          {!isDirect && r.agencyId && (
+                          {/* Track record de la agencia · SOLO promotor.
+                              La agencia no debe ver cómo el sistema la
+                              califica internamente (privacy + UX). */}
+                          {!isAgencyUser && !isDirect && r.agencyId && (
                             <AgencyTrackPill trackRecord={getAgencyTrackRecord(r.agencyId, createdRegistros)} />
                           )}
                         </p>
@@ -714,12 +775,18 @@ export default function Registros() {
               <section
                 className={cn(
                   "flex-1 min-w-0",
-                  // En móvil: si no hay registro activo, ocultamos el detalle
+                  // En desktop: parte del flex master-detail.
+                  // En mobile: si no hay registro activo, oculto.
                   !activeRecord && "hidden lg:block",
-                  // Padding bottom mobile · separa el footer Aprobar/Rechazar
-                  // del MobileBottomNav (h≈72px). Sin esto el footer queda
-                  // tapado por el nav fixed.
-                  "pb-24 lg:pb-0",
+                  // En mobile, cuando hay registro activo · pantalla
+                  // completa (fixed inset-0 z-40) que cubre header,
+                  // toolbar, lista y MobileBottomNav. Foco total en
+                  // el detail · cerrar con el botón ← del header.
+                  // `flex flex-col` para que la card interior pueda
+                  // pinear su footer al fondo (body con flex-1
+                  // overflow-y-auto). CLAUDE.md §"Responsive móvil
+                  // sin popovers".
+                  activeRecord && "fixed inset-0 z-40 bg-background flex flex-col lg:static lg:inset-auto lg:z-auto lg:bg-transparent lg:block",
                 )}
               >
                 {activeRecord ? (
@@ -961,7 +1028,7 @@ function RegistroDetail({
     : null;
 
   return (
-    <div className="bg-card border border-border rounded-2xl shadow-soft overflow-hidden">
+    <div className="bg-card overflow-hidden flex flex-col h-full lg:h-auto lg:border lg:border-border lg:rounded-2xl lg:shadow-soft">
       {/* Header del detalle · nombre + pulso pendiente + subtítulo con
           la promoción (antes estaba en el grid "Contexto"). */}
       <div className="px-4 sm:px-6 py-4 border-b border-border flex items-center gap-3">
@@ -976,14 +1043,28 @@ function RegistroDetail({
           {initials(record.cliente.nombre)}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-base font-bold text-foreground leading-tight truncate">
-              {record.cliente.flag && <span className="mr-1.5">{record.cliente.flag}</span>}
+              {/* Flag con fallback · si el registro no trae el emoji
+                 explícito (creados desde dialog), lo derivamos del nombre
+                 de la nacionalidad. Siempre se muestra bandera. */}
+              {(record.cliente.flag ?? resolveNationality(record.cliente.nacionalidad).flag) && (
+                <span className="mr-1.5">
+                  {record.cliente.flag ?? resolveNationality(record.cliente.nacionalidad).flag}
+                </span>
+              )}
               {record.cliente.nombre}
             </h2>
-            {/* Pulso "esperando" · visible solo mientras está pendiente. */}
-            {record.estado === "pendiente" && (
-              <span className="relative flex h-2 w-2 shrink-0" aria-label="Esperando decisión">
+            {/* publicRef del registro · ref humana copiable. */}
+            {record.publicRef && (
+              <PublicRefBadge value={record.publicRef} size="sm" />
+            )}
+            {/* Pulso "esperando" · pendiente (decisión) o preregistro_activo (visita). */}
+            {(record.estado === "pendiente" || record.estado === "preregistro_activo") && (
+              <span
+                className="relative flex h-2 w-2 shrink-0"
+                aria-label={record.estado === "pendiente" ? "Esperando decisión" : "Preregistro · esperando visita"}
+              >
                 <span className="absolute inline-flex h-full w-full rounded-full bg-warning opacity-75 animate-ping" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-warning" />
               </span>
@@ -1017,6 +1098,11 @@ function RegistroDetail({
         </div>
       </div>
 
+      {/* Body scrollable · todo entre el header y el footer queda
+          dentro de un <main> con `overflow-y-auto` para que el footer
+          de acciones quede pegado al fondo en mobile (fullscreen) sin
+          quedarse fuera de viewport en historiales largos. */}
+      <main className="flex-1 overflow-y-auto">
       {/* Cross-promoción · aviso si el cliente ya está aprobado en
           otra promoción del workspace (email o teléfono coincide).
           Solo promotor (viewerIsAgency oculta). */}
@@ -1026,14 +1112,104 @@ function RegistroDetail({
         </div>
       )}
 
-      {/* DuplicateResult — bloque rico con anillo + tabla side-by-side
-       *  + recomendación. Solo si la IA detectó una coincidencia. */}
-      {record.matchPercentage > 0 && (
+      {/* DuplicateResult — comparador side-by-side · SOLO promotor.
+       *
+       *  CRÍTICO · Privacy cross-tenant: la tabla expone email/teléfono/
+       *  nombre del cliente ganador (otra agencia o CRM directo del
+       *  promotor). La agencia entrante NO debe verlos · son datos de
+       *  otro tenant. Para la agencia mostramos un aviso mínimo abajo. */}
+      {!viewerIsAgency && record.matchPercentage > 0 && (
         <div className="px-4 sm:px-6 mt-4">
           <DuplicateResult
             record={record}
             onDismissMatch={canDecide ? onDismissMatch : undefined}
           />
+        </div>
+      )}
+
+      {/* Aviso minimal a la agencia cuando su registro entró como
+       *  `duplicado` por la regla first-come silent. Le indicamos que
+       *  no se aprobará SIN exponer los datos del ganador. */}
+      {viewerIsAgency && record.estado === "duplicado" && (
+        <div className="px-4 sm:px-6 mt-4">
+          <div className="rounded-xl border border-warning/30 bg-warning/10 px-3.5 py-3 flex items-start gap-2.5">
+            <div className="h-7 w-7 rounded-full bg-warning/15 grid place-items-center shrink-0 mt-0.5">
+              <Info className="h-3.5 w-3.5 text-warning" strokeWidth={2.25} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12.5px] font-semibold text-warning leading-snug">
+                Registro marcado como duplicado
+              </p>
+              <p className="text-[11px] text-warning/85 leading-relaxed mt-0.5">
+                Otro registro del mismo cliente entró antes en esta promoción.
+                Tu registro no avanzará · contacta al promotor si crees que es un error.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reassurance banner · sin coincidencias detectadas. SOLO promotor.
+       *
+       *  CRÍTICO · Privacy cross-tenant: el resultado del análisis IA
+       *  cruza el cliente con TODO el universo del promotor (contactos
+       *  CRM + registros de TODAS las agencias). Mostrarlo a la agencia
+       *  filtra info estratégica que no debería conocer:
+       *   · si el cliente está en otras agencias colaboradoras
+       *   · si está en el CRM directo del promotor
+       *  La agencia solo debe ver el estado de SU registro, no el
+       *  resultado del análisis interno. */}
+      {!viewerIsAgency && record.matchPercentage === 0 && record.estado === "pendiente" && (
+        <div className="px-4 sm:px-6 mt-4">
+          <div className="rounded-xl border border-success/30 bg-success/10 dark:bg-success/5 px-3.5 py-3 flex items-start gap-2.5">
+            <div className="h-7 w-7 rounded-full bg-success/15 grid place-items-center shrink-0 mt-0.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-success" strokeWidth={2.25} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12.5px] font-semibold text-success leading-snug">
+                Sin coincidencias · seguro aprobar
+              </p>
+              <p className="text-[11px] text-success/85 leading-relaxed mt-0.5">
+                La IA ha cruzado el cliente con tus contactos y registros
+                previos · no detecta duplicados.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Banner PREREGISTRO · estado preregistro_activo.
+          Es la pieza visual más importante para que el promotor o la
+          agencia entiendan que este NO es un registro definitivo · es
+          un preregistro pendiente de visita realizada. */}
+      {record.estado === "preregistro_activo" && (
+        <div className="mx-4 sm:mx-6 mt-4 rounded-xl border-2 border-warning/40 bg-warning/15 dark:bg-warning/10 p-4 flex items-start gap-3">
+          <div className="h-10 w-10 rounded-xl bg-warning/25 grid place-items-center text-warning shrink-0">
+            <Eye className="h-5 w-5" strokeWidth={2} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-[11px] uppercase tracking-[0.14em] font-bold text-warning">
+                Preregistro · pendiente de visita
+              </p>
+            </div>
+            <p className="text-[13px] font-semibold text-foreground mt-1 leading-snug">
+              Este NO es un registro definitivo todavía
+            </p>
+            <p className="text-[11.5px] text-foreground/80 mt-1 leading-relaxed">
+              {viewerIsAgency
+                ? "Tu cliente queda reservado a tu nombre. Se confirmará como registro definitivo cuando se marque la visita como realizada · si el plazo expira sin visita, el cliente queda libre."
+                : "El cliente queda reservado a la agencia colaboradora. Se confirmará automáticamente cuando se marque la visita como realizada · si el plazo expira sin visita, el cliente queda libre."}
+            </p>
+            {record.visitDate && (
+              <p className="text-[11.5px] text-warning font-semibold mt-2 inline-flex items-center gap-1.5">
+                <Clock className="h-3 w-3" />
+                Visita programada el{" "}
+                {new Date(record.visitDate).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}
+                {record.visitTime && ` · ${record.visitTime}h`}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -1079,19 +1255,51 @@ function RegistroDetail({
               <DetailRow
                 icon={Flag}
                 label="Nacionalidad"
-                value={`${record.cliente.flag ? `${record.cliente.flag} ` : ""}${record.cliente.nacionalidad}`}
+                /* Si el cliente no trae `flag` emoji, lo derivamos del
+                   nombre de la nacionalidad para que SIEMPRE se muestre
+                   bandera (resolveNationality cubre tanto inglés como
+                   español). */
+                value={(() => {
+                  const flagDirect = record.cliente.flag;
+                  const resolved = !flagDirect ? resolveNationality(record.cliente.nacionalidad) : null;
+                  const flag = flagDirect ?? resolved?.flag ?? "";
+                  return `${flag ? `${flag} ` : ""}${record.cliente.nacionalidad}`;
+                })()}
               />
             </dl>
           </div>
         )}
 
-        {/* Origen · logo agencia + foto agente + nombre completo.
-            La promoción ya no se muestra aquí (vive en el header). */}
+        {/* Origen / Destinatario · bidireccional según el viewer.
+            · Vista promotor: "Enviado por" + agencia colaboradora (o
+              "Captado por" + agente del propio promotor si es directo).
+            · Vista agencia: "Enviado a" + nombre del promotor de la
+              promoción · perspectiva inversa. */}
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-3">
-            {record.origen === "direct" ? "Captado por" : "Enviado por"}
+            {viewerIsAgency
+              ? "Enviado a"
+              : record.origen === "direct" ? "Captado por" : "Enviado por"}
           </p>
-          {record.origen === "direct" ? (
+          {viewerIsAgency ? (
+            /* Vista AGENCIA · destinatario = promotor de la promoción.
+               Phase 1: usamos el `developer` string de la promoción +
+               label genérico "Promotor" porque Phase 1 no permite que
+               el lado opuesto sea owner/comercializadora todavía.
+               TODO(phase-2): cuando exista `Promotion.owningParty` con
+               kind, sustituir label dinámicamente. */
+            <div className="flex items-center gap-2.5">
+              <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary grid place-items-center shrink-0">
+                <Building2 className="h-4 w-4" strokeWidth={1.75} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground truncate">
+                  {promotions.find((p) => p.id === record.promotionId)?.developer ?? "Promotor"}
+                </p>
+                <p className="text-[11px] text-muted-foreground truncate">Promotor</p>
+              </div>
+            </div>
+          ) : record.origen === "direct" ? (
             /* Directo · solo el agente del promotor. */
             agent ? (
               <div className="flex items-center gap-2.5">
@@ -1116,7 +1324,7 @@ function RegistroDetail({
               </div>
             )
           ) : (
-            /* Colaborador · logo agencia + agente enviador. */
+            /* Colaborador (vista promotor) · logo agencia + agente enviador. */
             <div className="space-y-2.5">
               {agency && (
                 <div className="flex items-center gap-2.5">
@@ -1171,62 +1379,143 @@ function RegistroDetail({
         </div>
       )}
 
-      {/* GracePeriodBanner — visible 5min tras aprobar/rechazar.
-       *  Permite revertir antes de notificar a la agencia. */}
-      {(record.estado === "aprobado" || record.estado === "rechazado") && (
-        <div className="px-4 sm:px-6 mt-4">
-          <GracePeriodBanner record={record} onRevert={onRevert} />
-        </div>
-      )}
+      {/* ActivityTimeline · abierto por defecto · si no cabe, scrollea
+          el body (el footer queda fijo abajo gracias al flex column).
+          `viewerIsAgency` filtra eventos internos del workspace
+          promotor (privacy cross-tenant). */}
+      <TimelineCollapsed record={record} viewerIsAgency={viewerIsAgency} />
+      </main>
 
-      {/* ActivityTimeline · plegado por defecto · evita desplazar el
-          footer de acciones fuera de viewport (el botón "Aprobar"
-          debe estar siempre accesible). */}
-      <TimelineCollapsed record={record} />
-
-      {/* Footer de acciones · oculto para agencia (solo promotor decide) */}
+      {/* Footer de acciones · siempre visible para el promotor, con
+          contenido distinto según estado (state machine):
+          · pendiente              → botones Aprobar / Rechazar
+          · decidido + en gracia   → countdown 5min + Revertir
+          · decidido + post-gracia → estado final (decisión inmutable)
+          La agencia no decide · footer oculto. */}
       {!viewerIsAgency && (
-      <div className="border-t border-border bg-card px-4 sm:px-6 py-4 flex flex-wrap items-center gap-2">
-        {record.matchPercentage > 0 && (
-          <button
-            onClick={() => toast.info("Abriendo ficha del cliente existente…")}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-border bg-card text-sm font-medium hover:bg-muted transition-colors"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            Ver cliente existente
-          </button>
-        )}
-
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={onReject}
-            disabled={!canDecide}
-            className={cn(
-              "inline-flex items-center gap-1.5 h-9 px-4 rounded-full border text-sm font-medium transition-colors",
-              canDecide
-                ? "border-border bg-card text-foreground hover:bg-destructive/5 hover:text-destructive hover:border-destructive/30"
-                : "border-border bg-muted text-muted-foreground cursor-not-allowed",
-            )}
-          >
-            <XCircle className="h-3.5 w-3.5" />
-            Rechazar
-          </button>
-          <button
-            onClick={onApprove}
-            disabled={!canDecide}
-            className={cn(
-              "inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-sm font-medium transition-colors shadow-soft",
-              canDecide
-                ? "bg-foreground text-background hover:bg-foreground/90"
-                : "bg-muted text-muted-foreground cursor-not-allowed shadow-none",
-            )}
-          >
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            Aprobar
-          </button>
-        </div>
-      </div>
+        <DecisionFooter
+          record={record}
+          onApprove={onApprove}
+          onReject={onReject}
+          onRevert={onRevert}
+          canDecide={canDecide}
+        />
       )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DecisionFooter · pie de la card de detalle, contenido swap.
+   ─────────────────────────────────────────────────────
+   Pendiente · botones Aprobar/Rechazar.
+   Recién decidido · GracePeriodBanner (countdown 5min + Revertir).
+   Tras la gracia · pill de estado final (sin acción · ya notificada).
+   ═══════════════════════════════════════════════════════════════════ */
+function DecisionFooter({
+  record, onApprove, onReject, onRevert, canDecide,
+}: {
+  record: Registro;
+  onApprove: () => void;
+  onReject: () => void;
+  onRevert: () => void;
+  canDecide: boolean;
+}) {
+  /* Re-render cada segundo · solo si está dentro de la gracia, para
+   *  que el countdown del banner se actualice y la transición a
+   *  "post-gracia" sea automática sin recargar. */
+  const decided = record.estado === "aprobado" || record.estado === "rechazado";
+  const decidedAtMs = record.decidedAt ? new Date(record.decidedAt).getTime() : 0;
+  const inGrace = decided && decidedAtMs > 0 && Date.now() - decidedAtMs < 5 * 60 * 1000;
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!inGrace) return;
+    const i = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(i);
+  }, [inGrace]);
+
+  return (
+    <div className="border-t border-border bg-card px-4 sm:px-6 py-4">
+      {canDecide ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {record.matchPercentage > 0 && (
+            <button
+              onClick={() => toast.info("Abriendo ficha del cliente existente…")}
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-border bg-card text-sm font-medium hover:bg-muted transition-colors"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Ver cliente existente
+            </button>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={onReject}
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:bg-destructive/5 hover:text-destructive hover:border-destructive/30 transition-colors"
+            >
+              <XCircle className="h-3.5 w-3.5" />
+              Rechazar
+            </button>
+            <button
+              onClick={onApprove}
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Aprobar
+            </button>
+          </div>
+        </div>
+      ) : inGrace ? (
+        <GracePeriodBanner record={record} onRevert={onRevert} />
+      ) : (
+        <DecidedStatus record={record} />
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DecidedStatus · pill final cuando ya pasó la ventana de gracia.
+   El registro es inmutable: la agencia ya recibió la notificación.
+   ═══════════════════════════════════════════════════════════════════ */
+function DecidedStatus({ record }: { record: Registro }) {
+  const isAprobado = record.estado === "aprobado";
+  const isPreregistro = record.estado === "preregistro_activo";
+  const ago = record.decidedAt ? relativeDate(record.decidedAt) : "";
+
+  /* Tres estilos posibles según el estado final */
+  const styles = isAprobado
+    ? { container: "bg-success/10 border border-success/25", iconWrap: "bg-success/15 text-success", text: "text-success" }
+    : isPreregistro
+    ? { container: "bg-warning/15 border border-warning/30", iconWrap: "bg-warning/20 text-warning", text: "text-warning" }
+    : { container: "bg-muted border border-border", iconWrap: "bg-muted-foreground/15 text-muted-foreground", text: "text-foreground" };
+
+  const Icon = isAprobado ? CheckCircle2 : isPreregistro ? Eye : XCircle;
+  const titleText = isAprobado
+    ? "Aprobado · agencia notificada"
+    : isPreregistro
+    ? "Preregistro activo · esperando visita"
+    : "Rechazado · agencia notificada";
+  const subText = isPreregistro
+    ? "Se confirmará como registro al marcar la visita como realizada · 5 min para revertir."
+    : ago
+      ? `Decisión ${ago} · ya no se puede revertir`
+      : "";
+
+  return (
+    <div className={cn("rounded-xl px-3.5 py-3 flex items-center gap-3", styles.container)}>
+      <div className={cn("h-8 w-8 rounded-full grid place-items-center shrink-0", styles.iconWrap)}>
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={cn("text-[13px] font-semibold leading-tight", styles.text)}>
+          {titleText}
+        </p>
+        {subText && (
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {subText}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -1289,8 +1578,14 @@ function AgencyTrackPill({ trackRecord }: { trackRecord: AgencyTrackRecord }) {
    TimelineCollapsed · ActivityTimeline plegado con toggle
    Mantiene el footer de acciones (Aprobar/Rechazar) siempre a la vista.
    ═══════════════════════════════════════════════════════════════════ */
-function TimelineCollapsed({ record }: { record: Registro }) {
-  const [open, setOpen] = useState(false);
+function TimelineCollapsed({
+  record,
+  viewerIsAgency = false,
+}: {
+  record: Registro;
+  viewerIsAgency?: boolean;
+}) {
+  const [open, setOpen] = useState(true);
   const count = record.timeline?.length ?? 0;
   return (
     <div className="border-t border-border/40">
@@ -1318,7 +1613,7 @@ function TimelineCollapsed({ record }: { record: Registro }) {
       </button>
       {open && (
         <div className="px-4 sm:px-6 pb-5">
-          <ActivityTimeline record={record} />
+          <ActivityTimeline record={record} viewerIsAgency={viewerIsAgency} />
         </div>
       )}
     </div>
@@ -1416,34 +1711,75 @@ function SortDropdown({
   value, onChange,
 }: { value: SortKey; onChange: (v: SortKey) => void }) {
   const active = SORT_OPTIONS.find((o) => o.value === value)!;
+  const isMobile = useIsMobile();
+  const [open, setOpen] = useState(false);
+
+  /* Lista común de opciones · misma UI en mobile (sheet bottom) y
+     desktop (popover). */
+  const optionsList = (
+    <div className="flex flex-col gap-0.5">
+      {SORT_OPTIONS.map((o) => {
+        const isActive = o.value === value;
+        return (
+          <button
+            key={o.value}
+            onClick={() => {
+              onChange(o.value);
+              setOpen(false);
+            }}
+            className={cn(
+              "w-full text-left px-3 py-3 lg:py-2 rounded-xl lg:rounded-lg text-[13.5px] lg:text-[12.5px] transition-colors",
+              isActive ? "bg-muted text-foreground font-medium" : "text-foreground hover:bg-muted/40",
+            )}
+          >
+            <p className="font-medium">{o.label}</p>
+            <p className="text-[11.5px] lg:text-[10.5px] text-muted-foreground mt-0.5">{o.hint}</p>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const triggerBtn = (
+    <button
+      type="button"
+      onClick={() => isMobile && setOpen(true)}
+      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-border bg-card text-[12.5px] font-medium text-foreground hover:border-foreground/30 transition-colors shrink-0"
+      title={active.hint}
+    >
+      <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.75} />
+      <span className="hidden sm:inline">{active.label}</span>
+    </button>
+  );
+
+  /* Mobile · Sheet desde abajo (estilo app nativa). CLAUDE.md
+     §"Responsive móvil sin popovers". */
+  if (isMobile) {
+    return (
+      <>
+        {triggerBtn}
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetContent
+            side="bottom"
+            className="rounded-t-2xl p-4 pt-3 max-h-[80vh] overflow-y-auto"
+          >
+            <div className="mx-auto h-1 w-10 rounded-full bg-border mb-3" aria-hidden />
+            <SheetTitle className="text-sm font-semibold text-foreground mb-3">
+              Ordenar por
+            </SheetTitle>
+            {optionsList}
+          </SheetContent>
+        </Sheet>
+      </>
+    );
+  }
+
+  /* Desktop · Popover anclado al trigger. */
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <button
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-border bg-card text-[12.5px] font-medium text-foreground hover:border-foreground/30 transition-colors shrink-0"
-          title={active.hint}
-        >
-          <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.75} />
-          <span className="hidden sm:inline">{active.label}</span>
-        </button>
-      </PopoverTrigger>
+      <PopoverTrigger asChild>{triggerBtn}</PopoverTrigger>
       <PopoverContent align="end" className="w-56 p-1.5">
-        {SORT_OPTIONS.map((o) => {
-          const isActive = o.value === value;
-          return (
-            <button
-              key={o.value}
-              onClick={() => onChange(o.value)}
-              className={cn(
-                "w-full text-left px-2.5 py-2 rounded-lg text-[12.5px] transition-colors",
-                isActive ? "bg-muted text-foreground font-medium" : "text-foreground hover:bg-muted/40",
-              )}
-            >
-              <p className="font-medium">{o.label}</p>
-              <p className="text-[10.5px] text-muted-foreground mt-0.5">{o.hint}</p>
-            </button>
-          );
-        })}
+        {optionsList}
       </PopoverContent>
     </Popover>
   );

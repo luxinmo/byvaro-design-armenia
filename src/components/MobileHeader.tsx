@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useCurrentUser } from "@/lib/currentUser";
 import { logout } from "@/lib/accountType";
+import { UsagePill } from "@/components/paywall/UsagePill";
 
 const drawerGroups = [
   { label: "General", items: [{ title: "Inicio", url: "/inicio", icon: Home }] },
@@ -51,10 +52,14 @@ export function MobileHeader() {
       ? `${currentUser.agencyName ?? "Agencia"} · Agencia`
       : "Promotor";
 
-  // Rutas "raíz" del menú principal — fuera de ellas mostramos la
-  // flecha de volver en lugar del logo.
+  // Rutas "raíz" del menú principal. En `/inicio` no mostramos flecha
+  // (ya estamos en la home). En el resto de raíces · flecha pequeña a
+  // la izquierda del logo que lleva a `/inicio` (atajo "ir a home").
+  // Fuera de raíces (detalles) · flecha de volver clásica con
+  // `navigate(-1)`.
   const rootPaths = ["/inicio", "/promociones", "/registros", "/ventas", "/calendario", "/colaboradores", "/contactos", "/equipo", "/microsites", "/emails", "/ajustes", "/empresa"];
   const isRoot = rootPaths.includes(location.pathname);
+  const isInicio = location.pathname === "/inicio";
 
   return (
     <>
@@ -63,13 +68,14 @@ export function MobileHeader() {
           derecha: campana + hamburguesa. */}
       <header className="lg:hidden sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border">
         <div className="h-14 px-4 grid grid-cols-[auto_1fr_auto] items-center gap-2">
-          {/* Izquierda */}
+          {/* Izquierda · flecha pegada al logo. En detalle: vuelve atrás.
+              En cualquier raíz que no sea /inicio: atajo a /inicio. */}
           <div className="flex items-center">
-            {!isRoot && (
+            {!isInicio && (
               <button
-                onClick={() => navigate(-1)}
+                onClick={() => (isRoot ? navigate("/inicio") : navigate(-1))}
                 className="p-2 -ml-2 rounded-lg hover:bg-muted text-foreground"
-                aria-label="Volver"
+                aria-label={isRoot ? "Ir a inicio" : "Volver"}
               >
                 <ArrowLeft className="h-5 w-5" />
               </button>
@@ -79,8 +85,9 @@ export function MobileHeader() {
           <div className="flex items-center justify-center">
             <BrandLogo variant="wordmark" wordmarkHeight={24} />
           </div>
-          {/* Derecha · menú (las notificaciones viven en la bottom bar). */}
-          <div className="flex items-center justify-end">
+          {/* Derecha · pill paywall + menú (las notificaciones viven en la bottom bar). */}
+          <div className="flex items-center justify-end gap-1">
+            <UsagePill />
             <button
               onClick={() => setOpen(true)}
               className="p-2 -mr-2 rounded-lg hover:bg-muted text-foreground"

@@ -24,6 +24,36 @@ export type ContactSourceType =
   | "direct" // formulario web propio o entrada directa
   | "import"; // importado de Excel/CSV
 
+/**
+ * Origen acumulativo de un Contact · cada vez que el contacto vuelve
+ * por un canal nuevo (portal, microsite, agencia…) se añade un entry
+ * a `Contact.origins[]`. NUNCA se sobrescribe.
+ *
+ * Ver `docs/contact-origins-audit.md`.
+ */
+export type ContactOrigin = {
+  /** Canal normalizado · alineado con LeadSource. Mantengo string para
+   *  no acoplar este modelo al import circular del enum LeadSource. */
+  source:
+    | "idealista" | "fotocasa" | "habitaclia"
+    | "microsite" | "referral" | "agency"
+    | "whatsapp" | "walkin" | "call"
+    | "registration" | "import" | "direct";
+  /** Etiqueta humana visible en UI · "Idealista", "Agencia Norte", etc. */
+  label: string;
+  /** ISO timestamp del momento exacto. */
+  occurredAt: string;
+  /** Promoción asociada si aplica (ej. lead específico de Promo A). */
+  promotionId?: string;
+  /** Agencia asociada si vino vía colaborador. */
+  agencyId?: string;
+  /** Id del Registro/Lead/event que disparó este origen · trazabilidad. */
+  refId?: string;
+  refType?: "registro" | "lead" | "web_activity" | "import" | "manual";
+  /** Notas opcionales: campaña, UTM, etc. */
+  meta?: Record<string, string | number>;
+};
+
 export type ContactStatus =
   /** Activo: con interacciones recientes o visitas próximas. */
   | "active"
@@ -46,13 +76,14 @@ export type Contact = {
   tradeName?: string;
   /** Para empresas: NIF/CIF de la empresa. */
   companyTaxId?: string;
-  /** Referencia interna correlativa de la organización, tipo "CON-0042".
-   *  Sirve al equipo para referirse al contacto sin usar nombre/email
-   *  (en facturas, contratos, mensajes internos). Único por org.
-   *  TODO(backend): autogenerar al crear el contacto y devolverlo en
-   *  POST /api/contacts. El admin puede personalizar el prefijo desde
-   *  /ajustes/contactos/* (futuro). */
+  /** @deprecated Usar `publicRef`. Alias derivado durante migración ·
+   *  se mantiene 1 release para no romper UI legacy que aún lo lea. */
   reference?: string;
+  /** Referencia pública del contacto · formato `coXXXXXX`. Único por
+   *  organización · inmutable durante la vida del contacto. Uso
+   *  HUMANO (búsqueda, emails, documentos, UI). El UUID `id` sigue
+   *  siendo PK técnica. Ver `docs/public-references-audit.md`. */
+  publicRef: string;
   name: string;
   flag?: string; // emoji bandera p.ej. "🇩🇪"
   nationality?: string; // nombre del país
@@ -60,12 +91,28 @@ export type Contact = {
   phone?: string;
   /** Tags asignadas (ids de availableTags). */
   tags: string[];
-  /** Fuente original — agency name, portal name o canal. */
+  /** @deprecated Usar `primarySource.label`. Mantengo 1 release. */
   source: string;
+  /** @deprecated Usar `primarySource.source`. Mantengo 1 release. */
   sourceType: ContactSourceType;
+  /**
+   * PRIMER origen del contacto · inmutable tras creación. Reemplaza
+   * a `source/sourceType` legacy para queries y UI nuevas.
+   * Ver `docs/contact-origins-audit.md`.
+   */
+  primarySource: ContactOrigin;
+  /** ÚLTIMO origen registrado · se actualiza en cada `appendOrigin`. */
+  latestSource: ContactOrigin;
+  /** Histórico cronológico completo · append-only · NUNCA sobrescribe. */
+  origins: ContactOrigin[];
   status: ContactStatus;
-  /** Texto humano: "2 días", "Ayer", "Hoy". */
+  /** @deprecated Texto humano "Hace 2h" derivado de `lastActivityAt`. */
   lastActivity: string;
+  /** ISO timestamp de la última actividad relevante con el contacto.
+   *  Único punto de mutación: `recordActivity()` en
+   *  `src/lib/contactActivity.ts`. NUNCA se retrocede.
+   *  Phase 1 · uno solo (global). Per-party tracking es Phase 2. */
+  lastActivityAt: string;
   /** Fecha de alta legible: "12 mar 2026". */
   firstSeen: string;
   /** Cuántas oportunidades activas tiene (visitas/ofertas en curso). */

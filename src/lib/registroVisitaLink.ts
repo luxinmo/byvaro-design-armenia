@@ -94,6 +94,38 @@ export function onRegistroApproved(registroId: string): { visitUpdated: boolean 
   return { visitUpdated: true };
 }
 
+/**
+ * Cuando una visita asociada a un Registro en estado `preregistro_activo`
+ * se marca como REALIZADA (`outcome: "realizada"`), el registro debe
+ * transitar a `aprobado` (cliente formalmente registrado).
+ *
+ * **Phase 1 Core**: función LISTA pero sin wire al calendario · el
+ * flujo de "marcar visita realizada" todavía no existe en el prototipo
+ * mock. Cuando el agente tenga UI para evaluar la visita (probablemente
+ * en `Calendario.tsx` o `VisitDetail.tsx`), llamar `onVisitCompleted`
+ * desde ahí.
+ *
+ * Devuelve un payload para que el caller pueda mutar su state local
+ * de Registros (no muta directamente · no tiene acceso al setRecords
+ * del componente).
+ */
+export function onVisitCompleted(registroId: string): {
+  shouldPromoteToApproved: boolean;
+  reason: "preregistro_activo_with_completed_visit" | "not_applicable";
+} {
+  /* Para conocer el estado del registro necesitamos leerlo desde el
+     storage donde viva (seed o creados). En Phase 1 mock el caller
+     ya tiene el record en su state · es más limpio que el caller
+     pase el `estado` o que esta función reciba el Registro entero.
+     Para mantener API simple, devolvemos solo el verdict basado en
+     una mirada quick al storage. */
+  // TODO(logic): cuando se cablee al flow de calendario, leer el
+  // Registro desde el state global o pasar el registro completo como
+  // argumento. Por ahora devolvemos `not_applicable` para no asumir.
+  void registroId;
+  return { shouldPromoteToApproved: false, reason: "not_applicable" };
+}
+
 /** Cuando el promotor RECHAZA el registro, la visita pendiente pasa
  *  a `cancelled` con motivo opcional. */
 export function onRegistroRejected(

@@ -2021,3 +2021,65 @@ Ver:
 - `src/lib/invitaciones.ts` · store de invitaciones + self-heal.
 - `src/lib/agencyCartera.ts` · cartera aceptada de la agencia + self-heal.
 - `src/components/collaborators/ShareMultiPromosDialog.tsx` · gate dura.
+
+## 2026-04-25 · ADR-058 · Paywall Fase 1 · validación 249€/mes promotor
+
+**Contexto.** Antes de invertir en backend completo (billing real, Stripe,
+proration, multi-org), necesitamos saber si los promotores están
+dispuestos a pagar 249€/mes. Una capa fina de paywall mock con CTA
+"Suscribirme" que no procesa pagos reales pero marca el plan como
+activo es suficiente para medir conversión sin las 4-6 semanas de
+trabajo de billing real.
+
+**Decisión.** Plan workspace-level con dos tiers (`trial` /
+`promoter_249`), 3 contadores (promociones / agencias / registros) y
+3 puntos de bloqueo. Solo los promotores se monetizan (Fase 1) · las
+agencias permanecen gratis con `useUsageGuard()` devolviendo
+`blocked: false` para `accountType !== "developer"`.
+
+**Límites trial** (tunables · ver `PLAN_LIMITS` en `src/lib/plan.ts`):
+- 2 promociones activas
+- 5 agencias invitadas (cualquier estado)
+- 40 registros recibidos (acumulado)
+
+**Razones**:
+- 1 promoción no basta para experimentar el producto · 2 permite
+  comparar y crea sensación de portfolio.
+- 5 agencias: 3 pegaba al inicio de la prueba; 5 da margen para
+  validar el flujo de invitación bidireccional.
+- 40 registros: con seed de ~24, el promotor llega al límite tras
+  ~16 registros adicionales · suficiente para sentir valor del
+  detector de duplicados y del ranking de agencias.
+
+**Implementación frontend**:
+- `src/lib/plan.ts` · modelo + hook `usePlan()` reactivo (localStorage
+  + `byvaro:plan-change` event).
+- `src/lib/usage.ts` · contadores derivados de seeds + storage.
+- `src/lib/usageGuard.ts` · `useUsageGuard(action)` + store singleton
+  del modal.
+- `src/components/paywall/UpgradeModal.tsx` · modal global montado en
+  `App.tsx` · 4 triggers con copy específico.
+- `src/components/paywall/UsagePill.tsx` · pill ámbar header (≥80%).
+- 3 puntos de bloqueo: wizard publicar (CrearPromocion.tsx),
+  invitar agencia (InvitarAgenciaModal.tsx), aprobar registro
+  (Registros.tsx::approve).
+
+**Backend pendiente**: 4 endpoints + webhook Stripe + 402 Payment
+Required en endpoints mutantes existentes. Spec completa
+en `docs/backend-integration.md §12`.
+
+**Tracking**: evento `paywall.shown` con `{ trigger, used, limit, tier }`.
+Es la métrica clave de validación · qué % de promotores que ven el
+modal hacen click en "Suscribirme".
+
+**Regla de oro CLAUDE.md**: añadida sección "Paywall Fase 1" para que
+toda feature nueva del promotor que cuente contra alguna cuota pase
+obligatoriamente por `useUsageGuard()`.
+
+**Archivos clave**:
+- `src/lib/plan.ts`, `src/lib/usage.ts`, `src/lib/usageGuard.ts`,
+  `src/lib/usagePressure.ts`.
+- `src/components/paywall/{UpgradeModal,UsagePill}.tsx`.
+- `src/pages/ajustes/facturacion/plan.tsx` (refactor a usePlan real).
+- `docs/screens/ajustes-plan.md` · spec.
+- `docs/backend-integration.md §12` · contrato backend.

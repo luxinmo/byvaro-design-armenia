@@ -199,6 +199,25 @@ export interface UnitData {
 
 export type CondicionRegistro = "nombre_completo" | "ultimas_4_cifras" | "nacionalidad" | "email_completo";
 
+/**
+ * Modo de validación del registro de cliente que aplica a una promoción.
+ *
+ *   · "directo"     · al aprobar el registro, el cliente queda
+ *                     formalmente registrado. Sin condicionar a visita.
+ *   · "por_visita"  · al aprobar el registro, el cliente queda como
+ *                     PREREGISTRO reservado a nombre del colaborador.
+ *                     La reserva se confirma definitivamente cuando se
+ *                     realice la primera visita.
+ *
+ * TODO(logic): la lógica de transición preregistro → aprobado tras
+ * visita realizada NO está implementada todavía. El toggle persiste el
+ * valor en `WizardState` y `Promotion.modoValidacionRegistro` pero
+ * `Registros.tsx::approve()` sigue formalizando todo registro al
+ * instante (comportamiento `directo` de facto). Implementar siguiendo
+ * `docs/registration-system.md §2`.
+ */
+export type ModoValidacionRegistro = "directo" | "por_visita";
+
 export interface OficinaVenta {
   id: string;
   nombre: string;
@@ -276,6 +295,12 @@ export interface WizardState {
   ivaIncluido: boolean;
   condicionesRegistro: CondicionRegistro[];
   validezRegistroDias: number; // 0 = no expira
+  /** Modo de validación · ver `ModoValidacionRegistro`. Default
+   *  `por_visita` (alineado con la copy histórica del wizard que ya
+   *  prometía preregistro tras visita). TODO(logic): la lógica
+   *  asociada vive en `Registros.tsx::approve()` y aún transita
+   *  directo a `aprobado` aunque este flag sea `por_visita`. */
+  modoValidacionRegistro: ModoValidacionRegistro;
   // Info basica
   /** Referencia interna de la promoción (abreviatura usada como prefijo
    *  en las referencias de unidades). Se autogenera desde el nombre
@@ -379,6 +404,7 @@ export const defaultWizardState: WizardState = {
   ivaIncluido: false,
   condicionesRegistro: ["nombre_completo", "ultimas_4_cifras", "nacionalidad"],
   validezRegistroDias: 180, // 6 meses por defecto
+  modoValidacionRegistro: "por_visita", // alineado con copy histórica · TODO(logic) implementar
   refPromocion: "",
   blockNames: {},
   nombrePromocion: "",

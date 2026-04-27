@@ -10,6 +10,45 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+    <!--
+      PostHog · Phase 1 validation tracking.
+      Captura los 4 eventos del paywall (paywall.shown, subscribe_clicked,
+      dismissed, usage_pill.clicked) emitidos por src/lib/analytics.ts.
+
+      El snippet inicializa `window.posthog` antes de que monte React, de
+      forma que la primera llamada a `track()` ya encuentra el cliente
+      listo. Si el snippet falla en cargar (adblock, red), `window.posthog`
+      queda undefined y `analytics.ts::track()` lo omite silenciosamente
+      (try/catch) · console.info sigue funcionando.
+
+      TODO(backend/analytics): Replace POSTHOG_API_KEY_PLACEHOLDER with real
+      key before production. Get the key from
+      https://app.posthog.com/project/settings (Project API Key, NOT the
+      personal API key). Cuando se reemplace, los eventos empezarán a
+      llegar al dashboard sin tocar más código.
+
+      Nota: con el placeholder, PostHog rechazará los eventos en su
+      backend (401) pero el cliente NO crashea · loguea un warning en
+      red y sigue. Aceptable durante validación local · cambiar antes de
+      desplegar a producción.
+    -->
+    <script>
+      !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug getPageViewId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+      try {
+        posthog.init('POSTHOG_API_KEY_PLACEHOLDER', {
+          api_host: 'https://app.posthog.com',
+          capture_pageview: true,
+          /* Privacidad · no grabamos sesiones por defecto en validación. */
+          disable_session_recording: true,
+          /* Persona · respetar Do-Not-Track del navegador. */
+          respect_dnt: true,
+        });
+      } catch (e) {
+        /* Defensa · si init falla, seguimos sin tracking. UX no se rompe. */
+        console.warn('[posthog] init failed', e);
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

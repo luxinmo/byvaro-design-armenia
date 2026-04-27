@@ -42,10 +42,13 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { agencies as allAgencies, type Agency } from "@/data/agencies";
-import { NATIONALITIES } from "@/data/nationalities";
+import { NATIONALITIES, resolveNationality } from "@/data/nationalities";
 import { useCurrentUser } from "@/lib/currentUser";
 import { addCreatedRegistro } from "@/lib/registrosStorage";
 import type { Registro } from "@/data/records";
+import { registros as SEED_REGISTROS } from "@/data/records";
+import { useCreatedRegistros } from "@/lib/registrosStorage";
+import { generatePublicRef } from "@/lib/publicRef";
 import { TEAM_MEMBERS } from "@/lib/team";
 import { recordTypeAny } from "@/components/contacts/contactEventsStorage";
 import { RegistrationTermsDialog } from "@/components/legal/RegistrationTermsDialog";
@@ -189,6 +192,9 @@ export function ClientRegistrationDialog({
   const registrationConditions = registrationRequirements ?? DEFAULT_REGISTRATION_CONDITIONS;
   const currentUser = useCurrentUser();
   const isAgencyUser = currentUser.accountType === "agency";
+  /* Lista actual de Registros (seed + creados) · usada para generar
+     `publicRef` único al crear uno nuevo. */
+  const allRegistrosForRef = [...useCreatedRegistros(), ...SEED_REGISTROS];
   const [mode, setMode] = useState<Mode | null>(null);
 
   /* Estado local del confirm step en vista agencia — permite corregir
@@ -513,6 +519,17 @@ export function ClientRegistrationDialog({
      * La agencia puede haber editado nombre/nacionalidad inline en el paso
      * confirm, y puede haber activado "Añadir visita" (→ tipo
      * registration_visit con fecha+hora propuestas). */
+    /* Hardening · si el usuario es agencia debe tener `agencyId`. Sin él
+     * no se puede atribuir el registro y se perdería la comisión. Falla
+     * fuerte (toast error + abort) en lugar de crear un registro huérfano.
+     * TODO(backend): el endpoint POST /api/registros valida que
+     *   `JWT.accountType === "agency" → agencyId` siempre esté presente. */
+    if (isAgencyUser && !currentUser.agencyId) {
+      toast.error("No se puede registrar", {
+        description: "Tu cuenta de agencia no tiene `agencyId` configurado · contacta soporte.",
+      });
+      return;
+    }
     if (selectedClient && promotionId) {
       const email = (selectedClient as { email?: string }).email ?? "";
       const existingPhone = (selectedClient as { phone?: string }).phone ?? "";
@@ -535,13 +552,19 @@ export function ClientRegistrationDialog({
         termsVersion: getRegistrationTerms(isAgencyUser ? "agency" : "developer").version,
         termsAcceptedAt: termsAcceptedAt ?? new Date().toISOString(),
       });
+      const newPublicRef = generatePublicRef("registration", allRegistrosForRef);
+      /* Bandera derivada del nombre de la nacionalidad para que el
+         registro lleve el emoji desde el inicio · evita que el header
+         del detalle salga sin bandera ("jaun carlos" sin 🇪🇸). */
+      const inferredFlag = resolveNationality(effectiveNationality).flag;
       const registroBase: Registro = isAgencyUser
         ? {
             id: `reg-local-${Date.now()}`,
+            publicRef: newPublicRef,
             origen: "collaborator",
             promotionId,
             agencyId: currentUser.agencyId,
-            cliente: { nombre: effectiveName, email, telefono, dni: "", nacionalidad: effectiveNationality },
+            cliente: { nombre: effectiveName, email, telefono, dni: "", nacionalidad: effectiveNationality, flag: inferredFlag },
             fecha: new Date().toISOString(),
             estado: "pendiente",
             matchPercentage: 0,
@@ -551,9 +574,10 @@ export function ClientRegistrationDialog({
           }
         : {
             id: `reg-local-${Date.now()}`,
+            publicRef: newPublicRef,
             origen: "direct",
             promotionId,
-            cliente: { nombre: effectiveName, email, telefono, dni: "", nacionalidad: effectiveNationality },
+            cliente: { nombre: effectiveName, email, telefono, dni: "", nacionalidad: effectiveNationality, flag: inferredFlag },
             fecha: new Date().toISOString(),
             estado: "pendiente",
             matchPercentage: 0,
@@ -770,10 +794,11 @@ export function ClientRegistrationDialog({
       });
       const registro: Registro = {
         id: `reg-local-${Date.now()}`,
+        publicRef: generatePublicRef("registration", allRegistrosForRef),
         origen: "collaborator",
         promotionId,
         agencyId: collabSelection.agencyId,
-        cliente: { nombre, email, telefono, dni: "", nacionalidad },
+        cliente: { nombre, email, telefono, dni: "", nacionalidad, flag: resolveNationality(nacionalidad).flag },
         fecha: new Date().toISOString(),
         estado: "pendiente",
         matchPercentage: 0,

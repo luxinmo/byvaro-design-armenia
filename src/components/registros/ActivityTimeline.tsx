@@ -30,10 +30,25 @@ const EVENT_META: Record<RegistroTimelineEvent["type"], {
   sent_to_developer: { icon: Send,          defaultTitle: "Cliente registrado" },
 };
 
-export function ActivityTimeline({ record }: { record: Registro }) {
+export function ActivityTimeline({
+  record,
+  viewerIsAgency = false,
+}: {
+  record: Registro;
+  /** Filtrado server-style · cuando el viewer es agencia, ocultamos
+   *  eventos internos del workspace del promotor (análisis IA,
+   *  notificación pendiente al propio agency, etc). Privacy
+   *  cross-tenant. */
+  viewerIsAgency?: boolean;
+}) {
   // Orden inverso · el evento más reciente arriba (patrón feed tipo
   // notificaciones · el usuario espera ver lo nuevo primero).
-  const events = [...(record.timeline ?? synthesizeTimeline(record))].reverse();
+  const raw = record.timeline ?? synthesizeTimeline(record);
+  /* Adapta el timeline para la vista de agencia (envío en lugar de
+   *  recepción + neutraliza referencias a "el promotor" porque puede
+   *  ser una comercializadora u owner). Filtra eventos internos del
+   *  workspace anfitrión (análisis IA, notificación pending). */
+  const events = [...(viewerIsAgency ? buildAgencyTimeline(raw) : raw)].reverse();
 
   return (
     <div className="space-y-1">
@@ -187,6 +202,62 @@ function ActorAvatar({ event, record }: { event: RegistroTimelineEvent; record: 
       className="h-7 w-7 rounded-full object-cover bg-muted"
     />
   );
+}
+
+/**
+ * Adapta un timeline genérico al punto de vista de la agencia que
+ * envió el registro:
+ *
+ *   · Filtra `auto_check` (análisis IA · interno del workspace destino).
+ *   · Filtra `notification` (backflow interno · la agencia ES la
+ *     destinataria de las notifs decididas, redundante con el evento
+ *     de decisión).
+ *   · Reescribe "Solicitud recibida" → "Solicitud enviada" desde el
+ *     punto de vista de la agencia.
+ *   · Inserta evento sintético "Entregada al destinatario" 30s después
+ *     de la creación · confirmación de recepción al lado opuesto.
+ *     TODO(backend): cuando exista el evento real de delivery
+ *     (webhook + ack del owningParty), reemplazar con el timestamp real.
+ *   · Neutraliza "del promotor" en títulos · usa "destinatario" porque
+ *     en Phase 2 el lado opuesto puede ser owner o comercializadora.
+ */
+function buildAgencyTimeline(raw: RegistroTimelineEvent[]): RegistroTimelineEvent[] {
+  const out: RegistroTimelineEvent[] = [];
+  for (const e of raw) {
+    if (e.type === "auto_check") continue;
+    if (e.type === "notification") continue;
+
+    if (e.type === "submitted") {
+      out.push({ ...e, title: "Solicitud enviada" });
+      /* Sintético · entrega al destinatario · timestamp = +30s.
+         Mock hasta que el backend emita el evento real de delivery. */
+      const deliveredAt = new Date(
+        new Date(e.timestamp).getTime() + 30 * 1000,
+      ).toISOString();
+      out.push({
+        id: "ev-delivered-to-owner",
+        type: "sent_to_developer",
+        title: "Entregada al destinatario",
+        timestamp: deliveredAt,
+        status: "completed",
+        actor: "Sistema",
+      });
+      continue;
+    }
+
+    if (e.type === "decision") {
+      let title = e.title;
+      /* "Esperando decisión del promotor" → "Esperando decisión".
+         "Aprobado/Rechazado por el promotor" → "Aprobado/Rechazado". */
+      title = title.replace(/\s+del\s+promotor/i, "");
+      title = title.replace(/\s+por\s+el\s+promotor/i, "");
+      out.push({ ...e, title });
+      continue;
+    }
+
+    out.push(e);
+  }
+  return out;
 }
 
 /** Sintetiza eventos a partir de los campos del Registro. */
