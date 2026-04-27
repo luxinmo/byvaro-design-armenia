@@ -23,9 +23,13 @@ export interface MockUser {
   password: string;
   name: string;
   accountType: AccountType;
-  /** Solo presente cuando accountType === "developer". "admin" controla
-   *  acceso a todas las keys de permisos; "member" es el rol operativo
-   *  con permisos limitados (ver `src/lib/permissions.ts`). Si falta →
+  /** Rol del usuario dentro de su organización (workspace).
+   *   · "admin"  controla acceso a todas las keys de permisos · puede
+   *     gestionar miembros, datos de empresa, billing y plan.
+   *   · "member" es el rol operativo · permisos limitados (ver
+   *     `src/lib/permissions.ts`).
+   *  Aplica tanto a `developer` (admin/member del workspace promotor)
+   *  como a `agency` (admin/member dentro de su agencia). Si falta,
    *  se asume "admin" para compatibilidad con cuentas viejas. */
   role?: UserRole;
   /** Solo para developer · id del registro en `TEAM_MEMBERS` al que
@@ -39,7 +43,12 @@ export interface MockUser {
   label: string;
 }
 
-export const DEMO_PASSWORD = "demo1234";
+/** Contraseña común para todas las cuentas demo · suficiente friction
+ *  para que solo quien la conoce (equipo Byvaro · testers invitados)
+ *  pueda entrar a la app desplegada en producción mientras se valida.
+ *  Combinada con la capa de basic-auth a nivel CDN/Vercel
+ *  (`docs/backend-integration.md §14.6`) cubre el periodo Phase 1A. */
+export const DEMO_PASSWORD = "Luxinmo2026Byvaro";
 
 export const mockUsers: MockUser[] = [
   /* ───── Promotor · admin ───── */
@@ -64,46 +73,101 @@ export const mockUsers: MockUser[] = [
     label: "Luxinmo · Agente (member)",
   },
 
-  /* ───── Agencias colaboradoras ───── */
+  /* ───── Agencias colaboradoras ─────
+   *  Cada agencia tiene 1 usuario admin (dueño/contacto principal).
+   *  Prime Properties tiene un usuario `member` adicional para que
+   *  puedas ver el comportamiento del rol limitado dentro de una
+   *  agencia (ej. el member NO puede gestionar miembros del equipo
+   *  ni cambiar el plan de la agencia · solo opera el día a día). */
   {
     email: "laura@primeproperties.com",
     password: DEMO_PASSWORD,
     name: "Laura Sánchez",
     accountType: "agency",
+    role: "admin",
     agencyId: "ag-1",
-    label: "Prime Properties Costa del Sol · Agencia",
+    label: "Prime Properties Costa del Sol · Agencia (admin)",
+  },
+  {
+    email: "tom@primeproperties.com",
+    password: DEMO_PASSWORD,
+    name: "Tom Brennan",
+    accountType: "agency",
+    role: "member",
+    agencyId: "ag-1",
+    label: "Prime Properties Costa del Sol · Agente (member)",
   },
   {
     email: "erik@nordichomefinders.com",
     password: DEMO_PASSWORD,
     name: "Erik Lindqvist",
     accountType: "agency",
+    role: "admin",
     agencyId: "ag-2",
-    label: "Nordic Home Finders · Agencia",
+    label: "Nordic Home Finders · Agencia (admin)",
+  },
+  {
+    email: "anna@nordichomefinders.com",
+    password: DEMO_PASSWORD,
+    name: "Anna Bergström",
+    accountType: "agency",
+    role: "member",
+    agencyId: "ag-2",
+    label: "Nordic Home Finders · Agente (member)",
   },
   {
     email: "pieter@dutchbelgianrealty.com",
     password: DEMO_PASSWORD,
     name: "Pieter De Vries",
     accountType: "agency",
+    role: "admin",
     agencyId: "ag-3",
-    label: "Dutch & Belgian Realty · Agencia",
+    label: "Dutch & Belgian Realty · Agencia (admin)",
+  },
+  {
+    email: "sander@dutchbelgianrealty.com",
+    password: DEMO_PASSWORD,
+    name: "Sander Janssen",
+    accountType: "agency",
+    role: "member",
+    agencyId: "ag-3",
+    label: "Dutch & Belgian Realty · Agente (member)",
   },
   {
     email: "james@meridianrealestate.co.uk",
     password: DEMO_PASSWORD,
     name: "James Whitfield",
     accountType: "agency",
+    role: "admin",
     agencyId: "ag-4",
-    label: "Meridian Real Estate · Agencia",
+    label: "Meridian Real Estate · Agencia (admin)",
+  },
+  {
+    email: "olivia@meridianrealestate.co.uk",
+    password: DEMO_PASSWORD,
+    name: "Olivia Carter",
+    accountType: "agency",
+    role: "member",
+    agencyId: "ag-4",
+    label: "Meridian Real Estate · Agente (member)",
   },
   {
     email: "joao@iberialuxuryhomes.pt",
     password: DEMO_PASSWORD,
     name: "João Almeida",
     accountType: "agency",
+    role: "admin",
     agencyId: "ag-5",
-    label: "Iberia Luxury Homes · Agencia",
+    label: "Iberia Luxury Homes · Agencia (admin)",
+  },
+  {
+    email: "ines@iberialuxuryhomes.pt",
+    password: DEMO_PASSWORD,
+    name: "Inês Costa",
+    accountType: "agency",
+    role: "member",
+    agencyId: "ag-5",
+    label: "Iberia Luxury Homes · Agente (member)",
   },
 ];
 

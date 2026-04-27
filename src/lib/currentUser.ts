@@ -52,14 +52,26 @@ const DEVELOPER_USER: CurrentUser = {
   accountType: "developer",
 };
 
-/** Construye un usuario sintético de agencia a partir del seed de agencies. */
-function buildAgencyUser(agencyId: string): CurrentUser {
+/** Construye un usuario sintético de agencia a partir del seed de agencies.
+ *  Si `agencyEmail` apunta a un mockUser concreto, derivamos su rol
+ *  (admin/member) y datos personales · permite probar admin vs member
+ *  dentro de la misma agencia (ej. laura@primeproperties = admin,
+ *  tom@primeproperties = member). Si no, fallback a contactoPrincipal
+ *  con role admin (compatibilidad con flujos viejos). */
+function buildAgencyUser(agencyId: string, agencyEmail?: string): CurrentUser {
   const a = agencies.find((x) => x.id === agencyId) ?? agencies[0];
+  const mock = agencyEmail
+    ? mockUsers.find(
+        (u) => u.accountType === "agency"
+          && u.agencyId === agencyId
+          && u.email.toLowerCase() === agencyEmail.toLowerCase(),
+      )
+    : undefined;
   return {
-    id: `u-agency-${a.id}`,
-    name: a.contactoPrincipal?.nombre ?? "Laura Sánchez",
-    email: a.contactoPrincipal?.email ?? "contacto@agencia.com",
-    role: "admin",
+    id: mock ? `u-agency-${a.id}-${mock.email}` : `u-agency-${a.id}`,
+    name: mock?.name ?? a.contactoPrincipal?.nombre ?? "Laura Sánchez",
+    email: mock?.email ?? a.contactoPrincipal?.email ?? "contacto@agencia.com",
+    role: mock?.role ?? "admin",
     organizationId: `agency-${a.id}`,
     accountType: "agency",
     agencyId: a.id,
@@ -88,13 +100,13 @@ function buildDeveloperUser(developerEmail?: string): CurrentUser {
 }
 
 export function useCurrentUser(): CurrentUser {
-  const { type, agencyId, developerEmail } = useAccountType();
+  const { type, agencyId, developerEmail, agencyEmail } = useAccountType();
   /* Fachada legacy · delega en meStorage. Ver ADR-050 y `src/lib/meStorage.ts`.
    * Se sincroniza automáticamente con la lista de TEAM_MEMBERS — si un
    * admin edita al usuario actual desde `/equipo`, este hook se refresca. */
   const profile = usePersistedProfile();
   return useMemo(() => {
-    if (type === "agency") return buildAgencyUser(agencyId);
+    if (type === "agency") return buildAgencyUser(agencyId, agencyEmail);
     const base = buildDeveloperUser(developerEmail);
     return {
       ...base,
@@ -107,7 +119,7 @@ export function useCurrentUser(): CurrentUser {
       avatar:     profile?.avatar,
       phone:      profile?.phone,
     };
-  }, [type, agencyId, developerEmail, profile]);
+  }, [type, agencyId, developerEmail, agencyEmail, profile]);
 }
 
 export function isAdmin(user: CurrentUser): boolean {

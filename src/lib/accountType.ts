@@ -33,12 +33,21 @@ const AGENCY_KEY = "byvaro.accountType.agencyId.v1";
  *  laura (member) en el mock de `currentUser`. Solo tiene sentido
  *  cuando type === "developer". */
 const DEVELOPER_EMAIL_KEY = "byvaro.accountType.developerEmail.v1";
+/** Email del agency user logueado · permite distinguir admin/member
+ *  dentro de la misma agencia (ej. laura@primeproperties admin vs
+ *  tom@primeproperties member). Solo tiene sentido cuando type === "agency". */
+const AGENCY_EMAIL_KEY = "byvaro.accountType.agencyEmail.v1";
 const CHANGE_EVENT = "byvaro:account-change";
 
 /** Agencia por defecto cuando el usuario activa modo agencia sin elegir una. */
 export const DEFAULT_AGENCY_ID = "ag-1";
 
-type Snapshot = { type: AccountType; agencyId: string; developerEmail?: string };
+type Snapshot = {
+  type: AccountType;
+  agencyId: string;
+  developerEmail?: string;
+  agencyEmail?: string;
+};
 
 /** sessionStorage vive por pestaña; así el usuario puede tener una pestaña como
  *  Promotor y otra como Agencia simultáneamente sin que se pisen. Al cerrar la
@@ -51,7 +60,8 @@ function read(): Snapshot {
   const type: AccountType = rawType === "agency" ? "agency" : "developer";
   const agencyId = sessionStorage.getItem(AGENCY_KEY) ?? DEFAULT_AGENCY_ID;
   const developerEmail = sessionStorage.getItem(DEVELOPER_EMAIL_KEY) ?? undefined;
-  return { type, agencyId, developerEmail };
+  const agencyEmail = sessionStorage.getItem(AGENCY_EMAIL_KEY) ?? undefined;
+  return { type, agencyId, developerEmail, agencyEmail };
 }
 
 function emit() {
@@ -88,16 +98,25 @@ export function setAccountAgencyId(id: string) {
  *  - Para developer, `emailOrAgencyId` es el email del mock user logueado
  *    (ej. "laura@byvaro.com") · se usa para resolver rol y id reales en
  *    `useCurrentUser`.
- *  - Para agency, es el agencyId de la agencia logueada. */
-export function loginAs(type: AccountType, emailOrAgencyId?: string) {
+ *  - Para agency, es el agencyId de la agencia logueada.
+ *  - `agencyEmail` (opcional) · email del usuario concreto dentro de la
+ *    agencia, para resolver admin/member. Si no se pasa, asume admin. */
+export function loginAs(
+  type: AccountType,
+  emailOrAgencyId?: string,
+  agencyEmail?: string,
+) {
   sessionStorage.setItem(STORAGE_KEY, type);
   // Limpia cualquier identidad previa del otro rol para que no se mezclen.
   if (type === "agency") {
     sessionStorage.removeItem(DEVELOPER_EMAIL_KEY);
     if (emailOrAgencyId) sessionStorage.setItem(AGENCY_KEY, emailOrAgencyId);
+    if (agencyEmail) sessionStorage.setItem(AGENCY_EMAIL_KEY, agencyEmail);
+    else sessionStorage.removeItem(AGENCY_EMAIL_KEY);
   } else {
     // developer
     sessionStorage.removeItem(AGENCY_KEY);
+    sessionStorage.removeItem(AGENCY_EMAIL_KEY);
     if (emailOrAgencyId) sessionStorage.setItem(DEVELOPER_EMAIL_KEY, emailOrAgencyId);
     else sessionStorage.removeItem(DEVELOPER_EMAIL_KEY);
   }
@@ -113,6 +132,7 @@ export function logout() {
   sessionStorage.removeItem(STORAGE_KEY);
   sessionStorage.removeItem(AGENCY_KEY);
   sessionStorage.removeItem(DEVELOPER_EMAIL_KEY);
+  sessionStorage.removeItem(AGENCY_EMAIL_KEY);
   if (typeof window !== "undefined") {
     localStorage.removeItem("byvaro.user.profile.v1");
     localStorage.removeItem("byvaro.user.phones.v1");

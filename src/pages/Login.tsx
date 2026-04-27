@@ -109,6 +109,10 @@ export default function Login() {
     loginAs(
       user.accountType,
       user.accountType === "agency" ? user.agencyId : user.email,
+      /* Para agency · pasamos el email del usuario para que useCurrentUser
+         resuelva admin/member dentro de la agencia (ej. laura@primeproperties
+         vs tom@primeproperties). */
+      user.accountType === "agency" ? user.email : undefined,
     );
     setSubmitting(false);
 
@@ -118,20 +122,20 @@ export default function Login() {
     navigate(nextUrl ?? "/inicio", { replace: true });
   }
 
-  /** Quick login desde las cards de demo · rellena inputs y dispara submit. */
-  const handleQuickLogin = async (u: MockUser) => {
+  /** Click en card de demo · pre-rellena el email y FOCUSEA el campo
+   *  contraseña · NO auto-loguea. La contraseña común
+   *  (`Luxinmo2026Byvaro`) la conoce solo el equipo Byvaro y testers
+   *  invitados · evita que cualquiera entre con un click. */
+  const handleQuickLogin = (u: MockUser) => {
     setEmail(u.email);
-    setPassword(u.password);
+    setPassword("");
     setError(null);
-    setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 300));
-    loginAs(
-      u.accountType,
-      u.accountType === "agency" ? u.agencyId : u.email,
-    );
-    setSubmitting(false);
-    toast.success(`Bienvenido, ${u.name.split(" ")[0]}`, { description: u.label });
-    navigate(nextUrl ?? "/inicio", { replace: true });
+    /* Foco al input de contraseña tras el siguiente tick para que
+       el usuario solo tenga que escribir y darle Enter. */
+    setTimeout(() => {
+      const el = document.getElementById("login-password") as HTMLInputElement | null;
+      el?.focus();
+    }, 0);
   };
 
   return (
@@ -323,19 +327,24 @@ export default function Login() {
                 <header className="mb-3 flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                      Cuentas de demo
+                      Cuentas de demo · {mockUsers.length} disponibles
                     </p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      Click para entrar. Password:{" "}
-                      <code className="font-mono bg-card px-1 py-0.5 rounded border border-border">
-                        {DEMO_PASSWORD}
-                      </code>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                      Click para rellenar el email · introduce la
+                      contraseña común para entrar. Solo el equipo
+                      Byvaro y testers invitados la conocen.
                     </p>
                   </div>
                 </header>
                 <div className="space-y-1.5">
                   {mockUsers.map((u) => {
                     const Icon = u.accountType === "developer" ? Building2 : Handshake;
+                    /* Rol resuelto · admin por defecto si falta. Pinta
+                       badge ámbar para admin · gris para member. */
+                    const role = u.role ?? "admin";
+                    const roleBadge = role === "admin"
+                      ? { label: "Admin", className: "bg-warning/15 text-warning" }
+                      : { label: "Miembro", className: "bg-muted text-muted-foreground" };
                     return (
                       <button
                         key={u.email}
@@ -359,8 +368,16 @@ export default function Login() {
                           <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
                         </span>
                         <div className="min-w-0 flex-1">
-                          <div className="text-xs font-semibold text-foreground truncate">
-                            {u.name}
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-semibold text-foreground truncate">
+                              {u.name}
+                            </span>
+                            <span className={cn(
+                              "text-[9.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0",
+                              roleBadge.className,
+                            )}>
+                              {roleBadge.label}
+                            </span>
                           </div>
                           <div className="text-[11px] text-muted-foreground truncate">
                             {u.email} · {u.label}
