@@ -35,7 +35,7 @@
  */
 
 import { useState, type FormEvent } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner"; // Toaster global en App.tsx
 import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, Building2, Handshake } from "lucide-react"; // iconos inline en inputs y estados
 import { cn } from "@/lib/utils";
@@ -54,6 +54,11 @@ function isValidEmail(v: string) {
 
 export default function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  /* Si el usuario fue redirigido aquí por el `<RequireAuth>` gate, su
+     URL original viene en `?next=`. Tras login, vuelve a esa URL en
+     lugar del default `/inicio`. */
+  const nextUrl = searchParams.get("next");
 
   // Estado del formulario
   const [email, setEmail] = useState("");
@@ -110,7 +115,7 @@ export default function Login() {
     toast.success(`Bienvenido, ${user.name.split(" ")[0]}`, {
       description: user.label,
     });
-    navigate("/inicio", { replace: true });
+    navigate(nextUrl ?? "/inicio", { replace: true });
   }
 
   /** Quick login desde las cards de demo · rellena inputs y dispara submit. */
@@ -126,7 +131,7 @@ export default function Login() {
     );
     setSubmitting(false);
     toast.success(`Bienvenido, ${u.name.split(" ")[0]}`, { description: u.label });
-    navigate("/inicio", { replace: true });
+    navigate(nextUrl ?? "/inicio", { replace: true });
   };
 
   return (
@@ -148,7 +153,9 @@ export default function Login() {
                     Inicia sesión
                   </h1>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Accede a tu cuenta para gestionar tus promociones.
+                    {nextUrl
+                      ? "Esta sección requiere autenticación · inicia sesión para continuar."
+                      : "Accede a tu cuenta para gestionar tus promociones."}
                   </p>
                 </header>
 

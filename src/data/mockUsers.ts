@@ -97,6 +97,14 @@ export const mockUsers: MockUser[] = [
     agencyId: "ag-4",
     label: "Meridian Real Estate · Agencia",
   },
+  {
+    email: "joao@iberialuxuryhomes.pt",
+    password: DEMO_PASSWORD,
+    name: "João Almeida",
+    accountType: "agency",
+    agencyId: "ag-5",
+    label: "Iberia Luxury Homes · Agencia",
+  },
 ];
 
 /** Busca un usuario por credenciales. Retorna null si no matchea. */

@@ -1896,6 +1896,87 @@ Eventos a emitir en cada acción · siguiendo la matriz de
 
 ---
 
+## 14 · Auth gate · login obligatorio (Phase 2 frontend mock)
+
+Spec del gate de autenticación a nivel de ruta. El frontend ya
+implementa el wrapper completo · este bloque define qué necesita el
+backend real para sustituir el mock.
+
+### 14.1 · Comportamiento actual (mock · `src/components/RequireAuth.tsx`)
+
+- Cualquier ruta excepto `/login` y `/register` está envuelta en
+  `<RequireAuth>`.
+- El gate llama a `isAuthenticated()` (lib/accountType.ts) que solo
+  comprueba si hay valor en `sessionStorage`.
+- Si no autenticado, redirige a `/login?next={original_url}`.
+- Login válida contra `mockUsers.ts` (lista hardcoded) y persiste en
+  sessionStorage.
+- Tras login, redirige al `next=` original o a `/inicio` por defecto.
+
+### 14.2 · Endpoints backend necesarios
+
+```http
+POST /api/auth/login
+  body: { email, password }
+  → 200 { token | session_cookie }   ← cookie httpOnly preferida
+  → 401 { code: "invalid_credentials" }
+  → 429 { code: "rate_limited" }     ← brute force protection
+
+POST /api/auth/logout
+  → 204 (cookie cleared / token revoked)
+
+GET /api/auth/me
+  → 200 { user: { id, email, name, accountType, role, agencyId? } }
+  → 401 { code: "unauthenticated" }
+  Cliente lo usa en lugar de mirar sessionStorage para saber si hay sesión.
+
+POST /api/auth/refresh        (opcional · si JWTs cortos)
+  → 200 { token }
+  → 401 si refresh expirado
+```
+
+### 14.3 · Cambios en frontend cuando exista backend
+
+- `isAuthenticated()` en `accountType.ts` pasa de mirar sessionStorage
+  a hacer fetch a `GET /api/auth/me` (con loading state).
+- `RequireAuth` se vuelve async · muestra spinner hasta resolver.
+- `loginAs()` deja de mutar sessionStorage · el cookie httpOnly del
+  servidor es la fuente de sesión.
+- `mockUsers.ts` y `findMockUser()` se eliminan.
+- `AccountSwitcher` (cambio rápido entre developer/agency en demo)
+  desaparece o queda solo para superadmins.
+
+### 14.4 · Seguridad mínima en producción
+
+- Cookie httpOnly + Secure + SameSite=Lax
+- CSRF token en mutaciones (header `X-CSRF-Token`)
+- Rate limit en `/auth/login` (5 intentos / IP / 15min)
+- Bcrypt o Argon2id para passwords
+- Email verification para nuevos signups
+- 2FA opcional (TOTP · `/ajustes/seguridad/2fa` ya tiene UI placeholder)
+
+### 14.5 · Multi-tenant boundaries
+
+Cada endpoint protegido lee `req.user.organizationId` y filtra por ahí
+con RLS. Ningún query frontend debe poder devolver datos de otra org.
+Ver §11 (Permisos) y §12 (Plan & paywall) para reglas específicas.
+
+### 14.6 · Acceso de demo en producción Phase 1A
+
+Mientras se valida el paywall sin backend, la app DEBE estar online
+pero NO accesible al público. Soluciones:
+
+1. **Recommended** · password basic auth a nivel CDN/Vercel
+   (`vercel.json` con `headers` y middleware) por encima del Login mock.
+2. Alternativa · solo el Login mock con `mockUsers.ts` como ACL ·
+   pero la app sigue siendo accesible si alguien adivina la URL del
+   asset (low-risk en SPA porque las APIs no existen aún).
+
+Para Phase 1B (post-validation) cuando exista backend real, el auth
+es server-side y este apartado deja de aplicar.
+
+---
+
 ## Historial de cambios
 
 | Fecha | Cambio |
@@ -1905,3 +1986,4 @@ Eventos a emitir en cada acción · siguiendo la matriz de
 | 2026-04-27 | §13 · Visita reprogramar/cancelar/completar + estado `caducado` (Phase 2 frontend mock implementado · backend pendiente). |
 | 2026-04-27 | Phase 2 frontend bloques A-G implementados: visit cancellation, expiry client-side, match score, T&C dialog, Party model, per-party activity, in-app notifications. Backend pendiente para todos. |
 | 2026-04-27 | Phase 2 frontend Bloque H: Conflict resolution UI enriquecido (DuplicateContext + OverrideConfirmDialog). `Registro.overrideNote/At/ByUserId` campos nuevos. Backend pendiente: persistir en companyEvent log cross-empresa para auditar disputas de comisión. |
+| 2026-04-27 | §14 · Auth gate `<RequireAuth>` · login obligatorio en todas las rutas excepto `/login` y `/register`. Soporte `?next=` para redirect post-login. Backend pendiente: 4 endpoints + cookie httpOnly + RLS server-side. |
