@@ -264,6 +264,12 @@ export type Registro = {
   approvedTermsVersion?: string;
   approvedTermsAt?: string;
   approvedTermsByUserId?: string;
+  /** Override · cuando el promotor aprueba a pesar de matchPercentage
+   *  ≥70%. Justificación obligatoria queda en historial cross-empresa
+   *  para auditar disputas futuras de comisión. (Phase 2 Bloque H) */
+  overrideNote?: string;
+  overrideAt?: string;
+  overrideByUserId?: string;
   /* TODO(fase-2) · "Pedir más datos a la agencia". No es un one-shot
    * sino un thread bidireccional · hay que decidir canal (in-app /
    * email híbrido tipo Intercom/Stripe / WhatsApp). Ver nota abajo.

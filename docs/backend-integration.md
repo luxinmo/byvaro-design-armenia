@@ -1904,3 +1904,4 @@ Eventos a emitir en cada acción · siguiendo la matriz de
 | 2026-04-25 | §12 · Plan & paywall Fase 1 (validación promotor 249€/mes). |
 | 2026-04-27 | §13 · Visita reprogramar/cancelar/completar + estado `caducado` (Phase 2 frontend mock implementado · backend pendiente). |
 | 2026-04-27 | Phase 2 frontend bloques A-G implementados: visit cancellation, expiry client-side, match score, T&C dialog, Party model, per-party activity, in-app notifications. Backend pendiente para todos. |
+| 2026-04-27 | Phase 2 frontend Bloque H: Conflict resolution UI enriquecido (DuplicateContext + OverrideConfirmDialog). `Registro.overrideNote/At/ByUserId` campos nuevos. Backend pendiente: persistir en companyEvent log cross-empresa para auditar disputas de comisión. |

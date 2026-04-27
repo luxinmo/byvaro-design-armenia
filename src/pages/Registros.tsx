@@ -68,6 +68,8 @@ import {
   CancelVisitPromoterDialog,
 } from "@/components/registros/VisitActionDialogs";
 import { TermsConfirmDialog } from "@/components/registros/TermsConfirmDialog";
+import { OverrideConfirmDialog } from "@/components/registros/OverrideConfirmDialog";
+import { DuplicateContext } from "@/components/registros/DuplicateContext";
 import type { VisitOutcome } from "@/data/records";
 import { getExpiryStatus } from "@/lib/registroExpiry";
 import { Tag } from "@/components/ui/Tag";
@@ -325,15 +327,18 @@ export default function Registros() {
           VisitConfirmDialog con agente obligatorio.
        4. Finalmente `approve(id)`.
      visit_only SALTA los pasos 1 y 2 (el cliente ya fue aprobado). */
-  type ApprovalStage = "match" | "relation" | "visit" | "terms" | null;
+  type ApprovalStage = "match" | "override" | "relation" | "visit" | "terms" | null;
   const [approvalFlow, setApprovalFlow] = useState<{ record: Registro; stage: ApprovalStage } | null>(null);
 
   const canSeeMatchDetails = useHasPermission("records.matchDetails.view");
 
   /** Determina la siguiente etapa del flujo para un registro dado.
-   *  El orden canónico es: match → relation → visit → terms → approve.
-   *  Bloque D · `terms` se inserta SIEMPRE como último step antes de
-   *  approve · es el T&C popup que persiste auditoría legal. */
+   *  El orden canónico es: match → override (si ≥70%) → relation →
+   *  visit → terms → approve.
+   *  · `override` (Bloque H) se inserta cuando matchPercentage ≥70 ·
+   *    obliga al promotor a justificar la decisión por escrito.
+   *  · `terms` (Bloque D) se inserta SIEMPRE como último step ·
+   *    auditoría legal. */
   const nextStageFor = (r: Registro, fromStage: ApprovalStage | "start"): ApprovalStage => {
     // visit_only · salta match/relation · solo visita + terms.
     if (r.tipo === "visit_only") {
@@ -342,8 +347,11 @@ export default function Registros() {
       return null;
     }
     if (fromStage === "start" && r.matchPercentage >= 65) return "match";
-    if ((fromStage === "start" || fromStage === "match") && r.possibleRelation) return "relation";
-    if ((fromStage === "start" || fromStage === "match" || fromStage === "relation")
+    /* Tras `match`, si el score es ≥70 (posible duplicado), pasar
+       obligatoriamente por override antes de continuar. */
+    if (fromStage === "match" && r.matchPercentage >= 70) return "override";
+    if ((fromStage === "start" || fromStage === "match" || fromStage === "override") && r.possibleRelation) return "relation";
+    if ((fromStage === "start" || fromStage === "match" || fromStage === "override" || fromStage === "relation")
         && (r.tipo === "registration_visit" || r.tipo === "visit_only")) {
       return "visit";
     }
@@ -359,6 +367,30 @@ export default function Registros() {
       return;
     }
     setApprovalFlow({ record, stage });
+  };
+
+  /* Bloque H · al confirmar override (match ≥70%), capturamos la nota
+     obligatoria + timestamp + userId · queda en historial cross-empresa
+     para auditar disputas futuras. Después seguimos al siguiente step. */
+  const confirmOverrideAndAdvance = (payload: { overrideNote: string }) => {
+    if (!approvalFlow) return;
+    const { record } = approvalFlow;
+    const now = new Date().toISOString();
+    setRecords((prev) => prev.map((r) => r.id === record.id ? {
+      ...r,
+      overrideNote: payload.overrideNote,
+      overrideAt: now,
+      overrideByUserId: currentUser.id,
+    } : r));
+    /* Avanzar al siguiente step desde override · normalmente terms o
+       relation/visit si aplican. */
+    const next = nextStageFor(record, "override");
+    if (next) {
+      setApprovalFlow({ record, stage: next });
+    } else {
+      setApprovalFlow(null);
+      approve(record.id);
+    }
   };
 
   /* Bloque D · al confirmar el T&C, capturamos versión + timestamp +
@@ -1118,6 +1150,14 @@ export default function Registros() {
             }}
             onCancel={cancelApproval}
           />
+          {/* Bloque H · si match ≥70%, pedir justificación obligatoria
+              ANTES de continuar el flujo. Queda en historial cross-empresa. */}
+          <OverrideConfirmDialog
+            open={approvalFlow.stage === "override"}
+            record={approvalFlow.record}
+            onClose={cancelApproval}
+            onConfirm={confirmOverrideAndAdvance}
+          />
           {/* Bloque D · último step · T&C antes del approve final. */}
           <TermsConfirmDialog
             open={approvalFlow.stage === "terms"}
@@ -1339,11 +1379,34 @@ function RegistroDetail({
        *  promotor). La agencia entrante NO debe verlos · son datos de
        *  otro tenant. Para la agencia mostramos un aviso mínimo abajo. */}
       {!viewerIsAgency && record.matchPercentage > 0 && (
-        <div className="px-4 sm:px-6 mt-4">
+        <div className="px-4 sm:px-6 mt-4 space-y-3">
           <DuplicateResult
             record={record}
             onDismissMatch={canDecide ? onDismissMatch : undefined}
           />
+          {/* Bloque H · contexto enriquecido · histórico de orígenes
+              del Contact existente + estado de actividad de la
+              atribución previa. Solo si el cliente está en CRM. */}
+          <DuplicateContext record={record} />
+        </div>
+      )}
+
+      {/* Bloque H · si el override ya se ha aplicado en este registro,
+          mostrar la nota visible al promotor (queda en histórico). */}
+      {!viewerIsAgency && record.overrideNote && (
+        <div className="mx-4 sm:mx-6 mt-3 rounded-xl border border-warning/30 bg-warning/10 px-3.5 py-3 flex items-start gap-2.5">
+          <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-warning leading-tight">
+              Override aplicado
+            </p>
+            <p className="text-[12px] text-foreground mt-1 leading-relaxed">
+              {record.overrideNote}
+            </p>
+            <p className="text-[10.5px] text-muted-foreground mt-1">
+              Aprobado a pesar de match {record.matchPercentage}% · queda en historial cross-empresa.
+            </p>
+          </div>
         </div>
       )}
 
