@@ -47,6 +47,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/currentUser";
 import { useHasPermission } from "@/lib/permissions";
+import { Flag } from "@/components/ui/Flag";
+import { resolveNationality } from "@/data/nationalities";
 import { agencyHref } from "@/lib/agencyNavigation";
 import { UserContextSwitcher } from "@/components/ui/UserContextSwitcher";
 import { findTeamMember, getMemberAvatarUrl, memberInitials, getAllTeamMembers } from "@/lib/team";
@@ -370,25 +372,26 @@ function computeNationalityMix(
   allRegistros: Registro[],
   range: Range,
   selectedUserId: string | null,
-): { label: string; flag?: string; count: number; pct: number }[] {
-  const counts = new Map<string, { count: number; flag?: string }>();
+): { label: string; iso?: string; count: number; pct: number }[] {
+  const counts = new Map<string, { count: number; iso?: string }>();
   for (const r of allRegistros) {
     if (!inRange(r.fecha, range)) continue;
     if (selectedUserId && r.decidedByUserId !== selectedUserId) continue;
     const key = r.cliente.nacionalidad || "—";
-    const prev = counts.get(key) ?? { count: 0, flag: r.cliente.flag };
-    counts.set(key, { count: prev.count + 1, flag: prev.flag ?? r.cliente.flag });
+    const incomingIso = r.cliente.nationalityIso ?? resolveNationality(r.cliente.nacionalidad).iso;
+    const prev = counts.get(key) ?? { count: 0, iso: incomingIso };
+    counts.set(key, { count: prev.count + 1, iso: prev.iso ?? incomingIso });
   }
   const total = Array.from(counts.values()).reduce((s, x) => s + x.count, 0);
   if (total === 0) return [];
   const sorted = Array.from(counts.entries())
-    .map(([label, { count, flag }]) => ({ label, flag, count, pct: (count / total) * 100 }))
+    .map(([label, { count, iso }]) => ({ label, iso, count, pct: (count / total) * 100 }))
     .sort((a, b) => b.count - a.count);
   // top 5 + Otros
   if (sorted.length <= 5) return sorted;
   const top = sorted.slice(0, 5);
   const otros = sorted.slice(5).reduce((s, x) => s + x.count, 0);
-  top.push({ label: "Otros", count: otros, pct: (otros / total) * 100 });
+  top.push({ label: "Otros", iso: undefined, count: otros, pct: (otros / total) * 100 });
   return top;
 }
 
@@ -1071,7 +1074,7 @@ function VelocityPanel({ velocity }: { velocity: Velocity }) {
    Mix nacionalidad · donut SVG
    ──────────────────────────────────────────────────────────────── */
 
-function NationalityDonut({ mix }: { mix: { label: string; flag?: string; count: number; pct: number }[] }) {
+function NationalityDonut({ mix }: { mix: { label: string; iso?: string; count: number; pct: number }[] }) {
   const colors = [
     "hsl(var(--primary))", "hsl(260 60% 55%)", "hsl(38 92% 50%)",
     "hsl(142 71% 45%)", "hsl(220 70% 50%)", "hsl(0 70% 55%)",
@@ -1127,8 +1130,8 @@ function NationalityDonut({ mix }: { mix: { label: string; flag?: string; count:
               {segments.map((s, i) => (
                 <li key={i} className="flex items-center gap-2 text-[11.5px]">
                   <span className="h-2 w-2 rounded-sm shrink-0" style={{ background: s.color }} />
-                  <span className="truncate flex-1">
-                    {s.flag && <span className="mr-1">{s.flag}</span>}
+                  <span className="truncate flex-1 inline-flex items-center gap-1.5">
+                    {s.iso && <Flag iso={s.iso} size={12} />}
                     {s.label}
                   </span>
                   <span className="tabular-nums text-muted-foreground shrink-0">{Math.round(s.pct)}%</span>

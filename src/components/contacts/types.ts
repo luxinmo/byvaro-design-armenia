@@ -106,7 +106,6 @@ export type Contact = {
    *  siendo PK técnica. Ver `docs/public-references-audit.md`. */
   publicRef: string;
   name: string;
-  flag?: string; // emoji bandera p.ej. "🇩🇪"
   nationality?: string; // nombre del país
   email?: string;
   phone?: string;

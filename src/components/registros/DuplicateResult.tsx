@@ -17,6 +17,8 @@ import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { MatchRing } from "./MatchRing";
 import type { Registro } from "@/data/records";
+import { Flag } from "@/components/ui/Flag";
+import { resolveNationality } from "@/data/nationalities";
 
 type Props = {
   record: Registro;
@@ -81,13 +83,13 @@ export function DuplicateResult({ record, onDismissMatch }: Props) {
             className="grid grid-cols-[80px_1fr_1fr_24px] sm:grid-cols-[1fr_1fr_1fr_28px] items-center px-2.5 sm:px-3 py-2 gap-2 sm:gap-3 border-t border-border/30"
           >
             <span className="text-[10px] text-muted-foreground font-medium truncate">{f.field}</span>
-            <span className="text-[11px] sm:text-xs font-semibold text-foreground break-words" title={f.newValue}>
+            <span className="text-[11px] sm:text-xs font-semibold text-foreground break-words">
               {f.newValue}
             </span>
             <span className={cn(
               "text-[11px] sm:text-xs break-words",
               f.match ? "text-foreground font-medium" : "text-muted-foreground",
-            )} title={f.existingValue}>
+            )}>
               {f.existingValue || "—"}
             </span>
             <div className="flex justify-center">
@@ -197,24 +199,33 @@ function maskPhoneIfCollab(telefono: string, origen: Registro["origen"]): string
  *  como `neutral`. */
 function buildMatchFields(r: Registro): Array<{
   field: string;
-  newValue: string;
-  existingValue: string;
+  newValue: React.ReactNode;
+  existingValue: React.ReactNode;
   match: boolean;
   /** Si true, no se pinta ni check ni X · el campo es informativo. */
   neutral?: boolean;
 }> {
   const m = r.matchCliente ?? {};
   const maskedPhone = maskPhoneIfCollab(r.cliente.telefono, r.origen);
-  // Nacionalidad con bandera · si matchCliente no trae flag propia
+  // Nacionalidad con bandera SVG · si matchCliente no trae iso propio,
   // pero la nacionalidad coincide, reutilizamos la del entrante.
-  const natNew = r.cliente.flag
-    ? `${r.cliente.flag} ${r.cliente.nacionalidad}`
-    : r.cliente.nacionalidad;
-  const existingFlag = m.flag
-    ?? (m.nacionalidad === r.cliente.nacionalidad ? r.cliente.flag : undefined);
-  const natExisting = m.nacionalidad
-    ? (existingFlag ? `${existingFlag} ${m.nacionalidad}` : m.nacionalidad)
-    : "";
+  const newIso = r.cliente.nationalityIso ?? resolveNationality(r.cliente.nacionalidad).iso;
+  const existingIso =
+    m.nationalityIso
+    ?? (m.nacionalidad ? resolveNationality(m.nacionalidad).iso : undefined)
+    ?? (m.nacionalidad === r.cliente.nacionalidad ? newIso : undefined);
+  const natNew = (
+    <span className="inline-flex items-center gap-1.5">
+      <Flag iso={newIso} size={12} />
+      {r.cliente.nacionalidad}
+    </span>
+  );
+  const natExisting = m.nacionalidad ? (
+    <span className="inline-flex items-center gap-1.5">
+      <Flag iso={existingIso} size={12} />
+      {m.nacionalidad}
+    </span>
+  ) : "";
   return [
     { field: "Nombre",       newValue: r.cliente.nombre,       existingValue: m.nombre       ?? "", match: m.nombre       === r.cliente.nombre },
     { field: "Teléfono",     newValue: maskedPhone,            existingValue: m.telefono     ?? "", match: m.telefono     === r.cliente.telefono },

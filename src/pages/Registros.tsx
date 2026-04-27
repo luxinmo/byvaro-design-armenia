@@ -32,10 +32,11 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import {
   Search, X, Check, ChevronDown, Filter, AlertTriangle, Shield,
-  Phone, Flag, Building2, Users, Info,
+  Phone, Flag as FlagIcon, Building2, Users, Info,
   ArrowLeft, Clock, CheckCircle2, XCircle, FileText, ArrowUpDown,
   ExternalLink, Sparkles, Eye, Handshake, UserCheck,
 } from "lucide-react";
+import { Flag } from "@/components/ui/Flag";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { toast } from "sonner";
@@ -762,17 +763,17 @@ export default function Registros() {
   ];
 
   /** Nacionalidades disponibles · derivadas de los registros actuales,
-   *  con bandera emoji asociada a cada una (la que aparece en el primer
-   *  registro de esa nacionalidad). Ordenadas por frecuencia · top 10. */
+   *  con su ISO 3166-1 derivado · alimenta `<Flag iso=... />` en
+   *  el dropdown. Ordenadas por frecuencia · top 10. */
   const nacionalidadOptions = useMemo(() => {
-    const stats = new Map<string, { count: number; flag?: string }>();
+    const stats = new Map<string, { count: number; iso?: string }>();
     for (const r of records) {
       const nat = r.cliente.nacionalidad;
       if (!nat) continue;
       const prev = stats.get(nat);
       stats.set(nat, {
         count: (prev?.count ?? 0) + 1,
-        flag: prev?.flag ?? r.cliente.flag,
+        iso: prev?.iso ?? r.cliente.nationalityIso ?? resolveNationality(nat).iso,
       });
     }
     return Array.from(stats.entries())
@@ -780,7 +781,8 @@ export default function Registros() {
       .slice(0, 10)
       .map(([nat, s]) => ({
         value: nat,
-        label: s.flag ? `${s.flag} ${nat}` : nat,
+        label: nat,
+        iso: s.iso,
       }));
   }, [records]);
 
@@ -945,9 +947,7 @@ export default function Registros() {
                       {/* Contenido minimalista · nombre + contexto + fecha/estado */}
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-foreground truncate inline-flex items-center gap-1.5">
-                          {(r.cliente.flag ?? resolveNationality(r.cliente.nacionalidad).flag) && (
-                            <span>{r.cliente.flag ?? resolveNationality(r.cliente.nacionalidad).flag}</span>
-                          )}
+                          <Flag iso={r.cliente.nationalityIso ?? resolveNationality(r.cliente.nacionalidad).iso} size={14} />
                           <span className="truncate">{r.cliente.nombre}</span>
                           {r.tipo === "registration_visit" && (
                             <span className="text-primary text-[10px] font-semibold uppercase tracking-wide shrink-0">
@@ -1305,14 +1305,14 @@ function RegistroDetail({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-base font-bold text-foreground leading-tight truncate">
-              {/* Flag con fallback · si el registro no trae el emoji
+              {/* Bandera SVG · si el registro no trae `nationalityIso`
                  explícito (creados desde dialog), lo derivamos del nombre
-                 de la nacionalidad. Siempre se muestra bandera. */}
-              {(record.cliente.flag ?? resolveNationality(record.cliente.nacionalidad).flag) && (
-                <span className="mr-1.5">
-                  {record.cliente.flag ?? resolveNationality(record.cliente.nacionalidad).flag}
-                </span>
-              )}
+                 de la nacionalidad · siempre se muestra bandera. */}
+              <Flag
+                iso={record.cliente.nationalityIso ?? resolveNationality(record.cliente.nacionalidad).iso}
+                size={16}
+                className="mr-1.5 align-middle"
+              />
               {record.cliente.nombre}
             </h2>
             {/* publicRef del registro · ref humana copiable. */}
@@ -1606,18 +1606,21 @@ function RegistroDetail({
                 mono
               />
               <DetailRow
-                icon={Flag}
+                icon={FlagIcon}
                 label="Nacionalidad"
-                /* Si el cliente no trae `flag` emoji, lo derivamos del
-                   nombre de la nacionalidad para que SIEMPRE se muestre
-                   bandera (resolveNationality cubre tanto inglés como
-                   español). */
-                value={(() => {
-                  const flagDirect = record.cliente.flag;
-                  const resolved = !flagDirect ? resolveNationality(record.cliente.nacionalidad) : null;
-                  const flag = flagDirect ?? resolved?.flag ?? "";
-                  return `${flag ? `${flag} ` : ""}${record.cliente.nacionalidad}`;
-                })()}
+                /* Si el cliente no trae `nationalityIso` explícito,
+                   lo derivamos del nombre de la nacionalidad para que
+                   SIEMPRE se muestre bandera SVG (resolveNationality
+                   cubre tanto inglés como español). */
+                value={
+                  <span className="inline-flex items-center gap-1.5">
+                    <Flag
+                      iso={record.cliente.nationalityIso ?? resolveNationality(record.cliente.nacionalidad).iso}
+                      size={14}
+                    />
+                    {record.cliente.nacionalidad}
+                  </span>
+                }
               />
             </dl>
           </div>
@@ -1897,7 +1900,7 @@ function DetailRow({
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
-  value: string;
+  value: React.ReactNode;
   mono?: boolean;
   highlight?: boolean;
 }) {
@@ -2220,7 +2223,7 @@ function RegistrosFilterDrawer({
   origenOptions: { value: string; label: string }[];
   origenFilter: string[];
   setOrigenFilter: (v: string[]) => void;
-  nacionalidadOptions: { value: string; label: string }[];
+  nacionalidadOptions: { value: string; label: string; iso?: string }[];
   nacionalidadFilter: string[];
   setNacionalidadFilter: (v: string[]) => void;
   dateRangeOptions: { value: "all" | "today" | "7d" | "30d"; label: string }[];

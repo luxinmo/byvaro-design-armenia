@@ -25,8 +25,8 @@ import { cn } from "@/lib/utils";
 export type MultiSelectOption = {
   value: string;
   label: string;
-  /** Prefijo opcional (emoji bandera, avatar inicial, dot color…). */
-  prefix?: string;
+  /** Prefijo opcional (icono <Flag>, avatar inicial, dot color…). */
+  prefix?: React.ReactNode;
 };
 
 interface Props {

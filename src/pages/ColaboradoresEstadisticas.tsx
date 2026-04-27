@@ -29,6 +29,7 @@ import {
   Check, AlertTriangle, Clock, Copy, ShieldCheck,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Flag } from "@/components/ui/Flag";
 import { cn } from "@/lib/utils";
 import { AgencyRankingTop5 } from "@/components/colaboradores/AgencyRankingTop5";
 
@@ -36,10 +37,12 @@ import { AgencyRankingTop5 } from "@/components/colaboradores/AgencyRankingTop5"
 function formatNumber(n: number) {
   return new Intl.NumberFormat("es-ES").format(n);
 }
-function flagOf(code: string): string {
-  const c = code.toUpperCase();
-  if (c.length !== 2) return "🏳️";
-  return String.fromCodePoint(...[...c].map((ch) => 127397 + ch.charCodeAt(0)));
+/** Devuelve el ISO 3166-1 alpha-2 normalizado · alimenta `<Flag iso=…/>`.
+ *  Reemplazo del antiguo `flagOf()` que devolvía emoji (no funciona en Windows). */
+function isoOf(code: string | undefined | null): string | undefined {
+  if (!code) return undefined;
+  const c = code.trim().toUpperCase();
+  return c.length === 2 ? c : undefined;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -167,7 +170,7 @@ const TAB_KEYS = ["registros", "ventas", "eficiencia"] as const;
 type Tab = typeof TAB_KEYS[number];
 type Dim = "nacionalidad" | "promocion";
 
-type Axis = { id: string; name: string; shortLabel: string; flag?: string };
+type Axis = { id: string; name: string; shortLabel: string; iso?: string };
 type DataMap = Record<AgencyId, Record<string, number>>;
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -296,7 +299,7 @@ export default function ColaboradoresEstadisticas({
             <FilterSelect
               label="Nacionalidad"
               placeholder="Todas"
-              options={NATIONS.map((n) => ({ value: n.id, label: `${flagOf(n.id)} ${n.name}` }))}
+              options={NATIONS.map((n) => ({ value: n.id, label: n.name }))}
               selected={fNations}
               onChange={(v) => setFNations(v as NationId[])}
             />
@@ -406,7 +409,7 @@ function useAxes(dim: Dim, fNations: NationId[], fPromos: PromoId[]): Axis[] {
   return useMemo(() => {
     if (dim === "nacionalidad") {
       const src = fNations.length === 0 ? [...NATIONS] : NATIONS.filter((n) => fNations.includes(n.id));
-      return src.map((n) => ({ id: n.id, name: n.name, shortLabel: n.id, flag: flagOf(n.id) }));
+      return src.map((n) => ({ id: n.id, name: n.name, shortLabel: n.id, iso: isoOf(n.id) }));
     }
     const src = fPromos.length === 0 ? [...PROMOTIONS] : PROMOTIONS.filter((p) => fPromos.includes(p.id));
     return src.map((p) => ({ id: p.id, name: p.name, shortLabel: p.code }));
@@ -1195,7 +1198,7 @@ function Heatmap({
               </th>
               {axes.map((x) => (
                 <th key={x.id} className="pb-2 px-1 text-center font-semibold text-[10px] text-muted-foreground">
-                  {x.flag && <span className="block text-sm leading-none">{x.flag}</span>}
+                  {x.iso && <span className="flex justify-center"><Flag iso={x.iso} size={14} /></span>}
                   <span className="block mt-0.5">{x.shortLabel}</span>
                 </th>
               ))}

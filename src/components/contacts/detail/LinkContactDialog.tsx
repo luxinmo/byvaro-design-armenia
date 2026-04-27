@@ -17,6 +17,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Flag } from "@/components/ui/Flag";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { MOCK_CONTACTS } from "@/components/contacts/data";
@@ -151,8 +152,8 @@ export function LinkContactDialog({ open, onOpenChange, contactId, current, onSa
                     onClick={() => { setPickedContact(c); setStep(2); }}
                     className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-left hover:bg-muted/40 transition-colors"
                   >
-                    <div className="h-9 w-9 rounded-full bg-foreground/10 grid place-items-center text-foreground font-semibold text-xs shrink-0">
-                      {c.flag ? <span className="text-base leading-none">{c.flag}</span> : initials}
+                    <div className="h-9 w-9 rounded-full bg-foreground/10 grid place-items-center text-foreground font-semibold text-xs shrink-0 overflow-hidden">
+                      {c.nationalityIso ? <Flag iso={c.nationalityIso} size={20} /> : initials}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">{c.name}</p>
@@ -170,9 +171,10 @@ export function LinkContactDialog({ open, onOpenChange, contactId, current, onSa
         {step === 2 && pickedContact && (
           <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
             <div className="flex items-center gap-3 p-3 rounded-2xl bg-muted/40 border border-border/40">
-              <div className="h-10 w-10 rounded-full bg-foreground/10 grid place-items-center text-foreground font-semibold text-xs shrink-0">
-                {pickedContact.flag ? <span className="text-lg leading-none">{pickedContact.flag}</span> :
-                  pickedContact.name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase()}
+              <div className="h-10 w-10 rounded-full bg-foreground/10 grid place-items-center text-foreground font-semibold text-xs shrink-0 overflow-hidden">
+                {pickedContact.nationalityIso
+                  ? <Flag iso={pickedContact.nationalityIso} size={22} />
+                  : pickedContact.name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-foreground truncate">{pickedContact.name}</p>

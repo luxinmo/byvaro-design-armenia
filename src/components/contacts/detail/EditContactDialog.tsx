@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PhoneInput } from "@/components/ui/PhoneInput";
+import { Flag } from "@/components/ui/Flag";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -79,7 +80,8 @@ type FormState = {
   companyTaxId: string;
   birthDate: string;
   nationality: string;
-  flag: string;
+  /** ISO 3166-1 alpha-2 derivado · alimenta `<Flag iso={form.nationalityIso}>`. */
+  nationalityIso: string;
   languages: string[];
   address: string;
   source: string;
@@ -98,7 +100,7 @@ function detailToForm(detail: ContactDetail): FormState {
     companyTaxId: detail.companyTaxId ?? "",
     birthDate: detail.birthDate ? detail.birthDate.slice(0, 10) : "",
     nationality: detail.nationality ?? "",
-    flag: detail.flag ?? "",
+    nationalityIso: detail.nationalityIso ?? "",
     languages: detail.languages ?? [],
     address: [detail.address, detail.city, detail.postalCode].filter(Boolean).join(", "),
     source: detail.source ?? "",
@@ -123,7 +125,7 @@ function emptyForm(): FormState {
     companyTaxId: "",
     birthDate: "",
     nationality: "",
-    flag: "",
+    nationalityIso: "",
     languages: [],
     address: "",
     source: "",
@@ -150,7 +152,7 @@ function formToEdits(form: FormState): ContactEdits {
     companyTaxId: form.kind === "company" ? form.companyTaxId.trim() || undefined : undefined,
     birthDate: form.birthDate ? new Date(form.birthDate).toISOString() : undefined,
     nationality: form.nationality.trim() || undefined,
-    flag: form.flag.trim() || undefined,
+    nationalityIso: form.nationalityIso.trim() || undefined,
     languages: form.languages.length ? form.languages : undefined,
     address: form.address.trim() || undefined,
     source: form.source.trim() || undefined,
@@ -248,8 +250,8 @@ export function EditContactDialog({ open, onOpenChange, detail, onSaved, onCreat
         tradeName: edits.tradeName,
         companyTaxId: edits.companyTaxId,
         name: displayName,
-        flag: edits.flag,
         nationality: edits.nationality,
+        nationalityIso: edits.nationalityIso,
         email: edits.email,
         phone: edits.phone,
         tags: [],
@@ -430,8 +432,8 @@ export function EditContactDialog({ open, onOpenChange, detail, onSaved, onCreat
             <Field label="Nacionalidad">
               <NationalityPicker
                 nationality={form.nationality}
-                flag={form.flag}
-                onChange={(name, flag) => set({ nationality: name, flag })}
+                iso={form.nationalityIso}
+                onChange={(name, iso) => set({ nationality: name, nationalityIso: iso ?? "" })}
               />
             </Field>
             <Field label="Idiomas">
@@ -789,11 +791,12 @@ function SourceSelect({
 }
 
 function NationalityPicker({
-  nationality, flag, onChange,
+  nationality, iso, onChange,
 }: {
   nationality: string;
-  flag: string;
-  onChange: (name: string, flag: string) => void;
+  iso: string;
+  /** Devuelve nombre del país + ISO 3166-1 alpha-2 (para `<Flag iso=…/>`). */
+  onChange: (name: string, iso: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -818,7 +821,7 @@ function NationalityPicker({
         >
           {nationality ? (
             <>
-              {flag && <span className="text-base leading-none shrink-0">{flag}</span>}
+              <Flag iso={iso} size={14} />
               <span className="flex-1 truncate text-left text-foreground">{nationality}</span>
             </>
           ) : (
@@ -855,13 +858,13 @@ function NationalityPicker({
               <button
                 key={c.iso}
                 type="button"
-                onClick={() => { onChange(c.name, c.flag); setOpen(false); }}
+                onClick={() => { onChange(c.name, c.iso); setOpen(false); }}
                 className={cn(
                   "w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors",
                   isSelected ? "bg-muted text-foreground" : "text-foreground hover:bg-muted/40",
                 )}
               >
-                <span className="text-base leading-none shrink-0">{c.flag}</span>
+                <Flag iso={c.iso} size={14} />
                 <span className="flex-1 text-xs truncate">{c.name}</span>
                 {isSelected && <Check className="h-3 w-3 text-success shrink-0" />}
               </button>
@@ -904,7 +907,7 @@ function LanguagesPicker({
                 className="inline-flex items-center gap-1 text-xs bg-muted/60 rounded-full pl-1.5 pr-1 py-0.5"
                 onClick={(e) => e.stopPropagation()}
               >
-                <span className="text-sm leading-none">{lang?.flag ?? "🏳️"}</span>
+                <Flag iso={lang?.countryIso} size={12} />
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onRemove(code); }}
@@ -952,7 +955,7 @@ function LanguagesPicker({
                   isSelected ? "bg-muted text-foreground" : "text-foreground hover:bg-muted/40",
                 )}
               >
-                <span className="text-base leading-none shrink-0">{l.flag}</span>
+                <Flag iso={l.countryIso} size={14} />
                 <span className="flex-1 text-xs truncate">{l.name}</span>
                 {isSelected && <Check className="h-3 w-3 text-success shrink-0" />}
               </button>
