@@ -1,7 +1,8 @@
-import { Bell, Home, Search } from "lucide-react";
+import { Home, Search } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { AccountSwitcher } from "./AccountSwitcher";
 import { UsagePill } from "./paywall/UsagePill";
+import { NotificationsBell } from "./notifications/NotificationsBell";
 
 /**
  * Header global (desktop).
@@ -52,13 +53,7 @@ export function AppHeader() {
           <span className="hidden xl:inline">Buscar</span>
           <span className="text-[10px] font-semibold bg-muted/60 border border-border rounded px-1 py-0.5 leading-none">⌘K</span>
         </button>
-        <button
-          className="relative p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-          aria-label="Notificaciones"
-        >
-          <Bell className="h-[18px] w-[18px]" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary ring-2 ring-background" />
-        </button>
+        <NotificationsBell />
       </div>
     </header>
   );

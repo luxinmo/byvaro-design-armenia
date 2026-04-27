@@ -56,6 +56,7 @@ const ESTADO_VARIANT: Record<RegistroEstado, "warning" | "success" | "danger" | 
   aprobado: "success",
   rechazado: "danger",
   duplicado: "muted",
+  caducado: "muted",
 };
 
 function relativeDate(iso: string): string {
@@ -108,7 +109,7 @@ export function RegistrosEmbedded({
     const c: Record<RegistroEstado | "total", number> = {
       total: filtered.length,
       pendiente: 0, preregistro_activo: 0,
-      aprobado: 0, rechazado: 0, duplicado: 0,
+      aprobado: 0, rechazado: 0, duplicado: 0, caducado: 0,
     };
     for (const r of filtered) c[r.estado] += 1;
     return c;

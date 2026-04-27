@@ -12,7 +12,8 @@
  *     `docs/registration-generic-model.md §3`).
  */
 
-import type { Contact, ContactTimelineEventType } from "@/components/contacts/types";
+import type { Contact, ContactTimelineEventType, PartyActivity } from "@/components/contacts/types";
+import type { Party } from "@/lib/party";
 
 /** Eventos que cuentan como actividad con el cliente. Coments internos,
  *  tags, mantenimiento NO cuentan. */
@@ -58,6 +59,61 @@ export function recordActivity(
      *  `<ActivityFreshness>`. */
     lastActivity: humanizeActivity(occurredAt),
   };
+}
+
+/**
+ * Phase 2 · Actualiza la actividad per-party del Contact. Append-once
+ * por `partyId`: si esa party ya tiene entry, lo actualiza (incrementa
+ * count + adelanta lastActivityAt). Si no, lo crea.
+ *
+ * Función pura · no muta. Devuelve un Contact nuevo.
+ */
+export function recordActivityForParty(
+  contact: Contact,
+  party: Party,
+  eventType: ContactTimelineEventType,
+  occurredAt: string = new Date().toISOString(),
+): Contact {
+  if (!isCountedEvent(eventType)) return contact;
+
+  const list = contact.partyActivities ?? [];
+  const idx = list.findIndex((p) => p.partyId === party.organizationId);
+  let next: PartyActivity[];
+  if (idx >= 0) {
+    const cur = list[idx];
+    /* Solo adelanta · nunca retrocede. */
+    if (new Date(occurredAt).getTime() <= new Date(cur.lastActivityAt).getTime()) {
+      next = list;
+      next[idx] = { ...cur, activityCount: cur.activityCount + 1 };
+    } else {
+      next = list.map((p, i) => i === idx
+        ? { ...p, lastActivityAt: occurredAt, lastActivityType: eventType, activityCount: p.activityCount + 1 }
+        : p);
+    }
+  } else {
+    /* Primera actividad de esta party con este contacto. */
+    next = [...list, {
+      partyId: party.organizationId,
+      partyKind: party.kind,
+      partyLabel: party.label ?? party.organizationId,
+      lastActivityAt: occurredAt,
+      lastActivityType: eventType,
+      firstActivityAt: occurredAt,
+      activityCount: 1,
+    }];
+  }
+
+  /* Aprovechamos para actualizar también el agregado global. */
+  return recordActivity(
+    { ...contact, partyActivities: next },
+    eventType,
+    occurredAt,
+  );
+}
+
+/** Devuelve la activity de una party concreta · undefined si no existe. */
+export function getPartyActivity(contact: Contact, partyId: string): PartyActivity | undefined {
+  return (contact.partyActivities ?? []).find((p) => p.partyId === partyId);
 }
 
 /* ══════ Freshness helpers · usados por <ActivityFreshness> ══════ */

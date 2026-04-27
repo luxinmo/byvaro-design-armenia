@@ -32,20 +32,46 @@
  */
 
 /**
- * Estados del Registro · Phase 1 incluye `preregistro_activo` para
- * promociones con `modoValidacionRegistro: "por_visita"`. Cuando la
- * visita asociada se marca como realizada, transita a `aprobado`.
+ * Estados del Registro.
  *
- * Phase 2 · estados adicionales `preregistro_pendiente`, `caducado`
- * y `desplazado` (necesitan crons backend · ver
- * `docs/registration-system.md §2`).
+ *   · pendiente            · esperando decisión del owningParty.
+ *   · preregistro_activo   · aprobado en modo `por_visita` ·
+ *                            esperando que la visita se realice.
+ *   · aprobado             · cliente formalmente registrado.
+ *   · rechazado            · rechazado por el owningParty.
+ *   · duplicado            · first-come silent · otro lo registró antes.
+ *   · caducado             · preregistro_activo cuya visita fue cancelada
+ *                            o cuyo plazo expiró sin realizarse · cliente
+ *                            queda libre para que otra agencia lo registre.
+ *
+ * Phase 2 · estado `desplazado` (perdió por visita ajena · ver
+ * `docs/registration-system.md §2`) · pendiente.
  */
 export type RegistroEstado =
   | "pendiente"
   | "preregistro_activo"
   | "aprobado"
   | "rechazado"
-  | "duplicado";
+  | "duplicado"
+  | "caducado";
+
+/**
+ * Outcome de la visita asociada al registro · solo aplica cuando
+ * `tipo === "registration_visit"` y el registro pasó por
+ * `preregistro_activo`. Determina cómo se transita el estado:
+ *
+ *   · realizada            → preregistro_activo → aprobado
+ *   · no_show_cliente      → preregistro_activo → caducado (cliente desistió)
+ *   · cancelada_agencia    → preregistro_activo → caducado (agencia renuncia · pesa en track record)
+ *   · cancelada_promotor   → preregistro_activo → caducado (motivo del lado anfitrión · NO penaliza agencia)
+ *   · reprogramada         → preregistro_activo (mantiene · solo cambia visitDate · max 2 veces)
+ */
+export type VisitOutcome =
+  | "realizada"
+  | "no_show_cliente"
+  | "cancelada_agencia"
+  | "cancelada_promotor"
+  | "reprogramada";
 
 /**
  * Origen del registro.
@@ -221,6 +247,23 @@ export type Registro = {
   /** Id del registro original · solo en `tipo === "visit_only"` · el
    *  cliente ya fue aprobado en ese registro. */
   originRegistroId?: string;
+  /** Resultado final de la visita asociada · marca la transición de
+   *  estado al ejecutarse. Undefined hasta que se evalúa la visita. */
+  visitOutcome?: VisitOutcome;
+  /** Cuántas veces se ha reprogramado la visita · cap a 2 (Phase 1).
+   *  TODO(backend): persistir + validar server-side el cap. */
+  reprogramacionesCount?: number;
+  /** Motivo de la última cancelación / reprogramación · libre. */
+  visitNote?: string;
+  /** ISO · cuándo se evaluó la visita (realizada/cancelada/reprogramada).
+   *  Sirve para mostrar "Caducado hace X días" en UI. */
+  visitOutcomeAt?: string;
+  /** Auditoría legal de los términos aceptados al aprobar. Versionado
+   *  vive en `src/lib/legalTerms.ts`. Permite probar ante disputa
+   *  qué versión se firmó y cuándo. */
+  approvedTermsVersion?: string;
+  approvedTermsAt?: string;
+  approvedTermsByUserId?: string;
   /* TODO(fase-2) · "Pedir más datos a la agencia". No es un one-shot
    * sino un thread bidireccional · hay que decidir canal (in-app /
    * email híbrido tipo Intercom/Stripe / WhatsApp). Ver nota abajo.
@@ -886,4 +929,14 @@ export const estadoLabel: Record<RegistroEstado, string> = {
   aprobado: "Aprobado",
   rechazado: "Rechazado",
   duplicado: "Duplicado",
+  caducado: "Caducado",
+};
+
+/** Label humano del outcome de visita · usado en timeline + cards. */
+export const visitOutcomeLabel: Record<VisitOutcome, string> = {
+  realizada:           "Visita realizada",
+  no_show_cliente:     "Cliente desistió",
+  cancelada_agencia:   "Cancelada por la agencia",
+  cancelada_promotor:  "Cancelada por el promotor",
+  reprogramada:        "Visita reprogramada",
 };
