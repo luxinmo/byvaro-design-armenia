@@ -4,6 +4,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { ConfirmDialogHost } from "@/components/ui/ConfirmDialog";
 import { UpgradeModal } from "@/components/paywall/UpgradeModal";
 import { ScrollToTop } from "@/components/ScrollToTop";
+import { RequireAuth } from "@/components/RequireAuth";
 import Inicio from "@/pages/Inicio";
 import Notificaciones from "@/pages/Notificaciones";
 import Actividad from "@/pages/Actividad";
@@ -118,22 +119,23 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* Wizard fullscreen (sin AppLayout) */}
-        <Route path="/crear-promocion" element={<CrearPromocion />} />
+        {/* Wizard fullscreen (sin AppLayout) · auth obligatorio. */}
+        <Route path="/crear-promocion" element={<RequireAuth><CrearPromocion /></RequireAuth>} />
 
-        {/* Entrada al modo Agencia · picker + atajo directo.
+        {/* Entrada al modo Agencia · picker + atajo directo · auth obligatorio.
          *   `/agencia`        → elige agencia.
          *   `/agencia/:id`    → salta directo a esa agencia y redirige a /inicio. */}
-        <Route path="/agencia" element={<AgenciaEntry />} />
-        <Route path="/agencia/:id" element={<AgenciaEntry />} />
+        <Route path="/agencia" element={<RequireAuth><AgenciaEntry /></RequireAuth>} />
+        <Route path="/agencia/:id" element={<RequireAuth><AgenciaEntry /></RequireAuth>} />
 
         {/* Ajustes · fullscreen propio (SettingsShell), no AppLayout.
          * `/ajustes` raíz renderiza la home (directorio de cards),
          * `/ajustes/<path>` renderiza la sub-página con sidebar. */}
-        <Route path="/ajustes" element={<Ajustes />} />
+        <Route path="/ajustes" element={<RequireAuth><Ajustes /></RequireAuth>} />
         <Route
           path="/ajustes/*"
           element={
+            <RequireAuth>
             <SettingsShell>
               <Routes>
                 {/* Páginas reales con contenido funcional */}
@@ -194,13 +196,15 @@ export default function App() {
                 <Route path="*" element={<SettingsPlaceholder />} />
               </Routes>
             </SettingsShell>
+            </RequireAuth>
           }
         />
 
-        {/* Resto de páginas dentro del AppLayout estándar */}
+        {/* Resto de páginas dentro del AppLayout estándar · auth obligatorio. */}
         <Route
           path="/*"
           element={
+            <RequireAuth>
             <AppLayout>
               <Routes>
                 <Route path="/" element={<Navigate to="/inicio" replace />} />
@@ -238,6 +242,7 @@ export default function App() {
                 <Route path="*" element={<Navigate to="/inicio" replace />} />
               </Routes>
             </AppLayout>
+            </RequireAuth>
           }
         />
       </Routes>

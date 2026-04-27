@@ -63,6 +63,22 @@ export function setAccountType(type: AccountType) {
   emit();
 }
 
+/**
+ * ¿Hay sesión activa? · usado por el `<RequireAuth>` gate del router.
+ *
+ * En mock · el "login" persiste solo el AccountType en sessionStorage.
+ * Si no hay accountType en sessionStorage, la sesión no existe y se
+ * fuerza redirect a /login.
+ *
+ * TODO(backend): sustituir por verificación de cookie httpOnly o JWT
+ * + endpoint `GET /api/auth/me` que devuelva 401 si no hay sesión.
+ * El cliente no debe inferir auth desde sessionStorage en producción.
+ */
+export function isAuthenticated(): boolean {
+  if (typeof window === "undefined") return false;
+  return sessionStorage.getItem(STORAGE_KEY) !== null;
+}
+
 export function setAccountAgencyId(id: string) {
   sessionStorage.setItem(AGENCY_KEY, id);
   emit();
