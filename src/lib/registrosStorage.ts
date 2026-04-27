@@ -21,6 +21,7 @@
 import { useEffect, useState } from "react";
 import { registros as SEED_REGISTROS, type Registro } from "@/data/records";
 import { generatePublicRef } from "@/lib/publicRef";
+import { findBestMatch } from "@/lib/matchScore";
 
 const STORAGE_KEY = "byvaro.registros.created.v1";
 const CHANGE_EVENT = "byvaro:registros-change";
@@ -102,19 +103,55 @@ export function addCreatedRegistro(r: Registro) {
     ? r
     : { ...r, publicRef: generatePublicRef("registration", [...read(), ...SEED_REGISTROS]) };
   const winner = findPendingDuplicate(ensured);
-  const finalRegistro: Registro = winner
+
+  /* Si hay duplicado intra-promo · regla first-come silent · el score
+     es 100 (cliente exacto · match por email/tel normalizado). */
+  if (winner) {
+    const list = read();
+    write([{
+      ...ensured,
+      estado: "duplicado",
+      matchPercentage: 100,
+      matchWith: `Registrado primero por ${winner.publicRef}`,
+      matchCliente: { ...winner.cliente },
+    }, ...list]);
+    return;
+  }
+
+  /* Bloque C · sin duplicado bloqueante, calculamos match score
+     contra otros registros del workspace (CROSS-promoción + contactos
+     CRM cuando exista) para que el promotor vea el aviso al revisar.
+     · score 0   → banner verde "seguro aprobar"
+     · 1-69      → coincidencia parcial (mismo cliente otra promo)
+     · 70-100    → posible duplicado relevante
+     TODO(backend): sustituir por POST /api/match/score (IA real). */
+  const candidates = [...read(), ...SEED_REGISTROS].filter(
+    (other) => other.id !== ensured.id && other.estado !== "rechazado" && other.estado !== "caducado",
+  );
+  const best = findBestMatch(ensured.cliente, candidates);
+  const finalRegistro: Registro = best && best.score > 0
     ? {
         ...ensured,
-        estado: "duplicado",
-        matchPercentage: 100,
-        /* `matchWith` muestra el publicRef humano (`re000042`) en
-           lugar del id técnico · más legible en banners. */
-        matchWith: `Registrado primero por ${winner.publicRef}`,
-        matchCliente: { ...winner.cliente },
+        matchPercentage: best.score,
+        matchWith: best.score >= 70
+          ? `Posible duplicado · ${best.target.publicRef}`
+          : `Coincidencia parcial · ${best.target.publicRef}`,
+        matchCliente: { ...best.target.cliente },
       }
     : ensured;
   const list = read();
   write([finalRegistro, ...list]);
+}
+
+/** Helper exportado · permite a la UI calcular el score de un cliente
+ *  entrante contra el universo actual (en form de creación, antes de
+ *  submitear · real-time hint). */
+export function previewMatchForCliente(cliente: Registro["cliente"]): number {
+  const candidates = [...read(), ...SEED_REGISTROS].filter(
+    (r) => r.estado !== "rechazado" && r.estado !== "caducado",
+  );
+  const best = findBestMatch(cliente, candidates);
+  return best?.score ?? 0;
 }
 
 export function removeCreatedRegistro(id: string) {

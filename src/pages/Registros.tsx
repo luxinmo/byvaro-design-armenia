@@ -59,8 +59,19 @@ import { agencies as ALL_AGENCIES } from "@/data/agencies";
 import { useCurrentUser } from "@/lib/currentUser";
 import { useCreatedRegistros } from "@/lib/registrosStorage";
 import { useUsageGuard } from "@/lib/usageGuard";
+import { recordNotification } from "@/lib/notifications";
 import { PublicRefBadge } from "@/components/ui/PublicRefBadge";
 import { resolveNationality } from "@/data/nationalities";
+import {
+  RescheduleVisitDialog,
+  CancelVisitAgencyDialog,
+  CancelVisitPromoterDialog,
+} from "@/components/registros/VisitActionDialogs";
+import { TermsConfirmDialog } from "@/components/registros/TermsConfirmDialog";
+import { OverrideConfirmDialog } from "@/components/registros/OverrideConfirmDialog";
+import { DuplicateContext } from "@/components/registros/DuplicateContext";
+import type { VisitOutcome } from "@/data/records";
+import { getExpiryStatus } from "@/lib/registroExpiry";
 import { Tag } from "@/components/ui/Tag";
 import { cn } from "@/lib/utils";
 import { MatchRing } from "@/components/registros/MatchRing";
@@ -129,6 +140,7 @@ function estadoTagVariant(e: RegistroEstado): "warning" | "success" | "danger" |
   if (e === "preregistro_activo") return "warning";
   if (e === "aprobado") return "success";
   if (e === "rechazado" || e === "duplicado") return "danger";
+  /* caducado · cliente liberado · sin atribución activa */
   return "muted";
 }
 
@@ -315,24 +327,36 @@ export default function Registros() {
           VisitConfirmDialog con agente obligatorio.
        4. Finalmente `approve(id)`.
      visit_only SALTA los pasos 1 y 2 (el cliente ya fue aprobado). */
-  type ApprovalStage = "match" | "relation" | "visit" | null;
+  type ApprovalStage = "match" | "override" | "relation" | "visit" | "terms" | null;
   const [approvalFlow, setApprovalFlow] = useState<{ record: Registro; stage: ApprovalStage } | null>(null);
 
   const canSeeMatchDetails = useHasPermission("records.matchDetails.view");
 
-  /** Determina la siguiente etapa del flujo para un registro dado. */
+  /** Determina la siguiente etapa del flujo para un registro dado.
+   *  El orden canónico es: match → override (si ≥70%) → relation →
+   *  visit → terms → approve.
+   *  · `override` (Bloque H) se inserta cuando matchPercentage ≥70 ·
+   *    obliga al promotor a justificar la decisión por escrito.
+   *  · `terms` (Bloque D) se inserta SIEMPRE como último step ·
+   *    auditoría legal. */
   const nextStageFor = (r: Registro, fromStage: ApprovalStage | "start"): ApprovalStage => {
-    // visit_only · salta match y relation · solo visita
+    // visit_only · salta match/relation · solo visita + terms.
     if (r.tipo === "visit_only") {
       if (fromStage === "start") return "visit";
+      if (fromStage === "visit") return "terms";
       return null;
     }
     if (fromStage === "start" && r.matchPercentage >= 65) return "match";
-    if ((fromStage === "start" || fromStage === "match") && r.possibleRelation) return "relation";
-    if ((fromStage === "start" || fromStage === "match" || fromStage === "relation")
+    /* Tras `match`, si el score es ≥70 (posible duplicado), pasar
+       obligatoriamente por override antes de continuar. */
+    if (fromStage === "match" && r.matchPercentage >= 70) return "override";
+    if ((fromStage === "start" || fromStage === "match" || fromStage === "override") && r.possibleRelation) return "relation";
+    if ((fromStage === "start" || fromStage === "match" || fromStage === "override" || fromStage === "relation")
         && (r.tipo === "registration_visit" || r.tipo === "visit_only")) {
       return "visit";
     }
+    /* Antes del approve final · siempre pasamos por T&C. */
+    if (fromStage !== "terms") return "terms";
     return null;
   };
 
@@ -343,6 +367,48 @@ export default function Registros() {
       return;
     }
     setApprovalFlow({ record, stage });
+  };
+
+  /* Bloque H · al confirmar override (match ≥70%), capturamos la nota
+     obligatoria + timestamp + userId · queda en historial cross-empresa
+     para auditar disputas futuras. Después seguimos al siguiente step. */
+  const confirmOverrideAndAdvance = (payload: { overrideNote: string }) => {
+    if (!approvalFlow) return;
+    const { record } = approvalFlow;
+    const now = new Date().toISOString();
+    setRecords((prev) => prev.map((r) => r.id === record.id ? {
+      ...r,
+      overrideNote: payload.overrideNote,
+      overrideAt: now,
+      overrideByUserId: currentUser.id,
+    } : r));
+    /* Avanzar al siguiente step desde override · normalmente terms o
+       relation/visit si aplican. */
+    const next = nextStageFor(record, "override");
+    if (next) {
+      setApprovalFlow({ record, stage: next });
+    } else {
+      setApprovalFlow(null);
+      approve(record.id);
+    }
+  };
+
+  /* Bloque D · al confirmar el T&C, capturamos versión + timestamp +
+     userId para auditoría legal · se persiste en el Registro. */
+  const confirmTermsAndApprove = (payload: { termsVersion: string; termsAcceptedAt: string }) => {
+    if (!approvalFlow) return;
+    const { record } = approvalFlow;
+    /* Precarga audit en el registro ANTES de approve · approve()
+       no toca estos campos para mantener la huella exacta del momento
+       de aceptación. */
+    setRecords((prev) => prev.map((r) => r.id === record.id ? {
+      ...r,
+      approvedTermsVersion: payload.termsVersion,
+      approvedTermsAt: payload.termsAcceptedAt,
+      approvedTermsByUserId: currentUser.id,
+    } : r));
+    setApprovalFlow(null);
+    approve(record.id);
   };
 
   const advanceApproval = () => {
@@ -441,9 +507,31 @@ export default function Registros() {
       targetEstado === "preregistro_activo" ? "Preregistro activado" : "Registro aprobado",
       { description },
     );
+
+    /* Notificación in-app a la agencia que envió el registro · solo
+       collaborator (direct = registro propio del promotor). Tras los
+       5min de gracia el backend real enviará el email; en el mock,
+       aparece inmediato en la campanita de la agencia (al cambiar de
+       cuenta verá la notif). */
+    if (record && record.origen === "collaborator" && record.agencyId) {
+      recordNotification({
+        recipientUserId: `u-agency-${record.agencyId}`,
+        event: targetEstado === "preregistro_activo" ? "preregistration.approved" : "registration.approved",
+        title: targetEstado === "preregistro_activo"
+          ? `Preregistro aprobado · ${record.cliente.nombre}`
+          : `Registro aprobado · ${record.cliente.nombre}`,
+        body: targetEstado === "preregistro_activo"
+          ? "Cliente queda reservado a tu nombre · se confirmará tras la primera visita."
+          : "Cliente formalmente registrado a tu agencia.",
+        severity: "success",
+        href: `/registros?active=${record.id}`,
+        meta: { registroId: record.id, publicRef: record.publicRef ?? "" },
+      });
+    }
   };
   const reject = (id: string, decisionNote: string) => {
     const now = new Date().toISOString();
+    const record = records.find((r) => r.id === id);
     setRecords((prev) => prev.map((r) => r.id === id ? {
       ...r, estado: "rechazado", decidedAt: now,
       decidedByUserId: currentUser.id,
@@ -459,6 +547,18 @@ export default function Registros() {
         ? "Visita asociada cancelada en el calendario. 5 min para revertir."
         : "Tienes 5 min para revertir antes de notificar a la agencia.",
     });
+    /* Notif in-app a la agencia. */
+    if (record && record.origen === "collaborator" && record.agencyId) {
+      recordNotification({
+        recipientUserId: `u-agency-${record.agencyId}`,
+        event: "registration.rejected",
+        title: `Registro rechazado · ${record.cliente.nombre}`,
+        body: decisionNote ? `Motivo: ${decisionNote}` : undefined,
+        severity: "danger",
+        href: `/registros?active=${record.id}`,
+        meta: { registroId: record.id, publicRef: record.publicRef ?? "" },
+      });
+    }
   };
 
   /* Estado del dialog de rechazo · record siendo rechazado. null = cerrado. */
@@ -488,6 +588,122 @@ export default function Registros() {
       ...r, estado: "pendiente", decidedAt: undefined,
     } : r));
     toast.info("Decisión revertida", { description: "El registro vuelve a pendiente." });
+  };
+
+  /* ── Acciones sobre la visita asociada al preregistro_activo ──
+     Bloque A · ver `docs/registration-system.md §2.3` y los TODO(backend)
+     que describen los endpoints REST equivalentes. */
+
+  /** Reprograma la visita asociada · cap a 2 reprogramaciones.
+   *  TODO(backend): POST /api/registrations/:id/visit/reschedule
+   *    body: { newDate, newTime, note? }
+   *    → 200 { reprogramacionesCount, visitDate, visitTime }
+   *    → 422 si reprogramacionesCount >= 2
+   *    Permission: solo `submittingParty` (agencia) o `owningParty`
+   *    (promotor) del registro. */
+  const rescheduleVisit = (id: string, payload: { newDate: string; newTime: string; note?: string }) => {
+    const record = records.find((r) => r.id === id);
+    setRecords((prev) => prev.map((r) => r.id === id ? {
+      ...r,
+      visitDate: payload.newDate,
+      visitTime: payload.newTime,
+      reprogramacionesCount: (r.reprogramacionesCount ?? 0) + 1,
+      visitOutcome: "reprogramada",
+      visitOutcomeAt: new Date().toISOString(),
+      visitNote: payload.note,
+    } : r));
+    toast.success("Visita reprogramada", {
+      description: `Nueva fecha: ${new Date(payload.newDate).toLocaleDateString("es-ES", { day: "numeric", month: "long" })}${payload.newTime ? ` · ${payload.newTime}h` : ""}.`,
+    });
+    /* Notif cross-empresa · al lado opuesto al que reprograma. */
+    if (record) {
+      const agencyReschedules = isAgencyUser;
+      if (agencyReschedules) {
+        /* Agencia reprograma → promotor recibe notif. Phase 1 mock
+           usamos u1 (promoter admin) como recipient genérico. */
+        recordNotification({
+          recipientUserId: "u1",
+          event: "visit.rescheduled_by_agency",
+          title: `Visita reprogramada · ${record.cliente.nombre}`,
+          body: `Nueva fecha: ${new Date(payload.newDate).toLocaleDateString("es-ES", { day: "numeric", month: "long" })}${payload.newTime ? ` · ${payload.newTime}h` : ""}.${payload.note ? ` Motivo: ${payload.note}` : ""}`,
+          severity: "info",
+          href: `/registros?active=${record.id}`,
+        });
+      } else if (record.agencyId) {
+        recordNotification({
+          recipientUserId: `u-agency-${record.agencyId}`,
+          event: "visit.rescheduled_by_developer",
+          title: `Visita reprogramada por el promotor · ${record.cliente.nombre}`,
+          body: `Nueva fecha: ${new Date(payload.newDate).toLocaleDateString("es-ES", { day: "numeric", month: "long" })}${payload.newTime ? ` · ${payload.newTime}h` : ""}.${payload.note ? ` Motivo: ${payload.note}` : ""}`,
+          severity: "warning",
+          href: `/registros?active=${record.id}`,
+        });
+      }
+    }
+  };
+
+  /** Cancela la visita · transita a `caducado` (cliente liberado).
+   *  TODO(backend): POST /api/registrations/:id/visit/cancel
+   *    body: { outcome: "no_show_cliente"|"cancelada_agencia"|"cancelada_promotor", note? }
+   *    → 200 { estado: "caducado", visitOutcome, visitOutcomeAt }
+   *    Permission: outcome restringido por rol del caller (la agencia
+   *    solo puede `no_show_cliente`/`cancelada_agencia`; el promotor
+   *    solo `cancelada_promotor`). */
+  const cancelVisit = (id: string, payload: { outcome: VisitOutcome; note?: string }) => {
+    const now = new Date().toISOString();
+    const record = records.find((r) => r.id === id);
+    setRecords((prev) => prev.map((r) => r.id === id ? {
+      ...r,
+      estado: "caducado",
+      visitOutcome: payload.outcome,
+      visitOutcomeAt: now,
+      visitNote: payload.note,
+    } : r));
+    /* Cancela también la visita en calendario si está enlazada. */
+    onRegistroRejected(id, payload.note);
+    /* Toast con tono según outcome · cancelación promotor es informativa,
+       cancelación agencia es destructiva, no_show es neutra. */
+    if (payload.outcome === "cancelada_promotor") {
+      toast.info("Visita cancelada", {
+        description: "La agencia ha sido notificada · NO afecta a su track record.",
+      });
+    } else if (payload.outcome === "cancelada_agencia") {
+      toast.error("Visita cancelada", {
+        description: "Cliente liberado · la cancelación queda registrada en tu track record.",
+      });
+    } else {
+      toast.info("Visita cancelada", {
+        description: "Cliente liberado · puede ser registrado de nuevo por cualquier agencia.",
+      });
+    }
+    /* Notif cross-empresa · según quién cancele. */
+    if (record) {
+      if (payload.outcome === "cancelada_promotor" && record.agencyId) {
+        /* Promotor cancela → agencia recibe notif con motivo. */
+        recordNotification({
+          recipientUserId: `u-agency-${record.agencyId}`,
+          event: "visit.cancelled_by_developer",
+          title: `Visita cancelada por el promotor · ${record.cliente.nombre}`,
+          body: `Motivo: ${payload.note ?? "(sin motivo)"}. Puedes contactar al promotor o crear un nuevo registro.`,
+          severity: "warning",
+          href: `/registros?active=${record.id}`,
+        });
+      } else if (
+        payload.outcome === "cancelada_agencia" || payload.outcome === "no_show_cliente"
+      ) {
+        /* Agencia cancela → promotor recibe notif. */
+        recordNotification({
+          recipientUserId: "u1",
+          event: "visit.cancelled_by_agency",
+          title: `Visita cancelada · ${record.cliente.nombre}`,
+          body: payload.outcome === "no_show_cliente"
+            ? "El cliente desistió · liberado para otras agencias."
+            : `Cancelación de la agencia · cliente liberado.${payload.note ? ` Nota: ${payload.note}` : ""}`,
+          severity: payload.outcome === "cancelada_agencia" ? "warning" : "info",
+          href: `/registros?active=${record.id}`,
+        });
+      }
+    }
   };
 
   const bulkApprove = () => {
@@ -582,6 +798,7 @@ export default function Registros() {
     { value: "aprobado", label: "Aprobados" },
     { value: "rechazado", label: "Rechazados" },
     { value: "duplicado", label: "Duplicados" },
+    { value: "caducado", label: "Caducados" },
   ];
 
   return (
@@ -799,6 +1016,8 @@ export default function Registros() {
                     onReject={() => setRejectingRecord(activeRecord)}
                     onRevert={() => revert(activeRecord.id)}
                     onDismissMatch={() => dismissMatch(activeRecord.id)}
+                    onReschedule={(payload) => rescheduleVisit(activeRecord.id, payload)}
+                    onCancelVisit={(payload) => cancelVisit(activeRecord.id, payload)}
                     viewerIsAgency={isAgencyUser}
                     onBack={() => setActiveId(null)}
                   />
@@ -931,6 +1150,31 @@ export default function Registros() {
             }}
             onCancel={cancelApproval}
           />
+          {/* Bloque H · si match ≥70%, pedir justificación obligatoria
+              ANTES de continuar el flujo. Queda en historial cross-empresa. */}
+          <OverrideConfirmDialog
+            open={approvalFlow.stage === "override"}
+            record={approvalFlow.record}
+            onClose={cancelApproval}
+            onConfirm={confirmOverrideAndAdvance}
+          />
+          {/* Bloque D · último step · T&C antes del approve final. */}
+          <TermsConfirmDialog
+            open={approvalFlow.stage === "terms"}
+            modo={
+              promotionById.get(approvalFlow.record.promotionId)?.modoValidacionRegistro
+              ?? "por_visita"
+            }
+            vars={{
+              agencia: approvalFlow.record.agencyId
+                ? agencyById.get(approvalFlow.record.agencyId)?.name ?? "la agencia colaboradora"
+                : "el promotor (registro directo)",
+              cliente: approvalFlow.record.cliente.nombre,
+              promocion: promotionById.get(approvalFlow.record.promotionId)?.name ?? "la promoción",
+            }}
+            onClose={cancelApproval}
+            onConfirm={confirmTermsAndApprove}
+          />
         </>
       )}
 
@@ -987,6 +1231,8 @@ function RegistroDetail({
   onReject,
   onRevert,
   onDismissMatch,
+  onReschedule,
+  onCancelVisit,
   onBack,
   viewerIsAgency = false,
 }: {
@@ -1000,6 +1246,9 @@ function RegistroDetail({
   /** Callback cuando el promotor pulsa "No es duplicado" · solo
    *  disponible para el promotor (no para agencia). */
   onDismissMatch?: () => void;
+  /** Callbacks de gestión de visita (preregistro_activo). */
+  onReschedule?: (payload: { newDate: string; newTime: string; note?: string }) => void;
+  onCancelVisit?: (payload: { outcome: VisitOutcome; note?: string }) => void;
   onBack: () => void;
   /** La agencia ve sus registros pero NO decide sobre ellos — eso
    *  es competencia del promotor. Oculta el pie de Aprobar/Rechazar. */
@@ -1007,6 +1256,17 @@ function RegistroDetail({
 }) {
   const level = getMatchLevel(record.matchPercentage);
   const canDecide = !viewerIsAgency && record.estado === "pendiente";
+
+  /* State local de los diálogos de visita (Bloque A). */
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [cancelVisitOpen, setCancelVisitOpen] = useState(false);
+
+  /* Bloque B · caducidad client-side · resuelve si el preregistro
+     está dentro/fuera de plazo. UI hint hasta que el cron backend
+     exista (default 30d si la promo no declara `validezRegistroDias`).
+     TODO(backend): sustituir el `undefined` por
+     `promotion.validezRegistroDias` cuando se cablee al modelo real. */
+  const expiryStatus = getExpiryStatus(record, undefined);
 
   // Agente que envió el registro · preferir audit.actor (huella real),
   // fallback al contacto principal de la agencia.
@@ -1119,11 +1379,34 @@ function RegistroDetail({
        *  promotor). La agencia entrante NO debe verlos · son datos de
        *  otro tenant. Para la agencia mostramos un aviso mínimo abajo. */}
       {!viewerIsAgency && record.matchPercentage > 0 && (
-        <div className="px-4 sm:px-6 mt-4">
+        <div className="px-4 sm:px-6 mt-4 space-y-3">
           <DuplicateResult
             record={record}
             onDismissMatch={canDecide ? onDismissMatch : undefined}
           />
+          {/* Bloque H · contexto enriquecido · histórico de orígenes
+              del Contact existente + estado de actividad de la
+              atribución previa. Solo si el cliente está en CRM. */}
+          <DuplicateContext record={record} />
+        </div>
+      )}
+
+      {/* Bloque H · si el override ya se ha aplicado en este registro,
+          mostrar la nota visible al promotor (queda en histórico). */}
+      {!viewerIsAgency && record.overrideNote && (
+        <div className="mx-4 sm:mx-6 mt-3 rounded-xl border border-warning/30 bg-warning/10 px-3.5 py-3 flex items-start gap-2.5">
+          <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-warning leading-tight">
+              Override aplicado
+            </p>
+            <p className="text-[12px] text-foreground mt-1 leading-relaxed">
+              {record.overrideNote}
+            </p>
+            <p className="text-[10.5px] text-muted-foreground mt-1">
+              Aprobado a pesar de match {record.matchPercentage}% · queda en historial cross-empresa.
+            </p>
+          </div>
         </div>
       )}
 
@@ -1183,34 +1466,104 @@ function RegistroDetail({
           agencia entiendan que este NO es un registro definitivo · es
           un preregistro pendiente de visita realizada. */}
       {record.estado === "preregistro_activo" && (
-        <div className="mx-4 sm:mx-6 mt-4 rounded-xl border-2 border-warning/40 bg-warning/15 dark:bg-warning/10 p-4 flex items-start gap-3">
-          <div className="h-10 w-10 rounded-xl bg-warning/25 grid place-items-center text-warning shrink-0">
-            <Eye className="h-5 w-5" strokeWidth={2} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-[11px] uppercase tracking-[0.14em] font-bold text-warning">
-                Preregistro · pendiente de visita
-              </p>
+        <div className="mx-4 sm:mx-6 mt-4 rounded-xl border-2 border-warning/40 bg-warning/15 dark:bg-warning/10 p-4 flex flex-col gap-3">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-xl bg-warning/25 grid place-items-center text-warning shrink-0">
+              <Eye className="h-5 w-5" strokeWidth={2} />
             </div>
-            <p className="text-[13px] font-semibold text-foreground mt-1 leading-snug">
-              Este NO es un registro definitivo todavía
-            </p>
-            <p className="text-[11.5px] text-foreground/80 mt-1 leading-relaxed">
-              {viewerIsAgency
-                ? "Tu cliente queda reservado a tu nombre. Se confirmará como registro definitivo cuando se marque la visita como realizada · si el plazo expira sin visita, el cliente queda libre."
-                : "El cliente queda reservado a la agencia colaboradora. Se confirmará automáticamente cuando se marque la visita como realizada · si el plazo expira sin visita, el cliente queda libre."}
-            </p>
-            {record.visitDate && (
-              <p className="text-[11.5px] text-warning font-semibold mt-2 inline-flex items-center gap-1.5">
-                <Clock className="h-3 w-3" />
-                Visita programada el{" "}
-                {new Date(record.visitDate).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}
-                {record.visitTime && ` · ${record.visitTime}h`}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-[11px] uppercase tracking-[0.14em] font-bold text-warning">
+                  Preregistro · pendiente de visita
+                </p>
+              </div>
+              <p className="text-[13px] font-semibold text-foreground mt-1 leading-snug">
+                Este NO es un registro definitivo todavía
               </p>
-            )}
+              <p className="text-[11.5px] text-foreground/80 mt-1 leading-relaxed">
+                {viewerIsAgency
+                  ? "Tu cliente queda reservado a tu nombre. Se confirmará como registro definitivo cuando se marque la visita como realizada · si el plazo expira sin visita, el cliente queda libre."
+                  : "El cliente queda reservado a la agencia colaboradora. Se confirmará automáticamente cuando se marque la visita como realizada · si el plazo expira sin visita, el cliente queda libre."}
+              </p>
+              {record.visitDate && (
+                <p className="text-[11.5px] text-warning font-semibold mt-2 inline-flex items-center gap-1.5">
+                  <Clock className="h-3 w-3" />
+                  Visita programada el{" "}
+                  {new Date(record.visitDate).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}
+                  {record.visitTime && ` · ${record.visitTime}h`}
+                </p>
+              )}
+              {/* Bloque B · alerta near-expiry · 48h antes de caducar. */}
+              {(expiryStatus.nearExpiry || expiryStatus.expired) && (
+                <p className={cn(
+                  "text-[11.5px] font-semibold mt-2 inline-flex items-center gap-1.5",
+                  expiryStatus.expired ? "text-destructive" : "text-warning",
+                )}>
+                  <AlertTriangle className="h-3 w-3" />
+                  {expiryStatus.expired
+                    ? `${expiryStatus.reason} · será marcado como caducado`
+                    : expiryStatus.reason}
+                </p>
+              )}
+            </div>
           </div>
+
+          {/* Acciones de visita · Bloque A. Disponibles para agencia
+              owner del registro y para promotor de la promoción. */}
+          {(onReschedule || onCancelVisit) && (
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-warning/25">
+              {onReschedule && (
+                <button
+                  type="button"
+                  onClick={() => setRescheduleOpen(true)}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-card border border-border text-[12px] font-medium hover:bg-muted transition-colors"
+                >
+                  <Clock className="h-3.5 w-3.5" />
+                  Cambiar fecha
+                </button>
+              )}
+              {onCancelVisit && (
+                <button
+                  type="button"
+                  onClick={() => setCancelVisitOpen(true)}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-card border border-border text-[12px] font-medium hover:bg-destructive/5 hover:text-destructive hover:border-destructive/30 transition-colors"
+                >
+                  <XCircle className="h-3.5 w-3.5" />
+                  Cancelar visita
+                </button>
+              )}
+              <span className="ml-auto text-[10.5px] text-warning/80 tabular-nums">
+                Reprogramaciones: {record.reprogramacionesCount ?? 0}/2
+              </span>
+            </div>
+          )}
         </div>
+      )}
+
+      {/* Diálogos de gestión de visita (Bloque A). */}
+      {onReschedule && (
+        <RescheduleVisitDialog
+          open={rescheduleOpen}
+          onClose={() => setRescheduleOpen(false)}
+          currentDate={record.visitDate}
+          currentTime={record.visitTime}
+          reprogramacionesCount={record.reprogramacionesCount ?? 0}
+          onConfirm={onReschedule}
+        />
+      )}
+      {onCancelVisit && !viewerIsAgency && (
+        <CancelVisitPromoterDialog
+          open={cancelVisitOpen}
+          onClose={() => setCancelVisitOpen(false)}
+          onConfirm={onCancelVisit}
+        />
+      )}
+      {onCancelVisit && viewerIsAgency && (
+        <CancelVisitAgencyDialog
+          open={cancelVisitOpen}
+          onClose={() => setCancelVisitOpen(false)}
+          onConfirm={onCancelVisit}
+        />
       )}
 
       {/* Visita propuesta — solo si tipo === registration_visit */}
@@ -1480,23 +1833,39 @@ function DecisionFooter({
 function DecidedStatus({ record }: { record: Registro }) {
   const isAprobado = record.estado === "aprobado";
   const isPreregistro = record.estado === "preregistro_activo";
+  const isCaducado = record.estado === "caducado";
   const ago = record.decidedAt ? relativeDate(record.decidedAt) : "";
 
-  /* Tres estilos posibles según el estado final */
+  /* Cuatro estilos según estado final · aprobado / preregistro / caducado / rechazado. */
   const styles = isAprobado
     ? { container: "bg-success/10 border border-success/25", iconWrap: "bg-success/15 text-success", text: "text-success" }
     : isPreregistro
     ? { container: "bg-warning/15 border border-warning/30", iconWrap: "bg-warning/20 text-warning", text: "text-warning" }
+    : isCaducado
+    ? { container: "bg-muted border border-border", iconWrap: "bg-muted-foreground/15 text-muted-foreground", text: "text-muted-foreground" }
     : { container: "bg-muted border border-border", iconWrap: "bg-muted-foreground/15 text-muted-foreground", text: "text-foreground" };
 
   const Icon = isAprobado ? CheckCircle2 : isPreregistro ? Eye : XCircle;
+  const outcomeLabel = record.visitOutcome
+    ? ({
+        realizada:           "visita realizada",
+        no_show_cliente:     "el cliente desistió",
+        cancelada_agencia:   "cancelada por la agencia",
+        cancelada_promotor:  "cancelada por el promotor",
+        reprogramada:        "reprogramada",
+      } as const)[record.visitOutcome]
+    : null;
   const titleText = isAprobado
     ? "Aprobado · agencia notificada"
     : isPreregistro
     ? "Preregistro activo · esperando visita"
+    : isCaducado
+    ? `Caducado · cliente liberado${outcomeLabel ? ` (${outcomeLabel})` : ""}`
     : "Rechazado · agencia notificada";
   const subText = isPreregistro
     ? "Se confirmará como registro al marcar la visita como realizada · 5 min para revertir."
+    : isCaducado
+    ? `${record.visitNote ? `Motivo: ${record.visitNote} · ` : ""}cualquier agencia puede registrar al cliente.`
     : ago
       ? `Decisión ${ago} · ya no se puede revertir`
       : "";

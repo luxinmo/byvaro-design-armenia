@@ -25,6 +25,27 @@ export type ContactSourceType =
   | "import"; // importado de Excel/CSV
 
 /**
+ * Actividad agregada por party · una entrada por organización (agencia,
+ * developer, owner) que ha tenido algún touchpoint con el cliente.
+ * Phase 2 · habilita la regla "atribución débil tras 45 días sin
+ * actividad". Ver `docs/registration-generic-model.md §3`.
+ *
+ * El array es append-once por party · si una org toca al cliente
+ * varias veces, se ACTUALIZA su entry (no se duplica).
+ */
+export type PartyActivity = {
+  partyId: string;          // organizationId
+  partyKind: "developer" | "agency" | "owner";
+  partyLabel: string;       // cacheado para UI
+  lastActivityAt: string;   // ISO
+  lastActivityType: ContactTimelineEventType;
+  /** Total de eventos relevantes con esta party. */
+  activityCount: number;
+  /** Primera vez que esta party tocó al cliente. */
+  firstActivityAt: string;
+};
+
+/**
  * Origen acumulativo de un Contact · cada vez que el contacto vuelve
  * por un canal nuevo (portal, microsite, agencia…) se añade un entry
  * a `Contact.origins[]`. NUNCA se sobrescribe.
@@ -111,8 +132,13 @@ export type Contact = {
   /** ISO timestamp de la última actividad relevante con el contacto.
    *  Único punto de mutación: `recordActivity()` en
    *  `src/lib/contactActivity.ts`. NUNCA se retrocede.
-   *  Phase 1 · uno solo (global). Per-party tracking es Phase 2. */
+   *  Mantenemos como agregado global · `partyActivities[]` per-party
+   *  (Phase 2) ofrece detalle. */
   lastActivityAt: string;
+  /** Phase 2 · actividad per-party · habilita regla 45d de inactividad.
+   *  Append-once por `partyId` · `recordActivityForParty()` actualiza
+   *  el entry existente. Ver `docs/registration-generic-model.md §3`. */
+  partyActivities?: PartyActivity[];
   /** Fecha de alta legible: "12 mar 2026". */
   firstSeen: string;
   /** Cuántas oportunidades activas tiene (visitas/ofertas en curso). */

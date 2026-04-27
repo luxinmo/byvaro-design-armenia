@@ -1769,9 +1769,139 @@ adelante").
 
 ---
 
+## 13 · Visita · reprogramar / cancelar / completar (Phase 2 frontend mock)
+
+Spec del flujo para gestionar la visita asociada a un Registro en
+estado `preregistro_activo`. El frontend ya implementa la UI completa
+con mocks · este bloque define los endpoints reales.
+
+### 13.1 · Modelo extendido
+
+```sql
+alter type registro_estado add value 'caducado';
+-- preregistro_activo cuya visita fue cancelada o cuyo plazo expiró.
+
+create type visit_outcome as enum (
+  'realizada',
+  'no_show_cliente',
+  'cancelada_agencia',
+  'cancelada_promotor',
+  'reprogramada'
+);
+
+alter table registrations add column visit_outcome visit_outcome;
+alter table registrations add column visit_outcome_at timestamptz;
+alter table registrations add column visit_note text;
+alter table registrations add column reprogramaciones_count int not null default 0;
+```
+
+### 13.2 · Endpoints
+
+```http
+POST /api/registrations/:id/visit/reschedule
+  body: { newDate, newTime, note? }
+  → 200 { reprogramacionesCount, visitDate, visitTime }
+  → 422 { code: "max_reprogramaciones_exceeded", limit: 2 }
+  Permission: agencyId del registro O developerId de la promo · admin role.
+  Side effects:
+    · UPDATE registrations SET visit_date, visit_time,
+      reprogramaciones_count = reprogramaciones_count + 1,
+      visit_outcome = 'reprogramada', visit_outcome_at = now()
+      WHERE id = $1 AND reprogramaciones_count < 2
+    · INSERT calendar_event update + companyEvent log
+
+POST /api/registrations/:id/visit/cancel
+  body: { outcome: "no_show_cliente"|"cancelada_agencia"|"cancelada_promotor", note? }
+  → 200 { estado: "caducado", visitOutcome, visitOutcomeAt }
+  → 403 si el outcome no es permitido para el rol del caller
+       (agency: solo no_show_cliente | cancelada_agencia)
+       (developer: solo cancelada_promotor)
+  Side effects:
+    · UPDATE registrations SET estado = 'caducado',
+      visit_outcome = $2, visit_outcome_at = now(), visit_note = $3
+    · UPDATE calendar_events SET status = 'cancelled' WHERE registro_id = $1
+    · INSERT companyEvent (cross-empresa log)
+    · Si outcome === 'cancelada_agencia' · increment penalty counter
+      en agency_track_record (track quality del promotor)
+    · Notificar al lado opuesto (in-app + email)
+
+POST /api/registrations/:id/visit/complete
+  body: { rating?, feedback? }
+  → 200 { estado: "aprobado", visitOutcome: "realizada" }
+  Permission: agencyId del registro (es quien marca la visita).
+  Side effects:
+    · UPDATE registrations SET estado = 'aprobado',
+      visit_outcome = 'realizada', visit_outcome_at = now()
+      WHERE id = $1 AND estado = 'preregistro_activo'
+    · UPDATE calendar_events SET status = 'completed'
+    · upsertContactFromRegistro (formaliza el contacto en CRM)
+    · Notificar al promotor: "Visita realizada · cliente registrado"
+```
+
+### 13.3 · Reglas de prioridad afectadas
+
+Al transitar a `caducado`, el cliente queda libre y puede ser registrado
+de nuevo. `findPendingDuplicate` server-side debe excluir `caducado` del
+filtro (igual que el frontend mock ya hace · `registrosStorage.ts:69`).
+
+```sql
+-- Cuando una agencia intenta registrar a un cliente, bloquear con
+-- duplicado solo si hay match en estos estados:
+select id from registrations
+  where promotion_id = $1
+    and estado in ('pendiente', 'preregistro_activo')
+    and (normalize_email(cliente_email) = normalize_email($2)
+         or normalize_phone(cliente_phone) = normalize_phone($3))
+  limit 1;
+```
+
+### 13.4 · Track record agencia
+
+El outcome `cancelada_agencia` impacta en la métrica de calidad de
+cancelaciones que el promotor ve junto al nombre de la agencia
+(`<AgencyTrackPill>` en lista de registros). Phase 2 backend:
+
+```sql
+create or replace view agency_track_record as
+select
+  agency_id,
+  count(*) filter (where estado = 'aprobado')             as aprobados,
+  count(*) filter (where estado = 'rechazado')            as rechazados,
+  count(*) filter (where estado = 'duplicado')            as duplicados,
+  count(*) filter (where visit_outcome = 'cancelada_agencia') as cancelaciones,
+  count(*) as total
+from registrations
+group by agency_id;
+```
+
+### 13.5 · Notificaciones cross-empresa
+
+Eventos a emitir en cada acción · siguiendo la matriz de
+`docs/registration-system.md §5`:
+
+| Acción | Recipient | Evento | Canal |
+|---|---|---|---|
+| Reprograma agencia | promotor | `visit.rescheduled_by_agency` | in-app |
+| Reprograma promotor | agencia | `visit.rescheduled_by_developer` | in-app + email |
+| Cancela agencia | promotor | `visit.cancelled_by_agency` | in-app |
+| Cancela promotor | agencia | `visit.cancelled_by_developer` | in-app + email (con motivo) |
+| Visita realizada | promotor | `visit.completed` | in-app + digest |
+
+### 13.6 · Referencias frontend
+
+- `src/components/registros/VisitActionDialogs.tsx` · 3 dialogs.
+- `src/pages/Registros.tsx::rescheduleVisit/cancelVisit` · handlers locales.
+- `src/data/records.ts` · `RegistroEstado += "caducado"`, `VisitOutcome` enum.
+- Banner preregistro con botones "Cambiar fecha" / "Cancelar visita".
+
+---
+
 ## Historial de cambios
 
 | Fecha | Cambio |
 |---|---|
 | 2026-04-22 | Documento creado — consolida todos los `TODO(backend)` existentes. |
 | 2026-04-25 | §12 · Plan & paywall Fase 1 (validación promotor 249€/mes). |
+| 2026-04-27 | §13 · Visita reprogramar/cancelar/completar + estado `caducado` (Phase 2 frontend mock implementado · backend pendiente). |
+| 2026-04-27 | Phase 2 frontend bloques A-G implementados: visit cancellation, expiry client-side, match score, T&C dialog, Party model, per-party activity, in-app notifications. Backend pendiente para todos. |
+| 2026-04-27 | Phase 2 frontend Bloque H: Conflict resolution UI enriquecido (DuplicateContext + OverrideConfirmDialog). `Registro.overrideNote/At/ByUserId` campos nuevos. Backend pendiente: persistir en companyEvent log cross-empresa para auditar disputas de comisión. |
