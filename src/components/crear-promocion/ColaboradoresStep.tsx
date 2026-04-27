@@ -290,14 +290,86 @@ export function ColaboradoresStep({
           </div>
         </div>
 
-        {/* Copy comercial · ciclo del registro */}
-        <div className="rounded-lg bg-primary/5 border border-primary/15 px-4 py-3 flex items-start gap-2.5">
-          <HandshakeIcon className="h-4 w-4 text-primary shrink-0 mt-0.5" strokeWidth={1.5} />
-          <div className="text-[11px] text-foreground leading-relaxed">
-            <p className="font-medium text-foreground mb-0.5">Así funciona el registro</p>
-            <p className="text-muted-foreground">
-              El cliente queda como <span className="text-foreground font-medium">preregistro</span> reservado a nombre del colaborador. La reserva se confirma <span className="text-foreground font-medium">definitivamente tras la primera visita</span>. Mientras tanto, ningún otro colaborador puede registrar al mismo cliente.
-            </p>
+        {/* Modo de validación del registro · radios "directo" vs "por_visita".
+            TODO(logic): el flag se persiste en `WizardState.modoValidacionRegistro`
+            y en `Promotion`, pero la lógica que actúa sobre él (transición
+            preregistro_activo → aprobado tras visita realizada) NO está
+            implementada todavía. Hoy `Registros.tsx::approve()` formaliza
+            todo registro al instante. Ver `docs/registration-system.md §2`. */}
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            <HandshakeIcon className="h-3.5 w-3.5 text-primary" strokeWidth={1.75} />
+            Modo de validación
+          </div>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {([
+              {
+                value: "por_visita" as const,
+                label: "Tras la visita",
+                recommended: true,
+                desc: "El cliente queda como preregistro reservado a nombre del colaborador · se confirma tras la primera visita realizada.",
+              },
+              {
+                value: "directo" as const,
+                label: "Directo al aprobar",
+                recommended: false,
+                desc: "El cliente queda formalmente registrado al aprobar · sin condicionar a visita.",
+              },
+            ]).map((opt) => {
+              const active = state.modoValidacionRegistro === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => update("modoValidacionRegistro", opt.value)}
+                  className={cn(
+                    "text-left rounded-lg border px-3.5 py-3 transition-colors",
+                    active ? "border-primary bg-primary/5" : "border-border hover:border-primary/30",
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className={cn(
+                      "h-4 w-4 rounded-full border-2 shrink-0 grid place-items-center",
+                      active ? "border-primary" : "border-muted-foreground/30",
+                    )}>
+                      {active && <div className="h-2 w-2 rounded-full bg-primary" />}
+                    </div>
+                    <span className="text-xs font-semibold text-foreground">{opt.label}</span>
+                    {opt.recommended && (
+                      <span className="ml-auto text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                        Recomendado
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10.5px] text-muted-foreground leading-relaxed mt-1.5">
+                    {opt.desc}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Copy explicativa contextual · cambia según el modo elegido. */}
+          <div className="rounded-lg bg-primary/5 border border-primary/15 px-4 py-3 flex items-start gap-2.5">
+            <HandshakeIcon className="h-4 w-4 text-primary shrink-0 mt-0.5" strokeWidth={1.5} />
+            <div className="text-[11px] text-foreground leading-relaxed">
+              <p className="font-medium text-foreground mb-0.5">
+                {state.modoValidacionRegistro === "por_visita"
+                  ? "Así funciona el preregistro"
+                  : "Así funciona el registro directo"}
+              </p>
+              <p className="text-muted-foreground">
+                {state.modoValidacionRegistro === "por_visita" ? (
+                  <>
+                    El cliente queda como <span className="text-foreground font-medium">preregistro</span> reservado a nombre del colaborador. La reserva se confirma <span className="text-foreground font-medium">definitivamente tras la primera visita</span>. Mientras tanto, ningún otro colaborador puede registrar al mismo cliente.
+                  </>
+                ) : (
+                  <>
+                    El cliente queda <span className="text-foreground font-medium">formalmente registrado</span> al aprobar el promotor, sin esperar visita. Recomendado solo si la operativa de la promoción no requiere visita previa para confirmar la atribución.
+                  </>
+                )}
+              </p>
+            </div>
           </div>
         </div>
 

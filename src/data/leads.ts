@@ -66,11 +66,13 @@ export type LeadInterest = {
 
 export type Lead = {
   id: string;
-  /** Referencia pública de la oportunidad · `OPP-0001`. Autogen en
-   *  entrada, nunca cambia, única por workspace. Se muestra en header
-   *  de la ficha y en la fila del listado — sirve para mencionarla
-   *  en emails/llamadas. */
-  reference: string;
+  /** @deprecated Usar `publicRef`. Alias derivado durante migración. */
+  reference?: string;
+  /** Referencia pública de la oportunidad · formato `opXXXXXX` (lead
+   *  y oportunidad comparten ref · son la misma entidad en distintas
+   *  fases). Inmutable, única por organización. Uso humano solo.
+   *  Ver `docs/public-references-audit.md`. */
+  publicRef: string;
   fullName: string;
   email: string;
   phone: string;
@@ -131,7 +133,21 @@ export const leadStatusConfig: Record<LeadStatus, { label: string; order: number
 /** Helper: resta N días/horas al momento actual en ISO. */
 const hoursAgo = (h: number) => new Date(Date.now() - h * 60 * 60 * 1000).toISOString();
 
-export const leads: Lead[] = [
+import { migrateLegacyRef } from "@/lib/publicRef";
+
+/* Backfill · cada Lead seed se escribe con `reference: "OPP-NNNN"`
+ * (legacy) y se enriquece con `publicRef: "opNNNNNN"` mediante el
+ * wrapper · evita reescribir 12 entries a mano. */
+type LegacyLeadSeed = Omit<Lead, "publicRef">;
+
+function enrichLegacyLeadSeed(seed: LegacyLeadSeed, idx: number): Lead {
+  return {
+    ...seed,
+    publicRef: migrateLegacyRef(seed.reference) ?? `op${String(idx + 1).padStart(6, "0")}`,
+  };
+}
+
+const RAW_LEADS: LegacyLeadSeed[] = [
   {
     id: "lead-1",
     reference: "OPP-0001",
@@ -390,3 +406,7 @@ export const leads: Lead[] = [
     createdAt: hoursAgo(4),
   },
 ];
+
+/** Export final · cada lead enriquecido con `publicRef`. El campo
+ *  legacy `reference` se mantiene por retrocompat hasta purgar. */
+export const leads: Lead[] = RAW_LEADS.map(enrichLegacyLeadSeed);

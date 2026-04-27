@@ -29,6 +29,7 @@ import { defaultWizardState } from "@/components/crear-promocion/types";
 import { canPublishWizard } from "@/lib/publicationRequirements"; // valida requisitos (fotos, unidades, plan pagos, ubicación, entrega, estado, comisiones)
 import { saveDraft as persistDraft, getDraft, deleteDraft } from "@/lib/promotionDrafts";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { useUsageGuard } from "@/lib/usageGuard";
 import {
   roleOptions, tipoOptions, subUniOptions, subVariasOptions,
   estadoOptions, faseConstruccionOptions, estiloViviendaOptions,
@@ -141,6 +142,10 @@ function hasPublishMinimums(s: WizardState): boolean {
 export default function CrearPromocion() {
   const navigate = useNavigate();
   const confirm = useConfirm();
+  /* Paywall · Fase 1 · Bloquea la publicación si el plan trial ya
+     tiene 2 promociones activas. Borrador y guardado siguen libres
+     para no dejar trabajo perdido. */
+  const createGuard = useUsageGuard("createPromotion");
   const [searchParams] = useSearchParams();
   const draftIdParam = searchParams.get("draft");
   // Carga inicial · prioridad: draft del query param > legacy migración > default
@@ -384,6 +389,19 @@ export default function CrearPromocion() {
       // Publicación final del wizard (llegamos aquí desde el paso
       // "revision" con `canPublishWizard(state) === true`).
       //
+      // Paywall guard · Fase 1: si el plan está en `trial` y ya hay
+      // 2 promociones activas, bloqueamos la publicación y abrimos el
+      // UpgradeModal. El borrador NO se borra · queda en "incompletas"
+      // para que el promotor lo retome al suscribirse.
+      // TODO(backend): el endpoint POST /api/promociones devolverá
+      //   402 Payment Required con `{ trigger, used, limit }` cuando
+      //   se llegue al tope · la UI lee ese payload y abre el mismo
+      //   modal con la copy correspondiente.
+      if (createGuard.blocked) {
+        flushSave();
+        createGuard.openUpgrade();
+        return;
+      }
       // TODO(backend): POST /api/promociones con WizardState (shape
       //   completo) → { id: string, code: string }. Ver
       //   docs/backend-integration.md §3 "Promociones · Endpoints".

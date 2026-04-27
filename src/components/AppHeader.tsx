@@ -1,6 +1,7 @@
 import { Bell, Home, Search } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { AccountSwitcher } from "./AccountSwitcher";
+import { UsagePill } from "./paywall/UsagePill";
 
 /**
  * Header global (desktop).
@@ -40,6 +41,8 @@ export function AppHeader() {
 
       {/* Utilidades · selector de vista (mock) + ⌘K global + notificaciones */}
       <div className="flex items-center gap-1.5">
+        {/* Paywall · pill ámbar cuando trial llega ≥80% de algún tope. */}
+        <UsagePill />
         <AccountSwitcher />
         <button
           className="inline-flex items-center gap-2 h-7 pl-2.5 pr-1.5 rounded-full border border-border bg-card text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors text-xs"

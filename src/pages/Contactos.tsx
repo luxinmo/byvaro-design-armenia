@@ -37,6 +37,9 @@ import {
   TAG_COLOR_PALETTE, nextTagId,
 } from "@/components/contacts/tagsStorage";
 import type { Contact, ContactTag, TagScope } from "@/components/contacts/types";
+import { PublicRefBadge } from "@/components/ui/PublicRefBadge";
+import { OriginsPill } from "@/components/contacts/OriginsPill";
+import { ActivityFreshness } from "@/components/contacts/ActivityFreshness";
 import { useCurrentUser, isAdmin } from "@/lib/currentUser";
 import { Flag } from "@/components/ui/Flag";
 
@@ -716,10 +719,8 @@ function ContactRow({
           {contact.nationalityIso && (
             <Flag iso={contact.nationalityIso} size={12} className="shrink-0" title={contact.nationality} />
           )}
-          {contact.reference && (
-            <span className="text-[10px] font-mono text-muted-foreground/70 tnum shrink-0 hidden sm:inline">
-              <Highlight text={contact.reference} query={query} />
-            </span>
+          {contact.publicRef && (
+            <PublicRefBadge value={contact.publicRef} size="sm" copyable={false} className="hidden sm:inline-flex" />
           )}
           {contact.status === "converted" && (
             <span className="text-[10px] font-semibold text-success shrink-0">
@@ -744,12 +745,10 @@ function ContactRow({
             </span>
           )}
 
-          {contact.source && (
+          {contact.origins && contact.origins.length > 0 && (
             <>
               <span className="h-3 w-px bg-border mx-0.5 hidden sm:block" />
-              <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded px-1.5 py-0.5 hidden sm:inline-flex">
-                <Highlight text={contact.source} query={query} />
-              </span>
+              <OriginsPill contact={contact} className="hidden sm:inline-flex" />
             </>
           )}
 
@@ -788,9 +787,9 @@ function ContactRow({
         </div>
       </div>
 
-      {/* Right side */}
+      {/* Right side · freshness pill colored según días sin actividad */}
       <div className="flex flex-col items-end gap-1 shrink-0">
-        <span className="text-[10px] text-muted-foreground/60">{contact.lastActivity}</span>
+        <ActivityFreshness lastActivityAt={contact.lastActivityAt} />
         {contact.activeOpportunities > 0 && (
           <span className="h-2 w-2 rounded-full bg-primary" />
         )}

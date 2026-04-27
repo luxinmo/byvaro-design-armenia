@@ -11,6 +11,7 @@
  */
 
 import type { Contact } from "./types";
+import { generatePublicRef } from "@/lib/publicRef";
 
 const KEY = "byvaro.contacts.created.v1";
 
@@ -38,19 +39,14 @@ export function removeCreatedContact(id: string): void {
 }
 
 /**
- * Calcula la siguiente referencia disponible tipo "CON-NNNN" mirando
- * todas las referencias existentes (seed + importados + creados).
+ * Calcula la siguiente referencia disponible (`coXXXXXX`) escaneando
+ * todas las publicRef existentes. Reemplaza al legacy `CON-NNNN`.
+ *
+ * Mantiene el nombre `nextContactReference` por compatibilidad con
+ * call-sites · ahora delega en `generatePublicRef("contact", ...)`.
  */
 export function nextContactReference(existingContacts: Contact[]): string {
-  let max = 0;
-  for (const c of existingContacts) {
-    const m = c.reference?.match(/^CON-(\d+)$/);
-    if (m) {
-      const n = parseInt(m[1], 10);
-      if (n > max) max = n;
-    }
-  }
-  return `CON-${String(max + 1).padStart(4, "0")}`;
+  return generatePublicRef("contact", existingContacts);
 }
 
 /**

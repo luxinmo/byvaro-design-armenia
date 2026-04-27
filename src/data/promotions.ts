@@ -1,6 +1,8 @@
 export type PromotionStatus = "active" | "incomplete" | "inactive" | "sold-out";
 export type BuildingType = "plurifamiliar" | "unifamiliar-single" | "unifamiliar-multiple";
 
+import type { ModoValidacionRegistro } from "@/components/crear-promocion/types";
+
 export type Promotion = {
   id: string;
   code: string;
@@ -31,6 +33,11 @@ export type Promotion = {
     visits: number;
     trend: number;
   };
+  /** Modo de validación · `directo` o `por_visita`. Si falta, asumir
+   *  `por_visita` (alineado con la copy histórica del wizard que
+   *  prometía preregistro tras visita). Ver `WizardState.modoValidacionRegistro`
+   *  y `docs/registration-system.md §2`. */
+  modoValidacionRegistro?: ModoValidacionRegistro;
 };
 
 export function getBuildingTypeLabel(type?: BuildingType): string | null {

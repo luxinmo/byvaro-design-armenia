@@ -62,3 +62,50 @@ export const NATIONALITIES: { code: string; label: string; flag: string }[] = [
   { code: "VN", label: "Vietnamese", flag: "🇻🇳" },
   { code: "ZA", label: "South African", flag: "🇿🇦" },
 ];
+
+/**
+ * Resuelve la bandera (emoji) y el código ISO a partir del nombre de
+ * nacionalidad (gentilicio en inglés o español · best-effort).
+ *
+ * Útil para enriquecer rendering de Registros donde `cliente.flag`
+ * llega vacío (registros antiguos o creados sin selector ENG).
+ *
+ * Devuelve `{ flag: undefined, iso: undefined }` si no encuentra match.
+ */
+const ALIASES_ES_TO_LABEL: Record<string, string> = {
+  "español": "Spanish", "española": "Spanish", "spanish": "Spanish",
+  "francés": "French", "francesa": "French",
+  "alemán": "German", "alemana": "German",
+  "italiano": "Italian", "italiana": "Italian",
+  "portugués": "Portuguese", "portuguesa": "Portuguese",
+  "inglés": "British", "inglesa": "British", "británico": "British", "británica": "British",
+  "estadounidense": "American", "americano": "American", "americana": "American",
+  "ruso": "Russian", "rusa": "Russian",
+  "marroquí": "Moroccan",
+  "argentino": "Argentinian", "argentina": "Argentinian",
+  "mexicano": "Mexican", "mexicana": "Mexican",
+  "chino": "Chinese", "china": "Chinese",
+  "holandés": "Dutch", "holandesa": "Dutch", "neerlandés": "Dutch", "neerlandesa": "Dutch",
+  "belga": "Belgian", "suizo": "Swiss", "suiza": "Swiss",
+};
+
+export function resolveNationality(input: string | undefined): {
+  flag: string | undefined;
+  iso: string | undefined;
+} {
+  if (!input) return { flag: undefined, iso: undefined };
+  const norm = input.trim().toLowerCase();
+  /* 1. Match directo · label inglés (forma canónica del catálogo). */
+  const direct = NATIONALITIES.find((n) => n.label.toLowerCase() === norm);
+  if (direct) return { flag: direct.flag, iso: direct.code };
+  /* 2. Match por código ISO. */
+  const byCode = NATIONALITIES.find((n) => n.code.toLowerCase() === norm);
+  if (byCode) return { flag: byCode.flag, iso: byCode.code };
+  /* 3. Match por alias español → label inglés. */
+  const aliasLabel = ALIASES_ES_TO_LABEL[norm];
+  if (aliasLabel) {
+    const found = NATIONALITIES.find((n) => n.label === aliasLabel);
+    if (found) return { flag: found.flag, iso: found.code };
+  }
+  return { flag: undefined, iso: undefined };
+}

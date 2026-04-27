@@ -108,8 +108,13 @@ export function CrossPromotionWarning({ record, className }: Props) {
                     to={`/registros?active=${h.registro.id}`}
                     className="flex items-center justify-between gap-2 text-[11.5px] text-foreground hover:text-destructive transition-colors py-1"
                   >
-                    <span className="truncate">
+                    <span className="truncate inline-flex items-center gap-1.5">
                       <span className="font-semibold">{h.promotionName}</span>
+                      {h.registro.publicRef && (
+                        <span className="font-mono tabular-nums text-[10px] text-muted-foreground">
+                          ({h.registro.publicRef})
+                        </span>
+                      )}
                       <span className="text-muted-foreground"> · coincide por {matchedLabel}{agencyNote}</span>
                     </span>
                     <ArrowUpRight className="h-3 w-3 shrink-0" strokeWidth={1.75} />

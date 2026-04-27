@@ -1671,8 +1671,107 @@ Cuando se añade una feature en frontend que requiera backend:
 
 ---
 
+## 12 · Plan & paywall (Fase 1 · validación 249€/mes)
+
+**Objetivo de fase**: monetizar promotores. Las agencias permanecen
+gratis. El backend solo necesita 4 endpoints + 1 webhook + validación
+en endpoints mutantes existentes.
+
+### 12.1 · Modelo
+
+```sql
+-- Tabla en la organización (workspace). Una fila por developer org.
+create table workspace_plan (
+  workspace_id  uuid primary key,
+  tier          text not null check (tier in ('trial','promoter_249')),
+  since         timestamptz not null default now(),
+  stripe_subscription_id text,
+  stripe_customer_id     text,
+  cancel_at_period_end   boolean default false
+);
+```
+
+### 12.2 · Endpoints
+
+```http
+GET /api/workspace/plan
+→ 200 { tier, since, expiresAt? }
+
+GET /api/workspace/usage
+→ 200 { activePromotions, invitedAgencies, registros }
+
+POST /api/workspace/plan/subscribe
+  body: { stripePriceId: "price_..." }
+→ 200 { tier: "promoter_249", since }   ← idempotente
+
+POST /api/workspace/plan/cancel
+→ 200 { tier: "trial", since }          ← cancela al final del período
+```
+
+### 12.3 · Enforcement en endpoints mutantes
+
+Los 3 endpoints siguientes **deben** validar el tier vigente y
+devolver **402 Payment Required** con `{ trigger, used, limit }`
+cuando se llegue al tope del plan trial:
+
+| Endpoint | Trigger | Límite trial | Límite promoter_249 |
+|---|---|---|---|
+| `POST /api/promociones` | `createPromotion` | 2 activas | 5 activas |
+| `POST /api/agencies/invite` | `inviteAgency` | 5 invitaciones | ∞ |
+| `POST /api/registros/:id/approve` | `acceptRegistro` | 40 registros | ∞ |
+
+**Nota crítica del counter `acceptRegistro`** · cuenta SOLO registros con `origen = 'collaborator'` (de agencias). Walk-ins del promotor (`origen = 'direct'`), portales (Idealista, Fotocasa…) y otras fuentes propias del promotor NO consumen cupo. SQL del counter:
+
+```sql
+select count(*)::int from registrations
+  where developer_organization_id = p_org
+    and origen = 'collaborator'
+```
+
+Ver `docs/portal-leads-integration.md` para detalle completo.
+
+El cliente lee el payload 402 y abre el `<UpgradeModal>` con la copy
+correspondiente al `trigger` (ya implementado en mock ·
+`src/lib/usageGuard.ts::openUpgradeModal`).
+
+### 12.4 · Webhooks Stripe
+
+- `customer.subscription.created` → escribe `tier="promoter_249"`.
+- `customer.subscription.deleted` → escribe `tier="trial"`.
+- `customer.subscription.updated` con `cancel_at_period_end=true` →
+  flag para banner "tu suscripción expira el {date}".
+- `invoice.payment_failed` → email al admin + paywall hard al día +3.
+
+### 12.5 · Tracking (analytics)
+
+Evento `paywall.shown` al abrir el modal. Payload:
+```json
+{ "trigger": "createPromotion|inviteAgency|acceptRegistro|near_limit",
+  "used": 40, "limit": 40, "tier": "trial",
+  "workspace_id": "...", "user_id": "..." }
+```
+
+Es la **métrica clave de validación** Fase 1. Rastrear también
+`paywall.subscribed` (CTA primario) y `paywall.dismissed` (CTA "Más
+adelante").
+
+### 12.6 · Referencias frontend
+
+- `src/lib/plan.ts` · `usePlan()`, `setPlan()`, `PLAN_LIMITS`.
+- `src/lib/usage.ts` · `useUsageCounters()`.
+- `src/lib/usageGuard.ts` · `useUsageGuard()`, `openUpgradeModal()`.
+- `src/lib/usagePressure.ts` · helper del pill ámbar (≥80%).
+- `src/components/paywall/UpgradeModal.tsx`, `UsagePill.tsx`.
+- `src/pages/CrearPromocion.tsx:393` · gate al publicar.
+- `src/components/empresa/InvitarAgenciaModal.tsx:65` · gate al invitar.
+- `src/pages/Registros.tsx:355` · gate al aprobar.
+- `docs/screens/ajustes-plan.md` · spec de la pantalla.
+
+---
+
 ## Historial de cambios
 
 | Fecha | Cambio |
 |---|---|
 | 2026-04-22 | Documento creado — consolida todos los `TODO(backend)` existentes. |
+| 2026-04-25 | §12 · Plan & paywall Fase 1 (validación promotor 249€/mes). |

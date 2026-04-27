@@ -19,6 +19,7 @@ import {
 import { useEmpresa } from "@/lib/empresa";
 import { cn } from "@/lib/utils";
 import { Flag } from "@/components/ui/Flag";
+import { useUsageGuard } from "@/lib/usageGuard";
 
 type Step = "datos" | "condiciones" | "preview";
 
@@ -39,6 +40,8 @@ const IDIOMAS = [
 export function InvitarAgenciaModal({ onClose }: { onClose: () => void }) {
   const { empresa } = useEmpresa();
   const { invitar } = useInvitaciones();
+  /* Paywall · Fase 1 · 5 invitaciones en trial. */
+  const inviteGuard = useUsageGuard("inviteAgency");
 
   const [step, setStep] = useState<Step>("datos");
   const [email, setEmail] = useState("");
@@ -54,6 +57,14 @@ export function InvitarAgenciaModal({ onClose }: { onClose: () => void }) {
   const next = () => {
     if (step === "datos") setStep("condiciones");
     else if (step === "condiciones") {
+      /* Paywall guard · si trial llegó al tope (5), abrimos modal y
+       *  cerramos este sin enviar. TODO(backend): el endpoint
+       *  POST /api/agencies/invite devolverá 402 con `{trigger,used,limit}`. */
+      if (inviteGuard.blocked) {
+        inviteGuard.openUpgrade();
+        onClose();
+        return;
+      }
       const inv = invitar({
         emailAgencia: email,
         nombreAgencia: nombre,

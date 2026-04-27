@@ -30,6 +30,9 @@ import {
 import type { Registro } from "@/data/records";
 import { agencies } from "@/data/agencies";
 import { promotions } from "@/data/promotions";
+import type { ContactOrigin } from "@/components/contacts/types";
+import { appendOrigin } from "@/lib/contactOrigins";
+import { recordActivity } from "@/lib/contactActivity";
 
 /* ══════ Helpers de normalización ══════════════════════════════════ */
 
@@ -88,8 +91,34 @@ export function upsertContactFromRegistro(
   const sourceLabel = agency?.name
     ?? (registro.origen === "direct" ? "Promotor directo" : "Agencia colaboradora");
 
-  /* ── Caso 1 · El contacto ya existe · solo añade evento. ── */
+  const nowIso = new Date().toISOString();
+  /* Origen estructurado del Registro · se usa en ambos paths (existente
+     y nuevo) para alimentar `Contact.origins[]` y `lastActivityAt`. */
+  const incomingOrigin: ContactOrigin = {
+    source: registro.origen === "collaborator" ? "agency" : "direct",
+    label: sourceLabel,
+    occurredAt: nowIso,
+    promotionId: registro.promotionId,
+    agencyId: registro.agencyId,
+    refId: registro.id,
+    refType: "registro",
+  };
+
+  /* ── Caso 1 · El contacto ya existe · acumula origen + actividad. ── */
   if (existing) {
+    /* Actualiza el Contact en su storage correspondiente con el nuevo
+       origen + lastActivityAt. Solo aplicamos a contactos creados
+       (los seeds e imported son read-only en mock). */
+    const created = loadCreatedContacts();
+    const idx = created.findIndex((c) => c.id === existing.id);
+    if (idx >= 0) {
+      const updated = recordActivity(
+        appendOrigin(created[idx], incomingOrigin),
+        "lead_entry",
+        nowIso,
+      );
+      saveCreatedContact(updated);
+    }
     recordTypeAny(
       existing.id,
       "lead_entry",
@@ -102,11 +131,11 @@ export function upsertContactFromRegistro(
 
   /* ── Caso 2 · Crear contacto skeleton. ── */
   const id = generateContactId(registro.cliente.nombre);
-  const reference = nextContactReference(all);
-  const nowIso = new Date().toISOString();
+  const publicRef = nextContactReference(all);
   const newContact: Contact = {
     id,
-    reference,
+    reference: publicRef, // alias legacy · derivado de publicRef
+    publicRef,
     kind: "individual",
     name: registro.cliente.nombre,
     email: registro.cliente.email,
@@ -114,8 +143,12 @@ export function upsertContactFromRegistro(
     flag: registro.cliente.flag,
     nationality: registro.cliente.nacionalidad,
     tags: [],
-    source: sourceLabel,
-    sourceType: "registration",
+    source: sourceLabel,             // legacy · alias de primarySource.label
+    sourceType: "registration",       // legacy
+    primarySource: incomingOrigin,    // ← canónico
+    latestSource: incomingOrigin,
+    origins: [incomingOrigin],
+    lastActivityAt: nowIso,
     status: "pending",
     lastActivity: "Hoy",
     firstSeen: new Date().toLocaleDateString("es-ES", {

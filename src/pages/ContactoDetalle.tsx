@@ -32,6 +32,9 @@ import { Button } from "@/components/ui/button";
 import { MOCK_CONTACTS } from "@/components/contacts/data";
 import { loadImportedContacts } from "@/components/contacts/importedStorage";
 import { loadCreatedContacts } from "@/components/contacts/createdContactsStorage";
+import { PublicRefBadge } from "@/components/ui/PublicRefBadge";
+import { OriginsList } from "@/components/contacts/OriginsList";
+import { ActivityFreshness } from "@/components/contacts/ActivityFreshness";
 import { loadDeletedContactIds, markContactDeleted } from "@/components/contacts/contactRelationsStorage";
 import { removeCreatedContact } from "@/components/contacts/createdContactsStorage";
 import { recordTypeAny } from "@/components/contacts/contactEventsStorage";
@@ -161,8 +164,8 @@ export default function ContactoDetalle() {
         </button>
 
         <div className="flex-1 min-w-0">
-          {/* Línea 1: nombre + bandera nacionalidad + estado */}
-          <div className="flex items-center gap-2">
+          {/* Línea 1: nombre + bandera nacionalidad + publicRef + freshness + estado */}
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-base sm:text-lg font-semibold tracking-tight text-foreground truncate">
               {detail.name}
             </h1>
@@ -174,6 +177,10 @@ export default function ContactoDetalle() {
                 title={detail.nationality}
               />
             )}
+            {detail.publicRef && (
+              <PublicRefBadge value={detail.publicRef} size="sm" />
+            )}
+            <ActivityFreshness lastActivityAt={detail.lastActivityAt} />
             {!isHot && (
               <span className={cn(
                 "inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-full shrink-0",
@@ -306,11 +313,18 @@ export default function ContactoDetalle() {
 
       {/* ══════ Contenido del tab ══════ */}
       {activeTab === "resumen" && (
-        <ContactSummaryTab
-          detail={detail}
-          onRefresh={() => setEditVersion((v) => v + 1)}
-          onOpenWhatsApp={() => setWhatsappOpen(true)}
-        />
+        <>
+          {/* Sección "Cómo nos conoció" · histórico de orígenes acumulados.
+              Solo se renderiza si hay datos; helper devuelve null si vacío. */}
+          <div className="mt-4 mb-5">
+            <OriginsList contact={baseContact} />
+          </div>
+          <ContactSummaryTab
+            detail={detail}
+            onRefresh={() => setEditVersion((v) => v + 1)}
+            onOpenWhatsApp={() => setWhatsappOpen(true)}
+          />
+        </>
       )}
       {activeTab === "historial" && <ContactHistoryTab detail={detail} />}
       {activeTab === "registros" && <ContactRecordsTab detail={detail} />}

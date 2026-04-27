@@ -223,7 +223,7 @@ export function EditContactDialog({ open, onOpenChange, detail, onSaved, onCreat
       /* Crear un Contact nuevo y persistirlo en createdContactsStorage. */
       const edits = formToEdits(form);
       const universe = [...MOCK_CONTACTS, ...loadImportedContacts(), ...loadCreatedContacts()];
-      const reference = nextContactReference(universe);
+      const publicRef = nextContactReference(universe);
       const displayName = form.kind === "individual"
         ? form.name.trim()
         : form.companyName.trim();
@@ -231,9 +231,18 @@ export function EditContactDialog({ open, onOpenChange, detail, onSaved, onCreat
       const todayHuman = new Date().toLocaleDateString("es-ES", {
         day: "numeric", month: "short", year: "numeric",
       });
+      const nowIso = new Date().toISOString();
+      /* Origen estructurado · entrada manual desde el form de creación. */
+      const manualOrigin = {
+        source: "direct" as const,
+        label: edits.source ?? "Direct",
+        occurredAt: nowIso,
+        refType: "manual" as const,
+      };
       const newContact: Contact = {
         id,
-        reference,
+        reference: publicRef, // alias legacy
+        publicRef,
         kind: form.kind,
         companyName: edits.companyName,
         tradeName: edits.tradeName,
@@ -246,6 +255,10 @@ export function EditContactDialog({ open, onOpenChange, detail, onSaved, onCreat
         tags: [],
         source: edits.source ?? "Direct",
         sourceType: "direct",
+        primarySource: manualOrigin,
+        latestSource: manualOrigin,
+        origins: [manualOrigin],
+        lastActivityAt: nowIso,
         status: "active",
         lastActivity: "Hoy",
         firstSeen: todayHuman,

@@ -20,6 +20,7 @@
 import { useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTabParam } from "@/lib/useTabParam";
+import { PublicRefBadge } from "@/components/ui/PublicRefBadge";
 import {
   ArrowLeft, Phone, Mail, MessageCircle, CheckCircle2, XCircle,
   Clock, User, UserPlus, Tag, Copy, AlertTriangle, Home, MapPin,
@@ -178,9 +179,7 @@ export default function LeadDetalle() {
                     )}
                   </div>
                   <p className="text-[11.5px] text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
-                    <code className="text-[10.5px] font-mono font-semibold text-foreground bg-muted/60 rounded px-1.5 py-0.5 tabular-nums">
-                      {lead.reference}
-                    </code>
+                    <PublicRefBadge value={lead.publicRef} size="sm" />
                     <span className="text-muted-foreground/60">·</span>
                     <span className="inline-flex items-center gap-1">
                       <Inbox className="h-3 w-3" strokeWidth={1.75} />

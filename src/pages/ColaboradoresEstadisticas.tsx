@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { AgencyRankingTop5 } from "@/components/colaboradores/AgencyRankingTop5";
 
 /* ─── helpers ─── */
 function formatNumber(n: number) {
@@ -446,6 +447,8 @@ function TabRegistros({ visibleAgencies, fNations, fPromos }: {
   return (
     <div className="space-y-5">
       <InsightsBlock insights={insights} />
+      {/* Ranking simple Fase 1 · datos en vivo (seed + creados). */}
+      <AgencyRankingTop5 />
       <Heatmap
         title="Matriz de registros"
         subtitle="Leads generados. Celda dominante por columna con borde."

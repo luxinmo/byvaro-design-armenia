@@ -46,6 +46,7 @@ export function rowsToContacts(rows: ImportedRow[]): Contact[] {
   const todayHuman = new Date().toLocaleDateString("es-ES", {
     day: "numeric", month: "short", year: "numeric",
   });
+  const nowIso = new Date().toISOString();
   return rows.map((r, i) => {
     const email = (r.email ?? "").trim().toLowerCase();
     /* En todo el sistema usamos un único campo "fullName". Si el CSV
@@ -53,9 +54,20 @@ export function rowsToContacts(rows: ImportedRow[]): Contact[] {
      * los concatenó antes de llegar aquí. */
     const fullName = (r.fullName ?? "").trim() || email || `Contacto importado ${i + 1}`;
     const tagsRaw = (r.tags ?? "").split(/[;|,]/).map((t) => t.trim()).filter(Boolean);
+    /* Origen estructurado · entrada por importación. */
+    const importOrigin = {
+      source: "import" as const,
+      label: r.source || "Imported",
+      occurredAt: nowIso,
+      refType: "import" as const,
+    };
     return {
       id: email ? `imp-${email}` : `imp-${Date.now()}-${i}`,
       reference: r.reference || undefined,
+      /* Sin publicRef estable en imports · se generará al persistir
+         vía `saveCreatedContact` si el usuario los confirma. Aquí
+         usamos un placeholder determinista basado en el email. */
+      publicRef: `imp${String(i + 1).padStart(6, "0")}`,
       name: fullName,
       nationality: r.nationality || undefined,
       email: email || undefined,
@@ -63,6 +75,10 @@ export function rowsToContacts(rows: ImportedRow[]): Contact[] {
       tags: tagsRaw,
       source: r.source || "Imported",
       sourceType: "import",
+      primarySource: importOrigin,
+      latestSource: importOrigin,
+      origins: [importOrigin],
+      lastActivityAt: nowIso,
       status: "pending",
       lastActivity: "Hoy",
       firstSeen: todayHuman,
