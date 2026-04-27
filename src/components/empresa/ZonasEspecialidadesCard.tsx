@@ -12,7 +12,7 @@ import type { Empresa } from "@/lib/empresa";
 import { EditableSection } from "./EditableSection";
 import { cn } from "@/lib/utils";
 import { Flag } from "@/components/ui/Flag";
-import { findLanguageByCode } from "@/lib/languages";
+import { findLanguageByCode, sortLanguagesByImportance, TOP_LANGUAGES } from "@/lib/languages";
 
 /* ─── Sugerencias predefinidas ────────────────────────────────────── */
 const ZONAS_SUGERIDAS = [
@@ -27,12 +27,11 @@ const ESPECIALIDADES_SUGERIDAS = [
   "Segunda residencia", "Comercial",
 ];
 
-/* Idiomas disponibles · deriva del catálogo canónico `LANGUAGES`
- * (src/lib/languages.ts) para evitar duplicación. Nos quedamos con
- * los 10 más habituales en el sector. */
-const IDIOMAS_DISPONIBLES = [
-  "ES", "EN", "FR", "DE", "PT", "IT", "NL", "RU", "AR", "ZH",
-].map((code) => findLanguageByCode(code)!).filter(Boolean);
+/* Idiomas disponibles · TOP_LANGUAGES primero (ES, EN, FR, DE, RU),
+ * luego el resto más habitual en el sector. */
+const IDIOMAS_DISPONIBLES = sortLanguagesByImportance([
+  ...TOP_LANGUAGES, "PT", "IT", "NL", "AR", "ZH", "HY",
+]).map((code) => findLanguageByCode(code)!).filter(Boolean);
 
 const inputClass = "h-8 px-3 text-[12px] bg-card border border-border rounded-full focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground/60";
 
@@ -93,14 +92,34 @@ function ChipList({
    ZonasEspecialidadesCard
    ═══════════════════════════════════════════════════════════════════ */
 export function ZonasEspecialidadesCard({
-  viewMode, empresa, update,
+  viewMode, empresa, update, idiomas, idiomasReadOnly,
 }: {
   viewMode: "edit" | "preview";
   empresa: Empresa;
   update: <K extends keyof Empresa>(key: K, value: Empresa[K]) => void;
+  /** Idiomas a mostrar en el bloque "Idiomas de atención". Cuando se
+   *  pasa, sustituye a `empresa.idiomasAtencion` (caso típico: own
+   *  workspace donde los idiomas se derivan automáticamente del equipo
+   *  vía `useEmpresaStats`). */
+  idiomas?: string[];
+  /** Si true, el bloque de idiomas se renderiza solo lectura (no se
+   *  puede editar manualmente — la fuente de verdad es el equipo). */
+  idiomasReadOnly?: boolean;
 }) {
   const [customZona, setCustomZona] = useState("");
   const [customEsp, setCustomEsp] = useState("");
+
+  const idiomasEffective = idiomas ?? empresa.idiomasAtencion;
+
+  /* Idiomas · 5 visibles + toggle "+N / ver menos" cuando hay más.
+   *  Mismo patrón que en EmpresaHomeTab "Datos de la empresa" y en
+   *  EmpresaAgentsTab `<PersonCard>`. */
+  const LANG_PREVIEW = 5;
+  const [langExpanded, setLangExpanded] = useState(false);
+  const visibleIdiomasEffective = langExpanded
+    ? idiomasEffective
+    : idiomasEffective.slice(0, LANG_PREVIEW);
+  const hiddenIdiomasCount = idiomasEffective.length - LANG_PREVIEW;
 
   const toggleZona = (z: string) => {
     const has = empresa.zonasOperacion.includes(z);
@@ -111,6 +130,7 @@ export function ZonasEspecialidadesCard({
     update("especialidades", has ? empresa.especialidades.filter(x => x !== e) : [...empresa.especialidades, e]);
   };
   const toggleIdioma = (c: string) => {
+    if (idiomasReadOnly) return;
     const has = empresa.idiomasAtencion.includes(c);
     update("idiomasAtencion", has ? empresa.idiomasAtencion.filter(x => x !== c) : [...empresa.idiomasAtencion, c]);
   };
@@ -176,24 +196,61 @@ export function ZonasEspecialidadesCard({
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-2 flex items-center gap-1.5">
               <Languages className="h-3 w-3" /> Idiomas de atención
+              {idiomasReadOnly && (
+                <span className="font-normal normal-case tracking-normal text-[10px] text-muted-foreground/70">· se calcula automáticamente desde tu equipo</span>
+              )}
             </p>
-            <div className="flex flex-wrap gap-1.5">
-              {IDIOMAS_DISPONIBLES.map((i) => {
-                const on = empresa.idiomasAtencion.includes(i.code);
-                return (
-                  <button key={i.code} type="button" onClick={() => toggleIdioma(i.code)}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors",
-                      on
-                        ? "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30"
-                        : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-foreground/30",
-                    )}>
-                    <Flag iso={i.countryIso} size={14} />
-                    {i.name}
-                  </button>
-                );
-              })}
-            </div>
+            {idiomasReadOnly ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {idiomasEffective.length === 0 ? (
+                  <span className="text-[11.5px] text-muted-foreground italic">
+                    Sin idiomas · añade agentes en /equipo con sus idiomas para activar este campo.
+                  </span>
+                ) : (
+                  <>
+                    {visibleIdiomasEffective.map((code) => {
+                      const i = findLanguageByCode(code);
+                      return (
+                        <span
+                          key={code}
+                          className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-500/30 px-2.5 py-1 text-[11.5px] font-medium"
+                        >
+                          <Flag iso={i?.countryIso ?? code} size={13} />
+                          {i?.name ?? code}
+                        </span>
+                      );
+                    })}
+                    {hiddenIdiomasCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setLangExpanded((v) => !v)}
+                        className="inline-flex items-center h-6 px-2 rounded-full border border-dashed border-border text-[11px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                      >
+                        {langExpanded ? "ver menos" : `+${hiddenIdiomasCount} más`}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {IDIOMAS_DISPONIBLES.map((i) => {
+                  const on = empresa.idiomasAtencion.includes(i.code);
+                  return (
+                    <button key={i.code} type="button" onClick={() => toggleIdioma(i.code)}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors",
+                        on
+                          ? "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30"
+                          : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-foreground/30",
+                      )}>
+                      <Flag iso={i.countryIso} size={14} />
+                      {i.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       }
@@ -213,21 +270,39 @@ export function ZonasEspecialidadesCard({
         </div>
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-2 flex items-center gap-1.5">
-            <Languages className="h-3 w-3" /> Idiomas de atención
+            <Languages className="h-3 w-3" /> Idiomas de atención <span className="tnum">({idiomasEffective.length})</span>
+            {idiomasReadOnly && (
+              <span className="font-normal normal-case tracking-normal text-[10px] text-muted-foreground/70">· se calcula automáticamente desde tu equipo</span>
+            )}
           </p>
-          <div className="flex flex-wrap gap-1.5">
-            {empresa.idiomasAtencion.length === 0 ? (
-              <span className="text-[11.5px] text-muted-foreground italic">Sin añadir</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {idiomasEffective.length === 0 ? (
+              <span className="text-[11.5px] text-muted-foreground italic">
+                {idiomasReadOnly
+                  ? "Sin idiomas · añade agentes en /equipo con sus idiomas para activar este campo."
+                  : "Sin añadir"}
+              </span>
             ) : (
-              empresa.idiomasAtencion.map(code => {
-                const i = findLanguageByCode(code);
-                return (
-                  <span key={code} className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-500/30 px-2.5 py-1 text-[11.5px] font-medium">
-                    <Flag iso={i?.countryIso ?? code} size={13} />
-                    {i?.name ?? code}
-                  </span>
-                );
-              })
+              <>
+                {visibleIdiomasEffective.map((code) => {
+                  const i = findLanguageByCode(code);
+                  return (
+                    <span key={code} className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-500/30 px-2.5 py-1 text-[11.5px] font-medium">
+                      <Flag iso={i?.countryIso ?? code} size={13} />
+                      {i?.name ?? code}
+                    </span>
+                  );
+                })}
+                {hiddenIdiomasCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setLangExpanded((v) => !v)}
+                    className="inline-flex items-center h-6 px-2 rounded-full border border-dashed border-border text-[11px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                  >
+                    {langExpanded ? "ver menos" : `+${hiddenIdiomasCount} más`}
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>

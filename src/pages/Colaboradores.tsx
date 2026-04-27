@@ -10,7 +10,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Search, X, Plus, Users, Star, ArrowUpRight, Sparkles, Mail, Phone,
   MoreHorizontal, Pause, Play, Trash2, Building2, FileSignature,
@@ -20,6 +20,20 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner"; // Toaster global en App.tsx
 import { agencies as baseAgencies, getContractStatus, getAgencyShareStats, type Agency } from "@/data/agencies";
+import { developerOnlyPromotions } from "@/data/developerPromotions";
+import { promotions } from "@/data/promotions";
+import {
+  useAllSolicitudes,
+  rechazarSolicitud,
+  aceptarSolicitud,
+  restaurarSolicitud,
+  type SolicitudColaboracion,
+  type SolicitudColaboracionStatus,
+} from "@/lib/solicitudesColaboracion";
+import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
+import { useHasPermission } from "@/lib/permissions";
+import { useCurrentUser } from "@/lib/currentUser";
+import { Lock, Undo2 } from "lucide-react";
 import { isAgencyVerified } from "@/lib/licenses";
 import { getAgencyLicenses } from "@/lib/agencyLicenses";
 import { agencyHref } from "@/lib/agencyNavigation";
@@ -107,15 +121,37 @@ function Highlight({ text, query }: { text: string; query: string }) {
 
 export default function Colaboradores() {
   const navigate = useNavigate();
+  const user = useCurrentUser();
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
-  const [estadoFilter, setEstadoFilter] = useState<"todas" | "activa" | "pausada">("todas");
+  /* Filtros iniciales leídos de la URL · permiten que páginas
+   * externas aterricen con un filtro pre-aplicado, alineando el
+   * contador de origen con lo que se muestra aquí. Aceptamos:
+   *   · `?tab=colaboran|pendientes|no-colaboran|todos` → segmented
+   *     superior + estado consistente (lo que hoy navega desde
+   *     `EmpresaHomeTab` al pulsar "Ver todos los colaboradores").
+   *   · `?estado=activa|pausada` (legacy / fallback) → solo estado.
+   */
+  const initialQuick = (() => {
+    const q = searchParams.get("tab");
+    if (q === "colaboran" || q === "pendientes" || q === "no-colaboran" || q === "todos") return q;
+    return "todos";
+  })();
+  const initialEstado = (() => {
+    const q = searchParams.get("estado");
+    if (q === "activa" || q === "pausada") return q;
+    if (initialQuick === "colaboran") return "activa";
+    if (initialQuick === "no-colaboran") return "pausada";
+    return "todas";
+  })();
+  const [estadoFilter, setEstadoFilter] = useState<"todas" | "activa" | "pausada">(initialEstado);
   /* Segmented rápido junto al buscador.
    *   · "todos"        → sin filtro.
    *   · "colaboran"    → estado activa.
    *   · "pendientes"   → estado contrato-pendiente (invitación saliente sin
    *                      responder, o solicitud entrante sin aprobar).
    *   · "no-colaboran" → estado pausada. */
-  const [quickFilter, setQuickFilter] = useState<"todos" | "colaboran" | "pendientes" | "no-colaboran">("todos");
+  const [quickFilter, setQuickFilter] = useState<"todos" | "colaboran" | "pendientes" | "no-colaboran">(initialQuick);
   const [invitarOpen, setInvitarOpen] = useState(false);
   const [overrides, setOverrides] = useState<Record<string, Partial<Agency> | "deleted">>({});
 
@@ -181,6 +217,102 @@ export default function Colaboradores() {
     () => agencies.filter((a) => a.solicitudPendiente || a.isNewRequest),
     [agencies],
   );
+
+  /* ─── Solicitudes por promoción · enviadas por agencias colaboradoras
+   *  desde el panel del promotor (`/promotor/:id/panel` · CTA Solicitar
+   *  colaboración). Drawer las muestra en tabs por estado: pendientes,
+   *  aceptadas, descartadas. Permiso para mover de estado:
+   *  `collaboration.requests.manage`. */
+  const allSolicitudes = useAllSolicitudes();
+  const solicitudesByStatus = useMemo(() => {
+    const buckets: Record<SolicitudColaboracionStatus, SolicitudColaboracion[]> = {
+      pendiente: [], aceptada: [], rechazada: [],
+    };
+    for (const s of allSolicitudes) buckets[s.status]?.push(s);
+    /* Ordenamos por fecha más reciente · pendientes lo más visible. */
+    (Object.keys(buckets) as SolicitudColaboracionStatus[]).forEach((k) => {
+      buckets[k].sort((a, b) => (b.decidedAt ?? b.createdAt) - (a.decidedAt ?? a.createdAt));
+    });
+    return buckets;
+  }, [allSolicitudes]);
+  const pendingPromoCount = solicitudesByStatus.pendiente.length;
+  const totalPending = pendientes.length + pendingPromoCount;
+  const canManageRequests = useHasPermission("collaboration.requests.manage");
+  const [requestsTab, setRequestsTab] = useState<SolicitudColaboracionStatus>("pendiente");
+
+  /* Lookup rápido para componer el card de cada solicitud-promo. */
+  const promoCatalog = useMemo(() => {
+    const m = new Map<string, { id: string; name: string; image?: string; location?: string; commission?: number }>();
+    for (const p of [...developerOnlyPromotions, ...promotions]) {
+      m.set(p.id, { id: p.id, name: p.name, image: p.image, location: p.location, commission: p.commission });
+    }
+    return m;
+  }, []);
+
+  /* Estado del modal "aceptar solicitud" → reusa SharePromotionDialog
+   *  con la promoción y agencia preseleccionadas (mismo flujo que para
+   *  agencias ya en Byvaro: paso de condiciones de colaboración). */
+  const [acceptingSolicitud, setAcceptingSolicitud] = useState<SolicitudColaboracion | null>(null);
+
+  const decidedByActor = { name: user.name, email: user.email, avatarUrl: user.avatar };
+
+  const handleAceptarSolicitud = (s: SolicitudColaboracion) => {
+    if (!canManageRequests) return;
+    /* Marcamos la solicitud como aceptada y abrimos el dialog de
+     *  invitación · al confirmar las condiciones, el flujo de
+     *  SharePromotionDialog crea la invitación que añade la agencia
+     *  a `promotionsCollaborating` (vía `useInvitaciones`).
+     *  TODO(backend): POST /api/colaboraciones-solicitadas/:id/accept
+     *    junto con las condiciones de la invitación · en una sola
+     *    transacción para que no quede a medio camino. */
+    aceptarSolicitud(s.id, decidedByActor);
+    setAcceptingSolicitud(s);
+  };
+
+  const handleRechazarSolicitud = (s: SolicitudColaboracion) => {
+    if (!canManageRequests) return;
+    rechazarSolicitud(s.id, decidedByActor);
+    toast.success("Solicitud descartada");
+  };
+
+  const handleRestaurarSolicitud = (s: SolicitudColaboracion) => {
+    if (!canManageRequests) return;
+    restaurarSolicitud(s.id);
+    toast.success("Solicitud recuperada · vuelve a Pendientes");
+    setRequestsTab("pendiente");
+  };
+
+  function fmtFechaHora(ms: number): string {
+    const d = new Date(ms);
+    return d.toLocaleString("es-ES", {
+      day: "2-digit", month: "short", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  }
+
+  function actorInitials(name: string): string {
+    return name.split(" ").filter(Boolean).slice(0, 2)
+      .map((w) => w[0]?.toUpperCase() ?? "").join("");
+  }
+
+  /** Avatar 16px del usuario que envió la solicitud · imagen si hay
+   *  `avatarUrl`, fallback a iniciales con bg muted. */
+  function SolicitudActorAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string }) {
+    if (avatarUrl) {
+      return (
+        <img
+          src={avatarUrl}
+          alt={name}
+          className="h-4 w-4 rounded-full object-cover border border-border shrink-0"
+        />
+      );
+    }
+    return (
+      <span className="h-4 w-4 rounded-full bg-muted text-[8.5px] font-semibold text-muted-foreground grid place-items-center shrink-0">
+        {actorInitials(name) || "?"}
+      </span>
+    );
+  }
 
   /* Mostramos todas las agencias como cards grandes tipo "Top performers". */
 
@@ -380,8 +512,10 @@ export default function Colaboradores() {
         </div>
       </section>
 
-      {/* Solicitudes pendientes · banner minimal */}
-      {pendientes.length > 0 && (
+      {/* Solicitudes pendientes · banner minimal · cuenta tanto las
+          agency-level (alta de marketplace) como las por promoción
+          que envían las agencias colaboradoras desde su panel. */}
+      {totalPending > 0 && (
         <section className="px-4 sm:px-6 lg:px-8 mt-4">
           <div className="max-w-[1400px] mx-auto">
             <button
@@ -390,9 +524,9 @@ export default function Colaboradores() {
             >
               <span className="h-2 w-2 rounded-full bg-warning shrink-0" />
               <span className="text-xs text-foreground min-w-0 flex-1 truncate">
-                <span className="font-semibold">{pendientes.length}</span>
-                {pendientes.length === 1 ? " solicitud pendiente" : " solicitudes pendientes"}
-                <span className="text-muted-foreground"> · agencias esperando tu respuesta</span>
+                <span className="font-semibold">{totalPending}</span>
+                {totalPending === 1 ? " solicitud pendiente" : " solicitudes pendientes"}
+                <span className="text-muted-foreground"> · esperando tu respuesta</span>
               </span>
               <span className="inline-flex items-center gap-1 text-xs font-medium text-primary group-hover:text-primary/80 transition-colors shrink-0">
                 Ver solicitudes
@@ -445,6 +579,27 @@ export default function Colaboradores() {
 
       {invitarOpen && <InvitarAgenciaModal onClose={() => setInvitarOpen(false)} />}
 
+      {/* Modal de invitación · al aceptar una solicitud por promoción
+          abrimos el flujo estándar de "compartir promoción con agencia"
+          (mismo que ya se usa cuando una agencia ya está en Byvaro:
+          paso de condiciones de colaboración con la agencia
+          preseleccionada). Al confirmar las condiciones, la invitación
+          se persiste vía `useInvitaciones()` y la promoción se añade a
+          `agency.promotionsCollaborating`. */}
+      {acceptingSolicitud && (() => {
+        const promo = promoCatalog.get(acceptingSolicitud.promotionId);
+        if (!promo) return null;
+        return (
+          <SharePromotionDialog
+            open={!!acceptingSolicitud}
+            onOpenChange={(v) => { if (!v) setAcceptingSolicitud(null); }}
+            promotionId={promo.id}
+            promotionName={promo.name}
+            defaultAgencyId={acceptingSolicitud.agencyId}
+          />
+        );
+      })()}
+
       {/* ═══════════ Drawer de solicitudes pendientes ═══════════ */}
       <AnimatePresence>
         {requestsOpen && (
@@ -464,127 +619,131 @@ export default function Colaboradores() {
               transition={{ type: "tween", duration: 0.25, ease: "easeOut" }}
               className="fixed right-0 top-0 bottom-0 z-50 w-full sm:w-[460px] bg-card border-l border-border shadow-soft-lg flex flex-col"
             >
-              <header className="h-14 shrink-0 flex items-center justify-between px-5 border-b border-border">
-                <div>
-                  <h2 className="text-[15px] font-semibold tracking-tight">Solicitudes</h2>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {pendientes.length === 1
-                      ? "1 agencia esperando respuesta"
-                      : `${pendientes.length} agencias esperando respuesta`}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setRequestsOpen(false)}
-                  className="p-2 -mr-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label="Cerrar"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </header>
-
-              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-3">
-                {pendientes.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-8 text-center">
-                    <Sparkles className="h-7 w-7 text-muted-foreground/40 mx-auto mb-2" strokeWidth={1.5} />
-                    <p className="text-sm font-medium text-foreground mb-1">Sin solicitudes</p>
-                    <p className="text-xs text-muted-foreground">
-                      Cuando una agencia te solicite colaborar, aparecerá aquí.
+              <header className="shrink-0 px-4 sm:px-5 pt-4 pb-0 border-b border-border">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-[15px] font-semibold tracking-tight">Solicitudes</h2>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {totalPending === 1 ? "1 esperando respuesta" : `${totalPending} esperando respuesta`}
                     </p>
                   </div>
-                ) : (
-                  pendientes.map((a) => (
-                    <article
-                      key={a.id}
-                      className="rounded-2xl border border-border bg-card overflow-hidden"
-                    >
-                      {/* Cover */}
-                      <div
-                        className="h-20 bg-muted relative"
-                        style={{
-                          backgroundImage: `url(${a.cover || DEFAULT_COVER})`,
-                          backgroundSize: "cover",
-                          backgroundPosition: "center",
-                        }}
+                  <button
+                    onClick={() => setRequestsOpen(false)}
+                    className="p-2 -mr-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Cerrar"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                {/* Tabs · pendientes · aceptadas · descartadas */}
+                <div className="mt-3 flex items-center gap-1 -mb-px overflow-x-auto no-scrollbar">
+                  {([
+                    { key: "pendiente", label: "Pendientes", count: solicitudesByStatus.pendiente.length },
+                    { key: "aceptada",  label: "Aceptadas",  count: solicitudesByStatus.aceptada.length },
+                    { key: "rechazada", label: "Descartadas", count: solicitudesByStatus.rechazada.length },
+                  ] as const).map((t) => {
+                    const active = requestsTab === t.key;
+                    return (
+                      <button
+                        key={t.key}
+                        onClick={() => setRequestsTab(t.key)}
+                        className={cn(
+                          "relative inline-flex items-center gap-1.5 h-9 px-3 text-[12.5px] font-medium whitespace-nowrap transition-colors",
+                          active
+                            ? "text-foreground after:absolute after:bottom-0 after:left-2 after:right-2 after:h-[2px] after:bg-foreground"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
                       >
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-                        <span className="absolute top-2 right-2 text-[11px] font-semibold text-foreground bg-card/90 backdrop-blur px-2 py-0.5 rounded-full shadow-soft">
-                          {a.origen === "marketplace" ? "Marketplace" : "Invitada"}
-                        </span>
-                      </div>
-
-                      <div className="p-4 -mt-7 relative">
-                        {/* Identidad */}
-                        <img
-                          src={a.logo || DEFAULT_LOGO}
-                          alt=""
-                          className="h-12 w-12 rounded-full object-cover border-2 border-card shadow-soft bg-background"
-                        />
-                        <div className="mt-2 flex items-start gap-2">
-                          <div className="min-w-0 flex-1">
-                            <h3 className="text-sm font-semibold text-foreground truncate inline-flex items-center gap-1.5">
-                              {a.name}
-                              {isAgencyVerified(getAgencyLicenses(a)) && <VerifiedBadge size="sm" />}
-                            </h3>
-                            <p className="text-[11px] text-muted-foreground truncate">
-                              {a.location}{a.type ? ` · ${typeLabel(a.type)}` : ""}
-                            </p>
-                          </div>
-                          <GoogleRatingBadge agency={a} size="xs" />
-                        </div>
-
-                        {/* Description */}
-                        {a.description && (
-                          <p className="mt-2 text-[11px] text-muted-foreground leading-relaxed line-clamp-3">
-                            {a.description}
-                          </p>
+                        {t.label}
+                        {t.count > 0 && (
+                          <span
+                            className={cn(
+                              "inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[9.5px] font-semibold tabular-nums",
+                              active ? "bg-foreground text-background" : "bg-muted text-muted-foreground",
+                            )}
+                          >
+                            {t.count}
+                          </span>
                         )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </header>
 
-                        {/* Mercados + stats fila */}
-                        <div className="mt-3 flex items-center gap-3 flex-wrap">
-                          {a.mercados && a.mercados.length > 0 && (
-                            <span className="text-sm leading-none">
-                              <MercadosFlags codes={a.mercados} max={6} />
-                            </span>
-                          )}
-                          {a.teamSize != null && (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-                              <Users className="h-3 w-3" strokeWidth={1.75} />
-                              {a.teamSize} agentes
-                            </span>
-                          )}
-                          {a.offices && a.offices.length > 0 && (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-                              <Building2 className="h-3 w-3" strokeWidth={1.75} />
-                              {a.offices.length} {a.offices.length === 1 ? "oficina" : "oficinas"}
-                            </span>
-                          )}
-                        </div>
+              <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-2.5">
+                {/* Aviso de permiso · si no puede gestionar, lo decimos arriba */}
+                {!canManageRequests && solicitudesByStatus[requestsTab].length > 0 && (
+                  <div className="flex items-start gap-2 rounded-xl bg-muted/40 border border-border px-3 py-2 mb-1">
+                    <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" strokeWidth={1.75} />
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Solo lectura · necesitas el permiso{" "}
+                      <code className="text-[10px] bg-background px-1 rounded">collaboration.requests.manage</code>{" "}
+                      para aceptar, descartar o restaurar solicitudes.
+                    </p>
+                  </div>
+                )}
 
-                        {/* Mensaje */}
-                        {a.mensajeSolicitud && (
-                          <div className="mt-3 rounded-xl bg-muted/50 p-3 border-l-2 border-warning/50">
-                            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
-                              Mensaje
-                            </p>
-                            <p className="text-[12px] text-foreground/80 italic leading-relaxed">
-                              "{a.mensajeSolicitud}"
-                            </p>
-                          </div>
-                        )}
+                {/* Cards compactas · agencia arriba, promoción debajo */}
+                {solicitudesByStatus[requestsTab].length > 0 ? (
+                  solicitudesByStatus[requestsTab].map((s) => {
+                    const ag = agencies.find((x) => x.id === s.agencyId);
+                    const promo = promoCatalog.get(s.promotionId);
+                    if (!ag || !promo) return null;
+                    const colabCount = (ag.promotionsCollaborating ?? []).length;
+                    const yaColabora = colabCount > 0;
+                    return (
+                      <SolicitudPromoCard
+                        key={s.id}
+                        solicitud={s}
+                        agency={ag}
+                        promo={promo}
+                        yaColabora={yaColabora}
+                        colabCount={colabCount}
+                        canManage={canManageRequests}
+                        onVerFicha={() => { setRequestsOpen(false); navigate(agencyHref(ag)); }}
+                        onAceptar={() => handleAceptarSolicitud(s)}
+                        onRechazar={() => handleRechazarSolicitud(s)}
+                        onRestaurar={() => handleRestaurarSolicitud(s)}
+                      />
+                    );
+                  })
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-8 text-center">
+                    <Sparkles className="h-7 w-7 text-muted-foreground/40 mx-auto mb-2" strokeWidth={1.5} />
+                    <p className="text-sm font-medium text-foreground mb-1">
+                      {requestsTab === "pendiente" ? "Sin solicitudes pendientes"
+                        : requestsTab === "aceptada" ? "Sin solicitudes aceptadas todavía"
+                        : "Sin descartadas"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {requestsTab === "pendiente"
+                        ? "Cuando una agencia solicite colaborar, aparecerá aquí."
+                        : requestsTab === "aceptada"
+                        ? "Las solicitudes que aceptes con condiciones quedarán archivadas en este tab."
+                        : "Las solicitudes que descartes podrás recuperarlas desde aquí."}
+                    </p>
+                  </div>
+                )}
 
-                        {/* CTA único · entrar a la ficha para decidir */}
-                        <button
-                          onClick={() => {
-                            setRequestsOpen(false);
-                            navigate(agencyHref(a));
-                          }}
-                          className="mt-4 w-full h-9 rounded-full bg-foreground text-background text-xs font-semibold hover:bg-foreground/90 transition-colors inline-flex items-center justify-center gap-1.5"
-                        >
-                          Ver ficha y decidir
-                          <ArrowUpRight className="h-3 w-3" strokeWidth={2} />
-                        </button>
-                      </div>
-                    </article>
+                {/* Solicitudes agency-level (alta de marketplace) · solo
+                    se listan en el tab Pendientes · es otro flujo. */}
+                {requestsTab === "pendiente" && pendientes.length > 0 && (
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground pt-3">
+                    Alta de agencia · {pendientes.length}
+                  </p>
+                )}
+
+                {requestsTab === "pendiente" && pendientes.length > 0 && (
+                  pendientes.map((a) => (
+                    <SolicitudAgencyCard
+                      key={a.id}
+                      agency={a}
+                      canManage={canManageRequests}
+                      onVerFicha={() => { setRequestsOpen(false); navigate(agencyHref(a)); }}
+                      onAceptar={() => { if (canManageRequests) handleAprobar(a.id); }}
+                      onRechazar={() => { if (canManageRequests) handleRechazar(a.id); }}
+                    />
                   ))
                 )}
               </div>
@@ -1118,5 +1277,340 @@ function MenuItem({
       <Icon className="h-3.5 w-3.5" strokeWidth={1.5} />
       {label}
     </button>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SolicitudPromoCard · card compacta para el drawer de solicitudes.
+   Estructura:
+     - Top · avatar agencia + nombre + verificado + chip estado colab.
+     - Sub · cover thumb promo + nombre promo + ubicación.
+     - Meta · fecha/hora · usuario que envió (avatar + nombre).
+     - Mensaje (si existe) · expandible.
+     - Acciones según el status:
+         pendiente  → Ver ficha · Descartar · Aceptar (si canManage).
+         aceptada   → Ver ficha (read-only).
+         rechazada  → Ver ficha · Recuperar (si canManage).
+   Mobile-first: todo en columnas, sin grids fijas; los botones llenan
+   el ancho con grid-cols-2 en móvil para que sean fáciles de tocar.
+   ═══════════════════════════════════════════════════════════════════ */
+function SolicitudPromoCard({
+  solicitud: s, agency: ag, promo, yaColabora, colabCount, canManage,
+  onVerFicha, onAceptar, onRechazar, onRestaurar,
+}: {
+  solicitud: SolicitudColaboracion;
+  agency: Agency;
+  promo: { id: string; name: string; image?: string; location?: string; commission?: number };
+  yaColabora: boolean;
+  colabCount: number;
+  canManage: boolean;
+  onVerFicha: () => void;
+  onAceptar: () => void;
+  onRechazar: () => void;
+  onRestaurar: () => void;
+}) {
+  function fmtFechaHoraLocal(ms: number): string {
+    return new Date(ms).toLocaleString("es-ES", {
+      day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+    });
+  }
+
+  const statusChip =
+    s.status === "pendiente" ? { label: "Pendiente", cls: "border-warning/30 bg-warning/10 text-warning" } :
+    s.status === "aceptada"  ? { label: "Aceptada",  cls: "border-success/25 bg-success/10 text-success" } :
+                                { label: "Descartada", cls: "border-destructive/25 bg-destructive/10 text-destructive" };
+
+  const colabChip = yaColabora
+    ? { label: `Ya colabora · ${colabCount} promo${colabCount === 1 ? "" : "s"}`, cls: "bg-success/10 text-success border-success/25" }
+    : { label: "Sin colaboración previa", cls: "bg-muted text-muted-foreground border-border" };
+
+  return (
+    <article className="rounded-2xl border border-border bg-card overflow-hidden">
+      <div className="p-3.5 space-y-3">
+        {/* Top · Identidad agencia + chip de estado de la solicitud */}
+        <div className="flex items-start gap-2.5">
+          <img
+            src={ag.logo || DEFAULT_LOGO}
+            alt=""
+            className="h-9 w-9 rounded-full object-cover bg-background border border-border shrink-0"
+          />
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[13.5px] font-semibold text-foreground truncate inline-flex items-center gap-1.5">
+              {ag.name}
+              {isAgencyVerified(getAgencyLicenses(ag)) && <VerifiedBadge size="sm" />}
+            </h3>
+            <p className="text-[11px] text-muted-foreground truncate">{ag.location}</p>
+          </div>
+          <span className={cn("inline-flex items-center h-5 px-2 rounded-full border text-[10px] font-medium shrink-0", statusChip.cls)}>
+            {statusChip.label}
+          </span>
+        </div>
+
+        {/* Sub · promoción · thumb + nombre */}
+        <button
+          type="button"
+          onClick={onVerFicha}
+          className="group w-full flex items-center gap-2.5 rounded-xl border border-border bg-muted/30 p-2 text-left hover:bg-muted/60 transition-colors"
+        >
+          <div
+            className="h-10 w-14 rounded-md bg-muted shrink-0 bg-cover bg-center"
+            style={{ backgroundImage: `url(${promo.image || DEFAULT_COVER})` }}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-[12px] font-semibold text-foreground truncate">{promo.name}</p>
+            <p className="text-[10.5px] text-muted-foreground truncate">
+              {promo.location ?? "—"}
+              {typeof promo.commission === "number" && promo.commission > 0 && ` · Comisión ${promo.commission}%`}
+            </p>
+          </div>
+        </button>
+
+        {/* Meta · estado de colaboración con la agencia + fecha + usuario */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10.5px] text-muted-foreground">
+          <span className={cn("inline-flex items-center h-5 px-2 rounded-full border font-medium", colabChip.cls)}>
+            {colabChip.label}
+          </span>
+          <span aria-hidden className="text-border">·</span>
+          <span className="tabular-nums">{fmtFechaHoraLocal(s.createdAt)}</span>
+          {s.requestedBy?.name && (
+            <>
+              <span aria-hidden className="text-border">·</span>
+              <span className="inline-flex items-center gap-1 min-w-0">
+                {s.requestedBy.avatarUrl ? (
+                  <img src={s.requestedBy.avatarUrl} alt="" className="h-3.5 w-3.5 rounded-full object-cover border border-border shrink-0" />
+                ) : (
+                  <span className="h-3.5 w-3.5 rounded-full bg-muted text-[8px] font-semibold grid place-items-center shrink-0">
+                    {s.requestedBy.name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0] ?? "").join("").toUpperCase()}
+                  </span>
+                )}
+                <span className="truncate text-foreground/80">{s.requestedBy.name}</span>
+              </span>
+            </>
+          )}
+        </div>
+
+        {/* Mensaje */}
+        {s.message && (
+          <p className="text-[11.5px] text-foreground/80 italic leading-relaxed line-clamp-3 rounded-lg bg-muted/40 px-2.5 py-1.5">
+            "{s.message}"
+          </p>
+        )}
+
+        {/* Decisión · solo si está aceptada o descartada · muestra
+            quién y cuándo del lado promotor. */}
+        {(s.status === "aceptada" || s.status === "rechazada") && s.decidedAt && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10.5px] text-muted-foreground rounded-lg bg-muted/30 px-2.5 py-1.5">
+            <span className="font-semibold text-foreground/70">
+              {s.status === "aceptada" ? "Aceptada" : "Descartada"}
+            </span>
+            <span aria-hidden className="text-border">·</span>
+            <span className="tabular-nums">
+              {new Date(s.decidedAt).toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+            </span>
+            {s.decidedBy?.name && (
+              <>
+                <span aria-hidden className="text-border">·</span>
+                <span className="inline-flex items-center gap-1 min-w-0">
+                  {s.decidedBy.avatarUrl ? (
+                    <img src={s.decidedBy.avatarUrl} alt="" className="h-3.5 w-3.5 rounded-full object-cover border border-border shrink-0" />
+                  ) : (
+                    <span className="h-3.5 w-3.5 rounded-full bg-muted text-[8px] font-semibold grid place-items-center shrink-0">
+                      {s.decidedBy.name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0] ?? "").join("").toUpperCase()}
+                    </span>
+                  )}
+                  <span className="truncate text-foreground/80">{s.decidedBy.name}</span>
+                </span>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Acciones según estado */}
+        {s.status === "pendiente" && (
+          <div className="grid grid-cols-3 gap-1.5">
+            <button
+              type="button"
+              onClick={onVerFicha}
+              className="h-8 rounded-full border border-border bg-card text-[11px] font-semibold text-foreground hover:bg-muted transition-colors"
+            >
+              Ver ficha
+            </button>
+            <button
+              type="button"
+              onClick={onRechazar}
+              disabled={!canManage}
+              className="h-8 rounded-full border border-destructive/30 bg-destructive/5 text-[11px] font-semibold text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Descartar
+            </button>
+            <button
+              type="button"
+              onClick={onAceptar}
+              disabled={!canManage}
+              className="h-8 rounded-full bg-foreground text-background text-[11px] font-semibold hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Aceptar
+            </button>
+          </div>
+        )}
+        {s.status === "rechazada" && (
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              onClick={onVerFicha}
+              className="h-8 rounded-full border border-border bg-card text-[11px] font-semibold text-foreground hover:bg-muted transition-colors"
+            >
+              Ver ficha
+            </button>
+            <button
+              type="button"
+              onClick={onRestaurar}
+              disabled={!canManage}
+              className="h-8 rounded-full border border-primary/30 bg-primary/10 text-[11px] font-semibold text-primary hover:bg-primary/15 transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Undo2 className="h-3 w-3" strokeWidth={2.25} />
+              Recuperar
+            </button>
+          </div>
+        )}
+        {s.status === "aceptada" && (
+          <button
+            type="button"
+            onClick={onVerFicha}
+            className="w-full h-8 rounded-full border border-border bg-card text-[11px] font-semibold text-foreground hover:bg-muted transition-colors"
+          >
+            Ver ficha
+          </button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SolicitudAgencyCard · solicitudes de alta marketplace · misma
+   estética compacta que `SolicitudPromoCard` pero sin sub-card de
+   promoción · la diferenciación se hace con un sub-row "alta · origen".
+   ═══════════════════════════════════════════════════════════════════ */
+function SolicitudAgencyCard({
+  agency: a, canManage, onVerFicha, onAceptar, onRechazar,
+}: {
+  agency: Agency;
+  canManage: boolean;
+  onVerFicha: () => void;
+  onAceptar: () => void;
+  onRechazar: () => void;
+}) {
+  return (
+    <article className="rounded-2xl border border-border bg-card overflow-hidden">
+      <div className="p-3.5 space-y-3">
+        {/* Top · Identidad agencia + chip de estado */}
+        <div className="flex items-start gap-2.5">
+          <img
+            src={a.logo || DEFAULT_LOGO}
+            alt=""
+            className="h-9 w-9 rounded-full object-cover bg-background border border-border shrink-0"
+          />
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[13.5px] font-semibold text-foreground truncate inline-flex items-center gap-1.5">
+              {a.name}
+              {isAgencyVerified(getAgencyLicenses(a)) && <VerifiedBadge size="sm" />}
+            </h3>
+            <p className="text-[11px] text-muted-foreground truncate">
+              {a.location}{a.type ? ` · ${typeLabel(a.type)}` : ""}
+            </p>
+          </div>
+          <span className="inline-flex items-center h-5 px-2 rounded-full border text-[10px] font-medium shrink-0 border-warning/30 bg-warning/10 text-warning">
+            Pendiente
+          </span>
+        </div>
+
+        {/* Sub · indicador de origen · marketplace vs invitada */}
+        <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 p-2 text-[11px]">
+          <span
+            className={cn(
+              "inline-flex items-center h-5 px-2 rounded-full border font-medium",
+              a.origen === "marketplace"
+                ? "border-primary/30 bg-primary/10 text-primary"
+                : "border-border bg-muted text-muted-foreground",
+            )}
+          >
+            {a.origen === "marketplace" ? "Marketplace" : "Invitada"}
+          </span>
+          <span className="text-muted-foreground truncate">
+            Alta de agencia · sin colaboración previa
+          </span>
+        </div>
+
+        {/* Meta · mercados + team + oficinas + Google rating */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10.5px] text-muted-foreground">
+          {a.mercados && a.mercados.length > 0 && (
+            <span className="inline-flex items-center text-sm leading-none">
+              <MercadosFlags codes={a.mercados} max={5} />
+            </span>
+          )}
+          {a.teamSize != null && (
+            <>
+              <span aria-hidden className="text-border">·</span>
+              <span className="inline-flex items-center gap-1">
+                <Users className="h-3 w-3" strokeWidth={1.75} /> {a.teamSize} agentes
+              </span>
+            </>
+          )}
+          {a.offices && a.offices.length > 0 && (
+            <>
+              <span aria-hidden className="text-border">·</span>
+              <span className="inline-flex items-center gap-1">
+                <Building2 className="h-3 w-3" strokeWidth={1.75} /> {a.offices.length} {a.offices.length === 1 ? "oficina" : "oficinas"}
+              </span>
+            </>
+          )}
+          <span className="ml-auto">
+            <GoogleRatingBadge agency={a} size="xs" />
+          </span>
+        </div>
+
+        {/* Descripción · si existe */}
+        {a.description && (
+          <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">
+            {a.description}
+          </p>
+        )}
+
+        {/* Mensaje · si existe */}
+        {a.mensajeSolicitud && (
+          <p className="text-[11.5px] text-foreground/80 italic leading-relaxed line-clamp-3 rounded-lg bg-muted/40 px-2.5 py-1.5">
+            "{a.mensajeSolicitud}"
+          </p>
+        )}
+
+        {/* Acciones · ver ficha · descartar · aceptar */}
+        <div className="grid grid-cols-3 gap-1.5">
+          <button
+            type="button"
+            onClick={onVerFicha}
+            className="h-8 rounded-full border border-border bg-card text-[11px] font-semibold text-foreground hover:bg-muted transition-colors"
+          >
+            Ver ficha
+          </button>
+          <button
+            type="button"
+            onClick={onRechazar}
+            disabled={!canManage}
+            className="h-8 rounded-full border border-destructive/30 bg-destructive/5 text-[11px] font-semibold text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Descartar
+          </button>
+          <button
+            type="button"
+            onClick={onAceptar}
+            disabled={!canManage}
+            className="h-8 rounded-full bg-foreground text-background text-[11px] font-semibold hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Aceptar
+          </button>
+        </div>
+      </div>
+    </article>
   );
 }

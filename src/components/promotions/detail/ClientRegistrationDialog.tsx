@@ -35,6 +35,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Flag } from "@/components/ui/Flag";
+import { promotions as ALL_PROMOTIONS } from "@/data/promotions";
+import { developerOnlyPromotions } from "@/data/developerPromotions";
+import { getOwnerRoleLabel, getOwnerRoleArticleLower, getOwnerRoleGenitive } from "@/lib/promotionRole";
 import {
   Search, UserPlus, Check, User, Phone, Globe, ArrowLeft, Clock,
   Users, Building2, AlertTriangle, Mail, Send, ShieldCheck, ChevronDown,
@@ -193,6 +196,15 @@ export function ClientRegistrationDialog({
   const registrationConditions = registrationRequirements ?? DEFAULT_REGISTRATION_CONDITIONS;
   const currentUser = useCurrentUser();
   const isAgencyUser = currentUser.accountType === "agency";
+  /* Resolución dinámica del rol del owner de la promoción · CLAUDE.md
+   * regla de oro · usar helpers para toda copy ("el promotor"…). */
+  const promo = promotionId
+    ? ALL_PROMOTIONS.find((p) => p.id === promotionId)
+      ?? developerOnlyPromotions.find((p) => p.id === promotionId)
+    : undefined;
+  const ownerLabel = getOwnerRoleLabel(promo); // "Promotor" | "Comercializador"
+  const ownerArticle = getOwnerRoleArticleLower(promo); // "el promotor" | "el comercializador"
+  const ownerGenitive = getOwnerRoleGenitive(promo); // "del promotor" | "del comercializador"
   /* Lista actual de Registros (seed + creados) · usada para generar
      `publicRef` único al crear uno nuevo. */
   const allRegistrosForRef = [...useCreatedRegistros(), ...SEED_REGISTROS];
@@ -571,7 +583,7 @@ export function ClientRegistrationDialog({
             estado: "pendiente",
             matchPercentage: 0,
             consent: true,
-            recommendation: "Registro desde agencia · pendiente de aprobación del promotor.",
+            recommendation: `Registro desde agencia · pendiente de aprobación ${ownerGenitive}.`,
             audit: fingerprint,
           }
         : {
@@ -584,7 +596,7 @@ export function ClientRegistrationDialog({
             estado: "pendiente",
             matchPercentage: 0,
             consent: true,
-            recommendation: "Registro directo del promotor.",
+            recommendation: `Registro directo ${ownerGenitive}.`,
             origenCliente: clientSource || undefined,
             audit: fingerprint,
           };
@@ -1256,7 +1268,7 @@ export function ClientRegistrationDialog({
                       >
                         {isHigh
                           ? "Revisa si es el mismo cliente antes de continuar — la IA marcará conflicto."
-                          : "Puedes continuar — el promotor validará por su parte."}
+                          : `Puedes continuar — ${ownerArticle} validará por su parte.`}
                       </p>
                     </div>
                   </div>
@@ -1387,7 +1399,7 @@ export function ClientRegistrationDialog({
                           <span
                             key={i}
                             className="h-10 w-10 rounded-lg border border-border bg-card inline-flex items-center justify-center text-base font-semibold text-foreground"
-                            title="Código de comprobación — el promotor ve el número completo"
+                            title={`Código de comprobación — ${ownerArticle} ve el número completo`}
                           >
                             {d}
                           </span>

@@ -21,6 +21,8 @@ import { cn } from "@/lib/utils";
 import { registros as SEED_REGISTROS, type Registro } from "@/data/records";
 import { useCreatedRegistros } from "@/lib/registrosStorage";
 import { promotions } from "@/data/promotions";
+import { developerOnlyPromotions } from "@/data/developerPromotions";
+import { getOwnerRoleLabelLower } from "@/lib/promotionRole";
 
 /** Normaliza email/tel para comparar · case-insensitive, sin
  *  espacios y solo dígitos para el teléfono. */
@@ -101,7 +103,11 @@ export function CrossPromotionWarning({ record, className }: Props) {
           <ul className="mt-2.5 space-y-1">
             {hits.map((h) => {
               const matchedLabel = h.matchedOn.join(" + ");
-              const agencyNote = h.registro.agencyId ? " · otra agencia" : " · promotor directo";
+              const otherPromo = promotions.find((p) => p.id === h.registro.promotionId)
+                ?? developerOnlyPromotions.find((p) => p.id === h.registro.promotionId);
+              const agencyNote = h.registro.agencyId
+                ? " · otra agencia"
+                : ` · ${getOwnerRoleLabelLower(otherPromo)} directo`;
               return (
                 <li key={h.registro.id}>
                   <Link

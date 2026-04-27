@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTabParam } from "@/lib/useTabParam";
 import { getDraft, saveDraft as persistDraft, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -55,7 +55,7 @@ import {
   PickTeamMembersDialog, PickSalesOfficesDialog,
 } from "@/components/promotions/detail/EditSectionDialogs";
 import { activeTeamMembers } from "@/data/teamMembers";
-import { companyOffices } from "@/data/companyOffices";
+import { useOficinas } from "@/lib/empresa";
 import { SendEmailDialog } from "@/components/email/SendEmailDialog";
 import { PriceListDialog } from "@/components/promotions/detail/PriceListDialog";
 import {
@@ -65,13 +65,19 @@ import {
 import { RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner"; // feedback tras publicar · Toaster global en App.tsx
 import { useCurrentUser } from "@/lib/currentUser";
+import { developerHref } from "@/lib/developerNavigation";
 import { useInvitaciones } from "@/lib/invitaciones";
 import { ensureAgencyContactForPromoter } from "@/lib/invitationContacts";
+import {
+  isInvitacionDescartada, descartarInvitacion,
+  onInvitacionesDescartadasChanged,
+} from "@/lib/invitacionesDescartadas";
 import { useEmpresa } from "@/lib/empresa";
 import { addPromotionToCartera, useAgencyCartera } from "@/lib/agencyCartera";
 import { Flag } from "@/components/ui/Flag";
 import { findLanguageByCode } from "@/lib/languages";
 import { TEAM_MEMBERS, type TeamMember } from "@/lib/team";
+import { getPromoterDisplayName } from "@/lib/promotionRole";
 
 function formatPrice(n: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
@@ -308,7 +314,24 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const [canShareOverride, setCanShareOverride] = useState<boolean | null>(null);
   // Edit dialogs
   const [editOpen, setEditOpen] = useState<null | "multimedia" | "basicInfo" | "structure" | "description" | "location" | "paymentPlan" | "showHouse" | "memoria" | "planos" | "brochure" | "contacts" | "inventory" | "salesOffices">(null);
-  const [salesOffices, setSalesOffices] = useState<SalesOffice[]>([]);
+  /** IDs de las oficinas del workspace que actúan como puntos de venta
+   *  para esta promoción. Se inicializan desde `p.puntosDeVentaIds` y
+   *  los datos completos se resuelven vía `useOficinas()` — esa es la
+   *  ÚNICA fuente de verdad. Nunca guardamos copias inline. */
+  const [salesOfficeIds, setSalesOfficeIds] = useState<string[]>([]);
+  const { oficinas: workspaceOficinas } = useOficinas();
+  const salesOffices: SalesOffice[] = workspaceOficinas
+    .filter((o) => salesOfficeIds.includes(o.id))
+    .map((o) => ({
+      id: o.id,
+      nombre: o.nombre,
+      direccion: [o.direccion, o.ciudad].filter(Boolean).join(", "),
+      telefono: o.telefono,
+      email: o.email,
+      whatsapp: o.whatsapp,
+      coverUrl: o.coverUrl || undefined,
+    }));
+  const setSalesOffices = (next: SalesOffice[]) => setSalesOfficeIds(next.map((o) => o.id));
 
   // Si el id pertenece a un borrador (localStorage), lo gestionamos en
   // modo reactivo: mantenemos el WizardState en estado local y cada
@@ -399,7 +422,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
   if (p && !initialized) {
     setComercialesList(p.comerciales || []);
-    setSalesOffices((p.puntosDeVenta || []) as SalesOffice[]);
+    setSalesOfficeIds((p as DevPromotion).puntosDeVentaIds ?? []);
     setInitialized(true);
   }
 
@@ -690,7 +713,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           - Tabs con subrayado (mismo patrón que /empresa) en vez de pills
             con fondo. El <Separator> desaparece porque el borde inferior
             del <nav> hace de separador visual. */}
-      <header className="px-3 sm:px-8 lg:px-10 pt-4 sm:pt-6 pb-0">
+      <header className="max-w-[1400px] mx-auto px-3 sm:px-8 lg:px-10 pt-4 sm:pt-6 pb-0">
         {/* Back link · visible en todos los tamaños. En móvil el
             MobileHeader también pone una flecha, pero aquí damos
             un camino de vuelta explícito dentro del contenido. */}
@@ -800,15 +823,32 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 <MapPin className="h-3.5 w-3.5 shrink-0" />
                 {p.location || "Sin ubicación"}
               </span>
-              {p.developer && (
-                <>
-                  <span className="hidden sm:inline text-border">·</span>
-                  <span className="inline-flex items-center gap-1">
-                    <Building2 className="h-3.5 w-3.5 shrink-0" />
-                    {p.developer}
-                  </span>
-                </>
-              )}
+              {(() => {
+                const promoterName = getPromoterDisplayName(p);
+                if (!promoterName) return null;
+                // Si quien mira es una agencia, el nombre del promotor
+                // es clicable · destino lo decide `developerHref`
+                // (panel operativo si ya colabora, ficha pública si no).
+                return (
+                  <>
+                    <span className="hidden sm:inline text-border">·</span>
+                    {viewAsCollaborator ? (
+                      <Link
+                        to={developerHref(currentUser, { fromPromoId: p.id })}
+                        className="inline-flex items-center gap-1 hover:text-foreground transition-colors group"
+                      >
+                        <Building2 className="h-3.5 w-3.5 shrink-0" />
+                        <span className="underline-offset-2 group-hover:underline">{promoterName}</span>
+                      </Link>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        <Building2 className="h-3.5 w-3.5 shrink-0" />
+                        {promoterName}
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
               {p.delivery && (
                 <>
                   <span className="hidden sm:inline text-border">·</span>
@@ -998,8 +1038,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       </header>
 
       <div
-        className="p-3 sm:p-[25px] w-full min-w-0"
-        style={{ maxWidth: (activeTabKey === "Availability" || activeTabKey === "Agencies" || activeTabKey === "Overview") ? undefined : "1250px" }}
+        className="max-w-[1400px] mx-auto p-3 sm:p-[25px] w-full min-w-0"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
@@ -1106,7 +1145,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
              *  se forzaba flex-col en modo agencia sin motivo claro; quedaba
              *  incoherente con la tab Disponibilidad que ya usa `lg:flex-row`
              *  en ambos roles. */}
-            <div className="flex gap-4 lg:flex-row flex-col w-full max-w-[1570px] min-w-0">
+            <div className="flex gap-4 lg:flex-row flex-col w-full max-w-[1400px] mx-auto min-w-0">
               {/* ── LEFT: Main content ── */}
               <div className="flex-1 min-w-0 space-y-5 order-2 lg:order-1">
 
@@ -1337,7 +1376,10 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   {p.name} es una promoción {typeLabel?.toLowerCase() || "residencial"} situada en {p.location || "España"}.
                   {/* El nombre del promotor se oculta en vista colaborador (la agencia no expone al promotor). */}
-                  {!viewAsCollaborator && p.developer && ` Desarrollada por ${p.developer}.`}
+                  {!viewAsCollaborator && (() => {
+                    const promoterName = getPromoterDisplayName(p);
+                    return promoterName ? ` Desarrollada por ${promoterName}.` : "";
+                  })()}
                   {p.totalUnits > 0 && ` El proyecto consta de ${p.totalUnits} unidades con entrega estimada para ${p.delivery || "por definir"}.`}
                   {p.propertyTypes.length > 0 && ` Las tipologías incluyen ${p.propertyTypes.join(", ").toLowerCase()}.`}
                 </p>
@@ -1697,7 +1739,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
         {/* ═══ TAB: AVAILABILITY ═══ */}
         {activeTabKey === "Availability" && (
-          <div className="flex gap-4 lg:flex-row flex-col w-full max-w-[1570px] min-w-0">
+          <div className="flex gap-4 lg:flex-row flex-col w-full max-w-[1400px] mx-auto min-w-0">
             {/* Main content */}
             <div className="flex-1 min-w-0 order-2 lg:order-1">
               <PromotionAvailabilityFull
@@ -2323,21 +2365,21 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       <PickSalesOfficesDialog
         open={pickOfficesOpen}
         onOpenChange={setPickOfficesOpen}
-        pool={companyOffices.map(o => ({
-          id: o.id, name: o.name, address: o.address, city: o.city,
-          phone: o.phone, email: o.email, coverUrl: o.coverUrl,
+        pool={workspaceOficinas.map((o) => ({
+          id: o.id,
+          name: o.nombre,
+          address: o.direccion,
+          city: o.ciudad,
+          phone: o.telefono,
+          email: o.email,
+          coverUrl: o.coverUrl || undefined,
         }))}
-        alreadyAddedIds={salesOffices.map(o => o.id)}
+        alreadyAddedIds={salesOfficeIds}
         onConfirm={(picked) => {
-          const additions: SalesOffice[] = picked.map(o => ({
-            id: o.id,
-            nombre: o.name,
-            direccion: [o.address, o.city].filter(Boolean).join(", "),
-            telefono: o.phone || "",
-            email: o.email || "",
-            coverUrl: o.coverUrl,
-          }));
-          setSalesOffices(prev => [...prev, ...additions]);
+          setSalesOfficeIds((prev) => [
+            ...prev,
+            ...picked.map((o) => o.id).filter((id) => !prev.includes(id)),
+          ]);
         }}
       />
 
@@ -2609,7 +2651,7 @@ function AgenciesTab({ promotionId, navigate, onInvite, canShare = true, onActiv
   const hasSidebar = otherPromoAgencies.length > 0;
 
   return (
-    <div className="space-y-5 w-full max-w-[1570px] min-w-0">
+    <div className="space-y-5 w-full max-w-[1400px] mx-auto min-w-0">
       {/* KPI hero — scoped to this promotion */}
       {allRelevant.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -3705,15 +3747,32 @@ function OfficeMiniCard({ office: o }: { office: PuntoDeVentaType }) {
 /* ══════════════ AgencyInvitationBanner ══════════════
    Banner al tope de la ficha de una promoción · solo se pinta cuando
    el usuario es una agencia con una invitación `pendiente` a esta
-   promoción concreta. Permite aceptar inline con un botón "Añadir a
-   mi cartera". Al aceptar, cambia estado a "aceptada" · el historial
-   cross-empresa se dispara en el flujo real. */
+   promoción concreta y NO la ha descartado localmente.
+
+   Caso 2a (agencia ya colaboradora · CLAUDE.md regla "vista de
+   agencia"): la agencia ya tiene workspace en Byvaro · al recibir la
+   invitación a una promoción nueva, simplemente la añade a su cartera
+   o la descarta. NO hay "Aceptar/Rechazar" porque NO es un contrato
+   nuevo · es solo ampliar el scope del contrato marco existente.
+
+   Acciones:
+     · "Añadir a mi cartera" → muta estado a aceptada + persiste
+       cartera + crea contacto bidireccional (lado agencia).
+     · "Descartar" → SILENCIOSO · solo descarta localmente (la agencia
+       deja de ver el banner). El promotor sigue viendo la invitación
+       como pendiente y caducará por timeout. NO emite eventos
+       cross-empresa · no fricciona la relación.
+*/
 function AgencyInvitationBanner({
   agencyId, promotionId,
 }: { agencyId: string; promotionId: string }) {
-  const { lista, aceptar, revocar } = useInvitaciones();
+  const { lista, aceptar } = useInvitaciones();
   const currentUser = useCurrentUser();
   const { empresa: promotorEmpresa } = useEmpresa();
+  /* Re-render local cuando cambia el set de invitaciones descartadas. */
+  const [, forceTick] = useState(0);
+  useEffect(() => onInvitacionesDescartadasChanged(() => forceTick((n) => n + 1)), []);
+
   const email = useMemo(() => {
     const a = agencies.find((x) => x.id === agencyId);
     return a?.contactoPrincipal?.email?.toLowerCase() ?? null;
@@ -3722,16 +3781,17 @@ function AgencyInvitationBanner({
     return lista.find((i) =>
       i.promocionId === promotionId
       && i.estado === "pendiente"
-      && (i.agencyId === agencyId || (email && i.emailAgencia.toLowerCase() === email)),
+      && (i.agencyId === agencyId || (email && i.emailAgencia.toLowerCase() === email))
+      && !isInvitacionDescartada(i.id),
     );
   }, [lista, promotionId, agencyId, email]);
 
   if (!invitation) return null;
 
-  const handleAccept = () => {
+  const handleAdd = () => {
     aceptar(invitation.id);
     addPromotionToCartera(agencyId, promotionId);
-    /* Lado agencia · al aceptar la invitación, persistimos al PROMOTOR
+    /* Lado agencia · al añadir a cartera, persistimos al PROMOTOR
      * como contacto (kind=company) en el CRM de la agencia. Idempotente.
      * Ver `docs/backend-integration.md §16`. */
     ensureAgencyContactForPromoter({
@@ -3750,18 +3810,23 @@ function AgencyInvitationBanner({
       description: "Ya puedes registrar clientes para esta promoción.",
     });
     /* TODO(backend) · persistir también en agency.promotionsCollaborating
-     *  + recordCompanyAny(agency.id, "invitation_accepted", ...) */
+     *  + recordCompanyAny(agency.id, "promotion_added_to_cartera", ...) */
   };
 
-  const handleReject = () => {
-    revocar(invitation.id);
-    toast.info("Invitación rechazada");
+  /* Descarte SILENCIOSO · solo desaparece de la vista de la agencia · NO
+   * notifica al promotor/comercializador · él la sigue viendo como
+   * pendiente y caducará por timeout estándar. */
+  const handleDismiss = () => {
+    descartarInvitacion(invitation.id);
+    toast("Invitación descartada", {
+      description: "Ya no la verás · el remitente no recibe notificación.",
+    });
   };
 
   return (
-    <div className="sticky top-0 z-40 bg-destructive/5 border-b border-destructive/20 px-4 sm:px-6 lg:px-8 py-3">
-      <div className="max-w-[1570px] mx-auto flex items-start sm:items-center gap-3 flex-wrap">
-        <span className="h-9 w-9 rounded-xl bg-destructive text-destructive-foreground grid place-items-center shrink-0">
+    <div className="sticky top-0 z-40 bg-primary/5 border-b border-primary/20 px-4 sm:px-6 lg:px-8 py-3">
+      <div className="max-w-[1400px] mx-auto flex items-start sm:items-center gap-3 flex-wrap">
+        <span className="h-9 w-9 rounded-xl bg-primary text-primary-foreground grid place-items-center shrink-0">
           <MailPlus className="h-4 w-4" strokeWidth={2} />
         </span>
         <div className="flex-1 min-w-0">
@@ -3769,7 +3834,7 @@ function AgencyInvitationBanner({
             {currentUser.name} · {currentUser.email ? currentUser.email : ""}
           </p>
           <p className="text-[12px] text-muted-foreground">
-            Te han invitado a colaborar en esta promoción ·
+            Te han invitado a esta promoción ·
             <span className="text-foreground font-medium"> {invitation.comisionOfrecida}%</span>
             {typeof invitation.duracionMeses === "number" && invitation.duracionMeses > 0
               ? ` · ${invitation.duracionMeses} meses`
@@ -3779,15 +3844,16 @@ function AgencyInvitationBanner({
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={handleReject}
-            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full border border-border bg-card text-[13px] font-medium text-foreground hover:bg-muted transition-colors"
+            onClick={handleDismiss}
+            title="Descartar · no notifica al remitente"
+            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full border border-border bg-card text-[13px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             <X className="h-3.5 w-3.5" strokeWidth={2} />
-            Rechazar
+            Descartar
           </button>
           <button
             type="button"
-            onClick={handleAccept}
+            onClick={handleAdd}
             className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-foreground text-background text-[13px] font-semibold hover:bg-foreground/90 transition-colors"
           >
             <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />

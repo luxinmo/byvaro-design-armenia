@@ -36,9 +36,21 @@ export interface Empresa {
   nombreComercial: string;
   razonSocial: string;
   cif: string;
-  logoUrl: string;              // data: URL o URL externa
+  logoUrl: string;              // data: URL o URL externa (recortada · para mostrar en UI)
   logoShape: "circle" | "square"; // forma del logo en el hero
-  coverUrl: string;             // portada grande del perfil público
+  coverUrl: string;             // portada grande del perfil público (recortada · para mostrar)
+  /* Imagen ORIGINAL sin recortar · sirve solo al editor para que el
+   * usuario pueda volver a entrar y ajustar el encuadre desde el
+   * mismo material de partida. Si está vacío, el editor cae a
+   * `logoUrl`/`coverUrl` (legacy o uploads externos). */
+  logoSourceUrl?: string;
+  coverSourceUrl?: string;
+  /* Parámetros de recorte (zoom + drag) que se usaron al guardar.
+   * Permite restaurar la vista del editor exactamente como la dejó
+   * el usuario · `posX/posY` se interpretan en coords del contenedor
+   * que el editor decida (escala se mantiene relativa). */
+  logoCrop?: { zoom: number; posX: number; posY: number };
+  coverCrop?: { zoom: number; posX: number; posY: number };
   colorCorporativo: string;     // hex "#AA2417"
   fundadaEn: string;            // "2012"
   subtitle: string;             // "{Town}, {Province}, {Country} · Founded in {year}"
@@ -58,16 +70,10 @@ export interface Empresa {
   facebook: string;
   youtube: string;
   tiktok: string;
-  // KPIs editables en Home
-  aniosOperando: string;        // "13"
-  oficinasCount: string;        // "01"
-  agentesCount: string;         // "01"
-  promocionesCount: string;     // "42"
-  unidadesVendidas: string;     // "250"
-  agenciasColaboradoras: string;// "47"
-  ventasAnuales: string;        // "0"
-  ingresosAnuales: string;      // "0"
-  portfolio: string;            // "0"
+  // KPIs derivados del sistema · ver `useEmpresaStats()` en
+  // `src/lib/empresaStats.ts`. NO se almacenan aquí — los conteos se
+  // calculan en runtime desde los datasets reales (promociones,
+  // agencias, sales, oficinas, team) para evitar desincronía.
   // Zonas y especialidades
   zonasOperacion: string[];     // ["Costa del Sol", "Costa Blanca"]
   especialidades: string[];     // ["Luxury", "Coastal", "Residencial"]
@@ -88,6 +94,51 @@ export interface Empresa {
   // Verificación
   verificada: boolean;
   verificadaEl: string;         // ISO date
+  /* Solicitud de verificación · datos que el promotor envía al
+   * superadmin de Byvaro para iniciar el KYC. Se persisten aquí solo
+   * mientras dura el proceso · al verificar (`verificada=true`) se
+   * conservan como histórico (auditoría: ¿quién pidió la verificación
+   * y cuándo?). Ver `docs/screens/empresa.md §Verificación`. */
+  verificacionEstado?:
+    | "no-iniciada"        // estado por defecto
+    | "datos-pendientes"   // form abierto, sin enviar
+    | "firmafy-pendiente"  // datos enviados, esperando firma del representante
+    | "revision-byvaro"    // firmado, esperando validación del superadmin
+    | "verificada"         // aprobada (alineado con `verificada=true`)
+    | "rechazada";         // superadmin rechaza · puede reintentar
+  verificacionRepresentante?: {
+    /** Id del miembro del workspace seleccionado · trazable contra
+     *  `useWorkspaceMembers()`. Vacío si el promotor introduce los
+     *  datos manualmente. */
+    memberId?: string;
+    nombreCompleto: string;
+    email: string;
+    telefono: string;
+    phonePrefix?: string;          // "+34" por defecto
+  };
+  /* Firmantes en nombre de la empresa.
+   *  - `firmaUnica = true` → solo el representante puede firmar
+   *    documentos legales en nombre de la empresa.
+   *  - `firmaUnica = false` → hay otras personas autorizadas
+   *    listadas en `autorizados`. Al verificar, todas deben aparecer
+   *    en los poderes notariales o ser apoderados solidariamente. La
+   *    asignación de QUIÉN firma QUÉ documento se decide más adelante
+   *    al lanzar cada flujo de Firmafy. */
+  verificacionFirmaUnica?: boolean;
+  verificacionAutorizados?: Array<{
+    nombreCompleto: string;
+    email: string;
+    telefono: string;
+    phonePrefix?: string;
+  }>;
+  /* Cada doc puede tener uno o varios ficheros (p.ej. DNI necesita
+   * frontal + dorso, o el promotor sube PDF + foto del registro). En
+   * backend cada ítem es un `fileId` referenciando un blob storage. */
+  verificacionDocs?: {
+    cifEmpresa?: Array<{ name: string; dataUrl: string; uploadedAt: string; mime?: string }>;
+    identidadRepresentante?: Array<{ name: string; dataUrl: string; uploadedAt: string; mime?: string }>;
+  };
+  verificacionSolicitadaEl?: string; // ISO · cuándo el promotor pulsó "Solicitar"
   // Rating Google (Places API · refrescado semanal por el backend)
   googlePlaceId: string;        // id devuelto por Places API
   googleRating: number;         // 0-5 (0 = sin datos)
@@ -120,6 +171,12 @@ export interface Oficina {
 /* ═══════════════════════════════════════════════════════════════════
    Defaults
    ═══════════════════════════════════════════════════════════════════ */
+/* Default `defaultEmpresa` · TODOS los campos VACÍOS · sin demo data.
+ *  El nombre real se rellena en el onboarding del workspace
+ *  (`/empresa` o equivalente) · NUNCA hardcodear "Luxinmo" o similar
+ *  · sería data de demo filtrándose a producción. Cuando un componente
+ *  pinta el nombre y está vacío, debe mostrar un placeholder genérico
+ *  ("Tu empresa") o un CTA al onboarding · NO un nombre fake. */
 export const defaultEmpresa: Empresa = {
   nombreComercial: "",
   razonSocial: "",
@@ -127,7 +184,7 @@ export const defaultEmpresa: Empresa = {
   logoUrl: "",
   coverUrl: "",
   logoShape: "circle",
-  colorCorporativo: "#AA2417",       // brand Byvaro por defecto
+  colorCorporativo: "#1D74E7",       // brand color Byvaro · neutro
   fundadaEn: "",
   subtitle: "",
   tagline: "",
@@ -144,15 +201,6 @@ export const defaultEmpresa: Empresa = {
   facebook: "",
   youtube: "",
   tiktok: "",
-  aniosOperando: "0",
-  oficinasCount: "0",
-  agentesCount: "0",
-  promocionesCount: "0",
-  unidadesVendidas: "0",
-  agenciasColaboradoras: "0",
-  ventasAnuales: "0",
-  ingresosAnuales: "0",
-  portfolio: "0",
   zonasOperacion: [],
   especialidades: [],
   idiomasAtencion: ["es"],
@@ -220,7 +268,122 @@ export function isValidCifBasico(cif: string): boolean {
 const EMPRESA_KEY = "byvaro-empresa";
 const OFICINAS_KEY = "byvaro-oficinas";
 
-function loadEmpresa(): Empresa {
+/* Seed inicial · `byvaro-oficinas` es la ÚNICA fuente de verdad de
+ * oficinas del workspace. Toda promoción que muestre un punto de
+ * venta lo hace referenciando un id de esta lista (campo
+ * `Promotion.puntosDeVentaIds`). REGLA: nunca puede haber una oficina
+ * que aparezca en una promoción y no exista aquí — sería una "oficina
+ * fantasma".
+ *
+ * Se persiste al primer load si localStorage no tiene
+ * `byvaro-oficinas` declarado. Si el usuario las borra, localStorage
+ * queda como `[]` (set pero vacío) y NO se re-seedean. */
+const OFICINAS_SEED: Oficina[] = [
+  {
+    id: "of-1",
+    nombre: "Oficina Central Marbella",
+    direccion: "Av. del Mar 15",
+    ciudad: "Marbella",
+    provincia: "Málaga",
+    telefono: "+34 952 123 456",
+    phonePrefix: "+34",
+    email: "marbella@luxinmo.com",
+    whatsapp: "+34 652 123 456",
+    horario: "L-V 9:00-19:00 · S 10:00-14:00",
+    logoUrl: "",
+    coverUrl: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&h=400&fit=crop",
+    esPrincipal: true,
+    activa: true,
+    createdAt: Date.parse("2024-01-15") || 0,
+  },
+  {
+    id: "of-2",
+    nombre: "Showroom Puerto Banús",
+    direccion: "Puerto Banús, Local 8",
+    ciudad: "Marbella",
+    provincia: "Málaga",
+    telefono: "+34 952 654 321",
+    phonePrefix: "+34",
+    email: "banus@luxinmo.com",
+    whatsapp: "+34 652 654 321",
+    horario: "L-V 10:00-20:00 · S-D 11:00-19:00",
+    logoUrl: "",
+    coverUrl: "https://images.unsplash.com/photo-1604328698692-f76ea9498e76?w=600&h=400&fit=crop",
+    esPrincipal: false,
+    activa: true,
+    createdAt: Date.parse("2024-06-01") || 0,
+  },
+  {
+    id: "of-3",
+    nombre: "Sales Office Jávea",
+    direccion: "Av. del Plá 12",
+    ciudad: "Jávea",
+    provincia: "Alicante",
+    telefono: "+34 965 123 456",
+    phonePrefix: "+34",
+    email: "javea@luxinmo.com",
+    whatsapp: "+34 665 123 456",
+    horario: "L-V 9:30-18:30",
+    logoUrl: "",
+    coverUrl: "https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=800&h=500&fit=crop&q=80",
+    esPrincipal: false,
+    activa: true,
+    createdAt: Date.parse("2025-03-10") || 0,
+  },
+  {
+    id: "of-4",
+    nombre: "Madrid HQ",
+    direccion: "Paseo de la Castellana 89",
+    ciudad: "Madrid",
+    provincia: "Madrid",
+    telefono: "+34 910 123 456",
+    phonePrefix: "+34",
+    email: "madrid@luxinmo.com",
+    whatsapp: "",
+    horario: "L-V 9:00-19:00",
+    logoUrl: "",
+    coverUrl: "https://images.unsplash.com/photo-1554469384-e58fac16e23a?w=600&h=400&fit=crop",
+    esPrincipal: false,
+    activa: true,
+    createdAt: Date.parse("2024-09-01") || 0,
+  },
+  {
+    id: "of-5",
+    nombre: "Costa Blanca Office",
+    direccion: "C/ del Sol 22",
+    ciudad: "Torrevieja",
+    provincia: "Alicante",
+    telefono: "+34 966 100 200",
+    phonePrefix: "+34",
+    email: "torrevieja@luxinmo.com",
+    whatsapp: "",
+    horario: "L-V 10:00-18:00",
+    logoUrl: "",
+    coverUrl: "",
+    esPrincipal: false,
+    activa: true,
+    createdAt: Date.parse("2025-01-15") || 0,
+  },
+  {
+    id: "of-6",
+    nombre: "Mijas Showroom",
+    direccion: "Av. de Mijas 5",
+    ciudad: "Mijas",
+    provincia: "Málaga",
+    telefono: "+34 952 555 010",
+    phonePrefix: "+34",
+    email: "mijas@luxinmo.com",
+    whatsapp: "",
+    horario: "L-V 9:30-19:00 · S 10:00-14:00",
+    logoUrl: "",
+    coverUrl: "https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=600&h=400&fit=crop",
+    esPrincipal: false,
+    activa: true,
+    createdAt: Date.parse("2025-02-01") || 0,
+  },
+];
+
+export function loadEmpresa(): Empresa {
   try {
     const raw = localStorage.getItem(EMPRESA_KEY);
     if (!raw) return defaultEmpresa;
@@ -239,9 +402,23 @@ function saveEmpresa(e: Empresa) {
 function loadOficinas(): Oficina[] {
   try {
     const raw = localStorage.getItem(OFICINAS_KEY);
-    if (!raw) return [];
+    if (raw === null) {
+      // Primera carga · persiste el seed para que el usuario pueda
+      // editar/borrar y los cambios se mantengan.
+      localStorage.setItem(OFICINAS_KEY, JSON.stringify(OFICINAS_SEED));
+      return [...OFICINAS_SEED];
+    }
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
+    // Demo · si el array existe pero está vacío (sesión previa que aún
+    // no había seedeado), re-seedeamos. Las promociones tienen
+    // `puntosDeVentaIds` que apuntan a estas oficinas, y mostrar 0
+    // oficinas en /empresa con esas promociones referenciándolas
+    // dejaría "oficinas fantasma".
+    if (parsed.length === 0) {
+      localStorage.setItem(OFICINAS_KEY, JSON.stringify(OFICINAS_SEED));
+      return [...OFICINAS_SEED];
+    }
     return parsed as Oficina[];
   } catch {
     return [];
@@ -266,11 +443,23 @@ function saveOficinas(list: Oficina[]) {
      · /empresa                → useEmpresa()                ← owner
      · /colaboradores/:id      → useEmpresa(id)               ← visitor
    ═══════════════════════════════════════════════════════════════════ */
+/** Sentinel del promotor único en single-tenant mock · ver
+ *  `src/lib/developerNavigation.ts`. Cuando `tenantId` arranca con
+ *  este prefijo, `useEmpresa` resuelve los datos del promotor desde
+ *  el storage del workspace (`byvaro-empresa`) en vez de la lista
+ *  de agencias · permite que la ruta `/promotor/:id` muestre la
+ *  ficha pública del promotor en modo visitor. */
+const DEVELOPER_TENANT_PREFIX = "developer-";
+
 export function useEmpresa(tenantId?: string) {
   const isVisitor = !!tenantId;
 
   const loadTenant = useCallback((): Empresa => {
     if (!tenantId) return loadEmpresa();
+    if (tenantId.startsWith(DEVELOPER_TENANT_PREFIX)) {
+      // Promotor · datos vienen del workspace (mock single-tenant).
+      return loadEmpresa();
+    }
     // Resolución mock · cuando haya backend: fetch a /api/empresas/:id/public
     const agency = agencies.find((a) => a.id === tenantId);
     return agency ? agencyToEmpresa(agency) : defaultEmpresa;

@@ -13,9 +13,8 @@
  */
 
 import {
-  CheckCircle2, Circle, Sparkles, ArrowRight,
+  CheckCircle2, Circle,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import type { Empresa } from "@/lib/empresa";
 import { cn } from "@/lib/utils";
 
@@ -23,21 +22,25 @@ interface ChecklistItem {
   key: string;
   label: string;
   done: boolean;
+  /** Peso en el cómputo del % · default 10. La verificación de
+   *  empresa pesa 30 (≈ 3 slots) porque es lo que decide la
+   *  confianza de las agencias colaboradoras al aceptar la
+   *  invitación. Imagen de portada, historia ampliada y testimonios
+   *  ya no puntúan · son nice-to-have, no requisito. */
+  weight: number;
   action?: string;
 }
 
 function getChecklist(empresa: Empresa, oficinasCount: number): ChecklistItem[] {
   return [
-    { key: "nombre",    label: "Nombre comercial",       done: !!empresa.nombreComercial.trim() },
-    { key: "legal",     label: "Razón social y CIF",     done: !!empresa.razonSocial.trim() && !!empresa.cif.trim() },
-    { key: "logo",      label: "Logo subido",            done: !!empresa.logoUrl },
-    { key: "cover",     label: "Imagen de portada",      done: !!empresa.coverUrl },
-    { key: "overview",  label: "Resumen de empresa",     done: !!empresa.overview.trim() },
-    { key: "about",     label: "Historia ampliada",      done: !!empresa.aboutOverview.trim() },
-    { key: "zonas",     label: "Zonas de operación",     done: empresa.zonasOperacion.length > 0 },
-    { key: "oficinas",  label: "Al menos 1 oficina",     done: oficinasCount > 0 },
-    { key: "terminos",  label: "Comisión por defecto",   done: empresa.comisionNacionalDefault > 0 },
-    { key: "testimonios", label: "Al menos 1 testimonio", done: empresa.testimonios.length > 0 },
+    { key: "nombre",       label: "Nombre comercial",         weight: 10, done: !!empresa.nombreComercial.trim() },
+    { key: "legal",        label: "Razón social y CIF",       weight: 10, done: !!empresa.razonSocial.trim() && !!empresa.cif.trim() },
+    { key: "logo",         label: "Logo subido",              weight: 10, done: !!empresa.logoUrl },
+    { key: "overview",     label: "Resumen de empresa",       weight: 10, done: !!empresa.overview.trim() },
+    { key: "zonas",        label: "Zonas de operación",       weight: 10, done: empresa.zonasOperacion.length > 0 },
+    { key: "oficinas",     label: "Al menos 1 oficina",       weight: 10, done: oficinasCount > 0 },
+    { key: "terminos",     label: "Comisión por defecto",     weight: 10, done: empresa.comisionNacionalDefault > 0 },
+    { key: "verificada",   label: "Verificación de empresa",  weight: 30, done: !!empresa.verificada },
   ];
 }
 
@@ -83,16 +86,29 @@ function SidebarCard({
    EmpresaSidebar
    ═══════════════════════════════════════════════════════════════════ */
 export function EmpresaSidebar({
-  empresa, oficinasCount,
+  empresa, oficinasCount, update,
 }: {
   empresa: Empresa;
   oficinasCount: number;
+  /** Setter del hook `useEmpresa` · necesario para guardar la URL
+   *  de Google Maps desde el card del sidebar. */
+  update: <K extends keyof Empresa>(key: K, value: Empresa[K]) => void;
 }) {
-  const navigate = useNavigate();
   const checklist = getChecklist(empresa, oficinasCount);
+  /* Cómputo ponderado · cada item suma su `weight` cuando está done.
+   * Total fijo = 100. La verificación pesa 30; el resto 10 cada uno.
+   * Ej: sin verificar pero con todo lo demás → 70%. */
+  const totalWeight = checklist.reduce((acc, c) => acc + c.weight, 0);
+  const doneWeight = checklist.filter(c => c.done).reduce((acc, c) => acc + c.weight, 0);
+  const percent = Math.round((doneWeight / totalWeight) * 100);
   const done = checklist.filter(c => c.done).length;
   const total = checklist.length;
-  const percent = Math.round((done / total) * 100);
+
+  /* Una vez al 100% no aporta nada mantener el card · ya está todo
+   * hecho. Devolvemos null para no ocupar espacio en la columna. */
+  if (percent >= 100) {
+    return <aside className="hidden xl:flex w-[280px] shrink-0 flex-col gap-4" />;
+  }
 
   return (
     <aside className="hidden xl:flex w-[280px] shrink-0 flex-col gap-4">
@@ -144,33 +160,12 @@ export function EmpresaSidebar({
           </ul>
         </SidebarCard>
 
-        {/* ═════ Consejo del día ═════ */}
-        <SidebarCard title="">
-          <div className="flex items-start gap-2.5 -mt-2">
-            <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-            <div>
-              <p className="text-[11.5px] font-semibold text-foreground leading-tight">Consejo del día</p>
-              <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
-                Los perfiles con <strong>3+ testimonios y cover personalizada</strong> reciben 2× más visitas de agencias.
-              </p>
-            </div>
-          </div>
-        </SidebarCard>
-
-        {/* ═════ Gestiona tu red en Colaboradores ═════ */}
-        <SidebarCard title="Red de agencias">
-          <p className="text-[11.5px] text-muted-foreground leading-relaxed">
-            Invita y gestiona tus agencias colaboradoras desde el módulo de Red.
-          </p>
-          <button
-            type="button"
-            onClick={() => navigate("/colaboradores")}
-            className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-primary hover:underline self-start"
-          >
-            Ir a Colaboradores
-            <ArrowRight className="h-3 w-3" />
-          </button>
-        </SidebarCard>
+        {/* La configuración de Reseñas de Google se ha movido al tab
+            "Sobre nosotros" · sección "Reseñas de Google" en modo
+            edición. Allí hay espacio para la explicación completa.
+            El acceso a `/colaboradores` se ha movido al CTA "Ver
+            todos los colaboradores" dentro de la sección "Agencias
+            colaboradoras" del tab Inicio · evita duplicar entradas. */}
       </aside>
   );
 }

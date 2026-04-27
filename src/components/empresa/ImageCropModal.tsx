@@ -22,13 +22,24 @@ import {
 import { cn } from "@/lib/utils";
 
 export type CropShape = "circle" | "square" | "rectangle";
+export interface CropParams { zoom: number; posX: number; posY: number }
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  onApply: (dataUrl: string) => void;
+  /** Callback de aplicar · devuelve la imagen recortada lista para
+   *  mostrar (`croppedDataUrl`), la imagen ORIGINAL sin recortar
+   *  (`sourceDataUrl`) y los parámetros del crop · al volver a abrir
+   *  con esos datos el modal restaura exactamente el encuadre. */
+  onApply: (croppedDataUrl: string, sourceDataUrl: string, crop: CropParams) => void;
   onRemove?: () => void;
   initialImage?: string;                            // dataURL o URL
+  /** Imagen original (sin recortar) si existe · si la pasas, se usa
+   *  como punto de partida en lugar de `initialImage`. */
+  initialSource?: string;
+  /** Crop guardado · zoom + posX + posY · usado para restaurar la
+   *  vista al volver a abrir el editor. */
+  initialCrop?: CropParams;
   shape: CropShape;                                 // recorte inicial
   allowShapeSwitch?: boolean;                       // solo para logo
   onShapeChange?: (shape: "circle" | "square") => void;
@@ -38,30 +49,45 @@ interface Props {
 }
 
 export function ImageCropModal({
-  open, onClose, onApply, onRemove, initialImage, shape, allowShapeSwitch, onShapeChange,
+  open, onClose, onApply, onRemove, initialImage, initialSource, initialCrop,
+  shape, allowShapeSwitch, onShapeChange,
   title = "Editar foto",
   outputSize = { width: 512, height: 512 },
   aspectRatio = 1,
 }: Props) {
-  const [imgSrc, setImgSrc] = useState<string | undefined>(initialImage);
+  /* Imagen ORIGINAL · es la fuente de verdad para reabrir y reajustar.
+   * Si el padre pasó `initialSource` la usamos; si no, caemos a
+   * `initialImage` (legacy o URL externa donde no separamos source y
+   * crop · el comportamiento es el mismo que antes). */
+  const [imgSrc, setImgSrc] = useState<string | undefined>(initialSource ?? initialImage);
   const [currentShape, setCurrentShape] = useState<CropShape>(shape);
-  const [zoom, setZoom] = useState(1);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(initialCrop?.zoom ?? 1);
+  const [position, setPosition] = useState({
+    x: initialCrop?.posX ?? 0,
+    y: initialCrop?.posY ?? 0,
+  });
   const [dragging, setDragging] = useState(false);
   const [imgDims, setImgDims] = useState<{ w: number; h: number } | null>(null);
   const dragStart = useRef<{ x: number; y: number; startX: number; startY: number }>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  /* Reset state al abrir con una nueva imagen */
+  /* Reset solo al abrir el modal · NO en cada cambio de `initialImage`
+   * o `shape`. Antes el efecto se disparaba al togglear redondo↔cuadrado
+   * (porque `shape` viaja por el padre vía `update("logoShape", …)`),
+   * y machacaba `imgSrc` con `initialImage` perdiendo la foto recién
+   * subida. Ahora el toggle de forma solo cambia el overlay del recorte;
+   * la imagen y posición permanecen intactas hasta que el usuario
+   * pulse Aplicar / Eliminar / Cerrar. */
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (open) {
-      setImgSrc(initialImage);
+    if (open && !wasOpen.current) {
+      setImgSrc(initialSource ?? initialImage);
       setCurrentShape(shape);
-      setZoom(1);
-      setPosition({ x: 0, y: 0 });
+      setZoom(initialCrop?.zoom ?? 1);
+      setPosition({ x: initialCrop?.posX ?? 0, y: initialCrop?.posY ?? 0 });
     }
-  }, [open, initialImage, shape]);
+    wasOpen.current = open;
+  }, [open, initialImage, initialSource, initialCrop, shape]);
 
   /* Dimensiones naturales de la imagen */
   useEffect(() => {
@@ -82,9 +108,45 @@ export function ImageCropModal({
   if (!open) return null;
 
   const isRectangle = currentShape === "rectangle";
-  const containerAspect = isRectangle ? aspectRatio : 1;
-  const containerHeight = 340;
-  const containerWidth = isRectangle ? containerHeight * aspectRatio : containerHeight;
+  const innerPadding = 24 * 2; /* `px-6` a cada lado */
+  /* Ancho del modal · 560 para circle/square · más ancho para
+   * rectangle (cover) para dejar holgura alrededor del recorte. */
+  const modalMaxWidth = isRectangle ? 900 : 560;
+  const maxContentWidth = modalMaxWidth - innerPadding;
+  /* `containerWidth × containerHeight` es el espacio VISIBLE de la
+   * imagen — el usuario ve toda la imagen aquí y puede arrastrarla.
+   * `cropW × cropH` es el RECORTE real (lo que se guarda) · queda
+   * centrado dentro del contenedor con margen oscurecido alrededor.
+   * Para circle/square el recorte coincide con el contenedor (no hay
+   * margen visible) · para rectangle dejamos margen para que el
+   * usuario vea el "antes y después". */
+  let containerWidth: number;
+  let containerHeight: number;
+  let cropW: number;
+  let cropH: number;
+  if (isRectangle) {
+    containerWidth = maxContentWidth;     // 852
+    containerHeight = 320;                // alto generoso para arrastrar
+    /* Recorte: ocupa el ancho con un margen de 50px a cada lado,
+     * altura derivada del aspect ratio. Si no cabe verticalmente,
+     * recalcula desde la altura. */
+    const horizMargin = 50;
+    cropW = containerWidth - 2 * horizMargin;
+    cropH = cropW / aspectRatio;
+    const maxCropH = containerHeight - 2 * 40;
+    if (cropH > maxCropH) {
+      cropH = maxCropH;
+      cropW = cropH * aspectRatio;
+    }
+  } else {
+    const desired = 340;
+    containerWidth = Math.min(desired, maxContentWidth);
+    containerHeight = containerWidth;
+    cropW = containerWidth;
+    cropH = containerHeight;
+  }
+  const cropLeft = (containerWidth - cropW) / 2;
+  const cropTop = (containerHeight - cropH) / 2;
 
   /* ─── Drag handlers ─── */
   const onMouseDown = (e: React.MouseEvent) => {
@@ -126,7 +188,12 @@ export function ImageCropModal({
     reader.readAsDataURL(f);
   };
 
-  /* ─── Apply: render a canvas y devolver dataURL ─── */
+  /* ─── Apply: render a canvas y devolver dataURL ───
+   * Se devuelve TANTO la imagen recortada lista para mostrar como la
+   * imagen ORIGINAL sin recortar (`imgSrc`) y los parámetros de
+   * recorte. Así el padre puede persistir las tres cosas y, al
+   * reabrir el editor, restaurar exactamente el encuadre · el usuario
+   * puede reajustar sin perder material. */
   const handleApply = () => {
     if (!imgSrc || !imgDims || !containerRef.current) return;
     const canvas = document.createElement("canvas");
@@ -137,25 +204,23 @@ export function ImageCropModal({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Calculamos el área visible del contenedor en coords de la imagen
-    // Imagen en contenedor: se escala con "cover" más zoom
     const img = new Image();
     img.onload = () => {
-      // Escala para cubrir el contenedor
+      /* Escala efectiva (image source → display): cover relativo al
+       * CONTENEDOR (la imagen llena el espacio visible) por el zoom. */
       const scaleCover = Math.max(containerWidth / img.width, containerHeight / img.height);
       const scale = scaleCover * zoom;
       const drawW = img.width * scale;
       const drawH = img.height * scale;
-
-      // Posición del top-left de la imagen dentro del contenedor
       const imgLeft = (containerWidth - drawW) / 2 + position.x;
       const imgTop = (containerHeight - drawH) / 2 + position.y;
 
-      // Origen en coords de imagen del área visible (container start)
-      const srcX = (0 - imgLeft) / scale;
-      const srcY = (0 - imgTop) / scale;
-      const srcW = containerWidth / scale;
-      const srcH = containerHeight / scale;
+      /* Origen en coords de imagen del RECORTE (no del contenedor).
+       * Para circle/square el recorte coincide con el contenedor (cropLeft=0). */
+      const srcX = (cropLeft - imgLeft) / scale;
+      const srcY = (cropTop - imgTop) / scale;
+      const srcW = cropW / scale;
+      const srcH = cropH / scale;
 
       if (currentShape === "circle") {
         ctx.save();
@@ -167,7 +232,8 @@ export function ImageCropModal({
       ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, outW, outH);
       if (currentShape === "circle") ctx.restore();
 
-      onApply(canvas.toDataURL("image/png", 0.92));
+      const croppedDataUrl = canvas.toDataURL("image/png", 0.92);
+      onApply(croppedDataUrl, imgSrc!, { zoom, posX: position.x, posY: position.y });
       onClose();
     };
     img.src = imgSrc;
@@ -186,7 +252,8 @@ export function ImageCropModal({
       onMouseLeave={onMouseUp}
     >
       <div
-        className="bg-card rounded-2xl border border-border shadow-lg w-full max-w-[560px] flex flex-col"
+        className="bg-card rounded-2xl border border-border shadow-lg w-full flex flex-col"
+        style={{ maxWidth: modalMaxWidth }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -267,44 +334,60 @@ export function ImageCropModal({
               onTouchMove={onTouchMove}
               onTouchEnd={onMouseUp}
             >
-              {/* Imagen */}
+              {/* Imagen · CRÍTICO: w-full h-full + object-cover.
+                  Antes era `minWidth/minHeight: 100%` con `max: none`
+                  · eso renderiza la imagen a su tamaño natural cuando
+                  era más grande que el contenedor, NO a cover.
+                  Resultado: lo visible en el modal NO coincidía con
+                  lo que el canvas en `handleApply` sampleaba (que
+                  asume cover-scaling). Con `w-full h-full
+                  object-cover` el box siempre mide igual que el
+                  contenedor y el contenido se cover-escala dentro,
+                  igual que el canvas · WYSIWYG. */}
               <img
                 src={imgSrc}
                 alt=""
                 draggable={false}
-                className="absolute left-1/2 top-1/2 pointer-events-none"
+                className="absolute inset-0 w-full h-full pointer-events-none"
                 style={{
-                  transform: `translate(-50%, -50%) translate(${position.x}px, ${position.y}px) scale(${zoom})`,
-                  minWidth: "100%",
-                  minHeight: "100%",
+                  transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+                  transformOrigin: "center center",
                   objectFit: "cover",
-                  maxWidth: "none",
-                  maxHeight: "none",
                 }}
               />
-              {/* Overlay con recorte */}
-              <div
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  background: currentShape === "circle"
-                    ? `radial-gradient(circle at center, transparent 0 calc(${Math.min(containerWidth, containerHeight) / 2}px - 1px), rgba(0,0,0,0.55) calc(${Math.min(containerWidth, containerHeight) / 2}px))`
-                    : currentShape === "square"
-                      ? "none"
-                      : "none",
-                }}
-              />
-              {/* Guía de recorte */}
+              {/* Overlay oscurece las zonas FUERA del recorte. Para
+                  rectangle: 4 bandas (top/bottom/left/right) · para
+                  circle: radial gradient · para square: nada (el
+                  recorte ocupa todo el contenedor). Lo que el usuario
+                  ve dentro del rectángulo discontinuo es exactamente
+                  lo que se guarda. */}
+              {currentShape === "rectangle" && (
+                <>
+                  <div className="absolute pointer-events-none bg-black/55" style={{ left: 0, right: 0, top: 0, height: cropTop }} />
+                  <div className="absolute pointer-events-none bg-black/55" style={{ left: 0, right: 0, bottom: 0, height: cropTop }} />
+                  <div className="absolute pointer-events-none bg-black/55" style={{ left: 0, top: cropTop, width: cropLeft, height: cropH }} />
+                  <div className="absolute pointer-events-none bg-black/55" style={{ right: 0, top: cropTop, width: cropLeft, height: cropH }} />
+                </>
+              )}
+              {currentShape === "circle" && (
+                <div
+                  className="absolute inset-0 pointer-events-none"
+                  style={{
+                    background: `radial-gradient(circle at center, transparent 0 calc(${Math.min(cropW, cropH) / 2}px - 1px), rgba(0,0,0,0.55) calc(${Math.min(cropW, cropH) / 2}px))`,
+                  }}
+                />
+              )}
+              {/* Guía de recorte · marca el área que se guardará. */}
               <div
                 className={cn(
-                  "absolute pointer-events-none border-[3px] border-dashed border-white/90",
+                  "absolute pointer-events-none border-[2px] border-dashed border-white/90",
                   currentShape === "circle" ? "rounded-full" : "rounded-xl",
                 )}
                 style={{
-                  left: "50%",
-                  top: "50%",
-                  transform: "translate(-50%, -50%)",
-                  width: currentShape === "rectangle" ? "92%" : Math.min(containerWidth, containerHeight) - 8,
-                  height: currentShape === "rectangle" ? "92%" : Math.min(containerWidth, containerHeight) - 8,
+                  left: cropLeft,
+                  top: cropTop,
+                  width: cropW,
+                  height: cropH,
                 }}
               />
               {/* Icono drag centro abajo */}
@@ -315,7 +398,11 @@ export function ImageCropModal({
           )}
         </div>
 
-        {/* Zoom slider */}
+        {/* Zoom slider · zoom mínimo = 1 (cover · la imagen siempre
+            llena el recorte sin huecos transparentes). Zoom máximo 3.
+            Para "ver menos zoom" el usuario reposiciona arrastrando ·
+            con cover el recorte siempre captura algo, no hay zonas
+            vacías. */}
         {imgSrc && (
           <div className="px-6 py-3 flex items-center gap-3">
             <ZoomOut className="h-4 w-4 text-muted-foreground shrink-0" />

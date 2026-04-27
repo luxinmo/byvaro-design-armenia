@@ -23,6 +23,7 @@ import {
 import { PdfIcon } from "@/components/icons/PdfIcon";
 import { cn } from "@/lib/utils";
 import { useHasPermission } from "@/lib/permissions";
+import { useCurrentUser } from "@/lib/currentUser";
 import { agencies } from "@/data/agencies";
 import { agencyHref } from "@/lib/agencyNavigation";
 import {
@@ -82,7 +83,17 @@ const SORT_OPTIONS = [
 export default function Contratos() {
   const navigate = useNavigate();
   const canView = useHasPermission("collaboration.contracts.view");
-  const all = useAllContracts();
+  const currentUser = useCurrentUser();
+  const allRaw = useAllContracts();
+  /* Privacy cross-tenant · si el viewer es agencia, solo puede ver
+   * contratos donde ELLA es la parte (`agencyId === su id`). El
+   * promotor ve todos los del workspace. */
+  const all = useMemo(() => {
+    if (currentUser.accountType === "agency" && currentUser.agencyId) {
+      return allRaw.filter((c) => c.agencyId === currentUser.agencyId);
+    }
+    return allRaw;
+  }, [allRaw, currentUser.accountType, currentUser.agencyId]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");

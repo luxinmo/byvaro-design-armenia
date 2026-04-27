@@ -26,6 +26,8 @@ otras agencias) al cambiar a modo "Vista colaborador".
 ┌──────────────────────────────────────────────────────────┐
 │ Breadcrumb: Promociones > Altea Hills                    │
 │ Hero: nombre + código + ubicación + promotor + acciones  │
+│   ↳ "promotor" → CLICABLE solo si la mira una agencia ↑   │
+│      destino: developerHref(user) → ficha o panel mirror  │
 │ Galería 2×2 (img principal + 4 thumbs + "+N fotos")      │
 ├──────────────────────────────────────────────────────────┤
 │ 5 KPIs: precio · disp · comisión · entrega · reserva     │
@@ -197,7 +199,11 @@ Mock estático en:
 - `src/data/units.ts` — `unitsByPromotion[promotionId]` → `Unit[]`.
 - `src/data/agencies.ts` — `Agency[]` con colaboraciones cruzadas.
 - `src/data/teamMembers.ts` — `activeTeamMembers` para el equipo comercial.
-- `src/data/companyOffices.ts` — oficinas de venta disponibles.
+- ~~`src/data/companyOffices.ts`~~ **borrado** · oficinas viven ahora en
+  `byvaro-oficinas` (workspace single-source · ver
+  `docs/backend/domains/empresa-stats-and-offices.md`). Las
+  promociones referencian por `puntosDeVentaIds: string[]` en lugar
+  de inline data; `PromocionDetalle.tsx` resuelve vía `useOficinas()`.
 
 ## Endpoints esperados (contract-first)
 

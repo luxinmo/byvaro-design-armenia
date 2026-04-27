@@ -19,9 +19,14 @@ import { cn } from "@/lib/utils";
 import type { Agency } from "@/data/agencies";
 import { Flag } from "@/components/ui/Flag";
 import { formatDateShort } from "./shared";
+import { useCurrentUser } from "@/lib/currentUser";
 
 interface Props {
   agency: Agency;
+  /** Mismo patrón que VisitasTab · si está set, filtramos a los
+   *  registros de ese agente. Mock matchea por nombre. Backend
+   *  filtrará por agent_id. */
+  restrictToUserId?: string;
 }
 
 interface MockRegistro {
@@ -38,7 +43,8 @@ interface MockRegistro {
   nationality?: string;
 }
 
-export function RegistrosTab({ agency: a }: Props) {
+export function RegistrosTab({ agency: a, restrictToUserId }: Props) {
+  const currentUserName = useCurrentUser().name;
   const registros: MockRegistro[] = useMemo(() => {
     const now = Date.now();
     const base: Record<string, MockRegistro[]> = {
@@ -59,8 +65,10 @@ export function RegistrosTab({ agency: a }: Props) {
         { id: "r4",  client: "Ingrid Hansen",     promoId: "dev-1", promoName: "Villa Serena",     status: "pendiente", createdAt: now - 3 * 86400e3,  matchPercentage: 35, agent: "Sofia Bergman",   nationality: "NO" },
       ],
     };
-    return (base[a.id] ?? []).sort((x, y) => y.createdAt - x.createdAt);
-  }, [a.id]);
+    const all = base[a.id] ?? [];
+    const filtered = restrictToUserId ? all.filter((r) => r.agent === currentUserName) : all;
+    return filtered.sort((x, y) => y.createdAt - x.createdAt);
+  }, [a.id, restrictToUserId, currentUserName]);
 
   const kpi = useMemo(() => ({
     pendientes:  registros.filter((r) => r.status === "pendiente").length,

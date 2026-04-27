@@ -18,6 +18,11 @@ import { cn } from "@/lib/utils";
 import type { Registro, RegistroTimelineEvent } from "@/data/records";
 import { findTeamMember, getMemberAvatarUrl } from "@/lib/team";
 import { agencies } from "@/data/agencies";
+import { promotions } from "@/data/promotions";
+import { developerOnlyPromotions } from "@/data/developerPromotions";
+import {
+  getOwnerRoleLabel, getOwnerRoleArticleLower, getOwnerRoleGenitive,
+} from "@/lib/promotionRole";
 
 const EVENT_META: Record<RegistroTimelineEvent["type"], {
   icon: typeof Inbox;
@@ -25,7 +30,7 @@ const EVENT_META: Record<RegistroTimelineEvent["type"], {
 }> = {
   submitted:         { icon: Inbox,         defaultTitle: "Solicitud recibida" },
   auto_check:        { icon: Cpu,           defaultTitle: "Análisis IA de duplicados" },
-  decision:          { icon: CheckCircle2,  defaultTitle: "Decisión del promotor" },
+  decision:          { icon: CheckCircle2,  defaultTitle: "Decisión" },
   notification:      { icon: Bell,          defaultTitle: "Notificación a la agencia" },
   sent_to_developer: { icon: Send,          defaultTitle: "Cliente registrado" },
 };
@@ -260,20 +265,31 @@ function buildAgencyTimeline(raw: RegistroTimelineEvent[]): RegistroTimelineEven
   return out;
 }
 
+/** Resuelve la promoción cruzando ambos seeds (developer-only + shareables). */
+function findPromotion(promotionId: string) {
+  return promotions.find((p) => p.id === promotionId)
+    ?? developerOnlyPromotions.find((p) => p.id === promotionId);
+}
+
 /** Sintetiza eventos a partir de los campos del Registro. */
 function synthesizeTimeline(r: Registro): RegistroTimelineEvent[] {
   const out: RegistroTimelineEvent[] = [];
+  /* Resolución dinámica de "promotor" vs "comercializador" · CLAUDE.md
+   * regla de oro · helpers en `src/lib/promotionRole.ts`. */
+  const promo = findPromotion(r.promotionId);
+  const ownerRoleLabel = getOwnerRoleLabel(promo); // "Promotor" | "Comercializador"
+  const byOwnerArticle = getOwnerRoleArticleLower(promo); // "el promotor" | "el comercializador"
 
-  /* Para directos el evento de alta lo dispara el promotor, no el sistema. */
+  /* Para directos el evento de alta lo dispara el owner, no el sistema. */
   if (r.origen === "direct") {
     out.push({
       id: "ev-submitted",
       type: "submitted",
-      title: "Registro creado por el promotor",
+      title: `Registro creado por ${byOwnerArticle}`,
       description: `Alta directa de ${r.cliente.nombre}`,
       timestamp: r.fecha,
       status: "completed",
-      actor: r.decidedBy ?? "Promotor",
+      actor: r.decidedBy ?? ownerRoleLabel,
     });
   } else {
     /* Colaborador · el actor es un HUMANO de la agencia · preferir
@@ -324,7 +340,7 @@ function synthesizeTimeline(r: Registro): RegistroTimelineEvent[] {
     out.push({
       id: "ev-decision",
       type: "decision",
-      title: r.estado === "aprobado" ? "Aprobado por el promotor" : "Rechazado por el promotor",
+      title: r.estado === "aprobado" ? `Aprobado por ${byOwnerArticle}` : `Rechazado por ${byOwnerArticle}`,
       description: r.decisionNote,
       timestamp: r.decidedAt ?? r.fecha,
       status: "completed",
@@ -347,7 +363,7 @@ function synthesizeTimeline(r: Registro): RegistroTimelineEvent[] {
     out.push({
       id: "ev-decision-pending",
       type: "decision",
-      title: "Esperando decisión del promotor",
+      title: `Esperando decisión ${getOwnerRoleGenitive(promo)}`,
       timestamp: r.fecha,
       status: "active",
       waitingDuration: relativeWaiting(r.fecha),

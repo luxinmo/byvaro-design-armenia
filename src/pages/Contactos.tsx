@@ -135,14 +135,27 @@ export default function Contactos() {
    *   Sin backend, nos basta un filtrado sobre el universo agregado. */
   const allContacts = useMemo<Contact[]>(() => {
     const deleted = loadDeletedContactIds();
-    return [...loadCreatedContacts(), ...loadImportedContacts(), ...MOCK_CONTACTS]
+    const tenantScope = [...loadCreatedContacts(), ...loadImportedContacts(), ...MOCK_CONTACTS]
       .filter((c) => !deleted.has(c.id))
       .filter((c) => {
         if (viewerIsAgency) return c.ownerAgencyId === currentUser.agencyId;
         return !c.ownerAgencyId;
       });
+    /* CLAUDE.md `permissions.md` · viewOwn vs viewAll.
+     *  · admin → todos los del tenant.
+     *  · member → solo aquellos donde está como assigned
+     *    (`assignedToUserIds` incluye su id). Si no hay
+     *    assignedToUserIds, NO los ve · evita fuga de cartera.
+     * TODO(backend): mover a SQL `WHERE assignee_id = $1`. */
+    if (currentUser.role === "member") {
+      const myId = currentUser.id;
+      return tenantScope.filter((c) =>
+        (c.assignedToUserIds ?? []).includes(myId),
+      );
+    }
+    return tenantScope;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createVersion, viewerIsAgency, currentUser.agencyId]);
+  }, [createVersion, viewerIsAgency, currentUser.agencyId, currentUser.role, currentUser.id]);
 
   const [orgTags, setOrgTagsState] = useState<ContactTag[]>(() => loadOrgTags());
   const setOrgTags = (next: ContactTag[] | ((prev: ContactTag[]) => ContactTag[])) => {

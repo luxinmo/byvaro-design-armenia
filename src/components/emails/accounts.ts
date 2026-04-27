@@ -9,7 +9,26 @@
  * Ver docs/screens/emails.md para el contrato completo.
  */
 
-export type EmailProvider = "gmail" | "microsoft" | "imap";
+export type EmailProvider = "gmail" | "microsoft" | "imap" | "byvaro";
+
+/** Dominio del correo nativo de Byvaro · cada usuario obtiene una
+ *  dirección `<localpart>@mail.byvaro.com` al darse de alta · útil
+ *  como fallback cuando todavía no han conectado su email corporativo.
+ *  TODO(backend): el dominio real lo gestiona Byvaro · MX records y
+ *  storage del proveedor de email transaccional. */
+export const BYVARO_MAIL_DOMAIN = "mail.byvaro.com";
+
+/** Deriva la dirección Byvaro nativa para un usuario.
+ *  - Si su email es `arman@luxinmo.com` → `arman@mail.byvaro.com`.
+ *  - Si ya termina en `@mail.byvaro.com`, se mantiene tal cual.
+ *  Sanitiza caracteres no válidos del localpart por seguridad. */
+export function deriveByvaroEmail(userEmail: string): string {
+  const trimmed = (userEmail ?? "").trim().toLowerCase();
+  if (!trimmed) return `usuario@${BYVARO_MAIL_DOMAIN}`;
+  if (trimmed.endsWith(`@${BYVARO_MAIL_DOMAIN}`)) return trimmed;
+  const localpart = (trimmed.split("@")[0] || "usuario").replace(/[^a-z0-9._-]/g, "");
+  return `${localpart}@${BYVARO_MAIL_DOMAIN}`;
+}
 
 export type ImapConfig = {
   imapHost: string;

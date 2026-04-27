@@ -32,7 +32,7 @@ const inputClass = "h-8 w-full px-3 text-[12.5px] bg-card border border-border r
 /* ─── Office card (vista pública) ─────────────────────────────────── */
 function OfficeCard({ office }: { office: Oficina }) {
   return (
-    <div className="w-[280px] shrink-0 rounded-2xl border border-border bg-card overflow-hidden hover:border-border/70 transition-colors">
+    <div className="rounded-2xl border border-border bg-card overflow-hidden hover:border-border/70 transition-colors">
       {/* Cover */}
       <div className="relative h-40 bg-muted/20">
         {office.coverUrl ? (
@@ -378,24 +378,35 @@ export function OfficesSection({ viewMode }: { viewMode: "edit" | "preview" }) {
         )}
       </div>
       <div className="px-5 pb-5">
-        <div className={cn(
-          "flex gap-4",
-          sorted.length === 1 && "justify-start",
-          sorted.length >= 2 && "flex-wrap",
-        )}>
-          {sorted.map(o => (
-            <OfficeCard key={o.id} office={o} />
-          ))}
-
-          {sorted.length === 0 && (
-            <div className="w-full py-8 text-center">
-              <Building2 className="h-8 w-8 mx-auto text-muted-foreground/20 mb-2" />
-              <p className="text-[12px] text-muted-foreground">
-                No hay oficinas visibles. Haz click en <span className="font-semibold">Editar</span> para añadir o mostrar oficinas.
-              </p>
+        {sorted.length === 0 ? (
+          <div className="w-full py-8 text-center">
+            <Building2 className="h-8 w-8 mx-auto text-muted-foreground/20 mb-2" />
+            <p className="text-[12px] text-muted-foreground">
+              No hay oficinas visibles. Haz click en <span className="font-semibold">Editar</span> para añadir o mostrar oficinas.
+            </p>
+          </div>
+        ) : (
+          /* Grid de 3 columnas en desktop, 2 en tablet, 1 en móvil ·
+             match con el resto de bloques (Portfolio, Equipo) que
+             muestran 3 destacados. Si hay más de 3, "Ver todas" lleva
+             al directorio completo. */
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sorted.slice(0, 3).map(o => (
+                <OfficeCard key={o.id} office={o} />
+              ))}
             </div>
-          )}
-        </div>
+            {sorted.length > 3 && (
+              <button
+                type="button"
+                onClick={() => { /* TODO(ui): abrir directorio completo de oficinas */ }}
+                className="mt-4 inline-flex items-center gap-1 text-[11.5px] font-semibold text-primary hover:underline"
+              >
+                Ver todas las oficinas ({sorted.length})
+              </button>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

@@ -61,3 +61,26 @@ export function languageCountryIso(code: string): string | undefined {
 export function languageName(code: string): string {
   return findLanguageByCode(code)?.name ?? code;
 }
+
+/** Idiomas prioritarios en el sector real estate (Costa del Sol /
+ *  Costa Blanca) · siempre se renderizan primero en cualquier lista
+ *  derivada (ficha pública, hero, ZonasEspecialidadesCard). El resto
+ *  conserva el orden de aparición. */
+export const TOP_LANGUAGES = ["ES", "EN", "FR", "DE", "RU"] as const;
+
+/** Ordena una lista de códigos de idioma poniendo los TOP_LANGUAGES
+ *  primero (en su orden), y el resto preserva su orden original.
+ *  Devuelve una nueva lista · no muta. Case-insensitive en input. */
+export function sortLanguagesByImportance(codes: string[]): string[] {
+  const upper = codes.map((c) => c.toUpperCase());
+  const seen = new Set<string>();
+  const top: string[] = [];
+  for (const t of TOP_LANGUAGES) {
+    if (upper.includes(t) && !seen.has(t)) {
+      top.push(t);
+      seen.add(t);
+    }
+  }
+  const rest = upper.filter((c) => !seen.has(c));
+  return [...top, ...rest];
+}

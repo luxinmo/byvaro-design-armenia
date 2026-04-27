@@ -50,7 +50,12 @@ export type DevPromotion = Promotion & {
   missingSteps?: string[];
   canShareWithAgencies?: boolean;
   collaboration?: CollaborationConfig;
-  puntosDeVenta?: PuntoDeVenta[];
+  /** IDs de oficinas del workspace (`byvaro-oficinas`) que actúan
+   *  como puntos de venta para esta promoción. La fuente de verdad de
+   *  los datos de oficina es `useOficinas()` — aquí solo guardamos
+   *  referencias. NUNCA inline data: una oficina referenciada SIEMPRE
+   *  debe existir en el listado del workspace. */
+  puntosDeVentaIds?: string[];
   comerciales?: Comercial[];
 };
 
@@ -68,7 +73,7 @@ export const developerOnlyPromotions: DevPromotion[] = [
     reservationCost: 30000,
     delivery: "Q4 2026",
     commission: 5,
-    developer: "My Company",
+    developer: "",
     agencies: 0,
     agencyAvatars: [],
     propertyTypes: ["Villa"],
@@ -92,10 +97,7 @@ export const developerOnlyPromotions: DevPromotion[] = [
       condicionesRegistro: ["nombre_completo", "ultimas_4_cifras", "nacionalidad", "email_completo"],
       validezRegistroDias: 90,
     },
-    puntosDeVenta: [
-      { id: "pv-1", nombre: "Oficina Central Marbella", direccion: "Av. del Mar 15, Marbella", telefono: "+34 952 123 456", email: "marbella@mycompany.com", whatsapp: "+34 652 123 456", coverUrl: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&h=400&fit=crop" },
-      { id: "pv-2", nombre: "Showroom Puerto Banús", direccion: "Puerto Banús, Local 8", telefono: "+34 952 654 321", email: "banus@mycompany.com", whatsapp: "+34 652 654 321", coverUrl: "https://images.unsplash.com/photo-1604328698692-f76ea9498e76?w=600&h=400&fit=crop" },
-    ],
+    puntosDeVentaIds: ["of-1", "of-2"],
     comerciales: [
       { id: "com-1", nombre: "Carlos Martínez", email: "carlos@mycompany.com", permissions: { canRegister: true, canShareWithAgencies: true, canEdit: false } },
       { id: "com-2", nombre: "Ana García", email: "ana@mycompany.com", permissions: { canRegister: true, canShareWithAgencies: false, canEdit: true } },
@@ -114,7 +116,7 @@ export const developerOnlyPromotions: DevPromotion[] = [
     reservationCost: 15000,
     delivery: "Q2 2027",
     commission: 4.5,
-    developer: "My Company",
+    developer: "",
     agencies: 2,
     agencyAvatars: [],
     propertyTypes: ["Villas", "Townhouses"],
@@ -140,9 +142,7 @@ export const developerOnlyPromotions: DevPromotion[] = [
       condicionesRegistro: ["nombre_completo", "ultimas_4_cifras", "nacionalidad"],
       validezRegistroDias: 0,
     },
-    puntosDeVenta: [
-      { id: "pv-3", nombre: "Sales Office Jávea", direccion: "Av. del Plá 12, Jávea", telefono: "+34 965 123 456", email: "javea@mycompany.com", whatsapp: "+34 665 123 456", coverUrl: "https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=800&h=500&fit=crop&q=80" },
-    ],
+    puntosDeVentaIds: ["of-3"],
   },
   {
     id: "dev-3",
@@ -157,7 +157,7 @@ export const developerOnlyPromotions: DevPromotion[] = [
     reservationCost: 6000,
     delivery: "Q1 2027",
     commission: 0,
-    developer: "My Company",
+    developer: "",
     agencies: 0,
     agencyAvatars: [],
     propertyTypes: ["Apartments", "Penthouses"],
@@ -180,7 +180,7 @@ export const developerOnlyPromotions: DevPromotion[] = [
     reservationCost: 8000,
     delivery: "Q3 2026",
     commission: 4,
-    developer: "My Company",
+    developer: "",
     agencies: 0,
     agencyAvatars: [],
     propertyTypes: ["Apartments", "Townhouses"],
@@ -204,8 +204,8 @@ export const developerOnlyPromotions: DevPromotion[] = [
     status: "active",
     reservationCost: 5000,
     delivery: "Q2 2026",
-    commission: 0,
-    developer: "My Company",
+    commission: 4,
+    developer: "",
     agencies: 0,
     agencyAvatars: [],
     propertyTypes: ["Apartments"],
@@ -215,7 +215,6 @@ export const developerOnlyPromotions: DevPromotion[] = [
     constructionProgress: 85,
     hasShowFlat: true,
     buildingType: "plurifamiliar",
-    missingSteps: ["Collaborators"],
-    canShareWithAgencies: false,
+    canShareWithAgencies: true,
   },
 ];

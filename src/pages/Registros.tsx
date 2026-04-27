@@ -37,6 +37,7 @@ import {
   ExternalLink, Sparkles, Eye, Handshake, UserCheck,
 } from "lucide-react";
 import { Flag } from "@/components/ui/Flag";
+import { getOwnerRoleLabel, getOwnerRoleArticleLower, getPromoterDisplayName } from "@/lib/promotionRole";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { toast } from "sonner";
@@ -166,8 +167,23 @@ export default function Registros() {
   const scopedList = useMemo(() => {
     const combined = [...createdRegistros, ...registrosMock];
     if (!isAgencyUser) return combined;
-    return combined.filter((r) => r.agencyId === currentUser.agencyId);
-  }, [createdRegistros, isAgencyUser, currentUser.agencyId]);
+    /* Filtro tenant · solo registros de la agencia del usuario. */
+    const byAgency = combined.filter((r) => r.agencyId === currentUser.agencyId);
+    /* CLAUDE.md `permissions.md` · viewOwn vs viewAll.
+     *   · admin → viewAll (todos los de la agencia).
+     *   · member → viewOwn (solo los que él envió, según
+     *     `audit.actor.email`).
+     * Si el seed no trae `audit.actor` (fallback), el registro NO
+     * se muestra al member · evita fuga.
+     * TODO(backend): mover el filter a SQL `WHERE author_user_id = $1`. */
+    if (currentUser.role === "member") {
+      const myEmail = currentUser.email.toLowerCase();
+      return byAgency.filter((r) =>
+        r.audit?.actor.email?.toLowerCase() === myEmail,
+      );
+    }
+    return byAgency;
+  }, [createdRegistros, isAgencyUser, currentUser.agencyId, currentUser.role, currentUser.email]);
 
   // Estado de datos (mutable para aprobar/rechazar en memoria).
   const [records, setRecords] = useState<Registro[]>(scopedList);
@@ -571,13 +587,17 @@ export default function Registros() {
    *  TODO(backend): POST /api/records/:id/dismiss-match envía la
    *  señal al modelo de IA para que ajuste el ranker. */
   const dismissMatch = (id: string) => {
-    setRecords((prev) => prev.map((r) => r.id === id ? {
-      ...r,
-      matchPercentage: 0,
-      matchWith: undefined,
-      matchCliente: undefined,
-      recommendation: "Match descartado por el promotor · no es la misma persona.",
-    } : r));
+    setRecords((prev) => prev.map((r) => {
+      if (r.id !== id) return r;
+      const promo = promotionById.get(r.promotionId);
+      return {
+        ...r,
+        matchPercentage: 0,
+        matchWith: undefined,
+        matchCliente: undefined,
+        recommendation: `Match descartado por ${getOwnerRoleArticleLower(promo)} · no es la misma persona.`,
+      };
+    }));
     toast.success("Match descartado", {
       description: "Byvaro aprenderá de esta decisión. El registro ya se puede aprobar sin advertencia.",
     });
@@ -1168,7 +1188,7 @@ export default function Registros() {
             vars={{
               agencia: approvalFlow.record.agencyId
                 ? agencyById.get(approvalFlow.record.agencyId)?.name ?? "la agencia colaboradora"
-                : "el promotor (registro directo)",
+                : `${getOwnerRoleArticleLower(promotionById.get(approvalFlow.record.promotionId))} (registro directo)`,
               cliente: approvalFlow.record.cliente.nombre,
               promocion: promotionById.get(approvalFlow.record.promotionId)?.name ?? "la promoción",
             }}
@@ -1260,6 +1280,14 @@ function RegistroDetail({
   /* State local de los diálogos de visita (Bloque A). */
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [cancelVisitOpen, setCancelVisitOpen] = useState(false);
+
+  /* Resolución de la promoción asociada · cruza ambos seeds (shareables
+   * + developer-only). Se usa para resolver el rol owner (promotor vs
+   * comercializador) en copy de los diálogos · CLAUDE.md regla de oro. */
+  const promo = useMemo(() =>
+    promotions.find((p) => p.id === record.promotionId)
+    ?? developerOnlyPromotions.find((p) => p.id === record.promotionId),
+  [record.promotionId]);
 
   /* Bloque B · caducidad client-side · resuelve si el preregistro
      está dentro/fuera de plazo. UI hint hasta que el cron backend
@@ -1556,6 +1584,7 @@ function RegistroDetail({
           open={cancelVisitOpen}
           onClose={() => setCancelVisitOpen(false)}
           onConfirm={onCancelVisit}
+          ownerLabel={getOwnerRoleLabel(promo)}
         />
       )}
       {onCancelVisit && viewerIsAgency && (
@@ -1563,6 +1592,7 @@ function RegistroDetail({
           open={cancelVisitOpen}
           onClose={() => setCancelVisitOpen(false)}
           onConfirm={onCancelVisit}
+          ownerArticle={getOwnerRoleArticleLower(promo)}
         />
       )}
 
@@ -1638,23 +1668,26 @@ function RegistroDetail({
               : record.origen === "direct" ? "Captado por" : "Enviado por"}
           </p>
           {viewerIsAgency ? (
-            /* Vista AGENCIA · destinatario = promotor de la promoción.
-               Phase 1: usamos el `developer` string de la promoción +
-               label genérico "Promotor" porque Phase 1 no permite que
-               el lado opuesto sea owner/comercializadora todavía.
-               TODO(phase-2): cuando exista `Promotion.owningParty` con
-               kind, sustituir label dinámicamente. */
-            <div className="flex items-center gap-2.5">
-              <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary grid place-items-center shrink-0">
-                <Building2 className="h-4 w-4" strokeWidth={1.75} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate">
-                  {promotions.find((p) => p.id === record.promotionId)?.developer ?? "Promotor"}
-                </p>
-                <p className="text-[11px] text-muted-foreground truncate">Promotor</p>
-              </div>
-            </div>
+            /* Vista AGENCIA · destinatario = promotor o comercializador
+               de la promoción · resuelto dinámicamente vía
+               `Promotion.ownerRole` (CLAUDE.md regla de oro · helper
+               `getOwnerRoleLabel()`). Reusa el `promo` resuelto al
+               principio del componente. */
+            (() => {
+              return (
+                <div className="flex items-center gap-2.5">
+                  <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary grid place-items-center shrink-0">
+                    <Building2 className="h-4 w-4" strokeWidth={1.75} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate">
+                      {getPromoterDisplayName(promo) || "Tu empresa"}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground truncate">{getOwnerRoleLabel(promo)}</p>
+                  </div>
+                </div>
+              );
+            })()
           ) : record.origen === "direct" ? (
             /* Directo · solo el agente del promotor. */
             agent ? (

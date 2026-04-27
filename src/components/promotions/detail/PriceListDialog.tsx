@@ -37,6 +37,7 @@ import { toast } from "sonner";
 import type { Promotion } from "@/data/promotions";
 import { unitsByPromotion, type Unit } from "@/data/units";
 import { useEmpresa } from "@/lib/empresa";
+import { getOwnerRoleLabelLower } from "@/lib/promotionRole";
 import { cn, priceForDisplay } from "@/lib/utils";
 import { MinimalSort } from "@/components/ui/MinimalSort";
 
@@ -607,7 +608,7 @@ export function PriceListDialog({ open, onOpenChange, promotion, agencyMode = fa
                   />
                   {agencyMode && (
                     <ToggleRow
-                      label="Mostrar datos del promotor"
+                      label={`Mostrar datos del ${getOwnerRoleLabelLower(promotion)}`}
                       description="Por defecto oculto en modo agencia"
                       checked={showDeveloperInfo}
                       onChange={setShowDeveloperInfo}
@@ -1072,7 +1073,7 @@ function TemplateEditorial({
               <p className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">{idioma === "es" ? "Forma de pago" : "Payment method"}</p>
               <p className="mt-1 text-[11px] text-foreground/90 leading-relaxed">
                 {idioma === "es"
-                  ? "Transferencia bancaria a cuenta escrow del promotor. Cada pago genera recibo nominal."
+                  ? `Transferencia bancaria a cuenta escrow del ${getOwnerRoleLabelLower(promotion)}. Cada pago genera recibo nominal.`
                   : "Bank transfer to escrow account. Each payment issues a nominal receipt."}
               </p>
             </div>

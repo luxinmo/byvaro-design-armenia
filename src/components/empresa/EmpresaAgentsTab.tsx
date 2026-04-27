@@ -12,42 +12,30 @@
  *
  * Agrupación:
  *   · "Equipo directivo" → admin o departamento Dirección/Administración.
- *   · "Agentes" → el resto de miembros visibles.
+ *   · "Equipo" → el resto de miembros visibles.
  *
  * Idiomas renderizados con <Flag> (CLAUDE.md §🧱 Componentes canónicos).
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { EyeOff } from "lucide-react";
 import { Flag } from "@/components/ui/Flag";
-import { findLanguageByCode } from "@/lib/languages";
-import { TEAM_MEMBERS, memberInitials, type TeamMember } from "@/lib/team";
+import { findLanguageByCode, sortLanguagesByImportance } from "@/lib/languages";
+import { memberInitials, type TeamMember } from "@/lib/team";
+import { useWorkspaceMembers, tenantToWorkspaceKey } from "@/lib/useWorkspaceMembers";
 
-const KEY_MEMBERS = "byvaro.organization.members.v4";
+const LANG_PREVIEW_COUNT = 5;
 
-function loadMembers(): TeamMember[] {
-  if (typeof window === "undefined") return TEAM_MEMBERS;
-  try {
-    const raw = window.localStorage.getItem(KEY_MEMBERS);
-    return raw ? JSON.parse(raw) : TEAM_MEMBERS;
-  } catch { return TEAM_MEMBERS; }
-}
-
-function useTeamMembers(): TeamMember[] {
-  const [list, setList] = useState<TeamMember[]>(() => loadMembers());
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const reload = () => setList(loadMembers());
-    window.addEventListener("byvaro:members-change", reload);
-    window.addEventListener("byvaro:me-change", reload);
-    window.addEventListener("storage", reload);
-    return () => {
-      window.removeEventListener("byvaro:members-change", reload);
-      window.removeEventListener("byvaro:me-change", reload);
-      window.removeEventListener("storage", reload);
-    };
-  }, []);
-  return list;
+/* useTeamMembers(tenantId) · equipo del TENANT MOSTRADO.
+ *   · sin tenantId → workspace del usuario actual (ficha propia).
+ *   · tenantId="developer-default" → equipo del promotor.
+ *   · tenantId="ag-1" → equipo de la agencia ag-1.
+ *
+ * Antes era el workspace del usuario actual SIEMPRE · fugaba el
+ * equipo de la agencia visitante a la ficha del promotor visitado. */
+function useTeamMembers(tenantId?: string | null): TeamMember[] {
+  const workspaceKey = tenantToWorkspaceKey(tenantId) ?? undefined;
+  return useWorkspaceMembers(workspaceKey).members;
 }
 
 /* Heurística para clasificar cada miembro visible. */
@@ -58,35 +46,55 @@ function isDirection(m: TeamMember): boolean {
 }
 
 function PersonCard({ member }: { member: TeamMember }) {
+  /* Idiomas · ordenados por importancia (TOP_LANGUAGES primero) y
+   *  cortados a 5. Si hay más se muestra un toggle "+N · ver más"
+   *  que expande el listado · click en "ver menos" lo colapsa. */
+  const sortedLangs = useMemo(
+    () => sortLanguagesByImportance(member.languages ?? []),
+    [member.languages],
+  );
+  const [langExpanded, setLangExpanded] = useState(false);
+  const visibleLangs = langExpanded ? sortedLangs : sortedLangs.slice(0, LANG_PREVIEW_COUNT);
+  const hiddenCount = sortedLangs.length - LANG_PREVIEW_COUNT;
+
   return (
-    <div className="w-28 flex flex-col gap-2">
-      <div className="w-28 h-32 rounded-xl overflow-hidden bg-muted/30">
+    <div className="w-[154px] flex flex-col gap-2">
+      <div className="w-[154px] h-[176px] rounded-xl overflow-hidden bg-muted/30">
         {member.avatarUrl ? (
           <img src={member.avatarUrl} alt={member.name} className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full grid place-items-center text-2xl font-semibold text-muted-foreground/40">
+          <div className="w-full h-full grid place-items-center text-[34px] font-semibold text-muted-foreground/40">
             {memberInitials(member)}
           </div>
         )}
       </div>
       <div>
-        <p className="text-[12px] font-semibold text-foreground truncate">{member.name}</p>
+        <p className="text-[14px] font-semibold text-foreground truncate">{member.name}</p>
         {member.jobTitle && (
-          <p className="text-[10.5px] text-muted-foreground truncate">{member.jobTitle}</p>
+          <p className="text-[12.5px] text-muted-foreground truncate">{member.jobTitle}</p>
         )}
-        {member.languages && member.languages.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1">
-            {member.languages.map((code) => {
+        {sortedLangs.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1 mt-1">
+            {visibleLangs.map((code) => {
               const lang = findLanguageByCode(code);
               return (
                 <Flag
                   key={code}
                   iso={lang?.countryIso ?? code}
-                  size={12}
+                  size={15}
                   title={lang?.name ?? code}
                 />
               );
             })}
+            {hiddenCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setLangExpanded((v) => !v)}
+                className="text-[10.5px] font-medium text-muted-foreground hover:text-foreground transition-colors px-1"
+              >
+                {langExpanded ? "ver menos" : `+${hiddenCount}`}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -109,8 +117,25 @@ function HiddenInfo({ hiddenCount }: { hiddenCount: number }) {
   );
 }
 
-export function EmpresaAgentsTab() {
-  const members = useTeamMembers();
+export function EmpresaAgentsTab({
+  isVisitor = false,
+  viewMode = "edit",
+  tenantId,
+}: {
+  /** Cuando se monta desde la ficha pública vista por OTRO tenant
+   *  (agencia mirando a un promotor o viceversa), `isVisitor` es
+   *  true. El visitor NO ve el aviso "X miembros ocultos" · es
+   *  metadato interno del workspace. */
+  isVisitor?: boolean;
+  /** En modo preview el promotor está simulando lo que ve un
+   *  usuario externo · también ocultamos el aviso. */
+  viewMode?: "edit" | "preview";
+  /** Tenant mostrado · si lo pasas, el equipo se lee del workspace
+   *  del tenant (developer o agency-XX). Sin él se lee del workspace
+   *  del usuario actual (ficha propia). */
+  tenantId?: string;
+} = {}) {
+  const members = useTeamMembers(tenantId);
   const { visible, hidden } = useMemo(() => {
     const active = members.filter((m) => !m.status || m.status === "active");
     return {
@@ -137,7 +162,7 @@ export function EmpresaAgentsTab() {
 
       {agents.length > 0 && (
         <section className="bg-card rounded-2xl border border-border shadow-soft p-6 flex flex-col gap-4">
-          <h2 className="text-[13.5px] font-semibold text-foreground">Agentes</h2>
+          <h2 className="text-[13.5px] font-semibold text-foreground">Equipo</h2>
           <div className="flex flex-wrap gap-4">
             {agents.map((m) => (
               <PersonCard key={m.id} member={m} />
@@ -158,7 +183,11 @@ export function EmpresaAgentsTab() {
       )}
 
       {/* Info al admin: cuántos quedan ocultos */}
-      <HiddenInfo hiddenCount={hidden.length} />
+      {/* Solo el admin del workspace en su propia ficha en modo
+          edición ve cuántos miembros tiene ocultos. La agencia (o
+          cualquier visitor) y el promotor en preview NO ven este
+          aviso · es metadato de gestión interna. */}
+      {!isVisitor && viewMode === "edit" && <HiddenInfo hiddenCount={hidden.length} />}
     </div>
   );
 }

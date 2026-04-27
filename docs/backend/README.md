@@ -72,7 +72,14 @@ En este orden (las siguientes dependen de las anteriores):
    promoción↔agencia). Specs: `§4`.
 3. **Invitaciones** a agencias (`invitations` + historial de eventos
    por invitación). Specs: `§5`.
-4. **Solicitudes** de agencia (request to collaborate). Specs: `§4`.
+4. **Solicitudes** de la agencia hacia el promotor:
+   - **Solicitud agency-level** (alta marketplace, una por agencia).
+     Specs: `docs/backend-integration.md §4`.
+   - **Solicitud por promoción** (una por par agencia↔promo, mucho más
+     granular y reciente). Specs: **`docs/backend/domains/collaboration-requests.md`**.
+   Ambas conviven en el mismo drawer de `/colaboradores` con tabs
+   Pendientes/Aceptadas/Descartadas. **Son flujos distintos** — no las
+   mezcles ni las modeles juntas en la misma tabla.
 5. **Registros** de clientes (`registrations`) + detección de
    duplicados con IA. Specs: `§7` + `docs/data-model.md`.
 6. **Contactos** (`contacts`) · base de clientes propia del promotor.
@@ -130,7 +137,10 @@ estructura: **flujo de negocio · modelo de datos · endpoints · webhooks
 | `docs/backend-integration.md` | Canónico · TODOS los endpoints, por dominio. Ya existe, mantenerlo al día. |
 | `docs/data-model.md` | Entidades, tipos TypeScript del frontend (hay que mapear a SQL). |
 | `docs/permissions.md` | Catálogo completo de `PermissionKey` + contrato RLS + JWT. |
-| `docs/backend/domains/collaboration.md` | Contratos · pagos · solicitudes de documentos (nuevo). |
+| `docs/backend/domains/collaboration.md` | Contratos · pagos · solicitudes de documentos. |
+| **`docs/backend/domains/collaboration-requests.md`** | **Solicitudes de colaboración por promoción** · agencia → promotor · descarte silencioso · override por invitación · permiso `collaboration.requests.manage`. |
+| **`docs/backend/domains/agency-developer-mirror.md`** | **Vista de promotor desde la agencia** · `/promotor/:id` + `/promotor/:id/panel` · mirror del panel de colaborador con `readOnly` para tabs sensibles. |
+| **`docs/backend/domains/empresa-stats-and-offices.md`** | **Empresa hero KPIs derivados + oficinas single-source** · sustitución de campos manuales del tipo `Empresa` + unificación `byvaro-oficinas`. |
 | `docs/backend/integrations/firmafy.md` | Integración completa con Firmafy · API, webhooks, payload. |
 
 ---

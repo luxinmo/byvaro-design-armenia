@@ -212,7 +212,7 @@ function LicenseLine({ licencia: l }: { licencia: LicenciaInmobiliaria }) {
   );
 }
 
-function Section({
+export function Section({
   icon: Icon, title, children,
 }: {
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
@@ -232,7 +232,7 @@ function Section({
   );
 }
 
-function DataGrid({ children }: { children: React.ReactNode }) {
+export function DataGrid({ children }: { children: React.ReactNode }) {
   return (
     <dl className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4">
       {children}
@@ -240,7 +240,7 @@ function DataGrid({ children }: { children: React.ReactNode }) {
   );
 }
 
-function DataField({
+export function DataField({
   label, value, mono, wide, link, linkLabel, icon: Icon,
 }: {
   label: string;

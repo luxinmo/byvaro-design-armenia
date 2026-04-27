@@ -16,6 +16,14 @@ Agencias pending/inactive/marketplace llevan a la ficha pública. Todo
 **Audiencia:** solo Promotor. Tab Historial es admin-only (banner
 explícito + `AdminOnly`).
 
+> **Mirror desde la agencia:** la simétrica de esta pantalla cuando
+> es una agencia mirando al promotor vive en `/promotor/:id/panel`
+> (`PromotorPanel.tsx`). Reusa los mismos 9 tabs y componentes con
+> restricciones específicas (Documentación read-only, sin
+> "Compartir promoción", header con datos del promotor). Doc:
+> **`docs/backend/domains/agency-developer-mirror.md`** y CLAUDE.md
+> §"REGLA DE ORO · Mirror del panel del promotor desde la agencia".
+
 ---
 
 ## Layout

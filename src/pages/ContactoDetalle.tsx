@@ -86,15 +86,31 @@ export default function ContactoDetalle() {
     [allContacts, id],
   );
 
-  /* Sin contacto válido → redirige al listado. */
-  if (!id || !baseContact) {
+  /* Privacy cross-tenant · si el viewer es agencia, solo puede abrir
+   * contactos suyos (`ownerAgencyId === currentUser.agencyId`). Si
+   * intenta acceder por URL directa a uno del promotor o de otra
+   * agencia → redirect al listado · NO 404 explícito para no filtrar
+   * existencia.
+   *
+   * Además · viewOwn para member · si no está en `assignedToUserIds`
+   * tampoco puede abrirlo (CLAUDE.md `permissions.md`). */
+  const user = useCurrentUser();
+  const blockedByTenant = !!baseContact
+    && user.accountType === "agency"
+    && user.agencyId
+    && baseContact.ownerAgencyId !== user.agencyId;
+  const blockedByOwnership = !!baseContact
+    && user.role === "member"
+    && !(baseContact.assignedToUserIds ?? []).includes(user.id);
+
+  /* Sin contacto válido o sin acceso → redirige al listado. */
+  if (!id || !baseContact || blockedByTenant || blockedByOwnership) {
     return <Navigate to="/contactos" replace />;
   }
 
   /* Version-tick para refrescar tras editar. Lo bumpeamos desde el
    * dialog cuando guarda. */
   const confirm = useConfirm();
-  const user = useCurrentUser();
   const [editVersion, setEditVersion] = useState(0);
 
   const detail = useMemo(

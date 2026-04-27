@@ -14,7 +14,7 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Home, Tag, FileText, CircleDollarSign, CalendarDays,
+  Home, Building, FileText, CircleDollarSign, CalendarDays,
   Handshake, Contact, Globe, Mail, Settings, ChevronsUpDown, FileSignature,
   Building2, Inbox, User as UserIcon, LogOut, Users, Activity, Sparkles,
 } from "lucide-react";
@@ -25,9 +25,13 @@ import { useCurrentUser } from "@/lib/currentUser";
 import { useInvitaciones } from "@/lib/invitaciones";
 import { agencies } from "@/data/agencies";
 import { useHasPermission } from "@/lib/permissions";
+import { onAgencyOnboardingChanged } from "@/lib/agencyOnboarding";
 import { logout } from "@/lib/accountType";
 import { registros as seedRegistros } from "@/data/records";
 import { useCreatedRegistros } from "@/lib/registrosStorage";
+import { promotions } from "@/data/promotions";
+import { developerOnlyPromotions } from "@/data/developerPromotions";
+import { sales as seedSales } from "@/data/sales";
 
 type NavItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }>; badge?: string | number; accent?: boolean; accentColor?: "primary" | "destructive" };
 type NavGroup = { label: string; items: NavItem[] };
@@ -47,9 +51,11 @@ const groups: NavGroup[] = [
   {
     label: "Comercial",
     items: [
-      { title: "Promociones", url: "/promociones", icon: Tag, badge: 12 },
-      { title: "Oportunidades", url: "/oportunidades", icon: Inbox, badge: 24, accent: true },
-      { title: "Registros", url: "/registros", icon: FileText, badge: 8 },
+      /* Sin badges hardcoded · cada uno se rellena dinámicamente abajo
+       * en `visibleGroups` con el conteo real (promotor vs agencia). */
+      { title: "Promociones", url: "/promociones", icon: Building },
+      { title: "Oportunidades", url: "/oportunidades", icon: Inbox },
+      { title: "Registros", url: "/registros", icon: FileText },
       { title: "Ventas", url: "/ventas", icon: CircleDollarSign },
       { title: "Calendario", url: "/calendario", icon: CalendarDays },
     ],
@@ -77,6 +83,23 @@ export function AppSidebar() {
   const { empresa } = useEmpresa();
   const currentUser = useCurrentUser();
   const isAgencyUser = currentUser.accountType === "agency";
+  /* Empresa / Equipo / Ajustes · solo admin del workspace · datos
+   *  fiscales, miembros, billing, integraciones, plan. El member NO
+   *  los ve.
+   *
+   * El setup del Responsable pendiente NO oculta los links · el admin
+   * de una agencia recién creada SÍ los ve para conocer su existencia.
+   * Al hacer click, el `<CriticalActionGuard>` de la ruta abre el
+   * modal y obliga a confirmar Responsable o invitar al real antes
+   * de poder entrar (regla CLAUDE.md "Setup de Responsable bloquea
+   * acciones críticas"). */
+  /* Listener · re-render cuando cambia el estado de onboarding (otra
+   * pestaña, mismo tab tras completar el setup, etc.). Sin esto el
+   * sidebar no se entera y los enlaces de Empresa/Equipo/Ajustes
+   * quedan stale (mostrando o no según el último render). */
+  const [, tickOnboarding] = useState(0);
+  useEffect(() => onAgencyOnboardingChanged(() => tickOnboarding((n) => n + 1)), []);
+  const canSeeAjustes = currentUser.role === "admin";
   // CLAUDE.md · "Datos sensibles requieren permiso" · /actividad
   // oculta del sidebar si el user no tiene la key. El gate real vive
   // en la página (early return); esta ocultación es por UX, no por
@@ -104,14 +127,23 @@ export function AppSidebar() {
 
   /* En modo agencia, oculta rutas que sólo tienen sentido para el
    * promotor. Estas mismas rutas se redirigen en App.tsx vía
-   * <AgencyGuard> si el usuario entra por URL directa. */
+   * <AgencyGuard> si el usuario entra por URL directa.
+   *
+   * El miembro / responsable de agencia SÍ ve:
+   *   Inicio · Contactos · Emails · Calendario · Oportunidades · Ventas
+   *   · Registros · Promociones (las que colabora) · Promotores (futura).
+   * No ve: Colaboradores (es vista del promotor) · Microsites · Actividad
+   * (admin del promotor) · Sugerencias. */
   const agencyHiddenRoutes = new Set([
     "/colaboradores",
     "/microsites",
-    "/oportunidades",
-    "/emails",
     "/actividad",
     "/sugerencias",
+    /* Contratos · NO solicitado en la lista de la agencia
+     * (Inicio, Contactos, Emails, Calendario, Oportunidades, Ventas,
+     * Registros, Promotores). Si más adelante hace falta, se mete una
+     * versión filtrada por agencyId. */
+    "/contratos",
   ]);
   const permissionHiddenRoutes = new Set<string>();
   if (!canSeeActivity) permissionHiddenRoutes.add("/actividad");
@@ -125,11 +157,18 @@ export function AppSidebar() {
   const createdRegs = useCreatedRegistros();
   const pendingRegistrosCount = useMemo(() => {
     const all = [...createdRegs, ...seedRegistros];
-    const scope = isAgencyUser && currentUser.agencyId
+    let scope = isAgencyUser && currentUser.agencyId
       ? all.filter((r) => r.agencyId === currentUser.agencyId)
       : all;
+    /* viewOwn · member solo ve los suyos · CLAUDE.md permissions.md. */
+    if (currentUser.role === "member") {
+      const myEmail = currentUser.email.toLowerCase();
+      scope = scope.filter((r) =>
+        r.audit?.actor.email?.toLowerCase() === myEmail,
+      );
+    }
     return scope.filter((r) => r.estado === "pendiente").length;
-  }, [createdRegs, isAgencyUser, currentUser.agencyId]);
+  }, [createdRegs, isAgencyUser, currentUser.agencyId, currentUser.role, currentUser.email]);
   const agencyEmail = useMemo(() => {
     if (!isAgencyUser || !currentUser.agencyId) return null;
     const a = agencies.find((x) => x.id === currentUser.agencyId);
@@ -143,6 +182,36 @@ export function AppSidebar() {
     ).length;
   }, [allPendientes, isAgencyUser, currentUser.agencyId, agencyEmail]);
 
+  /* Promociones · conteo real para mostrar en badge.
+   *  Promotor → promociones activas (visibles + developer-only).
+   *  Agencia  → si tiene invitaciones pendientes, ese es el badge
+   *             rojo (atención · click pa añadir a cartera). Si no,
+   *             sin badge (la página interna ya cuenta la cartera). */
+  const promocionesCount = useMemo(() => {
+    if (isAgencyUser) return pendingInvitations; // 0 → sin badge
+    return [
+      ...promotions.filter((p) => p.status === "active"),
+      ...developerOnlyPromotions.filter((p) => p.status === "active"),
+    ].length;
+  }, [isAgencyUser, pendingInvitations]);
+
+  /* Ventas · conteo real.
+   *  Promotor → todas las ventas no caídas.
+   *  Agencia admin → ventas no caídas de su agencia.
+   *  Agencia member → solo las suyas (audit.actor.email · viewOwn). */
+  const ventasCount = useMemo(() => {
+    const live = seedSales.filter((v) => v.estado !== "caida");
+    if (!isAgencyUser || !currentUser.agencyId) return live.length;
+    const byAgency = live.filter((v) => v.agencyId === currentUser.agencyId);
+    if (currentUser.role === "member") {
+      const myEmail = currentUser.email.toLowerCase();
+      return byAgency.filter((v) =>
+        v.audit?.actor.email?.toLowerCase() === myEmail,
+      ).length;
+    }
+    return byAgency.length;
+  }, [isAgencyUser, currentUser.agencyId, currentUser.role, currentUser.email]);
+
   const visibleGroups = (isAgencyUser
     ? groups.map((g) => ({
         ...g,
@@ -155,14 +224,28 @@ export function AppSidebar() {
       items: g.items
         .filter((it) => !permissionHiddenRoutes.has(it.url))
         .map((it) => {
-          /* Promociones · para agencias, sustituye el badge mock por
-             el nº real de invitaciones pendientes (o lo oculta). */
-          if (isAgencyUser && it.url === "/promociones") {
+          /* Promociones · agencia con invitaciones pendientes ve un
+             badge rojo · sin invitaciones, sin badge. Promotor ve el
+             nº de promos activas. */
+          if (it.url === "/promociones") {
+            if (isAgencyUser) {
+              return {
+                ...it,
+                badge: pendingInvitations > 0 ? pendingInvitations : undefined,
+                accent: pendingInvitations > 0,
+                accentColor: "destructive" as const,
+              };
+            }
             return {
               ...it,
-              badge: pendingInvitations > 0 ? pendingInvitations : undefined,
-              accent: pendingInvitations > 0,
-              accentColor: "destructive" as const,
+              badge: promocionesCount > 0 ? promocionesCount : undefined,
+            };
+          }
+          /* Ventas · conteo real (live · no caída). */
+          if (it.url === "/ventas") {
+            return {
+              ...it,
+              badge: ventasCount > 0 ? ventasCount : undefined,
             };
           }
           /* Registros · badge rojo con el nº real de pendientes. */
@@ -174,6 +257,16 @@ export function AppSidebar() {
               accentColor: "destructive" as const,
             };
           }
+          /* Oportunidades · el badge `24` es seed mock del promotor.
+           *  Para la agencia no tiene sentido (ella ve solo las suyas).
+           *  Hasta tener conteo real, lo escondemos en agencia. */
+          if (isAgencyUser && it.url === "/oportunidades") {
+            return { ...it, badge: undefined, accent: false };
+          }
+          /* Promociones developer-side · el `12` también es mock.
+           *  Si llega backend lo dejamos dinámico, mientras tanto el
+           *  badge mock sigue para promotor pero NO debe sangrar a la
+           *  agencia que ya tiene su override arriba. */
           return it;
         }),
     }))
@@ -260,8 +353,11 @@ export function AppSidebar() {
           </div>
         ))}
 
-        {/* ═════ Administración · solo promotor ═════ */}
-        {!isAgencyUser && (
+        {/* ═════ Administración · admin con setup completo ═════
+         *  Aplica a developer admin (siempre) y a agency admin con su
+         *  setup de Responsable confirmado. El member NO ve esta
+         *  sección · tampoco el agency admin con setup pendiente. */}
+        {canSeeAjustes && (
         <div className={collapsed ? "mb-2" : "mb-5"}>
           {!collapsed && (
             <div className="px-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/50 mb-2">
@@ -319,26 +415,29 @@ export function AppSidebar() {
         )}
       </nav>
 
-      {/* Footer */}
+      {/* Footer · "Ajustes" solo para admin · el member no gestiona
+       *  empresa, equipo, billing ni integraciones. */}
       <div className="border-t border-sidebar-border py-3">
-        <NavLink
-          to="/ajustes"
-          title={collapsed ? "Ajustes" : undefined}
-          className={({ isActive }) =>
-            cn(
-              "relative flex items-center transition-colors",
-              collapsed
-                ? "justify-center h-10 mx-2 rounded-lg"
-                : "gap-3 px-5 py-2 text-sm",
-              isActive
-                ? "bg-sidebar-accent/70 text-sidebar-accent-foreground font-medium nav-item-active"
-                : "text-sidebar-foreground hover:bg-sidebar-accent/40",
-            )
-          }
-        >
-          <Settings className="h-[18px] w-[18px]" />
-          {!collapsed && <span>Ajustes</span>}
-        </NavLink>
+        {canSeeAjustes && (
+          <NavLink
+            to="/ajustes"
+            title={collapsed ? "Ajustes" : undefined}
+            className={({ isActive }) =>
+              cn(
+                "relative flex items-center transition-colors",
+                collapsed
+                  ? "justify-center h-10 mx-2 rounded-lg"
+                  : "gap-3 px-5 py-2 text-sm",
+                isActive
+                  ? "bg-sidebar-accent/70 text-sidebar-accent-foreground font-medium nav-item-active"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent/40",
+              )
+            }
+          >
+            <Settings className="h-[18px] w-[18px]" />
+            {!collapsed && <span>Ajustes</span>}
+          </NavLink>
+        )}
         <div
           ref={userMenuRef}
           className={cn(
@@ -421,17 +520,19 @@ export function AppSidebar() {
                   <UserIcon className="h-4 w-4 text-muted-foreground" />
                   Mi perfil
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setUserMenuOpen(false);
-                    navigate("/ajustes");
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-foreground hover:bg-muted/60 transition-colors"
-                >
-                  <Settings className="h-4 w-4 text-muted-foreground" />
-                  Ajustes
-                </button>
+                {canSeeAjustes && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      navigate("/ajustes");
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-foreground hover:bg-muted/60 transition-colors"
+                  >
+                    <Settings className="h-4 w-4 text-muted-foreground" />
+                    Ajustes
+                  </button>
+                )}
               </div>
               <div className="border-t border-border py-1">
                 <button

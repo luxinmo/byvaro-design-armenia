@@ -18,6 +18,9 @@
  */
 
 import { Link } from "react-router-dom";
+import { promotions } from "@/data/promotions";
+import { developerOnlyPromotions } from "@/data/developerPromotions";
+import { getOwnerRoleArticleLower } from "@/lib/promotionRole";
 import { Sparkles, Clock, ExternalLink } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
@@ -114,7 +117,12 @@ export function DuplicateContext({ record }: { record: Registro }) {
                 {String(sortedOrigins.length + 1).padStart(2, "0")}
               </span>
               <span className="font-semibold text-warning truncate">
-                {record.origen === "direct" ? "Registro directo del promotor" : "Esta nueva solicitud"}
+                {record.origen === "direct"
+                  ? `Registro directo · ${getOwnerRoleArticleLower(
+                      promotions.find((p) => p.id === record.promotionId)
+                      ?? developerOnlyPromotions.find((p) => p.id === record.promotionId),
+                    )}`
+                  : "Esta nueva solicitud"}
               </span>
               <span className="text-muted-foreground/70 shrink-0">·</span>
               <span className="text-muted-foreground tabular-nums shrink-0">

@@ -266,7 +266,7 @@ export type GlobalBranding = {
 };
 
 export const defaultBranding: GlobalBranding = {
-  companyName: "My Company",
+  companyName: "",
   colorPrimary: "215 72% 55%",
   font: "inter",
 };

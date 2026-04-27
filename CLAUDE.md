@@ -513,6 +513,165 @@ es un code-smell. Se extrae al catálogo canónico.
 
 ---
 
+## 🤝 REGLA DE ORO · Solicitud de colaboración por promoción
+
+> **Las solicitudes de colaboración por promoción son distintas de las
+> altas agency-level (marketplace).** No las mezcles. La agencia envía
+> una solicitud para colaborar en UNA promoción concreta · el promotor
+> decide pendiente / aceptada / descartada con tabs en
+> `/colaboradores`. Doc canónico:
+> **`docs/backend/domains/collaboration-requests.md`**.
+
+**Reglas duras del flujo:**
+
+1. **Descarte silencioso** · cuando el promotor descarta una solicitud,
+   la agencia NO se entera. Su chip "Colaboración solicitada" se muestra
+   exactamente igual que cuando estaba pendiente. La función
+   `findSolicitudVivaParaAgencia()` agrupa pendiente + rechazada para
+   que la UI agencia pinte ambos estados como "enviada".
+
+2. **Override por invitación** · si el promotor envía una invitación
+   formal a una agencia que tenía solicitud descartada para esa misma
+   promoción, `acceptInvitationOverride()` flipa la solicitud a
+   `aceptada`. La invitación PREVALECE. El `SharePromotionDialog`
+   muestra un banner explícito ("Esta agencia tenía solicitud descartada
+   · descartada por X · fecha") con quién y cuándo.
+
+3. **Agencia NO puede reenviar** · descartada → no hay botón "Solicitar
+   de nuevo" desde la agencia. Solo el promotor decide: recuperar
+   manualmente desde tab Descartadas o reactivar automáticamente al
+   invitar.
+
+4. **Permiso** · `collaboration.requests.manage` es nuevo
+   (`src/lib/permissions.ts`). Default solo admin. Sin él el drawer de
+   `/colaboradores` muestra las solicitudes en read-only con aviso
+   lock-icon. Aceptar / Descartar / Recuperar quedan
+   `disabled:opacity-40 cursor-not-allowed`.
+
+5. **Trazabilidad obligatoria** · cada solicitud guarda
+   `requestedBy: { name, email?, avatarUrl? }` (snapshot del actor
+   agencia) y `decidedBy: { ... }` (snapshot del actor promotor que
+   aceptó/descartó/recuperó). Se muestran ambos en el drawer del
+   promotor.
+
+6. **Eventos cross-empresa** · `recordRequestReceived` al crear,
+   `recordRequestApproved` al aceptar, `recordRequestRejected` al
+   descartar. Aparecen en `/colaboradores/:id?tab=historial`.
+
+---
+
+## 🪞 REGLA DE ORO · Mirror del panel del promotor desde la agencia
+
+> Cuando una agencia ve a "su" promotor, accede a las pantallas espejo
+> de las que el promotor usa para ver agencias. Mismo lenguaje visual,
+> mismos componentes, distintas restricciones. Doc:
+> **`docs/backend/domains/agency-developer-mirror.md`**.
+
+**Pares simétricos:**
+
+| Promotor → agencia | Agencia → promotor |
+|---|---|
+| `/colaboradores/:id` (ficha pública) | `/promotor/:id` (ficha pública) |
+| `/colaboradores/:id/panel` (operativo) | `/promotor/:id/panel` (operativo) |
+| `agencyHref(agency)` decide | `developerHref(user)` decide |
+| Header con datos agencia | Header con datos promotor |
+| Tab Datos → `DatosTab` | Tab Datos → `DeveloperDatosTab` |
+
+**Restricciones del mirror agencia:**
+
+1. **Documentación read-only** · `DocumentacionTab` recibe `readOnly`
+   prop. La agencia NUNCA sube contratos · solo firma vía Firmafy email.
+2. **Resumen read-only** · banner "Sin contrato" pasa de CTA "Subir
+   contrato ahora" a aviso pasivo "Solo el promotor o comercializador
+   puede subir el contrato".
+3. **Sin "Compartir promoción"** en el header.
+4. **Permiso del panel · más relajado** · no requiere
+   `collaboration.panel.view`. Cualquier miembro de la agencia ve su
+   propio día a día con el promotor (no es info sensible cross-tenant
+   desde el lado agencia).
+
+**Resolución de datos** · `useEmpresa(tenantId)` reconoce el prefijo
+`developer-` y resuelve vía `loadEmpresa()` (single-tenant mock). En
+backend: `GET /api/promotor/:id/profile`.
+
+**Paridad visual obligatoria · NO romper:** la agencia mirando
+`/promotor/:id` debe ver lo MISMO que el promotor cuando hace
+"Previsualizar como usuario" en `/empresa`. Para mantenerlo:
+
+- `isVisitor` (boolean) NO controla los KPIs · solo (a) eyebrow,
+  (b) toggle preview, (c) modales de edición, (d) secciones internas
+  que el visitor no ve.
+- `entityType: "developer" | "agency"` controla los KPIs del
+  `HeroStatsStrip` y su origen es el TIPO DE ENTIDAD que se muestra,
+  no quién mira. `Empresa.tsx` lo deriva del tenantId.
+- `useEmpresaStats()` · si `tenantId` empieza con `developer-` o no
+  hay, computa los stats del workspace. Si es id de agencia, lee del
+  seed `agencies`. NO mezcles los dos branches.
+
+Si añades un campo o KPI nuevo, hazlo en una sola fuente
+(`useEmpresaStats`) y asegúrate de que las dos pantallas lo muestran
+igual ANTES de cerrar el PR.
+
+---
+
+## 🏢 REGLA DE ORO · Oficinas single source of truth
+
+> **`byvaro-oficinas` es la ÚNICA fuente de verdad de oficinas del
+> workspace.** Toda promoción que muestre un punto de venta lo
+> referencia por id (`puntosDeVentaIds: string[]`). NUNCA se duplican
+> datos de oficina. Ver
+> **`docs/backend/domains/empresa-stats-and-offices.md`**.
+
+**Por qué:** antes había 3 fuentes paralelas (`byvaro-oficinas`, inline
+`Promotion.puntosDeVenta`, `companyOffices.ts`) con ids distintos y
+datos divergentes. Una oficina podía aparecer en una promoción pero
+no en `/empresa` → "oficina fantasma". Inadmisible.
+
+**Regla:** si se ve una oficina en una promoción, **DEBE existir en
+`/empresa`**. Sin excepciones.
+
+Implementación:
+- `OFICINAS_SEED` en `src/lib/empresa.ts` auto-seedea 6 oficinas
+  (`of-1`...`of-6`) si localStorage está vacío.
+- Promociones usan `puntosDeVentaIds: string[]` referenciando.
+- `PromocionDetalle.tsx` resuelve vía `useOficinas()`.
+- `companyOffices.ts` borrado.
+
+**Backend:** tabla `offices` + pivote M:N `promotion_sales_offices` con
+FK. `ON DELETE SET NULL` en pivote.
+
+---
+
+## 📊 REGLA DE ORO · KPIs de empresa derivados, NO manuales
+
+> Los KPIs del hero de `/empresa` (Promociones, Unidades en venta,
+> Importe en venta, etc.) se computan en runtime desde los datasets
+> reales · NO son campos string editables en `Empresa.{x}Count`. Ver
+> `docs/backend/domains/empresa-stats-and-offices.md`.
+
+**Por qué:** los campos manuales se desincronizan inmediatamente del
+estado real. Un workspace con 5 promociones publicadas mostraba
+`promocionesCount: "0"` indefinidamente porque nadie tecleaba el valor.
+
+**Regla:** nueva métrica en hero o panel → **derívala en
+`useEmpresaStats()`** desde el dataset autoritario. NUNCA recrees un
+campo manual en `Empresa`.
+
+Eliminados (no los recrees): `aniosOperando`, `oficinasCount`,
+`agentesCount`, `promocionesCount`, `unidadesVendidas`,
+`agenciasColaboradoras`, `ventasAnuales`, `ingresosAnuales`,
+`portfolio`.
+
+`HeroStatsStrip` adapta los tiles con prop `mode: "owner" | "visitor"`:
+
+- Owner: Años · Promociones · Unidades en venta · Importe en venta · Colaboradores
+- Visitor: Años · Oficinas · Equipo · Unidades vendidas
+
+Idiomas: unión de `member.languages` (members activos) cuando es own
+workspace · NO campo `idiomasAtencion` editable manualmente.
+
+---
+
 ## 🥇 REGLA DE ORO · Historial del contacto
 
 > **Todo lo que pasa con un contacto se registra en su Historial.** Sin
@@ -656,6 +815,72 @@ Historial no aparece.
 a otra empresa (invitación, rechazo, oferta, contrato…), verifica:
 ¿se ve reflejada en `/colaboradores/:id?tab=historial`? Si no,
 falta el `recordCompanyEvent()`.
+
+---
+
+## 🏢 REGLA DE ORO · Datos del workspace son por tenant
+
+> **Todo store que represente "datos del workspace" (equipo, oficinas,
+> drafts, configuración interna) DEBE usar una clave de localStorage
+> sufijada por el workspace del usuario actual.** Las keys globales
+> single-tenant fugan los datos del promotor a las agencias y al revés.
+
+**Por qué.** El prototipo arrancó single-tenant — todo en
+`byvaro.organization.members.v4` (clave global). Cuando se introdujo el
+dual-role, agencias entrando a `/equipo`, `/empresa` (tab Equipo),
+selectores de miembros, etc. veían el equipo del promotor como si fuera
+suyo. Eso rompe el modelo dual-role (`docs/dual-role-model.md`) — la
+demo a una agencia validaba un producto que no es el real.
+
+**Patrón canónico.**
+
+```ts
+import { useCurrentUser, currentWorkspaceKey } from "@/lib/currentUser";
+
+const user = useCurrentUser();
+const workspaceKey = currentWorkspaceKey(user);
+// developer-default · agency-<agencyId>
+const STORAGE_KEY = `byvaro.<dominio>.<entidad>.v1:${workspaceKey}`;
+```
+
+Para `team` ya hay helpers · usar siempre `useWorkspaceMembers()` de
+`src/lib/useWorkspaceMembers.ts` o `getMembersForWorkspace(key)` de
+`src/lib/team.ts`. **Nunca leas `TEAM_MEMBERS` directamente** desde un
+componente · es solo el seed del workspace developer.
+
+**Seeds por agencia** · `src/lib/agencyTeamSeeds.ts` deriva el equipo
+demo desde `mockUsers.ts` filtrado por `agencyId`. Si añades una nueva
+agencia con usuarios mock, su equipo aparece automáticamente. Si la
+agencia no tiene usuarios mock (p.ej. solicitudes pendientes), el seed
+es lista vacía y la pantalla muestra el empty-state estándar.
+
+**Stores ya migrados** (no recrees logica para estos):
+
+- `team` (Equipo, ajustes/usuarios/miembros, EmpresaAgentsTab,
+  EmpresaHomeTab, useEmpresaStats).
+
+**Stores PENDIENTES de migrar** (deuda técnica · documentar antes de
+añadir features que dependan):
+
+- `oficinas` (`byvaro-oficinas`) · agencias ven oficinas del promotor.
+- Drafts de wizards y formularios que persisten en `localStorage`.
+- Cualquier picker/selector que tire de TEAM_MEMBERS sin pasar por
+  `useWorkspaceMembers` (ej. UserSelect en algunos contextos).
+
+**Backend.** Cuando aterrice multi-tenancy real (`organization_id` +
+RLS), las keys con sufijo desaparecen · cada endpoint estará scoped
+al `organization_id` del JWT y devolverá solo datos del workspace.
+Mantén los helpers `currentWorkspaceKey()` y `useWorkspaceMembers()`
+porque sirven de adaptador 1-a-1 al backend.
+
+**Checklist al añadir un store nuevo "del workspace":**
+
+- [ ] ¿La clave de localStorage tiene sufijo `:${workspaceKey}`?
+- [ ] ¿El seed por defecto es distinto para developer vs agency?
+- [ ] ¿Se reseed automáticamente al cambiar de cuenta (account
+      switcher) o queda contaminada la lista de la cuenta anterior?
+- [ ] ¿El TODO(backend) anota cómo el endpoint scoped reemplaza la
+      key sufijada?
 
 ---
 
@@ -1203,6 +1428,178 @@ Todo `navigate()` / `<Link to=...>` hacia una agencia debe pasar por
 (ej. botón "Ver ficha pública" dentro del panel). En ese caso sí se
 linkea a `/colaboradores/:id` directamente · queda documentado en el
 propio componente.
+
+---
+
+## 🛂 REGLA DE ORO · Setup de Responsable de agencia bloquea acciones críticas
+
+> **Toda agencia recién dada de alta vía `/invite/:token` (caso 1)
+> arranca con el setup de Responsable PENDIENTE.** Hasta que el user
+> elige "Soy el Responsable" o "Quiero invitar al Responsable", el
+> sistema NO debe permitir acciones críticas que dependan de tener
+> la cadena de mando clara · si el user pulsó "Lo haré más tarde",
+> el modal vuelve a aparecer al disparar cualquiera de esas acciones.
+
+**Por qué.** El Responsable es la única persona que puede legalmente
+firmar contratos, gestionar permisos, cambiar plan y representar a la
+agencia. Si el sistema permite hacer esas cosas sin saber quién es el
+Responsable, queda data huérfana y puede haber disputas a posteriori
+("yo no autoricé esa firma", "yo no contraté ese plan").
+
+**Estados del setup** (ver `src/lib/agencyOnboarding.ts`):
+
+- `pending` (sin estado en storage) · acaba de crearse la agencia ·
+  el modal `<ResponsibleSetupDialog>` aparece bloqueante en cualquier
+  pantalla.
+- `deferred` · el user pulsó "Lo haré más tarde" · `deferredAt` en
+  storage · el modal NO se auto-abre, pero el banner ámbar
+  `<PendingResponsibleBanner>` sale persistente arriba de la app +
+  cualquier acción crítica dispara el modal otra vez.
+- `completed` · el user eligió "Soy el Responsable" o terminó el form
+  de "Invitar Responsable" · `completedAt` en storage · ni modal ni
+  banner.
+
+**Catálogo de acciones críticas** que DEBEN re-disparar el modal si
+el setup está pendiente o aplazado:
+
+- Invitar miembros del equipo (`/ajustes/usuarios/miembros`).
+- Generar / firmar contratos de colaboración.
+- Aprobar / rechazar registros recibidos.
+- Editar datos fiscales o legales de la agencia.
+- Cambiar plan de suscripción / acceder a billing.
+- Conectar integraciones externas (Google Calendar, WhatsApp Business,
+  pasarelas de pago).
+- Aceptar términos legales nuevos en nombre de la agencia.
+
+**Cómo aplicar el guard** (patrón canónico):
+
+```tsx
+import { useState } from "react";
+import { needsResponsibleSetup } from "@/lib/agencyOnboarding";
+import { ResponsibleSetupDialog } from "@/components/agency-onboarding/ResponsibleSetupDialog";
+import { useCurrentUser } from "@/lib/currentUser";
+
+function CriticalActionButton() {
+  const user = useCurrentUser();
+  const [forceSetup, setForceSetup] = useState(false);
+
+  const handleClick = () => {
+    if (user.accountType === "agency" && user.agencyId
+        && needsResponsibleSetup(user.agencyId)) {
+      setForceSetup(true);
+      return;
+    }
+    /* … ejecuta la acción crítica real … */
+  };
+
+  return (
+    <>
+      <button onClick={handleClick}>Invitar miembro</button>
+      {forceSetup && (
+        <ResponsibleSetupDialog forceOpen onClose={() => setForceSetup(false)} />
+      )}
+    </>
+  );
+}
+```
+
+El dialog acepta `forceOpen` + `onClose` precisamente para este caso ·
+así el caller decide si re-intentar la acción tras el setup completo.
+
+**Checklist al añadir una acción crítica nueva:**
+
+- [ ] ¿La acción cambia algo que solo el Responsable debería poder
+      autorizar? Si sí, aplica el guard.
+- [ ] ¿Se invoca desde un botón? Envuelve el handler.
+- [ ] ¿Se invoca desde un `onSubmit` de formulario? Mete el check al
+      principio y bloquea el submit.
+- [ ] ¿La hace una agencia o un promotor? Solo aplica a `accountType ===
+      "agency"` · los promotores tienen su propio flujo de billing.
+
+**TODO(backend).** Cuando llegue la API real, este guard pasa al servidor:
+los endpoints críticos comprueban el flag de onboarding del workspace
+y devuelven `409 onboarding_incomplete` si hay setup pendiente. El
+frontend lee el código y abre el modal igual que ahora.
+
+---
+
+## 🏷️ REGLA DE ORO · Promotor vs Comercializador · label dinámico
+
+> **Cada promoción se crea como `promotor` o `comercializador` (campo
+> `Promotion.ownerRole`). Toda la copy de la UI que hoy dice "promotor"
+> hardcodeado DEBE leer ese campo y resolverse dinámicamente con los
+> helpers de `src/lib/promotionRole.ts`.** Una agencia colaboradora
+> puede estar trabajando con un promotor o con un comercializador
+> exclusivo · si la UI dice "Esperando decisión del promotor" pero la
+> promoción la lleva un comercializador, la copy es engañosa y rompe
+> la confianza del partner.
+
+**Modelo.**
+
+- `Promotion.ownerRole?: "promotor" | "comercializador"` (default
+  "promotor" para retrocompatibilidad). Set en el wizard de creación
+  vía `WizardState.role` (ya existe · `RoleOption` en
+  `src/components/crear-promocion/types.ts`).
+- Es per-promoción, NO per-workspace · una misma empresa puede tener
+  algunas promociones donde es promotor y otras donde es
+  comercializador. La fuente de verdad vive en la promoción concreta.
+
+**Helpers canónicos** · `src/lib/promotionRole.ts`:
+
+```ts
+import {
+  getOwnerRoleLabel,         // "Promotor" | "Comercializador" · titulares
+  getOwnerRoleLabelLower,    // "promotor" | "comercializador" · body inline
+  getOwnerRoleArticleLower,  // "el promotor" | "el comercializador" · frases
+  getOwnerRoleGenitive,      // "del promotor" | "del comercializador" · "Decisión del…"
+  resolveOwnerRole,          // "promotor" | "comercializador" · branching lógico
+} from "@/lib/promotionRole";
+
+// Ejemplos de uso:
+<p>Esperando decisión {getOwnerRoleGenitive(promo)}.</p>
+<p>{getOwnerRoleArticleLower(promo)} aprobará el registro.</p>
+<Tag>{getOwnerRoleLabel(promo)}</Tag>
+```
+
+**Sitios que SÍ deben migrar** (toda copy visible al usuario):
+
+- Registros · "Esperando decisión del promotor", "Aprobado/Rechazado
+  por el promotor", "Registro directo del promotor".
+- Banner de visita y dialog de cancelación · "Cancelar visita
+  (promotor)" → "Cancelar visita ({rol})".
+- Activity timeline · `decision: { defaultTitle: "Decisión del
+  promotor" }` debe leer la promo asociada.
+- Emails y plantillas · cuando lleguen al backend, el handler debe
+  resolver el label antes de renderizar.
+- Toda mención de "el promotor" en copy informativa.
+
+**Sitios que NO migran** (uso técnico/admin · queda "Promotor" fijo):
+
+- `AccountSwitcher` · label de la cuenta del workspace · es el rol
+  global del usuario logueado, no de una promoción concreta. Se
+  resuelve aparte cuando se modele `Workspace.kind`.
+- Plan de suscripción · "Plan Promotor 249€/mes" es nombre de
+  producto comercial, no rol de promoción.
+- `Promociones.tsx` placeholder de búsqueda · es texto de UX
+  genérico ("Buscar promoción, promotor, ubicación") · no aplica.
+- Comentarios en código (`// el promotor decide…`) · son
+  documentación técnica, no copy visible.
+
+**Checklist al añadir copy nueva que hable del owner:**
+
+- [ ] ¿Tengo la `Promotion` en contexto? Sí → usar helpers de
+      `promotionRole.ts`. No → bloquear y subir el `promo` por props.
+- [ ] ¿Estoy hardcodeando "Promotor" o "el promotor" en JSX? → mal,
+      usar helper.
+- [ ] ¿La copy aparece en lado agencia? → doblemente importante ·
+      la agencia NO debería ver "promotor" si trabaja con un
+      comercializador.
+
+**TODO(backend).** Cuando exista la API, `GET /api/promociones/:id`
+devuelve `ownerRole`. Si en el futuro un workspace solo opera como
+comercializador, considerar mover el campo también a
+`organizations.kind` para defaults; per-promoción sigue siendo la
+fuente de verdad.
 
 ---
 

@@ -37,6 +37,22 @@
 
 import type { WizardState, StepId } from "@/components/crear-promocion/types";
 import type { Promotion } from "@/data/promotions";
+import { loadEmpresa } from "./empresa";
+
+/** Devuelve true si la empresa del workspace tiene mínimamente
+ *  identificada su entidad legal (nombre comercial o razón social).
+ *  Sin uno de los dos no se puede publicar nada — la promoción
+ *  necesita atribuir al promotor/comercializador en la ficha pública,
+ *  microsites, registros, contratos. */
+function empresaTieneIdentidad(): boolean {
+  if (typeof window === "undefined") return true; // SSR · skip check
+  try {
+    const e = loadEmpresa();
+    return !!(e.nombreComercial?.trim() || e.razonSocial?.trim());
+  } catch {
+    return false;
+  }
+}
 
 /** Un requisito faltante con contexto suficiente para guiar al usuario. */
 export interface MissingRequirement {
@@ -56,6 +72,16 @@ export interface MissingRequirement {
 
 export function getMissingForWizard(state: WizardState): MissingRequirement[] {
   const missing: MissingRequirement[] = [];
+
+  // 0. Identidad de la empresa (nombre comercial o razón social).
+  //    Sin esto la promoción no se puede publicar — falta el "quién"
+  //    en la ficha pública, microsites y registros.
+  if (!empresaTieneIdentidad()) {
+    missing.push({
+      key: "empresa-identidad",
+      label: "Configura el nombre comercial o razón social de tu empresa en /ajustes/empresa/datos",
+    });
+  }
 
   // 1. Fotos
   if (state.fotos.length === 0) {
@@ -166,8 +192,15 @@ export function getMissingForPromotion(p: Promotion): MissingRequirement[] {
   if (!p.code || !p.code.trim()) {
     missing.push({ key: "codigo", label: "Sin código de referencia", ficha: "basicInfo" });
   }
-  if (!p.developer || !p.developer.trim()) {
-    missing.push({ key: "developer", label: "Sin promotor asignado", ficha: "basicInfo" });
+  // El "quién publica" sale del workspace · si no hay nombre comercial
+  // ni razón social configurados en /ajustes/empresa/datos, la
+  // promoción no se puede publicar (no hay manera de atribuirla en la
+  // ficha pública, microsites o registros).
+  if (!empresaTieneIdentidad()) {
+    missing.push({
+      key: "empresa-identidad",
+      label: "Configura el nombre comercial o razón social en /ajustes/empresa/datos",
+    });
   }
 
   /* ── Multimedia ────────────────────────────────────────── */

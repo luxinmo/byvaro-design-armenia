@@ -41,7 +41,10 @@ export function AccountSwitcher() {
     (a) => !a.solicitudPendiente && !a.isNewRequest,
   );
 
-  const developerName = empresa.nombreComercial || "Luxinmo";
+  /* Sin valores demo hardcoded · el nombre real lo configura el admin
+   * en /ajustes/empresa/datos. Si no hay dato, mostramos "Tu empresa"
+   * como placeholder genérico (NO un nombre fake como "Luxinmo"). */
+  const developerName = empresa.nombreComercial?.trim() || "Tu empresa";
   const label =
     type === "developer"
       ? `Promotor · ${developerName}`

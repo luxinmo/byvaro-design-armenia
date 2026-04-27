@@ -5,6 +5,14 @@
  * verificación (estilo Instagram/X) · CIF pequeño debajo. El tik solo
  * aparece si `empresa.verificada === true` (validado por Byvaro ·
  * ver `/ajustes/empresa/verificacion`).
+ *
+ * IMPORTANTE · fuente única de verdad:
+ *   Esta pantalla escribe SIEMPRE en el store canónico `useEmpresa()`
+ *   (key `byvaro-empresa`). Antes existía un `OrgProfile` paralelo con
+ *   key propia · al ser un store separado, los cambios no se veían en
+ *   la vista pública del promotor desde la cuenta de la agencia (ni en
+ *   `getPromoterDisplayName()`). Si añades un campo nuevo, conéctalo al
+ *   shape `Empresa` y al hook · NO crees stores paralelos.
  */
 
 import { useEffect, useState } from "react";
@@ -19,60 +27,80 @@ import { useEmpresa } from "@/lib/empresa";
 import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
 import { toast } from "sonner";
 
-const KEY = "byvaro.organization.profile.v1";
-
-type OrgProfile = {
-  legalName: string;
-  commercialName: string;
-  taxId: string;
+type FormState = {
+  razonSocial: string;
+  nombreComercial: string;
+  cif: string;
   email: string;
-  phone: string;
-  website: string;
-  address: string;
-  city: string;
-  postalCode: string;
-  country: string;
+  telefono: string;
+  sitioWeb: string;
+  direccion: string;
+  ciudad: string;
+  codigoPostal: string;
+  pais: string;
 };
 
-const DEFAULT: OrgProfile = {
-  legalName: "Luxinmo Real Estate S.L.",
-  commercialName: "Luxinmo",
-  taxId: "B12345678",
-  email: "info@luxinmo.com",
-  phone: "+34 952 000 000",
-  website: "https://luxinmo.com",
-  address: "Calle Real 25",
-  city: "Marbella",
-  postalCode: "29602",
-  country: "España",
-};
-
-function load(): OrgProfile {
-  if (typeof window === "undefined") return DEFAULT;
-  try { return { ...DEFAULT, ...JSON.parse(window.localStorage.getItem(KEY) ?? "{}") }; }
-  catch { return DEFAULT; }
+function fromEmpresa(e: ReturnType<typeof useEmpresa>["empresa"]): FormState {
+  return {
+    razonSocial: e.razonSocial,
+    nombreComercial: e.nombreComercial,
+    cif: e.cif,
+    email: e.email,
+    telefono: e.telefono,
+    sitioWeb: e.sitioWeb,
+    direccion: e.direccionFiscal.direccion,
+    ciudad: e.direccionFiscal.ciudad,
+    codigoPostal: e.direccionFiscal.codigoPostal,
+    pais: e.direccionFiscal.pais,
+  };
 }
 
 export default function AjustesEmpresaDatos() {
   const user = useCurrentUser();
   const canEdit = isAdmin(user);
-  const [data, setData] = useState<OrgProfile>(() => load());
-  const [initial, setInitial] = useState(data);
+  const { empresa, patch } = useEmpresa();
+  const [data, setData] = useState<FormState>(() => fromEmpresa(empresa));
+  const [initial, setInitial] = useState<FormState>(data);
   const { setDirty } = useDirty();
-  const { empresa } = useEmpresa();
+
+  // Si la empresa cambia desde otra fuente (otro tab, otra pantalla),
+  // resincroniza el formulario sólo si el usuario no tiene cambios sin
+  // guardar · evita pisarle el trabajo en curso.
+  useEffect(() => {
+    if (JSON.stringify(data) === JSON.stringify(initial)) {
+      const next = fromEmpresa(empresa);
+      setData(next);
+      setInitial(next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresa]);
 
   useEffect(() => { setDirty(JSON.stringify(data) !== JSON.stringify(initial)); }, [data, initial, setDirty]);
   const isDirty = JSON.stringify(data) !== JSON.stringify(initial);
 
   const save = () => {
     if (!canEdit) { toast.error("Solo los administradores pueden editar"); return; }
-    window.localStorage.setItem(KEY, JSON.stringify(data));
+    patch({
+      razonSocial: data.razonSocial,
+      nombreComercial: data.nombreComercial,
+      cif: data.cif,
+      email: data.email,
+      telefono: data.telefono,
+      sitioWeb: data.sitioWeb,
+      direccionFiscal: {
+        ...empresa.direccionFiscal,
+        direccion: data.direccion,
+        ciudad: data.ciudad,
+        codigoPostal: data.codigoPostal,
+        pais: data.pais,
+      },
+    });
     setInitial(data);
     setDirty(false);
     toast.success("Datos de la empresa guardados");
   };
 
-  const set = (patch: Partial<OrgProfile>) => setData((d) => ({ ...d, ...patch }));
+  const set = (p: Partial<FormState>) => setData((d) => ({ ...d, ...p }));
 
   return (
     <SettingsScreen
@@ -91,12 +119,12 @@ export default function AjustesEmpresaDatos() {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <h2 className="text-[17px] sm:text-[19px] font-bold text-foreground tracking-tight truncate">
-                {data.commercialName || data.legalName || "Tu empresa"}
+                {data.nombreComercial || data.razonSocial || "Tu empresa"}
               </h2>
               {empresa.verificada && <VerifiedBadge size="md" />}
             </div>
             <p className="text-[11.5px] text-muted-foreground mt-0.5 tabular-nums">
-              {data.taxId ? `Nº de registro · ${data.taxId}` : "Sin CIF / NIF configurado"}
+              {data.cif ? `Nº de registro · ${data.cif}` : "Sin CIF / NIF configurado"}
             </p>
           </div>
         </div>
@@ -104,20 +132,20 @@ export default function AjustesEmpresaDatos() {
 
       <SettingsCard title="Identidad fiscal">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <SettingsField label="Razón social"><Input value={data.legalName} onChange={(e) => set({ legalName: e.target.value })} disabled={!canEdit} /></SettingsField>
-          <SettingsField label="Nombre comercial"><Input value={data.commercialName} onChange={(e) => set({ commercialName: e.target.value })} disabled={!canEdit} /></SettingsField>
-          <SettingsField label="CIF / NIF"><Input value={data.taxId} onChange={(e) => set({ taxId: e.target.value })} disabled={!canEdit} /></SettingsField>
+          <SettingsField label="Razón social"><Input value={data.razonSocial} onChange={(e) => set({ razonSocial: e.target.value })} disabled={!canEdit} /></SettingsField>
+          <SettingsField label="Nombre comercial"><Input value={data.nombreComercial} onChange={(e) => set({ nombreComercial: e.target.value })} disabled={!canEdit} /></SettingsField>
+          <SettingsField label="CIF / NIF"><Input value={data.cif} onChange={(e) => set({ cif: e.target.value })} disabled={!canEdit} /></SettingsField>
         </div>
       </SettingsCard>
 
       <SettingsCard title="Contacto">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <SettingsField label="Email corporativo"><Input type="email" value={data.email} onChange={(e) => set({ email: e.target.value })} disabled={!canEdit} /></SettingsField>
-          <SettingsField label="Teléfono"><Input value={data.phone} onChange={(e) => set({ phone: e.target.value })} disabled={!canEdit} /></SettingsField>
+          <SettingsField label="Teléfono"><Input value={data.telefono} onChange={(e) => set({ telefono: e.target.value })} disabled={!canEdit} /></SettingsField>
           <SettingsField label="Web" htmlFor="web">
             <div className="relative">
               <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input id="web" value={data.website} onChange={(e) => set({ website: e.target.value })} className="pl-9" disabled={!canEdit} />
+              <Input id="web" value={data.sitioWeb} onChange={(e) => set({ sitioWeb: e.target.value })} className="pl-9" disabled={!canEdit} />
             </div>
           </SettingsField>
         </div>
@@ -126,11 +154,11 @@ export default function AjustesEmpresaDatos() {
       <SettingsCard title="Dirección fiscal">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <SettingsField label="Dirección" htmlFor="addr">
-            <Input id="addr" value={data.address} onChange={(e) => set({ address: e.target.value })} disabled={!canEdit} />
+            <Input id="addr" value={data.direccion} onChange={(e) => set({ direccion: e.target.value })} disabled={!canEdit} />
           </SettingsField>
-          <SettingsField label="Ciudad"><Input value={data.city} onChange={(e) => set({ city: e.target.value })} disabled={!canEdit} /></SettingsField>
-          <SettingsField label="Código postal"><Input value={data.postalCode} onChange={(e) => set({ postalCode: e.target.value })} disabled={!canEdit} /></SettingsField>
-          <SettingsField label="País"><Input value={data.country} onChange={(e) => set({ country: e.target.value })} disabled={!canEdit} /></SettingsField>
+          <SettingsField label="Ciudad"><Input value={data.ciudad} onChange={(e) => set({ ciudad: e.target.value })} disabled={!canEdit} /></SettingsField>
+          <SettingsField label="Código postal"><Input value={data.codigoPostal} onChange={(e) => set({ codigoPostal: e.target.value })} disabled={!canEdit} /></SettingsField>
+          <SettingsField label="País"><Input value={data.pais} onChange={(e) => set({ pais: e.target.value })} disabled={!canEdit} /></SettingsField>
         </div>
       </SettingsCard>
     </SettingsScreen>

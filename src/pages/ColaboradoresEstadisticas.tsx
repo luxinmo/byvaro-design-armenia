@@ -465,7 +465,7 @@ function TabRegistros({ visibleAgencies, fNations, fPromos }: {
       />
       <Panel
         title="Calidad de los registros"
-        subtitle="% aprobados por el promotor · duplicados detectados por la IA · SLA de respuesta"
+        subtitle="% aprobados · duplicados detectados por la IA · SLA de respuesta"
       >
         <div className="overflow-x-auto -mx-4 sm:-mx-5 px-4 sm:px-5">
           <table className="w-full text-sm">

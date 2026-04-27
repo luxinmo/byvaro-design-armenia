@@ -146,6 +146,13 @@ incidencias, financiero). Admin-only por defecto.
   liberar · cancelar · subir comprobante interno.
 - `collaboration.documents.manage` — solicitar documentos a la agencia
   (factura, IBAN, certificados) · aprobar/rechazar los subidos.
+- `collaboration.requests.manage` — aceptar / descartar / recuperar
+  solicitudes de colaboración por promoción que envían las agencias.
+  Gate de las acciones del drawer en `/colaboradores` (tabs Pendientes /
+  Aceptadas / Descartadas). Sin esta key el usuario VE las solicitudes
+  en read-only con aviso lock-icon · Aceptar/Descartar/Recuperar quedan
+  `disabled:opacity-40`. Doc canónico:
+  `docs/backend/domains/collaboration-requests.md`.
 
 ### Dashboard de actividad · `activity.*`
 
@@ -189,6 +196,7 @@ incidencias, financiero). Admin-only por defecto.
 | `collaboration.payments.view` | ✅ | ❌ | Financiero |
 | `collaboration.payments.manage` | ✅ | ❌ | |
 | `collaboration.documents.manage` | ✅ | ❌ | |
+| `collaboration.requests.manage` | ✅ | ❌ | Aceptar/descartar/recuperar solicitudes por promoción |
 | `activity.dashboard.view` | ✅ | ❌ | KPIs globales |
 
 ### `admin` — TODOS los permisos por defecto.

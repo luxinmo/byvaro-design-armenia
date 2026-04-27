@@ -37,6 +37,24 @@ function relativeDays(iso: string): string {
   return `hace ${Math.round(diff / 30)} meses`;
 }
 
+/* Validación mínima de URL de Google Maps · permisivo a propósito.
+ *  Acepta `google.com/maps`, `maps.google.com`, `maps.app.goo.gl`,
+ *  `goo.gl/maps`. El backend valida en serio cuando llegue. */
+function isPlausibleMapsUrl(url: string): boolean {
+  if (!url || !url.trim()) return false;
+  const u = url.toLowerCase().trim();
+  if (!/^https?:\/\//.test(u)) return false;
+  return /google\./.test(u) || /goo\.gl/.test(u);
+}
+
+/* Hash determinístico string → int para generar rating mock
+ *  reproducible (la misma URL devuelve siempre los mismos valores). */
+function hashStringToInt(s: string): number {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
 export function GoogleRatingCard({ empresa, viewMode, update }: Props) {
   const hasRating = empresa.googleRating > 0;
   const connected = !!empresa.googlePlaceId;
@@ -115,22 +133,78 @@ export function GoogleRatingCard({ empresa, viewMode, update }: Props) {
           </div>
         )}
 
-        {/* Modo edición: input para pegar la URL de Maps */}
+        {/* Modo edición · input + botón Conectar + Desactivar.
+            El click "Conectar" simula el fetch del backend (en mock
+            genera rating/total deterministic desde la URL · al
+            conectar real, el endpoint hace request a Google Places
+            API y devuelve los valores reales). */}
         {viewMode === "edit" && (
-          <div className="mt-3 space-y-1.5">
+          <div className="mt-3 space-y-2">
             <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium block">
-              URL de tu ficha Google Maps
+              Enlace a tu ficha Google Maps
             </label>
-            <input
-              type="url"
-              value={empresa.googleMapsUrl}
-              onChange={(e) => update("googleMapsUrl", e.target.value)}
-              placeholder="https://maps.app.goo.gl/..."
-              className="w-full h-9 px-3 text-xs bg-background border border-border rounded-lg focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground/60"
-            />
+            <div className="flex gap-2">
+              <input
+                id="google-maps-url-input"
+                type="url"
+                value={empresa.googleMapsUrl}
+                onChange={(e) => update("googleMapsUrl", e.target.value)}
+                placeholder="Pega aquí el enlace de tu ficha"
+                className="flex-1 min-w-0 h-9 px-3 text-xs bg-background border border-border rounded-lg focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground/60"
+              />
+              {/* Botón SIEMPRE visible · disabled si el input está
+                  vacío. */}
+              <button
+                type="button"
+                disabled={!empresa.googleMapsUrl?.trim()}
+                onClick={() => {
+                  /* MOCK · usamos los valores del seed (4.7 · 312
+                   *  reseñas) para que el demo refleje tu Google real
+                   *  sin tener que parsear nada.
+                   *  TODO(backend): POST /api/empresa/google-place
+                   *    { mapsUrl } · resolverá place_id real, hará
+                   *    fetch a Places API y devolverá los valores
+                   *    actualizados. Cron semanal refresca rating. */
+                  const seed = hashStringToInt(empresa.googleMapsUrl);
+                  update("googlePlaceId", `MOCK_${seed.toString(36)}`);
+                  update("googleRating", 4.7);
+                  update("googleRatingsTotal", 312);
+                  update("googleFetchedAt", new Date().toISOString());
+                }}
+                className="h-9 px-4 rounded-full bg-foreground text-background text-xs font-semibold hover:bg-foreground/90 transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Conectar
+              </button>
+            </div>
+            <details className="group">
+              <summary className="text-[11px] text-primary hover:underline cursor-pointer list-none inline-flex items-center gap-1">
+                <span className="group-open:hidden">¿Cómo obtengo el enlace?</span>
+                <span className="hidden group-open:inline">Ocultar pasos</span>
+              </summary>
+              <ol className="mt-2 ml-4 text-[11px] text-muted-foreground leading-relaxed list-decimal space-y-0.5">
+                <li>Abre <a href="https://www.google.com/maps" target="_blank" rel="noreferrer" className="underline hover:text-foreground">Google Maps</a> y busca tu empresa.</li>
+                <li>Pulsa en el botón <b>Compartir</b>.</li>
+                <li>Copia el enlace y pégalo arriba.</li>
+              </ol>
+            </details>
+            {(empresa.googleRating > 0 || empresa.googlePlaceId) && (
+              <button
+                type="button"
+                onClick={() => {
+                  /* TODO(backend): DELETE /api/empresa/google-place */
+                  update("googleMapsUrl", "");
+                  update("googlePlaceId", "");
+                  update("googleRating", 0);
+                  update("googleRatingsTotal", 0);
+                  update("googleFetchedAt", "");
+                }}
+                className="text-[11px] text-destructive/80 hover:text-destructive hover:underline transition-colors"
+              >
+                Desactivar conexión
+              </button>
+            )}
             <p className="text-[10px] text-muted-foreground/80 leading-relaxed">
-              Al guardar, el sistema resolverá el <code className="px-1 rounded bg-muted">place_id</code> y
-              traerá el rating y el nº de reseñas automáticamente. Se refresca cada semana.
+              Refrescamos los datos automáticamente cada semana desde Google.
             </p>
           </div>
         )}

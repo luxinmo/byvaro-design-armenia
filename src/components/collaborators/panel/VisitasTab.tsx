@@ -13,9 +13,18 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Agency } from "@/data/agencies";
+import { useCurrentUser } from "@/lib/currentUser";
 
 interface Props {
   agency: Agency;
+  /** Si está set, filtra las visitas a las del agente con este id /
+   *  nombre. Lo usa el panel del lado AGENCIA cuando un member abre
+   *  el panel del promotor · ve solo sus propias visitas. Admin pasa
+   *  undefined y ve todas las del equipo.
+   *  Mock: matchea contra el nombre del agente porque la seed actual
+   *  usa nombre, no id. TODO(backend): cuando exista API real,
+   *  filtrar server-side por `WHERE agent_id = :restrictToUserId`. */
+  restrictToUserId?: string;
 }
 
 interface MockVisit {
@@ -31,7 +40,8 @@ interface MockVisit {
   agent?: string;
 }
 
-export function VisitasTab({ agency: a }: Props) {
+export function VisitasTab({ agency: a, restrictToUserId }: Props) {
+  const currentUserName = useCurrentUser().name;
   const visits: MockVisit[] = useMemo(() => {
     const now = Date.now();
     const base: Record<string, MockVisit[]> = {
@@ -50,13 +60,20 @@ export function VisitasTab({ agency: a }: Props) {
         { id: "v3", when: now - 14 * 86400e3, client: "Astrid Olsen",   promoId: "dev-2", promoName: "Villas del Pinar", unit: "Apt. 07-2",  status: "realizada", outcome: "interesado", rating: 4, agent: "Erik Lindqvist" },
       ],
     };
-    return (base[a.id] ?? []).sort((x, y) => {
+    const all = (base[a.id] ?? []);
+    /* Filtrado por agente · si `restrictToUserId` está set, solo
+     *  vemos visitas asignadas a ese user. Mock: matcheamos por
+     *  nombre porque la seed usa nombres. Backend usará agent_id. */
+    const filtered = restrictToUserId
+      ? all.filter((v) => v.agent === currentUserName)
+      : all;
+    return filtered.sort((x, y) => {
       const xFuture = x.when > Date.now(); const yFuture = y.when > Date.now();
       if (xFuture && !yFuture) return -1;
       if (!xFuture && yFuture) return 1;
       return xFuture ? x.when - y.when : y.when - x.when;
     });
-  }, [a.id]);
+  }, [a.id, restrictToUserId, currentUserName]);
 
   const kpi = useMemo(() => {
     const now = Date.now();

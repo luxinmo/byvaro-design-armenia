@@ -27,7 +27,7 @@ import {
 import {
   ArrowLeft, ArrowUpRight, Eye, Mail, Share2, Shield,
   LayoutGrid, FileSignature, CreditCard, History, Building2, Receipt,
-  CalendarCheck, TrendingUp, FileText,
+  CalendarCheck, TrendingUp, FileText, BarChart3,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -58,7 +58,7 @@ function initials(name: string): string {
 }
 
 const PANEL_TABS = [
-  "resumen", "datos", "visitas", "registros", "ventas",
+  "resumen", "estadisticas", "datos", "visitas", "registros", "ventas",
   "documentacion", "pagos", "facturas", "historial",
 ] as const;
 type PanelTab = typeof PANEL_TABS[number];
@@ -114,6 +114,7 @@ export default function ColaboracionPanel() {
 
   const tabDefs: Array<{ id: PanelTab; label: string; icon: typeof LayoutGrid }> = [
     { id: "resumen",       label: "Resumen",       icon: LayoutGrid },
+    { id: "estadisticas",  label: "Estadísticas",  icon: BarChart3 },
     { id: "datos",         label: "Datos",         icon: Building2 },
     { id: "visitas",       label: "Visitas",       icon: CalendarCheck },
     { id: "registros",     label: "Registros",     icon: FileText },
@@ -126,7 +127,7 @@ export default function ColaboracionPanel() {
 
   return (
     <div className="h-full overflow-auto bg-background" data-scroll-container>
-      <div className="px-4 sm:px-6 lg:px-10 pt-6 pb-16 max-w-[1570px] mx-auto w-full">
+      <div className="px-4 sm:px-6 lg:px-10 pt-6 pb-16 max-w-[1400px] mx-auto w-full">
 
         {/* ══════ Back + eyebrow ══════ */}
         <div className="mb-4">
@@ -245,6 +246,22 @@ export default function ColaboracionPanel() {
             fromPromoId={fromPromoId}
             onGoTo={(t) => setTab(t)}
           />
+        )}
+        {tab === "estadisticas" && (
+          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
+            <div className="h-10 w-10 rounded-2xl bg-muted text-muted-foreground grid place-items-center mx-auto mb-3">
+              <BarChart3 className="h-4 w-4" strokeWidth={1.75} />
+            </div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">En diseño</p>
+            <h3 className="text-base font-semibold text-foreground mt-1.5 mb-2">
+              Estadísticas operativas con esta agencia
+            </h3>
+            <p className="text-[12.5px] text-muted-foreground leading-relaxed max-w-md mx-auto">
+              KPIs comparativos · conversión registros→ventas, ticket medio, tiempos de
+              respuesta, top agentes de la agencia, calidad de leads. Diseño en curso · iteramos
+              cuando definamos qué métricas pesan en la decisión del promotor.
+            </p>
+          </div>
         )}
         {tab === "datos" && <DatosTab agency={a} />}
         {tab === "visitas" && <VisitasTab agency={a} />}
