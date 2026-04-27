@@ -66,6 +66,8 @@ import { RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner"; // feedback tras publicar · Toaster global en App.tsx
 import { useCurrentUser } from "@/lib/currentUser";
 import { useInvitaciones } from "@/lib/invitaciones";
+import { ensureAgencyContactForPromoter } from "@/lib/invitationContacts";
+import { useEmpresa } from "@/lib/empresa";
 import { addPromotionToCartera, useAgencyCartera } from "@/lib/agencyCartera";
 import { Flag } from "@/components/ui/Flag";
 import { findLanguageByCode } from "@/lib/languages";
@@ -3711,6 +3713,7 @@ function AgencyInvitationBanner({
 }: { agencyId: string; promotionId: string }) {
   const { lista, aceptar, revocar } = useInvitaciones();
   const currentUser = useCurrentUser();
+  const { empresa: promotorEmpresa } = useEmpresa();
   const email = useMemo(() => {
     const a = agencies.find((x) => x.id === agencyId);
     return a?.contactoPrincipal?.email?.toLowerCase() ?? null;
@@ -3728,6 +3731,21 @@ function AgencyInvitationBanner({
   const handleAccept = () => {
     aceptar(invitation.id);
     addPromotionToCartera(agencyId, promotionId);
+    /* Lado agencia · al aceptar la invitación, persistimos al PROMOTOR
+     * como contacto (kind=company) en el CRM de la agencia. Idempotente.
+     * Ver `docs/backend-integration.md §16`. */
+    ensureAgencyContactForPromoter({
+      agencyId,
+      promotor: {
+        nombreComercial: promotorEmpresa.nombreComercial,
+        razonSocial: promotorEmpresa.razonSocial,
+        cif: promotorEmpresa.cif,
+        email: promotorEmpresa.email,
+        telefono: promotorEmpresa.telefono,
+        logoUrl: promotorEmpresa.logoUrl,
+      },
+      invitacionId: invitation.id,
+    });
     toast.success("Añadida a tu cartera", {
       description: "Ya puedes registrar clientes para esta promoción.",
     });

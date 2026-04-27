@@ -10,12 +10,16 @@
 import { useState } from "react";
 import {
   X, Mail, Percent, Globe, Copy, Check, ArrowLeft, ArrowRight,
-  Send, Building2, MessageSquare, Sparkles,
+  Send, Building2, MessageSquare, Sparkles, Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  useInvitaciones, getEmailPreview, buildInvitacionUrl, type Invitacion,
+  useInvitaciones, getEmailPreview, getInvitacionHtml, buildInvitacionUrl, type Invitacion,
 } from "@/lib/invitaciones";
+import { promotions } from "@/data/promotions";
+import { recordSentInvitationEmail } from "@/lib/sentEmails";
+import { ensurePromoterContactForAgency } from "@/lib/invitationContacts";
+import { agencies } from "@/data/agencies";
 import { useEmpresa } from "@/lib/empresa";
 import { cn } from "@/lib/utils";
 import { Flag } from "@/components/ui/Flag";
@@ -94,9 +98,69 @@ export function InvitarAgenciaModal({ onClose }: { onClose: () => void }) {
   };
 
   const handleSend = () => {
-    // Mock: en v1 localStorage. En v2 se llama al backend que envía email via Resend.
-    toast.success("Invitación registrada", {
-      description: `${nombre || email} recibirá el email en breve.`,
+    if (!creada) {
+      toast.error("Crea la invitación primero");
+      return;
+    }
+    /* Genera el HTML completo del email con la plantilla oficial. */
+    const promo = creada.promocionId
+      ? promotions.find((p) => p.id === creada.promocionId)
+      : undefined;
+    const { asunto, html } = getInvitacionHtml({
+      promotorNombre: empresa.nombreComercial || "Tu empresa",
+      promotorLogo: empresa.logoUrl,
+      nombreAgencia: nombre,
+      emailAgencia: creada.emailAgencia,
+      promocionNombre: promo?.name ?? creada.promocionNombre,
+      promocionFoto: promo?.image,
+      precioDesde: promo?.priceMin,
+      precioHasta: promo?.priceMax,
+      entrega: promo?.delivery,
+      unidadesDisponibles: promo?.availableUnits,
+      unidadesTotales: promo?.totalUnits,
+      comisionOfrecida: creada.comisionOfrecida,
+      duracionMeses: creada.duracionMeses,
+      formaPago: creada.formaPago,
+      datosRequeridos: creada.datosRequeridos,
+      mensajePersonalizado: creada.mensajePersonalizado,
+      acceptUrl: buildInvitacionUrl(creada.token),
+      expiraEnDias: 30,
+    });
+    /* Persiste el email "enviado" en el log local · accesible para
+       review y debug · futuro `/ajustes/email/historial`. */
+    recordSentInvitationEmail({
+      to: creada.emailAgencia,
+      subject: asunto,
+      html,
+      invitacionId: creada.id,
+    });
+    /* Lado promotor · crea (o reutiliza) el Contact de la AGENCIA en
+     * su CRM. Idempotente · si ya existe no duplica. Ver
+     * `docs/backend-integration.md §16`. */
+    const agencyData = creada.agencyId
+      ? agencies.find((a) => a.id === creada.agencyId)
+      : undefined;
+    ensurePromoterContactForAgency({
+      agency: agencyData
+        ? { id: agencyData.id, name: agencyData.name, logo: agencyData.logo, location: agencyData.location }
+        : undefined,
+      emailAgencia: creada.emailAgencia,
+      nombreAgencia: nombre || creada.nombreAgencia,
+      invitacionId: creada.id,
+      promocionId: creada.promocionId,
+      promocionNombre: creada.promocionNombre,
+    });
+    /* Abre el HTML real renderizado en pestaña nueva · usuario ve
+       cómo quedaría el email tal cual llegaría al inbox. */
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener,noreferrer");
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    /* TODO(backend): POST /api/emails/send con { to, subject, html }
+       que retransmite vía Resend/SendGrid. Hasta entonces, abrimos el
+       HTML en pestaña nueva como demo. */
+    toast.success("Invitación enviada", {
+      description: `${nombre || email} ha recibido el email · se abre en una pestaña nueva.`,
     });
     onClose();
   };
@@ -309,20 +373,61 @@ export function InvitarAgenciaModal({ onClose }: { onClose: () => void }) {
               </div>
 
               {creada && (
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 flex items-center gap-2 h-10 px-3 bg-muted/40 border border-border rounded-xl font-mono text-[11.5px] text-foreground/80 truncate">
-                    <Globe className="h-3 w-3 text-muted-foreground/60 shrink-0" />
-                    <span className="truncate">{buildInvitacionUrl(creada.token)}</span>
+                <>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 flex items-center gap-2 h-10 px-3 bg-muted/40 border border-border rounded-xl font-mono text-[11.5px] text-foreground/80 truncate">
+                      <Globe className="h-3 w-3 text-muted-foreground/60 shrink-0" />
+                      <span className="truncate">{buildInvitacionUrl(creada.token)}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCopyLink}
+                      className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border border-border text-[12px] font-semibold text-foreground hover:bg-muted transition-colors shrink-0"
+                    >
+                      {copied ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copied ? "Copiado" : "Copiar enlace"}
+                    </button>
                   </div>
+                  {/* Preview del email completo · abre el HTML real en
+                      pestaña nueva para que el promotor revise cómo
+                      quedaría antes de "enviar". */}
                   <button
                     type="button"
-                    onClick={handleCopyLink}
-                    className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border border-border text-[12px] font-semibold text-foreground hover:bg-muted transition-colors shrink-0"
+                    onClick={() => {
+                      const promo = creada.promocionId
+                        ? promotions.find((p) => p.id === creada.promocionId)
+                        : undefined;
+                      const { html } = getInvitacionHtml({
+                        promotorNombre: empresa.nombreComercial || "Tu empresa",
+                        promotorLogo: empresa.logoUrl,
+                        nombreAgencia: nombre,
+                        emailAgencia: creada.emailAgencia,
+                        promocionNombre: promo?.name ?? creada.promocionNombre,
+                        promocionFoto: promo?.image,
+                        precioDesde: promo?.priceMin,
+                        precioHasta: promo?.priceMax,
+                        entrega: promo?.delivery,
+                        unidadesDisponibles: promo?.availableUnits,
+                        unidadesTotales: promo?.totalUnits,
+                        comisionOfrecida: creada.comisionOfrecida,
+                        duracionMeses: creada.duracionMeses,
+                        formaPago: creada.formaPago,
+                        datosRequeridos: creada.datosRequeridos,
+                        mensajePersonalizado: creada.mensajePersonalizado,
+                        acceptUrl: buildInvitacionUrl(creada.token),
+                        expiraEnDias: 30,
+                      });
+                      const blob = new Blob([html], { type: "text/html" });
+                      const url = URL.createObjectURL(blob);
+                      window.open(url, "_blank", "noopener,noreferrer");
+                      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                    }}
+                    className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl border border-primary/30 bg-primary/5 text-[12.5px] font-semibold text-primary hover:bg-primary/10 transition-colors"
                   >
-                    {copied ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
-                    {copied ? "Copiado" : "Copiar enlace"}
+                    <Eye className="h-3.5 w-3.5" />
+                    Ver email completo (HTML)
                   </button>
-                </div>
+                </>
               )}
             </div>
           )}
