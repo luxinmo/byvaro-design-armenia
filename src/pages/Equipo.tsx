@@ -30,8 +30,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { ViewToggle } from "@/components/ui/ViewToggle";
-import { TEAM_MEMBERS, type TeamMember, type TeamMemberStatus } from "@/lib/team";
-import { useCurrentUser, isAdmin } from "@/lib/currentUser";
+import { type TeamMember, type TeamMemberStatus, getMembersForWorkspace, teamStorageKey } from "@/lib/team";
+import { useCurrentUser, isAdmin, currentWorkspaceKey } from "@/lib/currentUser";
+/* Side-effect import · registra el builder de seeds por agencia
+ * para que `getMembersForWorkspace("agency-…")` devuelva datos. */
+import "@/lib/agencyTeamSeeds";
 import { findLanguageByCode } from "@/lib/languages";
 import { Flag } from "@/components/ui/Flag";
 import { cn } from "@/lib/utils";
@@ -42,22 +45,12 @@ import { DeactivateUserDialog } from "@/components/team/DeactivateUserDialog";
 import { emitMembersChange } from "@/lib/meStorage";
 import type { HandoverPlan } from "@/lib/assetOwnership";
 
-/* v4 = bump tras adoptar catálogo canónico de jobTitles (Founder, CEO…). */
-const KEY = "byvaro.organization.members.v4";
-
-function load(): TeamMember[] {
-  if (typeof window === "undefined") return TEAM_MEMBERS;
-  try {
-    const raw = window.localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw) as TeamMember[];
-    return TEAM_MEMBERS;
-  } catch {
-    return TEAM_MEMBERS;
-  }
-}
-function persist(m: TeamMember[]) {
+/* Storage por workspace · `byvaro.organization.members.v4:${tenant}`.
+ * Antes era una key global que fugaba el equipo del promotor a las
+ * agencias · ver REGLA DE ORO multi-tenant en CLAUDE.md. */
+function persistAt(workspaceKey: string, m: TeamMember[]) {
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(KEY, JSON.stringify(m));
+    window.localStorage.setItem(teamStorageKey(workspaceKey), JSON.stringify(m));
     /* Notificamos a meStorage · sidebar, perfil personal y cualquier
      * consumer de useCurrentUser/useMe se refrescan en caliente. */
     emitMembersChange();
@@ -74,7 +67,13 @@ const VIEW_KEY = "byvaro.equipo.view.v1";
 export default function Equipo() {
   const user = useCurrentUser();
   const canEdit = isAdmin(user);
-  const [members, setMembers] = useState<TeamMember[]>(() => load());
+  const workspaceKey = currentWorkspaceKey(user);
+  /* Re-leer desde la key correcta cada vez que cambia el workspace
+   * (account switcher: developer → agency en otra pestaña, etc.). */
+  const [members, setMembers] = useState<TeamMember[]>(() => getMembersForWorkspace(workspaceKey));
+  useEffect(() => {
+    setMembers(getMembersForWorkspace(workspaceKey));
+  }, [workspaceKey]);
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewMode>(() => {
     if (typeof window === "undefined") return "gallery";
@@ -99,8 +98,8 @@ export default function Equipo() {
   }, [view]);
 
   useEffect(() => {
-    persist(members);
-  }, [members]);
+    persistAt(workspaceKey, members);
+  }, [members, workspaceKey]);
 
   const update = (id: string, patch: Partial<TeamMember>) =>
     setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));

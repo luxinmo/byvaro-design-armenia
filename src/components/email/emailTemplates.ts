@@ -131,7 +131,7 @@ const wrap = (inner: string) => `
 
 const brandHeader = (b: TemplateBlocks, lang: Language) => `
   <div class="brand">
-    <img class="brand-logo-img" src="${b.brandLogo || BRAND_LOGO_DEFAULT}" alt="${b.brandName || "My Company"}" />
+    <img class="brand-logo-img" src="${b.brandLogo || BRAND_LOGO_DEFAULT}" alt="${b.brandName || "Luxinmo"}" />
     <span class="brand-divider"></span>
     <span class="brand-tag" data-block="brandTagline">${b.brandTagline || (lang === "es" ? "Promotor inmobiliario" : "Real estate developer")}</span>
   </div>`;
@@ -216,19 +216,19 @@ const closingBlock = (b: TemplateBlocks) => `
 
 const brandDefaults = {
   es: {
-    brandName: "My Company",
+    brandName: "Luxinmo",
     brandTagline: "Promotor inmobiliario",
     brandLogo: BRAND_LOGO_DEFAULT,
     agentName: "Laura Martín",
-    agentRole: "My Company · Asesora comercial",
+    agentRole: "Luxinmo · Asesora comercial",
     agentContact: "+34 600 000 000 · laura@mycompany.com",
   },
   en: {
-    brandName: "My Company",
+    brandName: "Luxinmo",
     brandTagline: "Real estate developer",
     brandLogo: BRAND_LOGO_DEFAULT,
     agentName: "Laura Martín",
-    agentRole: "My Company · Sales advisor",
+    agentRole: "Luxinmo · Sales advisor",
     agentContact: "+34 600 000 000 · laura@mycompany.com",
   },
 };
@@ -295,7 +295,7 @@ const lastUnitDefaults = {
 const newLaunchDefaults = {
   es: {
     title: "Nuevo lanzamiento: Mar Azul Residences",
-    subtitle: "Torrevieja, Alicante · Entrega Q2 2026 · Por My Company",
+    subtitle: "Torrevieja, Alicante · Entrega Q2 2026 · Por Luxinmo",
     body: "Nos complace presentarte nuestra nueva promoción residencial en primera línea de playa. <strong>44 viviendas</strong> de diseño contemporáneo, con calidades premium y zonas comunes de hotel boutique. Pre-reserva abierta a <strong>precios de lanzamiento</strong> con descuento del 5% durante las primeras 4 semanas.",
     cta: "Ver disponibilidad completa",
     cta2: "Descargar brochure",
@@ -306,7 +306,7 @@ const newLaunchDefaults = {
   },
   en: {
     title: "New launch: Mar Azul Residences",
-    subtitle: "Torrevieja, Alicante · Delivery Q2 2026 · By My Company",
+    subtitle: "Torrevieja, Alicante · Delivery Q2 2026 · By Luxinmo",
     body: "We're excited to introduce our new beachfront residential development. <strong>44 contemporary homes</strong> with premium finishes and boutique-hotel-style amenities. Pre-bookings open at <strong>launch pricing</strong> with a 5% discount during the first 4 weeks.",
     cta: "View full availability",
     cta2: "Download brochure",
@@ -320,13 +320,13 @@ const newLaunchDefaults = {
 const newAvailabilityDefaults = {
   es: {
     title: "Nueva disponibilidad · Mar Azul Residences",
-    subtitle: "Torrevieja, Alicante · Por My Company",
+    subtitle: "Torrevieja, Alicante · Por Luxinmo",
     body: "Hemos liberado <strong>nuevas unidades</strong> en Mar Azul Residences tras la última fase de comercialización. Disponemos de tipologías de 2 y 3 dormitorios con las mejores orientaciones y áticos con solárium privado. Inventario actualizado a continuación.",
     cta: "Ver inventario completo",
   },
   en: {
     title: "New availability · Mar Azul Residences",
-    subtitle: "Torrevieja, Alicante · By My Company",
+    subtitle: "Torrevieja, Alicante · By Luxinmo",
     body: "We've released <strong>new units</strong> at Mar Azul Residences after the latest sales phase. 2 and 3 bedroom layouts with the best orientations and penthouses with private solarium are now available. Updated inventory below.",
     cta: "View full inventory",
   },

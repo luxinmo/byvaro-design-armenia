@@ -14,9 +14,14 @@ import {
 import { cn } from "@/lib/utils";
 import type { Agency } from "@/data/agencies";
 import { formatEur, formatDateShort } from "./shared";
+import { useCurrentUser } from "@/lib/currentUser";
 
 interface Props {
   agency: Agency;
+  /** Mismo patrón que VisitasTab/RegistrosTab · si está set,
+   *  filtramos a las ventas de ese agente. Mock matchea por nombre.
+   *  Backend filtrará por agent_id. */
+  restrictToUserId?: string;
 }
 
 interface MockSale {
@@ -31,7 +36,8 @@ interface MockSale {
   agent?: string;
 }
 
-export function VentasTab({ agency: a }: Props) {
+export function VentasTab({ agency: a, restrictToUserId }: Props) {
+  const currentUserName = useCurrentUser().name;
   const sales: MockSale[] = useMemo(() => {
     const now = Date.now();
     const base: Record<string, MockSale[]> = {
@@ -48,8 +54,10 @@ export function VentasTab({ agency: a }: Props) {
         { id: "s2", client: "Astrid Olsen",           promoId: "dev-2", promoName: "Villas del Pinar", unit: "Apt. 07-2",  stage: "reserva",  amount: 690_000,   startedAt: now - 14 * 86400e3, agent: "Erik Lindqvist" },
       ],
     };
-    return (base[a.id] ?? []).sort((x, y) => y.startedAt - x.startedAt);
-  }, [a.id]);
+    const all = base[a.id] ?? [];
+    const filtered = restrictToUserId ? all.filter((s) => s.agent === currentUserName) : all;
+    return filtered.sort((x, y) => y.startedAt - x.startedAt);
+  }, [a.id, restrictToUserId, currentUserName]);
 
   const kpi = useMemo(() => {
     const enCurso = sales.filter((s) => ["iniciada", "reserva", "contrato", "escritura"].includes(s.stage)).length;

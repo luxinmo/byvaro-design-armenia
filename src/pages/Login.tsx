@@ -59,9 +59,12 @@ export default function Login() {
      URL original viene en `?next=`. Tras login, vuelve a esa URL en
      lugar del default `/inicio`. */
   const nextUrl = searchParams.get("next");
+  /* Pre-rellena el email si el caller lo pasa (ej. landing
+   * `/invite/:token` → caso 2b · ya conocemos el email del invitado). */
+  const prefilledEmail = searchParams.get("email") ?? "";
 
   // Estado del formulario
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(prefilledEmail);
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [showPwd, setShowPwd] = useState(false);

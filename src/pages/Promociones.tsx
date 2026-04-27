@@ -7,7 +7,7 @@
  */
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { useNavigate, NavLink } from "react-router-dom";
+import { useNavigate, NavLink, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Building2, Plus, MapPin, Users, Flame, SlidersHorizontal,
@@ -28,6 +28,9 @@ import { Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
 import { useCurrentUser } from "@/lib/currentUser";
+import { useEmpresa } from "@/lib/empresa";
+import { resolveDeveloperLogo, getDeveloperAvatar } from "@/lib/developerDirectory";
+import { getPromoterDisplayName } from "@/lib/promotionRole";
 import { useInvitacionesForAgency } from "@/lib/invitaciones";
 import { canPublishPromotion } from "@/lib/publicationRequirements";
 
@@ -343,6 +346,7 @@ const TRENDING_THRESHOLD = 50;
 export default function Promociones() {
   const navigate = useNavigate();
   const confirm = useConfirm();
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
 
   // Filtros de gestión (específicos del promotor)
@@ -361,6 +365,18 @@ export default function Promociones() {
 
   // Agencia específica (solo si collabFilter incluye "with-agencies")
   const [agencyFilter, setAgencyFilter] = useState<string | null>(null);
+
+  /* Filtro por promotor · permite que páginas externas (p.ej.
+   * `Empresa.tsx` · "Ver todas" del Portfolio destacado) aterricen ya
+   * filtradas por un promotor concreto. Acepta:
+   *   · "developer-default" → workspace propio (developerOnlyPromotions).
+   *   · cualquier nombre exacto → match con `p.developer` de marketplace.
+   * Se inicializa de la URL (`?developer=…`) y se puede tocar desde el
+   * drawer. */
+  const initialDeveloper = searchParams.get("developer");
+  const [developerFilter, setDeveloperFilter] = useState<string | null>(
+    initialDeveloper && initialDeveloper.length > 0 ? initialDeveloper : null,
+  );
 
   // Estado, orden, vista
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -390,7 +406,8 @@ export default function Promociones() {
     (buildingTypeFilter !== "All" ? 1 : 0) +
     (priceMin !== null || priceMax !== null ? 1 : 0) +
     (minBedrooms !== null ? 1 : 0) +
-    (agencyFilter !== null ? 1 : 0);
+    (agencyFilter !== null ? 1 : 0) +
+    (developerFilter !== null ? 1 : 0);
 
   /* ─── Borradores (aparecen en el listado con status="incomplete") ── */
   const [drafts, setDrafts] = useState<PromotionDraft[]>(() => listDrafts());
@@ -495,6 +512,53 @@ export default function Promociones() {
     { value: "5", label: "5%+" },
   ];
 
+  /* Logo del workspace propio · si el promotor ha subido logo en
+   * /empresa, ese es el avatar; si no, fallback al directorio
+   * canónico (Luxinmo) y por último al dicebear determinista. */
+  const { empresa: ownEmpresa } = useEmpresa();
+  const ownLogo = ownEmpresa.logoUrl
+    || resolveDeveloperLogo({ id: "developer-default", name: ownEmpresa.nombreComercial || "Luxinmo" });
+  const ownLabel = ownEmpresa.nombreComercial || "Luxinmo";
+
+  /* Promotores presentes en los datos · "developer-default" para el
+   * workspace propio + nombres únicos de marketplace promotions. Cada
+   * opción incluye logo (real cuando se conoce, dicebear de fallback)
+   * + count de promociones para el buscador con avatares del drawer. */
+  const developerOptions = useMemo(() => {
+    type Opt = { value: string; label: string; logoUrl: string; promosCount: number; subtitle?: string };
+    const map = new Map<string, Opt>();
+    if (developerOnlyPromotions.length > 0) {
+      map.set("developer-default", {
+        value: "developer-default",
+        label: ownLabel,
+        logoUrl: ownLogo,
+        promosCount: 0,
+        subtitle: "Workspace",
+      });
+    }
+    for (const p of allPromotions) {
+      if ((p as DevPromotion).id && (p as DevPromotion).developer === "" && developerOnlyPromotions.some((x) => x.id === p.id)) {
+        const o = map.get("developer-default");
+        if (o) o.promosCount += 1;
+        continue;
+      }
+      const name = p.developer;
+      if (!name) continue;
+      const existing = map.get(name);
+      if (existing) {
+        existing.promosCount += 1;
+      } else {
+        map.set(name, {
+          value: name,
+          label: name,
+          logoUrl: resolveDeveloperLogo({ name }),
+          promosCount: 1,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allPromotions, ownLabel, ownLogo]);
+
   /* ─── Opciones DINÁMICAS derivadas de los datos reales ─── */
   const locationOptions = useMemo(() => {
     const zones = new Set<string>();
@@ -529,6 +593,7 @@ export default function Promociones() {
   const clearAllFilters = () => {
     setSearch("");
     setActivityFilter([]); setCollabFilter([]); setAgencyFilter(null);
+    setDeveloperFilter(null);
     setSelectedLocations([]); setSelectedTypes([]); setBuildingTypeFilter("All");
     setPriceMin(null); setPriceMax(null); setMinBedrooms(null);
     setSelectedDelivery([]); setSelectedCommissions([]);
@@ -545,6 +610,13 @@ export default function Promociones() {
     { key: "incomplete", label: "Incompletas", mobile: true },
     { key: "sold-out", label: "Vendidas", mobile: true },
   ] as const;
+
+  /* Set de IDs del workspace propio · usado para el sentinel
+   * `developer-default` del filtro. */
+  const workspaceDeveloperIds = useMemo(
+    () => new Set(developerOnlyPromotions.map((p) => p.id)),
+    [],
+  );
 
   /* ─── Filtrado (gestión + búsqueda avanzada combinadas) ─── */
   const filtered = useMemo(() => {
@@ -596,6 +668,18 @@ export default function Promociones() {
         if (!ag || !ag.promotionsCollaborating.includes(p.id)) return false;
       }
 
+      /* Promotor (developer) · "developer-default" mapea al
+       * workspace propio (developerOnlyPromotions); cualquier otro
+       * valor compara contra `p.developer` (nombre del promotor en
+       * marketplace). */
+      if (developerFilter !== null) {
+        if (developerFilter === "developer-default") {
+          if (!workspaceDeveloperIds.has(p.id)) return false;
+        } else {
+          if (p.developer !== developerFilter) return false;
+        }
+      }
+
       // ──────── Búsqueda avanzada ────────
       if (selectedLocations.length > 0 && !selectedLocations.includes(getZone(p.location))) return false;
       if (buildingTypeFilter !== "All" && !matchesBuildingType(p.buildingType, buildingTypeFilter)) return false;
@@ -632,7 +716,7 @@ export default function Promociones() {
     });
   }, [
     allPromotions, search, statusFilter,
-    activityFilter, collabFilter, agencyFilter,
+    activityFilter, collabFilter, agencyFilter, developerFilter, workspaceDeveloperIds,
     selectedLocations, buildingTypeFilter, selectedTypes,
     priceMin, priceMax, minBedrooms,
     selectedDelivery, selectedCommissions,
@@ -932,7 +1016,7 @@ export default function Promociones() {
                       {p.name}
                     </h3>
                     <div className="flex flex-wrap items-center gap-x-2 text-sm xl:text-xs text-muted-foreground mb-2 lg:mb-3">
-                      {p.developer && <span>{p.developer}</span>}
+                      {(() => { const n = getPromoterDisplayName(p); return n ? <span>{n}</span> : null; })()}
                       {p.delivery && (
                         <>
                           <span className="text-border">·</span>
@@ -1183,6 +1267,19 @@ export default function Promociones() {
 
                 <div className="space-y-5">
                   <SectionTitle>Búsqueda avanzada</SectionTitle>
+
+                  {/* Filtro por promotor · buscador con avatares
+                      (mismo patrón que AgencySearcher) · permite a la
+                      agencia ver con qué promotores está colaborando
+                      y al developer ver el catálogo agregado de
+                      marketplace por promotor. */}
+                  {developerOptions.length > 0 && (
+                    <DeveloperSearcher
+                      options={developerOptions}
+                      value={developerFilter}
+                      onChange={setDeveloperFilter}
+                    />
+                  )}
 
                   <SearchableFilterGroup
                     title="Ubicación"
@@ -1497,6 +1594,119 @@ function BedroomsThresholdFilter({
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   DeveloperSearcher · buscador + lista de promotores con avatares.
+   Mismo patrón que AgencySearcher · selección única (o null).
+   ═══════════════════════════════════════════════════════════════════ */
+type DevOption = { value: string; label: string; logoUrl: string; promosCount: number; subtitle?: string };
+
+function DeveloperSearcher({
+  options, value, onChange,
+}: {
+  options: DevOption[];
+  value: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const [q, setQ] = useState("");
+  /* Solo buscamos cuando el usuario teclea ≥1 char · NO renderizamos
+   * el catálogo entero por defecto (en backend pueden ser miles de
+   * promotores · mostrar todos rompería rendimiento y UX). */
+  const trimmed = q.trim();
+  const isSearching = trimmed.length > 0;
+  const MAX_RESULTS = 20;
+  const filtered = useMemo(() => {
+    if (!isSearching) return [];
+    const qq = trimmed.toLowerCase();
+    return options
+      .filter((o) => o.label.toLowerCase().includes(qq))
+      .slice(0, MAX_RESULTS);
+  }, [trimmed, isSearching, options]);
+  const selected = value ? options.find((o) => o.value === value) : null;
+
+  return (
+    <div className="pt-1">
+      <div className="flex items-baseline justify-between mb-2">
+        <h4 className="text-[13px] font-semibold text-foreground">Promotor</h4>
+        {value && (
+          <button onClick={() => onChange(null)} className="text-[11px] text-muted-foreground hover:text-destructive">
+            Quitar filtro
+          </button>
+        )}
+      </div>
+      {selected ? (
+        <div className="flex items-center gap-2.5 p-2.5 rounded-xl border border-primary/30 bg-primary/5">
+          <img
+            src={selected.logoUrl}
+            alt=""
+            className="h-8 w-8 rounded-full bg-white object-contain p-0.5 shrink-0"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = getDeveloperAvatar(selected.label); }}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-semibold text-foreground truncate">{selected.label}</p>
+            <p className="text-[11px] text-muted-foreground truncate">
+              {selected.subtitle ?? `${selected.promosCount} promo${selected.promosCount === 1 ? "" : "s"}`}
+            </p>
+          </div>
+          <button onClick={() => onChange(null)} className="p-1 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="relative mb-2">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
+            <input
+              type="text"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar promotor por nombre..."
+              className="w-full h-8 pl-8 pr-8 text-[12.5px] bg-muted/30 border border-border rounded-full focus:bg-background focus:border-primary outline-none transition-colors"
+            />
+            {q && (
+              <button onClick={() => setQ("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+          {/* Listado · solo aparece cuando hay texto en el input.
+              Sin texto = pista discreta · evitamos volcar miles de
+              opciones al abrir el drawer. */}
+          {!isSearching ? (
+            <p className="text-[11.5px] text-muted-foreground italic px-1 py-2">
+              Empieza a escribir para buscar un promotor
+            </p>
+          ) : filtered.length === 0 ? (
+            <p className="text-[11.5px] text-muted-foreground italic px-1 py-2">Sin coincidencias</p>
+          ) : (
+            <div className="space-y-1 max-h-[220px] overflow-y-auto">
+              {filtered.map((o) => (
+                <button
+                  key={o.value}
+                  onClick={() => onChange(o.value)}
+                  className="w-full flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted/40 transition-colors text-left"
+                >
+                  <img
+                    src={o.logoUrl}
+                    alt=""
+                    className="h-7 w-7 rounded-full bg-white object-contain p-0.5 shrink-0"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = getDeveloperAvatar(o.label); }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12.5px] font-medium text-foreground truncate">{o.label}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {o.subtitle ?? `${o.promosCount} promo${o.promosCount === 1 ? "" : "s"}`}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    AgencySearcher · buscador + lista de agencias colaboradoras
    Solo se renderiza cuando collabFilter incluye "with-agencies".
    Selecciona una única agencia (o null) para filtrar promos donde
@@ -1608,7 +1818,7 @@ function PromoCardCompact({ promo: p, isTrending }: { promo: DevPromotion; isTre
         <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground truncate">{p.location}</p>
         <h3 className="text-[15px] font-bold text-foreground mt-0.5 truncate">{p.name}</h3>
         <p className="text-[11.5px] text-muted-foreground mt-0.5 truncate">
-          {p.developer} · {p.delivery}
+          {getPromoterDisplayName(p)} · {p.delivery}
         </p>
         <p className="text-lg font-bold text-foreground mt-2 tnum">
           {fmt(p.priceMin)}

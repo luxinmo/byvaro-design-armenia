@@ -132,9 +132,12 @@ type CancelAgencyProps = {
   onClose: () => void;
   /** Outcome elegido · transmitido al caller para que mute estado. */
   onConfirm: (payload: { outcome: VisitOutcome; note?: string }) => void;
+  /** Label dinámico del owner de la promoción · "el promotor" o
+   *  "el comercializador". Si no se pasa, default "el destinatario". */
+  ownerArticle?: string;
 };
 
-export function CancelVisitAgencyDialog({ open, onClose, onConfirm }: CancelAgencyProps) {
+export function CancelVisitAgencyDialog({ open, onClose, onConfirm, ownerArticle = "el destinatario" }: CancelAgencyProps) {
   const [outcome, setOutcome] = useState<VisitOutcome | null>(null);
   const [note, setNote] = useState("");
   const canSubmit = !!outcome;
@@ -174,7 +177,7 @@ export function CancelVisitAgencyDialog({ open, onClose, onConfirm }: CancelAgen
               v: "cancelada_agencia" as const,
               icon: AlertTriangle,
               title: "No la voy a hacer",
-              desc: "Renuncia interna. Cuenta como cancelación de la agencia · puede afectar el track record con el promotor.",
+              desc: `Renuncia interna. Cuenta como cancelación de la agencia · puede afectar el track record con ${ownerArticle}.`,
             },
           ]).map((opt) => {
             const active = outcome === opt.v;
@@ -208,7 +211,7 @@ export function CancelVisitAgencyDialog({ open, onClose, onConfirm }: CancelAgen
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={2}
-              placeholder="Contexto adicional para el promotor"
+              placeholder={`Contexto adicional para ${ownerArticle}`}
               className="px-3 py-2 rounded-lg border border-border bg-card text-sm focus:border-primary outline-none resize-none"
             />
           </label>
@@ -235,9 +238,12 @@ type CancelPromoterProps = {
   open: boolean;
   onClose: () => void;
   onConfirm: (payload: { outcome: VisitOutcome; note: string }) => void;
+  /** Label dinámico para el título · "Promotor" o "Comercializador".
+   *  Si no se pasa, default "Promotor" (retrocompatibilidad). */
+  ownerLabel?: string;
 };
 
-export function CancelVisitPromoterDialog({ open, onClose, onConfirm }: CancelPromoterProps) {
+export function CancelVisitPromoterDialog({ open, onClose, onConfirm, ownerLabel = "Promotor" }: CancelPromoterProps) {
   const [note, setNote] = useState("");
   const canSubmit = note.trim().length >= 5;
 
@@ -255,7 +261,7 @@ export function CancelVisitPromoterDialog({ open, onClose, onConfirm }: CancelPr
             <div className="h-9 w-9 rounded-xl bg-warning/15 text-warning grid place-items-center shrink-0">
               <Ban className="h-4 w-4" />
             </div>
-            <DialogTitle>Cancelar visita (promotor)</DialogTitle>
+            <DialogTitle>Cancelar visita ({ownerLabel.toLowerCase()})</DialogTitle>
           </div>
           <DialogDescription>
             Vas a cancelar tú la visita. La agencia recibirá una notificación

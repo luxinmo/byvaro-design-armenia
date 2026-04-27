@@ -28,22 +28,76 @@ y JWT claims en `docs/permissions.md`.
 
 ### Empresa (Company / Tenant)
 
-Cuenta raíz. Cada empresa tiene una o varias promociones.
+Cuenta raíz. Cada empresa tiene una o varias promociones. El shape vivo
+del prototipo está en `src/lib/empresa.ts::Empresa` y persiste en
+localStorage `byvaro-empresa` (single-tenant en mock; por
+`organization.id` en backend). Spec funcional:
+[`docs/screens/empresa.md`](screens/empresa.md).
+
+Campos relevantes (no exhaustivo):
 
 ```ts
-interface Company {
-  id: string;
-  name: string;
-  logo?: string;
-  taxId: string;         // CIF
-  address: string;
-  billing: BillingInfo;
-  plan: "starter" | "pro" | "enterprise";
-  createdAt: Date;
+interface Empresa {
+  // Identidad
+  nombreComercial: string;
+  razonSocial: string;
+  cif: string;
+  logoUrl: string;         // versión recortada para mostrar
+  logoShape: "circle" | "square";
+  coverUrl: string;        // versión recortada
+  // Imagen original sin recortar + parámetros de crop ·
+  // permite reabrir el editor y reajustar sin perder material.
+  logoSourceUrl?: string;
+  coverSourceUrl?: string;
+  logoCrop?:  { zoom: number; posX: number; posY: number };
+  coverCrop?: { zoom: number; posX: number; posY: number };
+
+  // Verificación legal · ver docs/screens/admin-verificaciones.md
+  verificada: boolean;
+  verificadaEl: string;                              // ISO date
+  verificacionEstado?:
+    | "no-iniciada" | "datos-pendientes"
+    | "firmafy-pendiente" | "revision-byvaro"
+    | "verificada" | "rechazada";
+  verificacionRepresentante?: {
+    memberId?: string;                                // id del TeamMember si aplica
+    nombreCompleto: string;
+    email: string;
+    telefono: string;
+    phonePrefix?: string;                             // "+34"
+  };
+  verificacionDocs?: {
+    cifEmpresa?:             Array<{ name; dataUrl; uploadedAt; mime? }>;
+    identidadRepresentante?: Array<{ name; dataUrl; uploadedAt; mime? }>;
+  };
+  verificacionFirmaUnica?: boolean;
+  verificacionAutorizados?: Array<{
+    nombreCompleto; email; telefono; phonePrefix?;
+  }>;
+  verificacionSolicitadaEl?: string;                  // ISO
+
+  // Reseñas Google (Places API · refresco semanal)
+  googlePlaceId: string;
+  googleRating: number;        // 0-5 (0 = sin datos)
+  googleRatingsTotal: number;
+  googleFetchedAt: string;     // ISO · último refresco
+  googleMapsUrl: string;
+
+  // … resto: tagline, overview, certificaciones, testimonios,
+  // direccionFiscal, idiomaDefault, comisionNacionalDefault, etc.
 }
 ```
 
-Relaciones: 1 Company → N Users, N Promociones.
+Relaciones: 1 Empresa → N TeamMembers (workspace), N Promociones,
+N Oficinas, 1 estado de verificación legal.
+
+**Storage por workspace** (multi-tenant en frontend mock):
+
+| Store | Key | Notas |
+|---|---|---|
+| Empresa principal | `byvaro-empresa` | Único en mock; backend lo scoped a `organization.id` |
+| Oficinas | `byvaro-oficinas` | Única fuente de verdad de oficinas; ver REGLA DE ORO en `CLAUDE.md` |
+| Equipo | `byvaro.organization.members.v4:${workspaceKey}` | `developer-default` o `agency-<id>`; ver `useWorkspaceMembers.ts` |
 
 ### Usuario / Miembro del equipo (TeamMember)
 
@@ -217,7 +271,11 @@ interface Promotion {
   };
 }
 
-// Extension: DevPromotion = Promotion & { collaboration, comerciales, puntosDeVenta, missingSteps }
+// Extension: DevPromotion = Promotion & {
+//   collaboration, comerciales, missingSteps,
+//   puntosDeVentaIds?: string[],   // ← refs a `byvaro-oficinas` por id (NO inline data).
+//                                     Ver docs/backend/domains/empresa-stats-and-offices.md
+// }
 ```
 
 **Reglas de negocio:**
@@ -955,3 +1013,74 @@ CREATE POLICY "users see own company promos"
 ```
 
 Agencias acceden vía tabla `collaborations` (join-based RLS).
+
+## SolicitudColaboracion (por promoción)
+
+Solicitud que envía una agencia al promotor para colaborar en UNA
+promoción concreta. Distinta de `Agency.solicitudPendiente` (alta
+agency-level vía marketplace). Ver doc canónico:
+**`docs/backend/domains/collaboration-requests.md`**.
+
+```ts
+interface SolicitudColaboracion {
+  id: string;
+  agencyId: string;
+  promotionId: string;
+  message?: string;
+  status: "pendiente" | "aceptada" | "rechazada";
+  createdAt: number;          // ms epoch
+  requestedBy?: {              // snapshot del actor agencia
+    name: string;
+    email?: string;
+    avatarUrl?: string;
+  };
+  decidedAt?: number;
+  decidedBy?: {                // snapshot del actor promotor
+    name: string;
+    email?: string;
+    avatarUrl?: string;
+  };
+}
+```
+
+Storage mock: `byvaro.agency.collab-requests.v1` (localStorage).
+
+**Reglas duras** (CLAUDE.md §"REGLA DE ORO · Solicitud de
+colaboración por promoción"):
+- Idempotente · `crearSolicitud()` no duplica si hay pendiente.
+- Descarte SILENCIOSO · agencia ve pendiente y rechazada igual.
+- Override · invitación formal del promotor reactiva (status →
+  aceptada) cualquier solicitud rechazada para (agencyId, promoId).
+- Permiso `collaboration.requests.manage` para mutar (admin-only).
+
+## Oficinas single-source
+
+Tabla canónica · `offices` (mock localStorage `byvaro-oficinas`).
+Sustituye 3 fuentes paralelas previas (ver
+`docs/backend/domains/empresa-stats-and-offices.md`).
+
+```ts
+interface Oficina {
+  id: string;             // "of-1", "of-2", … (IDs estables)
+  nombre: string;
+  direccion: string;
+  ciudad: string;
+  provincia: string;
+  telefono: string;
+  phonePrefix: string;
+  email: string;
+  whatsapp: string;
+  horario: string;
+  logoUrl: string;
+  coverUrl: string;
+  esPrincipal: boolean;   // exactamente UNA principal por workspace
+  activa: boolean;
+  createdAt: number;
+}
+```
+
+Pivote M:N en backend: `promotion_sales_offices(promotion_id,
+office_id)`. Frontend lo refleja via `puntosDeVentaIds: string[]` en
+`DevPromotion`. **Regla:** toda oficina referenciada en una promoción
+DEBE existir en `byvaro-oficinas` (no se permiten "oficinas
+fantasma").

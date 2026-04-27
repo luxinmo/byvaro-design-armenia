@@ -5,6 +5,8 @@ import { AppHeader } from "./AppHeader";
 import { MobileHeader } from "./MobileHeader";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { hasUnsavedChanges } from "@/lib/unsavedGuard";
+import { ResponsibleSetupDialog } from "@/components/agency-onboarding/ResponsibleSetupDialog";
+import { PendingResponsibleBanner } from "@/components/agency-onboarding/PendingResponsibleBanner";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   // Guard global para cambios sin guardar. Intercepta clicks en
@@ -68,6 +70,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Mobile header */}
         <MobileHeader />
 
+        {/* Banner ámbar persistente · agencias con setup de Responsable
+         * APLAZADO ("Lo haré más tarde"). El modal bloqueante ya cubre
+         * el caso "fresh-pending sin defer"; este banner solo lo
+         * complementa cuando la elección quedó aplazada. */}
+        <PendingResponsibleBanner />
+
         <main className="flex-1 overflow-auto pb-20 lg:pb-8">
           {children}
         </main>
@@ -75,6 +83,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Mobile bottom nav */}
         <MobileBottomNav />
       </div>
+
+      {/* Onboarding · agencia recién creada vía /invite/:token (caso 1)
+       * pasa por aquí para decidir si el usuario es Responsable o
+       * invita al Responsable real. Bloquea la app hasta completar
+       * (no se puede cerrar sin elegir). El componente decide solo
+       * si pintarse · si la cuenta no es agency o el setup ya está
+       * hecho, no renderiza nada. */}
+      <ResponsibleSetupDialog />
 
       {/* Dialog de confirmación al navegar con cambios sin guardar —
           estilo ChatGPT: backdrop difuminado, card centrada con tokens

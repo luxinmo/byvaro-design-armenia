@@ -171,12 +171,27 @@ export const mockUsers: MockUser[] = [
   },
 ];
 
-/** Busca un usuario por credenciales. Retorna null si no matchea. */
+/** Busca un usuario por credenciales. Retorna null si no matchea.
+ *  Cruza el seed canónico con los usuarios creados vía `/invite/:token`
+ *  (alta nueva caso 1) que viven en `byvaro.users.created.v1`.
+ *  Cuando llegue backend real, esto pasa a `POST /api/auth/login`. */
 export function findMockUser(email: string, password: string): MockUser | null {
   const normalized = email.trim().toLowerCase();
-  return (
-    mockUsers.find(
-      (u) => u.email.toLowerCase() === normalized && u.password === password,
-    ) ?? null
+  const seedHit = mockUsers.find(
+    (u) => u.email.toLowerCase() === normalized && u.password === password,
   );
+  if (seedHit) return seedHit;
+  /* Lazy require para evitar cycle (createdAgencies importa MockUser). */
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem("byvaro.users.created.v1");
+    if (!raw) return null;
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return null;
+    return (arr as MockUser[]).find(
+      (u) => u.email.toLowerCase() === normalized && u.password === password,
+    ) ?? null;
+  } catch {
+    return null;
+  }
 }

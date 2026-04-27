@@ -25,6 +25,7 @@ import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { registros as records } from "@/data/records";
 import { sales as salesMock, getComisionImporte } from "@/data/sales";
 import { agencies } from "@/data/agencies";
+import { useAgencyCartera } from "@/lib/agencyCartera";
 import { useCreatedRegistros } from "@/lib/registrosStorage";
 import { canPublishPromotion } from "@/lib/publicationRequirements";
 import type { Promotion } from "@/data/promotions";
@@ -39,35 +40,57 @@ export default function AgencyHome() {
   const user = useCurrentUser();
   const navigate = useNavigate();
   const agency = useMemo(() => agencies.find((a) => a.id === user.agencyId), [user.agencyId]);
+  /* Cartera reactiva · merge entre `agency.promotionsCollaborating`
+   * (seed) y los override locales del agency (lo que ha aceptado o
+   * descartado vía /invite/:token). */
+  const carteraIds = useAgencyCartera(agency ?? agencies[0]);
 
-  /* Promociones donde colabora la agencia. Además del match por
-   * agencyId debe pasar los mismos filtros que /promociones: activa,
-   * publicable y compartición habilitada. Una promoción incompleta no
-   * existe para la agencia. */
+  /* Promociones donde colabora la agencia · ids del seed + ids de la
+   * cartera local. Filtros de visibilidad: activa, publicable, no
+   * desactivó compartición. */
   const promocionesAsignadas = useMemo(() => {
-    const pool = [...developerOnlyPromotions, ...promotions.map((p) => ({ ...p, collaboratingAgencies: [] as string[] }))];
+    if (!agency) return [];
+    const ids = new Set<string>([
+      ...(agency.promotionsCollaborating ?? []),
+      ...carteraIds,
+    ]);
+    const pool = [...developerOnlyPromotions, ...promotions];
     return pool.filter((p) => {
-      const collab = (p as { collaboratingAgencies?: string[] }).collaboratingAgencies ?? [];
-      if (!collab.includes(user.agencyId ?? "")) return false;
-      if ((p as { status?: string }).status !== "active") return false;
+      if (!ids.has(p.id)) return false;
+      if (p.status !== "active") return false;
       if (!canPublishPromotion(p as unknown as Promotion)) return false;
       if ((p as { canShareWithAgencies?: boolean }).canShareWithAgencies === false) return false;
       return true;
     });
-  }, [user.agencyId]);
+  }, [agency, carteraIds]);
 
-  /* Registros propios (seed + creados). */
+  /* Registros propios (seed + creados). Member · solo los suyos
+   * (audit.actor.email). Admin · todos los de la agencia. */
   const created = useCreatedRegistros();
   const misRegistros = useMemo(() => {
     const all = [...created, ...records];
-    return all.filter((r) => r.agencyId === user.agencyId);
-  }, [created, user.agencyId]);
+    const byAgency = all.filter((r) => r.agencyId === user.agencyId);
+    if (user.role === "member") {
+      const myEmail = user.email.toLowerCase();
+      return byAgency.filter((r) =>
+        r.audit?.actor.email?.toLowerCase() === myEmail,
+      );
+    }
+    return byAgency;
+  }, [created, user.agencyId, user.role, user.email]);
 
-  /* Ventas propias + comisión estimada. */
-  const misVentas = useMemo(
-    () => salesMock.filter((v) => v.agencyId === user.agencyId),
-    [user.agencyId],
-  );
+  /* Ventas propias + comisión estimada. Member · solo las suyas
+   * (audit.actor cuando exista). Admin · todas de la agencia. */
+  const misVentas = useMemo(() => {
+    const byAgency = salesMock.filter((v) => v.agencyId === user.agencyId);
+    if (user.role === "member") {
+      const myEmail = user.email.toLowerCase();
+      return byAgency.filter((v) =>
+        v.audit?.actor.email?.toLowerCase() === myEmail,
+      );
+    }
+    return byAgency;
+  }, [user.agencyId, user.role, user.email]);
   const comisionEstimada = useMemo(
     () => misVentas.reduce((acc, v) => acc + getComisionImporte(v), 0),
     [misVentas],
@@ -103,13 +126,18 @@ export default function AgencyHome() {
               <span className="text-muted-foreground font-medium"> · tu panel de colaboración</span>
             </h1>
           </div>
-          <button
-            onClick={() => navigate("/promociones")}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-foreground text-background text-sm font-medium shadow-soft hover:bg-foreground/90 transition-colors"
-          >
-            <UserPlus className="h-3.5 w-3.5" />
-            Registrar cliente
-          </button>
+          {/* "Registrar cliente" solo aparece si la agencia tiene
+           *  alguna promoción en su cartera · sin promociones la
+           *  acción no tiene destino y confunde al usuario nuevo. */}
+          {promocionesAsignadas.length > 0 && (
+            <button
+              onClick={() => navigate("/promociones")}
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-foreground text-background text-sm font-medium shadow-soft hover:bg-foreground/90 transition-colors"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              Registrar cliente
+            </button>
+          )}
         </div>
       </div>
 

@@ -311,9 +311,88 @@ const daysAgo = (d: number) => new Date(now - d * 24 * 60 * 60 * 1000).toISOStri
 
 type LegacyRegistroSeed = Omit<Registro, "publicRef">;
 
+/* ─── Atribución determinística de actores por agencia ────────────
+ *  Cada registro del seed se atribuye automáticamente a un usuario
+ *  mock concreto (admin o member alternados según paridad del id),
+ *  para que el filtro viewOwn funcione · CLAUDE.md `permissions.md`
+ *  · cada member debe ver solo lo suyo.
+ *
+ *  Mapping fijo · si en mockUsers se añaden más miembros, ampliar.
+ *  Los registros sin agencia (`origen: "direct"`) se atribuyen al
+ *  promotor admin (Arman). */
+const ACTORS_BY_AGENCY: Record<string, Array<{ id: string; name: string; email: string }>> = {
+  /* ag-1 · Prime Properties */
+  "ag-1": [
+    { id: "u-agency-ag-1-laura@primeproperties.com", name: "Laura Sánchez",  email: "laura@primeproperties.com" },
+    { id: "u-agency-ag-1-tom@primeproperties.com",   name: "Tom Brennan",     email: "tom@primeproperties.com" },
+  ],
+  /* ag-2 · Nordic Home Finders */
+  "ag-2": [
+    { id: "u-agency-ag-2-erik@nordichomefinders.com", name: "Erik Lindqvist", email: "erik@nordichomefinders.com" },
+    { id: "u-agency-ag-2-anna@nordichomefinders.com", name: "Anna Bergström", email: "anna@nordichomefinders.com" },
+  ],
+  /* ag-3 · Dutch & Belgian Realty */
+  "ag-3": [
+    { id: "u-agency-ag-3-pieter@dutchbelgianrealty.com", name: "Pieter De Vries", email: "pieter@dutchbelgianrealty.com" },
+    { id: "u-agency-ag-3-sander@dutchbelgianrealty.com", name: "Sander Janssen",   email: "sander@dutchbelgianrealty.com" },
+  ],
+  /* ag-4 · Meridian Real Estate */
+  "ag-4": [
+    { id: "u-agency-ag-4-james@meridianrealestate.co.uk",  name: "James Whitfield", email: "james@meridianrealestate.co.uk" },
+    { id: "u-agency-ag-4-olivia@meridianrealestate.co.uk", name: "Olivia Carter",    email: "olivia@meridianrealestate.co.uk" },
+  ],
+  /* ag-5 · Iberia Luxury Homes */
+  "ag-5": [
+    { id: "u-agency-ag-5-joao@iberialuxuryhomes.pt",  name: "João Almeida", email: "joao@iberialuxuryhomes.pt" },
+    { id: "u-agency-ag-5-ines@iberialuxuryhomes.pt",  name: "Inês Costa",    email: "ines@iberialuxuryhomes.pt" },
+  ],
+};
+const PROMOTER_ADMIN = { id: "u1", name: "Arman Rahmanov", email: "arman@byvaro.com" };
+
+function buildSeedAudit(
+  s: LegacyRegistroSeed,
+): import("@/lib/audit").ActionFingerprint | undefined {
+  if (s.audit) return s.audit; // si el seed lo trae explícito, no lo sobrescribimos
+  /* Pickeamos actor según paridad del id numérico del registro · así el
+   * mismo seed siempre se atribuye al mismo user · estable. */
+  const numMatch = s.id.match(/(\d+)$/);
+  const idx = numMatch ? parseInt(numMatch[1], 10) : 0;
+  let actor: { id: string; name: string; email: string };
+  let role: "developer" | "agency";
+  if (s.origen === "direct" || !s.agencyId) {
+    actor = PROMOTER_ADMIN;
+    role = "developer";
+  } else {
+    const pool = ACTORS_BY_AGENCY[s.agencyId];
+    if (!pool || pool.length === 0) return undefined;
+    actor = pool[idx % pool.length];
+    role = "agency";
+  }
+  return {
+    v: 1,
+    capturedAt: s.fecha,
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+    platform: "MacIntel",
+    language: "es-ES",
+    timezone: "Europe/Madrid",
+    timezoneOffset: -60,
+    screen: { width: 1920, height: 1080, pixelRatio: 2 },
+    viewport: { width: 1440, height: 900 },
+    actor: {
+      id: actor.id,
+      name: actor.name,
+      email: actor.email,
+      role,
+      agencyId: role === "agency" ? s.agencyId : undefined,
+    },
+  };
+}
+
 function enrichLegacyRegistroSeeds(seeds: LegacyRegistroSeed[]): Registro[] {
   /* Asignamos publicRef por orden cronológico ASC (el más antiguo es
-     re000001) · así futuros registros nuevos siempre tienen ref mayor. */
+     re000001) · así futuros registros nuevos siempre tienen ref mayor.
+     Y atribuimos audit.actor determinísticamente para que viewOwn
+     funcione (member solo ve los suyos). */
   const sorted = [...seeds].sort(
     (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
   );
@@ -321,7 +400,11 @@ function enrichLegacyRegistroSeeds(seeds: LegacyRegistroSeed[]): Registro[] {
   sorted.forEach((s, i) => {
     refMap.set(s.id, `re${String(i + 1).padStart(6, "0")}`);
   });
-  return seeds.map((s) => ({ ...s, publicRef: refMap.get(s.id)! }));
+  return seeds.map((s) => ({
+    ...s,
+    publicRef: refMap.get(s.id)!,
+    audit: s.audit ?? buildSeedAudit(s),
+  }));
 }
 
 const RAW_REGISTROS: LegacyRegistroSeed[] = [

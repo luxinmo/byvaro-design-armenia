@@ -197,15 +197,19 @@ export function ensureAgencyContactForPromoter(
   if (existing) return existing;
 
   const nowIso = new Date().toISOString();
+  /* Label neutro · "Empresa colaboradora" en vez de "Promotor" porque
+   * el otro lado puede ser promotor o comercializador (CLAUDE.md regla
+   * de oro · `getOwnerRoleLabel`). El nombre comercial real ya queda
+   * en `companyName` · aquí solo describimos cómo entró este contacto. */
   const origin: ContactOrigin = {
     source: "referral",
-    label: `Promotor · invitación aceptada`,
+    label: `Empresa colaboradora · invitación aceptada`,
     occurredAt: nowIso,
     refId: input.invitacionId,
     refType: "manual",
     meta: {
       invitacionId: input.invitacionId,
-      promotor: displayName,
+      empresa: displayName,
     },
   };
 

@@ -53,14 +53,20 @@ import { SectionHeader, StateBadge, formatRelative } from "./shared";
 
 interface Props {
   agency: Agency;
+  /** Cuando se monta este tab desde el lado AGENCIA (panel del
+   *  promotor en `/promotor/:id/panel`), forzamos read-only · la
+   *  agencia NO puede subir/enviar/archivar contratos · esos flujos
+   *  los inicia siempre el promotor. La agencia solo firma desde el
+   *  email de Firmafy. */
+  readOnly?: boolean;
 }
 
-export function DocumentacionTab({ agency: a }: Props) {
+export function DocumentacionTab({ agency: a, readOnly = false }: Props) {
   const user = useCurrentUser();
   const actor = { name: user.name, email: user.email };
   const canViewContracts = useHasPermission("collaboration.contracts.view");
-  const canManageContracts = useHasPermission("collaboration.contracts.manage");
-  const canManageDocs = useHasPermission("collaboration.documents.manage");
+  const canManageContracts = useHasPermission("collaboration.contracts.manage") && !readOnly;
+  const canManageDocs = useHasPermission("collaboration.documents.manage") && !readOnly;
 
   const contracts = useContractsForAgency(a.id);
   const docs = useAgencyDocRequests(a.id);
@@ -214,8 +220,9 @@ function ContractsList({
         <FileSignature className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" strokeWidth={1.5} />
         <p className="text-sm font-medium text-foreground mb-1">Sin contratos todavía</p>
         <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-          Sube el PDF del contrato de colaboración y envíalo a firmar. Byvaro lo manda a la
-          agencia vía Firmafy y te avisa cuando quede firmado.
+          {canManage
+            ? "Sube el PDF del contrato de colaboración y envíalo a firmar. Byvaro lo manda a la agencia vía Firmafy y te avisa cuando quede firmado."
+            : "Solo el promotor o comercializador puede subir el contrato. Cuando lo envíe a firmar, recibirás un email de Firmafy con el link."}
         </p>
       </div>
     );

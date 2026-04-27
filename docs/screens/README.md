@@ -32,6 +32,8 @@ contract, permisos, estados, enlaces salientes.
 | Ajustes · Miembros del equipo | `/ajustes/usuarios/miembros` | [`ajustes-miembros.md`](ajustes-miembros.md) | ✅ diseñada |
 | Ajustes · Empresa > Departamentos | `/ajustes/empresa/departamentos` | [`empresa-departamentos.md`](empresa-departamentos.md) | ✅ diseñada (CRUD + store · ADR-054) |
 | Equipo (hub rich) | `/equipo` | [`equipo.md`](equipo.md) | ✅ diseñada (galería + lista + 2 flows alta) |
+| Empresa (ficha + verificación) | `/empresa` · `/promotor/:id` · `/colaboradores/:id` | [`empresa.md`](empresa.md) | ✅ diseñada (3 tabs + verificación legal con Firmafy) |
+| Superadmin · Verificaciones | `/superadmin/verificaciones` | [`admin-verificaciones.md`](admin-verificaciones.md) | 🎨 spec (sin UI todavía) |
 | Dashboard de miembro | `/equipo/:id/estadisticas` | [`equipo-estadisticas.md`](equipo-estadisticas.md) | ✅ diseñada (4 bloques KPIs + heatmap) |
 | Microsites | `/microsites` | (pendiente) | 🎨 placeholder |
 | Emails | `/emails` | [`emails.md`](emails.md) | 🟡 doc + tipos (falta UI) |

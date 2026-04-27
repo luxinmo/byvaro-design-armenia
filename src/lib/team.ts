@@ -67,7 +67,7 @@ export type TeamMember = {
 export const TEAM_MEMBERS: TeamMember[] = [
   { id: "u1", name: "Arman Rahmanov", email: "arman@byvaro.com", role: "admin",
     jobTitle: "Founder & Co-Founder", department: "Dirección",
-    languages: ["ES", "EN", "RU"],
+    languages: ["ES", "EN", "RU", "HY"],
     phone: "+34 612 345 678",
     avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=320&h=320&fit=crop",
     status: "active", visibleOnProfile: true, canSign: true, canAcceptRegistrations: true,
@@ -77,7 +77,7 @@ export const TEAM_MEMBERS: TeamMember[] = [
     commissionCapturePct: 20, commissionSalePct: 40 },
   { id: "u2", name: "Laura Gómez", email: "laura@byvaro.com", role: "member",
     jobTitle: "Senior Property Consultant", department: "Comercial",
-    languages: ["ES", "EN", "FR"],
+    languages: ["ES", "EN", "FR", "IT"],
     phone: "+34 611 223 344",
     avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=320&h=320&fit=crop",
     status: "active", visibleOnProfile: true, canAcceptRegistrations: true,
@@ -87,7 +87,7 @@ export const TEAM_MEMBERS: TeamMember[] = [
     commissionCapturePct: 15, commissionSalePct: 35 },
   { id: "u3", name: "Diego Sánchez", email: "diego@byvaro.com", role: "member",
     jobTitle: "Property Consultant", department: "Comercial",
-    languages: ["ES", "DE"],
+    languages: ["ES", "DE", "NL"],
     phone: "+34 633 998 877",
     avatarUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=320&h=320&fit=crop",
     status: "active", visibleOnProfile: true,
@@ -97,7 +97,7 @@ export const TEAM_MEMBERS: TeamMember[] = [
     commissionCapturePct: 10, commissionSalePct: 25 },
   { id: "u4", name: "Marta Jiménez", email: "marta@byvaro.com", role: "member",
     jobTitle: "Listings Coordinator", department: "Comercial",
-    languages: ["ES", "EN"],
+    languages: ["ES", "EN", "AR"],
     avatarUrl: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=320&h=320&fit=crop",
     status: "active", visibleOnProfile: false,
     joinedAt: "2026-04-01T10:00:00Z", lastActiveAt: "2026-04-21T18:00:00Z",
@@ -114,7 +114,7 @@ export const TEAM_MEMBERS: TeamMember[] = [
     joinedAt: "2026-04-23T09:00:00Z" },
   { id: "u7", name: "Isabel Fernández", email: "isabel@byvaro.com", role: "member",
     jobTitle: "Property Consultant", department: "Comercial",
-    languages: ["ES", "EN", "PT"],
+    languages: ["ES", "EN", "PT", "ZH"],
     phone: "+34 677 112 233",
     avatarUrl: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=320&h=320&fit=crop",
     status: "active", visibleOnProfile: true, canAcceptRegistrations: true,
@@ -132,29 +132,109 @@ export const TEAM_MEMBERS: TeamMember[] = [
     whatsappLinked: false, twoFactorEnabled: true, recordsDecidedLast30d: 0 },
 ];
 
+/* ─── Multi-tenant: equipo por workspace ──────────────────────────
+ *
+ * El prototipo arrancó single-tenant: una sola key
+ * `byvaro.organization.members.v4` con TEAM_MEMBERS (equipo del
+ * promotor) leída desde TODAS las pantallas. Cuando se introdujo el
+ * dual-role (developer + agency), las agencias acabaron viendo el
+ * equipo del promotor en `/equipo`, en `/empresa` (tab Equipo), en
+ * los selectores de miembros, etc. — fuga del modelo dual-role.
+ *
+ * Ahora cada workspace tiene su propia clave:
+ *   `byvaro.organization.members.v4:${workspaceKey}`
+ *   donde `workspaceKey = currentWorkspaceKey(user)`.
+ *
+ * Seeds:
+ *   · developer-default → TEAM_MEMBERS (constante de este archivo).
+ *   · agency-<agencyId>  → buildAgencyTeam(agencyId) en
+ *     `agencyTeamSeeds.ts` (deriva de mockUsers + agencies).
+ *
+ * Patrón canónico — ver REGLA DE ORO "Datos del workspace son por
+ * tenant" en CLAUDE.md.
+ *
+ * TODO(backend): cuando exista `GET /api/workspace/members`, este
+ * helper se reemplaza por una llamada al endpoint scoped al
+ * workspace del JWT.
+ */
+
+/* Base key (compat con código que aún no pasa workspaceKey). */
+const TEAM_BASE_KEY = "byvaro.organization.members.v4";
+
+/** Key de localStorage para el equipo de un workspace concreto. */
+export function teamStorageKey(workspaceKey: string): string {
+  return `${TEAM_BASE_KEY}:${workspaceKey}`;
+}
+
+/** Seed de fallback para un workspace · sincrono · sin tocar storage. */
+export function seedMembersForWorkspace(workspaceKey: string): TeamMember[] {
+  if (workspaceKey === "developer-default") return TEAM_MEMBERS;
+  if (workspaceKey.startsWith("agency-")) {
+    const agencyId = workspaceKey.slice("agency-".length);
+    /* Lazy require para evitar ciclo team.ts ↔ agencyTeamSeeds.ts ↔
+     * mockUsers.ts. `require` no rula con Vite ESM, así que importamos
+     * de manera estática desde el helper interno (ver buildAgencyTeam). */
+    return buildAgencyTeamSafe(agencyId);
+  }
+  return TEAM_MEMBERS;
+}
+
+/* Wrapper que importa `buildAgencyTeam` perezosamente para no crear
+ * ciclo de imports. En runtime el módulo ya está disponible. */
+let _buildAgencyTeam: ((id: string) => TeamMember[]) | null = null;
+function buildAgencyTeamSafe(agencyId: string): TeamMember[] {
+  if (!_buildAgencyTeam) {
+    /* Nota: se inyecta en `agencyTeamSeeds.ts` durante su carga ·
+     * si nunca se importa, devolvemos []. */
+    return [];
+  }
+  return _buildAgencyTeam(agencyId);
+}
+export function _registerAgencyTeamBuilder(fn: (id: string) => TeamMember[]) {
+  _buildAgencyTeam = fn;
+}
+
 /**
- * Devuelve la lista efectiva de miembros.
+ * Devuelve la lista efectiva de miembros de UN workspace concreto.
+ * Lee primero `localStorage[teamStorageKey(workspaceKey)]` y cae al
+ * seed si está vacío o falla parseo.
  *
- * Prefiere el localStorage `byvaro.organization.members.v4` (donde viven
- * los cambios del admin desde `/equipo` y del propio usuario desde
- * `/ajustes/perfil/personal`). Fallback al seed en SSR/tests.
- *
- * Las funciones síncronas como `findTeamMember` y `getMemberAvatarUrl`
- * leen siempre la versión más reciente, por lo que cualquier consumer
- * (ficha de contacto, historial, oficinas…) ve el avatar / nombre
- * actual sin necesidad de suscribirse explícitamente — basta con un
- * re-render cuando otro hook como `useMe` dispara cambios.
+ * Migración legacy: si la clave nueva está vacía pero existe la vieja
+ * `byvaro.organization.members.v4` Y `workspaceKey === "developer-default"`,
+ * leemos la vieja (compat con prototipo single-tenant). Las agencias
+ * NUNCA heredan de la clave global · su seed es propio.
+ */
+export function getMembersForWorkspace(workspaceKey: string): TeamMember[] {
+  const seed = seedMembersForWorkspace(workspaceKey);
+  if (typeof window === "undefined") return seed;
+  try {
+    const raw = window.localStorage.getItem(teamStorageKey(workspaceKey));
+    if (raw) {
+      const parsed = JSON.parse(raw) as TeamMember[];
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+    /* Migración legacy · solo developer. */
+    if (workspaceKey === "developer-default") {
+      const legacyRaw = window.localStorage.getItem(TEAM_BASE_KEY);
+      if (legacyRaw) {
+        const parsed = JSON.parse(legacyRaw) as TeamMember[];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    }
+    return seed;
+  } catch {
+    return seed;
+  }
+}
+
+/**
+ * Compat — devuelve los miembros del workspace developer (legacy).
+ * Solo usar desde código que NO tiene contexto del usuario actual
+ * (helpers puros que nunca van a ver una agencia). Para todo lo
+ * demás usar `getMembersForWorkspace(workspaceKey)`.
  */
 export function getAllTeamMembers(): TeamMember[] {
-  if (typeof window === "undefined") return TEAM_MEMBERS;
-  try {
-    const raw = window.localStorage.getItem("byvaro.organization.members.v4");
-    if (!raw) return TEAM_MEMBERS;
-    const parsed = JSON.parse(raw) as TeamMember[];
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : TEAM_MEMBERS;
-  } catch {
-    return TEAM_MEMBERS;
-  }
+  return getMembersForWorkspace("developer-default");
 }
 
 /** Busca por id o por nombre (case-insensitive) · datos vivos de localStorage. */

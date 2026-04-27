@@ -19,6 +19,7 @@
 
 import { useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
+import { useCurrentUser } from "@/lib/currentUser";
 import { useTabParam } from "@/lib/useTabParam";
 import { PublicRefBadge } from "@/components/ui/PublicRefBadge";
 import {
@@ -74,8 +75,14 @@ function relativeTime(iso: string): string {
 export default function LeadDetalle() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const currentUser = useCurrentUser();
 
-  const lead = useMemo(() => leads.find((l) => l.id === id), [id]);
+  /* Privacy cross-tenant · agency NO debe entrar a leads del promotor.
+   * Hasta que `Lead` tenga `agencyId`, redirect agency-only. */
+  const lead = useMemo(() => {
+    if (currentUser.accountType === "agency") return undefined;
+    return leads.find((l) => l.id === id);
+  }, [id, currentUser.accountType]);
 
   /* Tabs del cuerpo · deep-linkables vía ?tab= (ver `useTabParam`).
      'actividad' es el default — concentra el evento de entrada +

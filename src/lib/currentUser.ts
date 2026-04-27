@@ -52,25 +52,62 @@ const DEVELOPER_USER: CurrentUser = {
   accountType: "developer",
 };
 
-/** Construye un usuario sintético de agencia a partir del seed de agencies.
- *  Si `agencyEmail` apunta a un mockUser concreto, derivamos su rol
- *  (admin/member) y datos personales · permite probar admin vs member
- *  dentro de la misma agencia (ej. laura@primeproperties = admin,
- *  tom@primeproperties = member). Si no, fallback a contactoPrincipal
- *  con role admin (compatibilidad con flujos viejos). */
+/** Construye un usuario sintético de agencia a partir del seed de agencies
+ *  o de las agencias creadas vía /invite/:token (caso 1 · alta nueva).
+ *
+ *  Si `agencyEmail` apunta a un mockUser (seed) o a un usuario creado en
+ *  localStorage, derivamos su rol (admin/member) y datos personales ·
+ *  permite probar admin vs member dentro de la misma agencia. */
 function buildAgencyUser(agencyId: string, agencyEmail?: string): CurrentUser {
-  const a = agencies.find((x) => x.id === agencyId) ?? agencies[0];
-  const mock = agencyEmail
+  /* Resolver agencia · seed primero, luego storage local de creadas
+   * (alta vía invitación). Solo si ninguna existe, caemos a la primera
+   * del seed (compat). */
+  let a = agencies.find((x) => x.id === agencyId);
+  if (!a && typeof window !== "undefined") {
+    try {
+      const raw = window.localStorage.getItem("byvaro.agencies.created.v1");
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          a = arr.find((x: { id: string }) => x.id === agencyId);
+        }
+      }
+    } catch { /* noop */ }
+  }
+  if (!a) a = agencies[0];
+
+  /* Resolver mockUser · seed primero, luego created users. */
+  let mock = agencyEmail
     ? mockUsers.find(
         (u) => u.accountType === "agency"
           && u.agencyId === agencyId
           && u.email.toLowerCase() === agencyEmail.toLowerCase(),
       )
     : undefined;
+  if (!mock && agencyEmail && typeof window !== "undefined") {
+    try {
+      const raw = window.localStorage.getItem("byvaro.users.created.v1");
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          mock = arr.find(
+            (u: { accountType: string; agencyId?: string; email: string }) =>
+              u.accountType === "agency"
+              && u.agencyId === agencyId
+              && u.email.toLowerCase() === agencyEmail.toLowerCase(),
+          );
+        }
+      }
+    } catch { /* noop */ }
+  }
+
   return {
     id: mock ? `u-agency-${a.id}-${mock.email}` : `u-agency-${a.id}`,
-    name: mock?.name ?? a.contactoPrincipal?.nombre ?? "Laura Sánchez",
-    email: mock?.email ?? a.contactoPrincipal?.email ?? "contacto@agencia.com",
+    /* Fallbacks neutros · NUNCA un nombre demo concreto · si no hay
+     *  data, mostramos placeholders genéricos que el wizard de
+     *  onboarding obligará a rellenar. */
+    name: mock?.name ?? a.contactoPrincipal?.nombre ?? "Sin nombre",
+    email: mock?.email ?? a.contactoPrincipal?.email ?? "",
     role: mock?.role ?? "admin",
     organizationId: `agency-${a.id}`,
     accountType: "agency",
@@ -124,4 +161,26 @@ export function useCurrentUser(): CurrentUser {
 
 export function isAdmin(user: CurrentUser): boolean {
   return user.role === "admin";
+}
+
+/** Identificador estable del workspace del usuario actual.
+ *
+ *  Usado para particionar stores que son "del workspace" (equipo,
+ *  configuración interna, drafts) y que en el prototipo single-tenant
+ *  vivían en una clave global de localStorage — fugando datos del
+ *  promotor a las agencias y viceversa.
+ *
+ *  Mapping:
+ *    · accountType="developer" → "developer-default" (un solo
+ *      promotor en mock; en backend será `organization.id`).
+ *    · accountType="agency"    → `agency-${agencyId}`.
+ *
+ *  Patrón canónico para keys: `${baseKey}:${currentWorkspaceKey(user)}`.
+ *  Ver REGLA DE ORO "Datos del workspace son por tenant" en CLAUDE.md.
+ */
+export function currentWorkspaceKey(user: CurrentUser): string {
+  if (user.accountType === "agency" && user.agencyId) {
+    return `agency-${user.agencyId}`;
+  }
+  return "developer-default";
 }

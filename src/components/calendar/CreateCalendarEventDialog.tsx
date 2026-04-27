@@ -65,6 +65,8 @@ import {
   type PromotionWithRegistrationStatus,
 } from "@/lib/registrationMatcher";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
+import { promotions } from "@/data/promotions";
+import { getOwnerRoleArticleLower } from "@/lib/promotionRole";
 import { MOCK_CONTACTS } from "@/components/contacts/data";
 import { cn } from "@/lib/utils";
 
@@ -267,8 +269,12 @@ export function CreateCalendarEventDialog({
     } as Parameters<typeof createCalendarEvent>[0]);
 
     if (type === "visit" && requiresRegistration) {
+      const promo = promotionId
+        ? developerOnlyPromotions.find((p) => p.id === promotionId)
+          ?? promotions.find((p) => p.id === promotionId)
+        : undefined;
       toast.success("Registro enviado + visita programada", {
-        description: "La visita queda pendiente hasta que el promotor apruebe el registro.",
+        description: `La visita queda pendiente hasta que ${getOwnerRoleArticleLower(promo)} apruebe el registro.`,
       });
       /* TODO(backend): POST /api/registrations aquí con:
          { promotionId, cliente: { nombre, email, ... }, estado: "pendiente",

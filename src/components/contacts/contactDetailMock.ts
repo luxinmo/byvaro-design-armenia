@@ -591,19 +591,31 @@ function buildRelated(rng: () => number, all: Contact[], excludeId: string): Con
 export function buildContactDetail(base: Contact, allContacts: Contact[]): ContactDetail {
   const rng = mulberry32(seedFromId(base.id));
 
+  /* Contactos "blank" (recién creados sin actividad real · ej. el contacto
+   * del promotor que crea la agencia al aceptar invitación, o el contacto
+   * de la agencia que crea el promotor al invitar). NO se les genera
+   * mock data · arrancan vacíos hasta que tengan actividad real. */
+  const isBlank =
+    (base.totalRegistrations ?? 0) === 0
+    && (base.activeOpportunities ?? 0) === 0
+    && !base.hasUpcomingVisit
+    && !base.hasVisitDone
+    && !base.hasRecentWebActivity;
+
   const phones = buildPhones(rng, base.phone);
   const emails = buildEmails(rng, base.email);
-  const records = buildRecords(rng, base.totalRegistrations || 1);
-  const opportunities = buildOpportunities(rng);
-  const activeOperation = buildActiveOperation(rng, records);
+  const records = isBlank ? [] : buildRecords(rng, base.totalRegistrations || 1);
+  const opportunities = isBlank ? [] : buildOpportunities(rng);
+  const activeOperation = isBlank ? undefined : buildActiveOperation(rng, records);
   /* Mergeamos evaluaciones que el usuario haya añadido localmente
    * (visitEvaluationsStorage) sobre las visitas mock. */
   const evals = loadAllEvaluations();
-  const visits = buildVisits(rng, base.hasUpcomingVisit, base.hasVisitDone)
-    .map((v) => evals[v.id] ? { ...v, evaluation: evals[v.id] } : v);
-  const documents = buildDocuments(rng);
-  const comments = buildComments(rng);
-  const timeline = buildTimeline(rng, records, visits, documents, comments, base.email);
+  const visits = isBlank ? [] :
+    buildVisits(rng, base.hasUpcomingVisit, base.hasVisitDone)
+      .map((v) => evals[v.id] ? { ...v, evaluation: evals[v.id] } : v);
+  const documents = isBlank ? [] : buildDocuments(rng);
+  const comments = isBlank ? [] : buildComments(rng);
+  const timeline = isBlank ? [] : buildTimeline(rng, records, visits, documents, comments, base.email);
   /* Asignados y relacionados: si hay override local lo usamos, si no
    * generamos del mock determinista. */
   const assignedUsers = loadAssignedOverride(base.id) ?? buildAssignedUsers(rng, base.assignedTo);
@@ -619,12 +631,12 @@ export function buildContactDetail(base: Contact, allContacts: Contact[]): Conta
 
   return {
     ...base,
-    leadScore,
-    nif: rng() > 0.5 ? `${Math.floor(10000000 + rng() * 89999999)}${"ABCDEFGHJKLMNPQRSTVWXYZ"[Math.floor(rng() * 23)]}` : undefined,
-    birthDate: rng() > 0.4 ? new Date(1960 + Math.floor(rng() * 40), Math.floor(rng() * 12), 1 + Math.floor(rng() * 27)).toISOString() : undefined,
-    address: rng() > 0.5 ? "Calle Mayor 12, 3º B" : undefined,
-    city: rng() > 0.5 ? "Marbella" : undefined,
-    postalCode: rng() > 0.5 ? "29600" : undefined,
+    leadScore: isBlank ? 0 : leadScore,
+    nif: isBlank ? undefined : (rng() > 0.5 ? `${Math.floor(10000000 + rng() * 89999999)}${"ABCDEFGHJKLMNPQRSTVWXYZ"[Math.floor(rng() * 23)]}` : undefined),
+    birthDate: isBlank ? undefined : (rng() > 0.4 ? new Date(1960 + Math.floor(rng() * 40), Math.floor(rng() * 12), 1 + Math.floor(rng() * 27)).toISOString() : undefined),
+    address: isBlank ? undefined : (rng() > 0.5 ? "Calle Mayor 12, 3º B" : undefined),
+    city: isBlank ? undefined : (rng() > 0.5 ? "Marbella" : undefined),
+    postalCode: isBlank ? undefined : (rng() > 0.5 ? "29600" : undefined),
     phones,
     emailAddresses: emails,
     records,

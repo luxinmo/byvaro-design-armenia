@@ -11,24 +11,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { isAdmin, useCurrentUser } from "@/lib/currentUser";
+import { useEmpresa } from "@/lib/empresa";
 import { toast } from "sonner";
-
-const KEY = "byvaro.organization.profile.v1";
-
-function loadOrgName(): string {
-  if (typeof window === "undefined") return "Luxinmo";
-  try {
-    const raw = window.localStorage.getItem(KEY);
-    if (!raw) return "Luxinmo";
-    const obj = JSON.parse(raw);
-    return obj.commercialName || obj.legalName || "Luxinmo";
-  } catch { return "Luxinmo"; }
-}
 
 export default function AjustesZonaCriticaEliminarWorkspace() {
   const user = useCurrentUser();
   const canEdit = isAdmin(user);
-  const orgName = loadOrgName();
+  const { empresa } = useEmpresa();
+  const orgName = empresa.nombreComercial?.trim() || empresa.razonSocial?.trim() || "Tu empresa";
   const [confirmText, setConfirmText] = useState("");
   const [understand, setUnderstand] = useState(false);
   const confirm = useConfirm();

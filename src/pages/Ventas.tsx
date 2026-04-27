@@ -124,10 +124,16 @@ export default function Ventas() {
   // Estado "vivo" sobre el mock — permite simular transiciones desde el diálogo.
   // Para agencia: filtramos al dataset base por `agencyId` para que todos los
   // cálculos de abajo (KPIs, filtros, kanban) ya partan de sus propias ventas.
-  const baseSales = useMemo(
-    () => (isAgencyUser ? salesMock.filter((v) => v.agencyId === currentUser.agencyId) : salesMock),
-    [isAgencyUser, currentUser.agencyId],
-  );
+  // Member · además filtra por `audit.actor.email` (CLAUDE.md viewOwn).
+  const baseSales = useMemo(() => {
+    if (!isAgencyUser) return salesMock;
+    const byAgency = salesMock.filter((v) => v.agencyId === currentUser.agencyId);
+    if (currentUser.role === "member") {
+      const myEmail = currentUser.email.toLowerCase();
+      return byAgency.filter((v) => v.audit?.actor.email?.toLowerCase() === myEmail);
+    }
+    return byAgency;
+  }, [isAgencyUser, currentUser.agencyId, currentUser.role, currentUser.email]);
   const [sales, setSales] = useState<Venta[]>(baseSales);
   useEffect(() => { setSales(baseSales); }, [baseSales]);
   const [viewMode, setViewMode] = useState<"kanban" | "tabla">("kanban");

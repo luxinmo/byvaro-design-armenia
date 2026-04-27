@@ -167,6 +167,26 @@ const CATEGORIES: TemplateCategory[] = [
           "Colaboradores · Invitar agencia",
         ],
       },
+      {
+        id: "auth-responsible-invitation",
+        label: "Invitación al Responsable de la agencia",
+        description: "El usuario que crea una agencia vía invitación de promotor declara que él NO es el Responsable y propone al dueño / director real. Se envía email al Responsable con CTA de aceptación · al aceptar toma rol admin y el invitador queda como miembro. Generado por `getResponsibleInviteHtml()` · ver `src/lib/responsibleInviteEmail.ts`.",
+        icon: UserPlus,
+        status: "live",
+        usedIn: [
+          "Onboarding agencia · Configura quién será el Responsable · Invitar Responsable",
+        ],
+      },
+      {
+        id: "auth-domain-match-notify-admin",
+        label: "Aviso al admin · invitado con dominio coincidente",
+        description: "Cuando un promotor invita a un email cuyo dominio coincide con una agencia ya registrada en Byvaro pero ese email NO está dado de alta como miembro · se notifica al admin de esa agencia para que invite a la persona al equipo. Una vez aceptado, la persona puede procesar la invitación del promotor. Generado por `getDomainMatchNotifyHtml()` · ver `src/lib/domainMatchNotifyEmail.ts`.",
+        icon: ShieldCheck,
+        status: "live",
+        usedIn: [
+          "Cualquier flujo de invitación a agencia · `/invite/:token` detecta dominio match",
+        ],
+      },
     ],
   },
 

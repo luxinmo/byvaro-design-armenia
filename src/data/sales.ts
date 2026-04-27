@@ -61,12 +61,18 @@ export type Venta = {
     concepto: string;
     importe: number;
   }>;
+  /** Huella de quién creó / cerró la venta · alimenta el filtro
+   *  viewOwn (member solo ve las suyas). Si falta, member no la ve. */
+  audit?: import("@/lib/audit").ActionFingerprint;
 };
 
 /* ══════════════════════════════════════════════════════════════════
-   Dataset mock — 22 ventas, distribuidas por estado
+   Dataset mock — 22 ventas, distribuidas por estado.
+   `RAW_SALES` se enriquece con `audit.actor` determinístico (ver
+   `enrichSeedSales` al final del archivo) para que el filtro
+   viewOwn / viewAll funcione · CLAUDE.md `permissions.md`.
    ══════════════════════════════════════════════════════════════════ */
-export const sales: Venta[] = [
+const RAW_SALES: Venta[] = [
   /* ─── RESERVADAS (7) ─── */
   {
     id: "v-001",
@@ -729,3 +735,60 @@ export function getFechaReferencia(v: Venta): string {
       return v.fechaReserva;
   }
 }
+
+/* ─── Atribución determinística de actores · alimenta viewOwn ──── */
+const SALES_ACTORS: Record<string, Array<{ id: string; name: string; email: string }>> = {
+  "ag-1": [
+    { id: "u-agency-ag-1-laura@primeproperties.com", name: "Laura Sánchez", email: "laura@primeproperties.com" },
+    { id: "u-agency-ag-1-tom@primeproperties.com",   name: "Tom Brennan",    email: "tom@primeproperties.com" },
+  ],
+  "ag-2": [
+    { id: "u-agency-ag-2-erik@nordichomefinders.com", name: "Erik Lindqvist", email: "erik@nordichomefinders.com" },
+    { id: "u-agency-ag-2-anna@nordichomefinders.com", name: "Anna Bergström", email: "anna@nordichomefinders.com" },
+  ],
+  "ag-3": [
+    { id: "u-agency-ag-3-pieter@dutchbelgianrealty.com", name: "Pieter De Vries", email: "pieter@dutchbelgianrealty.com" },
+    { id: "u-agency-ag-3-sander@dutchbelgianrealty.com", name: "Sander Janssen",   email: "sander@dutchbelgianrealty.com" },
+  ],
+  "ag-4": [
+    { id: "u-agency-ag-4-james@meridianrealestate.co.uk",  name: "James Whitfield", email: "james@meridianrealestate.co.uk" },
+    { id: "u-agency-ag-4-olivia@meridianrealestate.co.uk", name: "Olivia Carter",    email: "olivia@meridianrealestate.co.uk" },
+  ],
+  "ag-5": [
+    { id: "u-agency-ag-5-joao@iberialuxuryhomes.pt", name: "João Almeida", email: "joao@iberialuxuryhomes.pt" },
+    { id: "u-agency-ag-5-ines@iberialuxuryhomes.pt", name: "Inês Costa",    email: "ines@iberialuxuryhomes.pt" },
+  ],
+};
+
+function enrichSeedSales(seeds: Venta[]): Venta[] {
+  return seeds.map((s) => {
+    if (s.audit) return s;
+    const numMatch = s.id.match(/(\d+)$/);
+    const idx = numMatch ? parseInt(numMatch[1], 10) : 0;
+    const pool = s.agencyId ? SALES_ACTORS[s.agencyId] : undefined;
+    if (!pool || pool.length === 0) return s;
+    const actor = pool[idx % pool.length];
+    const audit: import("@/lib/audit").ActionFingerprint = {
+      v: 1,
+      capturedAt: s.fechaReserva,
+      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+      platform: "MacIntel",
+      language: "es-ES",
+      timezone: "Europe/Madrid",
+      timezoneOffset: -60,
+      screen: { width: 1920, height: 1080, pixelRatio: 2 },
+      viewport: { width: 1440, height: 900 },
+      actor: {
+        id: actor.id,
+        name: actor.name,
+        email: actor.email,
+        role: "agency",
+        agencyId: s.agencyId ?? undefined,
+      },
+    };
+    return { ...s, audit };
+  });
+}
+
+/** Dataset final · `RAW_SALES` con `audit.actor` añadido. */
+export const sales: Venta[] = enrichSeedSales(RAW_SALES);

@@ -19,10 +19,13 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTabParam } from "@/lib/useTabParam";
 import {
-  Eye, AlertTriangle, CheckCircle2, Camera, Image as ImageIcon,
+  Eye, CheckCircle2, Camera, Image as ImageIcon,
 } from "lucide-react";
 import { useEmpresa, useOficinas } from "@/lib/empresa";
+import { useEmpresaStats } from "@/lib/empresaStats";
 import { useCurrentUser } from "@/lib/currentUser";
+import { agencies } from "@/data/agencies";
+import { hasActiveDeveloperCollab, DEFAULT_DEVELOPER_ID } from "@/lib/developerNavigation";
 import { cn } from "@/lib/utils";
 import { EmpresaHomeTab } from "@/components/empresa/EmpresaHomeTab";
 import { EmpresaAboutTab } from "@/components/empresa/EmpresaAboutTab";
@@ -30,9 +33,11 @@ import { EmpresaAgentsTab } from "@/components/empresa/EmpresaAgentsTab";
 import { EmpresaSidebar } from "@/components/empresa/EmpresaSidebar";
 import { ImageCropModal } from "@/components/empresa/ImageCropModal";
 import { HeroSocialIcons } from "@/components/empresa/HeroSocialIcons";
+import { HeroGoogleRating } from "@/components/empresa/HeroGoogleRating";
+import { DefaultCoverPattern } from "@/components/empresa/DefaultCoverPattern";
 import { VerifiedBadge } from "@/components/ui/VerifiedBadge"; // Toaster global en App.tsx
 
-const TAB_KEYS = ["home", "about", "agents", "statistics"] as const;
+const TAB_KEYS = ["home", "about", "agents"] as const;
 type Tab = typeof TAB_KEYS[number];
 
 /**
@@ -83,6 +88,62 @@ export default function Empresa({
   const effectiveTenantId = tenantId ?? (isAgencyUser ? currentUser.agencyId : undefined);
   const { empresa, update, isVisitor } = useEmpresa(effectiveTenantId);
   const { oficinas } = useOficinas();
+  const stats = useEmpresaStats(empresa, oficinas.length, effectiveTenantId);
+
+  /* Tipo de entidad para los KPIs del HeroStatsStrip. Es ortogonal a
+   * `isVisitor`: la ficha de un promotor (sea propia o vista por una
+   * agencia desde /promotor/:id) usa los tiles de portfolio. La ficha
+   * de una agencia (sea propia o vista por un promotor desde
+   * /colaboradores/:id) usa los tiles operativos. Heurística:
+   *   · sin tenantId Y usuario es agency → ficha propia agencia.
+   *   · sin tenantId Y usuario es developer → ficha propia developer.
+   *   · tenantId con prefijo "developer-" → developer profile.
+   *   · cualquier otro tenantId → agency profile.
+   */
+  const entityType: "developer" | "agency" =
+    !effectiveTenantId
+      ? (isAgencyUser ? "agency" : "developer")
+      : effectiveTenantId.startsWith("developer-")
+        ? "developer"
+        : "agency";
+
+  /* ─── Teaser de "ficha avanzada" · solo se muestra en modo visitor.
+   *
+   *  panelHref · ruta del panel operativo de la entidad mostrada:
+   *    · entityType="developer" → `/promotor/:id/panel`
+   *    · entityType="agency"    → `/colaboradores/:id/panel`
+   *
+   *  hasActiveCollab · ¿el usuario logueado y la entidad mostrada
+   *  comparten un vínculo activo? "Activo" aquí incluye invitación
+   *  abierta, colaboración firmada o colaboración pausada — la
+   *  ficha pública es el fallback solo cuando no hay nada entre las
+   *  dos empresas. Se evalúa según el cruce de roles:
+   *    · agency viendo developer  → hasActiveDeveloperCollab(user).
+   *    · developer viendo agency  → leemos status/estado de la agency
+   *      mostrada (cualquier estado distinto de pending sin contrato
+   *      cuenta).
+   */
+  const panelHref = effectiveTenantId
+    ? (entityType === "developer"
+      ? `/promotor/${effectiveTenantId === DEFAULT_DEVELOPER_ID ? DEFAULT_DEVELOPER_ID : effectiveTenantId}/panel`
+      : `/colaboradores/${effectiveTenantId}/panel`)
+    : undefined;
+
+  const hasActiveCollab = (() => {
+    if (!isVisitor) return false;
+    if (entityType === "developer") {
+      return hasActiveDeveloperCollab(currentUser);
+    }
+    // entityType === "agency" → developer viendo la ficha de una agencia.
+    const ag = agencies.find((x) => x.id === effectiveTenantId);
+    if (!ag) return false;
+    if (ag.status === "active") return true;
+    if (ag.estadoColaboracion === "activa") return true;
+    if (ag.estadoColaboracion === "contrato-pendiente") return true;
+    if (ag.estadoColaboracion === "pausada") return true;
+    return false;
+  })();
+
   const [tab, setTab] = useTabParam<Tab>(TAB_KEYS, "home");
   const [viewMode, setViewMode] = useState<"edit" | "preview">(isVisitor ? "preview" : "edit");
   const [editingImage, setEditingImage] = useState<"logo" | "cover" | null>(null);
@@ -97,20 +158,42 @@ export default function Empresa({
     about: !!empresa.aboutOverview.trim(),
   }), [empresa, oficinas]);
 
-  const completionPercent = Math.round(
-    (Object.values(completion).filter(Boolean).length / Object.values(completion).length) * 100
-  );
-  const isIncomplete = completionPercent < 100;
+  /* completionPercent ya no se usa aquí · el % vive en el sidebar
+     `EmpresaSidebar` que computa su propio checklist. */
 
-  /* ─── ImageCropModal: Aplicar una imagen recortada ─── */
-  const handleApplyImage = (dataUrl: string) => {
-    if (editingImage === "logo") update("logoUrl", dataUrl);
-    else if (editingImage === "cover") update("coverUrl", dataUrl);
+  /* ─── ImageCropModal: Aplicar una imagen recortada ───
+   * Guardamos 3 cosas:
+   *   · `*Url`     → imagen recortada, lista para mostrar.
+   *   · `*SourceUrl` → imagen ORIGINAL sin recortar · permite reabrir
+   *     el editor con el material completo y reajustar.
+   *   · `*Crop`    → zoom + posX + posY usados al recortar · al
+   *     reabrir, restauramos el encuadre exacto. */
+  const handleApplyImage = (
+    dataUrl: string,
+    sourceDataUrl: string,
+    crop: { zoom: number; posX: number; posY: number },
+  ) => {
+    if (editingImage === "logo") {
+      update("logoUrl", dataUrl);
+      update("logoSourceUrl", sourceDataUrl);
+      update("logoCrop", crop);
+    } else if (editingImage === "cover") {
+      update("coverUrl", dataUrl);
+      update("coverSourceUrl", sourceDataUrl);
+      update("coverCrop", crop);
+    }
     setEditingImage(null);
   };
   const handleRemoveImage = () => {
-    if (editingImage === "logo") update("logoUrl", "");
-    else if (editingImage === "cover") update("coverUrl", "");
+    if (editingImage === "logo") {
+      update("logoUrl", "");
+      update("logoSourceUrl", "");
+      update("logoCrop", undefined);
+    } else if (editingImage === "cover") {
+      update("coverUrl", "");
+      update("coverSourceUrl", "");
+      update("coverCrop", undefined);
+    }
     setEditingImage(null);
   };
 
@@ -123,32 +206,22 @@ export default function Empresa({
     ].filter(Boolean).join(", ") +
       (empresa.fundadaEn ? ` · Fundada en ${empresa.fundadaEn}` : "");
 
-  /* ─── Tabs config ─── */
+  /* ─── Tabs config · solo 3 ─── La tab "Estadísticas" se quitó del
+   *  nav porque las estadísticas operativas viven en el panel
+   *  avanzado (`/promotor/:id/panel` o `/colaboradores/:id/panel`),
+   *  no en la ficha pública. El teaser que sustituye al Lema en modo
+   *  visitor invita a entrar al panel si hay colaboración activa. */
   const tabs: { value: Tab; label: string; disabled?: boolean }[] = [
     { value: "home", label: "Inicio" },
     { value: "about", label: "Sobre nosotros" },
-    { value: "agents", label: "Agentes" },
-    { value: "statistics", label: "Estadísticas", disabled: true },
+    { value: "agents", label: "Equipo" },
   ];
 
   return (
     <div className="flex flex-col min-h-full bg-background">
-      {/* ═════ Banner onboarding (solo dueño, no visitor) ═════ */}
-      {!isVisitor && isIncomplete && viewMode === "edit" && (
-        <div className="bg-warning/10 border-b border-warning/30 px-4 sm:px-6 lg:px-10 py-3 flex items-center gap-3 flex-wrap">
-          <AlertTriangle className="h-4 w-4 text-warning dark:text-warning shrink-0" />
-          <p className="text-[11.5px] text-foreground flex-1 min-w-0">
-            <span className="font-semibold">Tu perfil de empresa está al {completionPercent}%.</span>{" "}
-            Completa todas las secciones para que agencias y promotores puedan encontrarte.
-          </p>
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="w-24 h-1.5 bg-warning/20 rounded-full overflow-hidden">
-              <div className="h-full bg-warning/70 rounded-full transition-all" style={{ width: `${completionPercent}%` }} />
-            </div>
-            <span className="text-[10px] font-semibold text-warning dark:text-warning tnum">{completionPercent}%</span>
-          </div>
-        </div>
-      )}
+      {/* Banner onboarding eliminado · la misma info (% completado +
+          checklist) ya vive en el sidebar derecho como "Fuerza del
+          perfil" · evita duplicar y deja la cabecera más limpia. */}
 
       <div className="px-4 sm:px-6 lg:px-10 pt-4 pb-10 max-w-[1250px] mx-auto w-full">
         {/* ═════ Cabecera ═════ */}
@@ -164,11 +237,11 @@ export default function Empresa({
                   ← Volver
                 </button>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  Ficha de agencia
+                  Ficha de empresa
                 </p>
-                <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight leading-tight mt-1">
-                  {empresa.nombreComercial}
-                </h1>
+                {/* El nombre de la empresa solo se muestra en el hero
+                    (debajo de la cover) · no lo duplicamos aquí
+                    arriba para evitar la repetición. */}
               </>
             ) : (
               <>
@@ -197,7 +270,7 @@ export default function Empresa({
               )}
             >
               <Eye className="h-3.5 w-3.5" />
-              {viewMode === "preview" ? "Volver a editar" : "Previsualizar como agencia"}
+              {viewMode === "preview" ? "Volver a editar" : "Previsualizar como usuario"}
             </button>
           )}
         </div>
@@ -207,13 +280,28 @@ export default function Empresa({
 
         {/* ═════ Profile hero ═════ */}
         <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-soft">
-          {/* Cover */}
+          {/* Cover · si no hay portada, mostramos un patrón geométrico
+              de fallback (estilo "default cover" de Facebook/LinkedIn)
+              para que la cabecera no quede vacía. Encima siempre va un
+              degradado de abajo a arriba (hasta la mitad) para mejorar
+              el contraste con cualquier UI flotante (botones,
+              iconos sociales). */}
           <div className="relative h-48 sm:h-56 bg-muted/30 group">
             {empresa.coverUrl ? (
               <img src={empresa.coverUrl} alt="Portada" className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-muted via-muted/60 to-primary/10" />
+              <DefaultCoverPattern />
             )}
+            {/* Gradiente bottom→top hasta el 50% · oscurece la mitad
+                inferior progresivamente. Pointer-events-none para no
+                interferir con el botón de editar arriba. */}
+            <div
+              aria-hidden
+              className="absolute inset-x-0 bottom-0 h-1/2 pointer-events-none"
+              style={{
+                background: "linear-gradient(to top, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.18) 60%, rgba(0,0,0,0) 100%)",
+              }}
+            />
             {viewMode === "edit" && (
               <button
                 type="button"
@@ -264,26 +352,31 @@ export default function Empresa({
                   </h1>
                   {empresa.verificada && <VerifiedBadge size="md" />}
                 </div>
-                {empresa.tagline ? (
-                  <p className="text-[14px] font-medium text-primary mt-1 leading-snug" style={{ color: empresa.colorCorporativo || undefined }}>
-                    {empresa.tagline}
-                  </p>
-                ) : viewMode === "edit" && (
+                {viewMode === "edit" ? (
+                  /* Modo edición · input siempre editable (incluso si
+                   *  ya hay tagline). El usuario puede sobreescribir
+                   *  o vaciar la frase desde aquí mismo. */
                   <input
                     type="text"
                     value={empresa.tagline}
                     onChange={(e) => update("tagline", e.target.value)}
                     placeholder="Añade un slogan · Ej. Inversión segura en la Costa del Sol"
                     className="mt-1 w-full max-w-lg text-[14px] font-medium text-primary bg-transparent outline-none border-b border-dashed border-border focus:border-primary placeholder:text-muted-foreground/50 placeholder:font-normal transition-colors pb-0.5"
+                    style={{ color: empresa.colorCorporativo || undefined }}
                     maxLength={120}
                   />
-                )}
+                ) : empresa.tagline ? (
+                  <p className="text-[14px] font-medium text-primary mt-1 leading-snug" style={{ color: empresa.colorCorporativo || undefined }}>
+                    {empresa.tagline}
+                  </p>
+                ) : null}
                 <p className="text-[12.5px] text-muted-foreground mt-1.5 truncate">
                   {subtitleDisplay || "Completa la ubicación y año de fundación para personalizar tu perfil"}
                 </p>
               </div>
-              {/* Iconos sociales · discretos, alineados a la derecha */}
-              <div className="shrink-0">
+              {/* Bloque derecho · rating Google encima · iconos sociales debajo */}
+              <div className="shrink-0 flex flex-col items-end gap-2">
+                <HeroGoogleRating empresa={empresa} />
                 <HeroSocialIcons empresa={empresa} update={update} viewMode={viewMode} />
               </div>
             </div>
@@ -316,16 +409,38 @@ export default function Empresa({
         <div className="flex flex-col xl:flex-row gap-5 mt-5">
           <div className="flex-1 min-w-0">
             {tab === "home" && (
-              <EmpresaHomeTab viewMode={viewMode} empresa={empresa} update={update} />
+              <EmpresaHomeTab
+                viewMode={viewMode}
+                empresa={empresa}
+                update={update}
+                stats={stats}
+                isVisitor={isVisitor}
+                entityType={entityType}
+                panelHref={panelHref}
+                hasActiveCollab={hasActiveCollab}
+                tenantId={effectiveTenantId}
+              />
             )}
             {tab === "about" && (
-              <EmpresaAboutTab viewMode={viewMode} empresa={empresa} update={update} />
+              <EmpresaAboutTab
+                viewMode={viewMode}
+                empresa={empresa}
+                update={update}
+                isVisitor={isVisitor}
+                isAdmin={currentUser.role === "admin"}
+              />
             )}
-            {tab === "agents" && <EmpresaAgentsTab />}
+            {tab === "agents" && (
+              <EmpresaAgentsTab
+                isVisitor={isVisitor}
+                viewMode={viewMode}
+                tenantId={effectiveTenantId}
+              />
+            )}
           </div>
 
           {!isVisitor && viewMode === "edit" && tab === "home" && (
-            <EmpresaSidebar empresa={empresa} oficinasCount={oficinas.length} />
+            <EmpresaSidebar empresa={empresa} oficinasCount={oficinas.length} update={update} />
           )}
         </div>
       </div>
@@ -339,22 +454,31 @@ export default function Empresa({
             onApply={handleApplyImage}
             onRemove={handleRemoveImage}
             initialImage={empresa.logoUrl || undefined}
+            initialSource={empresa.logoSourceUrl || undefined}
+            initialCrop={empresa.logoCrop}
             shape={empresa.logoShape === "square" ? "square" : "circle"}
             allowShapeSwitch
             onShapeChange={(s) => update("logoShape", s)}
             title="Editar logo"
             outputSize={{ width: 512, height: 512 }}
           />
+          {/* Aspect ratio del recorte = aspect real del hero `h-56`
+              dentro del card (max-w-[1250px]). Render aprox 1168×224
+              en desktop · 5.214:1. WYSIWYG: el área del recorte tiene
+              la MISMA proporción que el cover en la ficha → todo lo
+              visible dentro del recorte aparece tal cual al guardar. */}
           <ImageCropModal
             open={editingImage === "cover"}
             onClose={() => setEditingImage(null)}
             onApply={handleApplyImage}
             onRemove={handleRemoveImage}
             initialImage={empresa.coverUrl || undefined}
+            initialSource={empresa.coverSourceUrl || undefined}
+            initialCrop={empresa.coverCrop}
             shape="rectangle"
-            aspectRatio={24 / 10}
+            aspectRatio={1168.67 / 224}
             title="Editar portada"
-            outputSize={{ width: 1200, height: 500 }}
+            outputSize={{ width: 2336, height: 448 }}
           />
         </>
       )}

@@ -1,7 +1,7 @@
 export type PromotionStatus = "active" | "incomplete" | "inactive" | "sold-out";
 export type BuildingType = "plurifamiliar" | "unifamiliar-single" | "unifamiliar-multiple";
 
-import type { ModoValidacionRegistro } from "@/components/crear-promocion/types";
+import type { ModoValidacionRegistro, RoleOption } from "@/components/crear-promocion/types";
 
 export type Promotion = {
   id: string;
@@ -38,6 +38,14 @@ export type Promotion = {
    *  prometía preregistro tras visita). Ver `WizardState.modoValidacionRegistro`
    *  y `docs/registration-system.md §2`. */
   modoValidacionRegistro?: ModoValidacionRegistro;
+  /** Rol del workspace dueño de esta promoción · "promotor" (construye)
+   *  o "comercializador" (vende en exclusiva la obra de un tercero).
+   *  Set en el wizard de creación · CLAUDE.md regla de oro. Si falta,
+   *  asumir "promotor" para retrocompatibilidad con seeds antiguos.
+   *  Toda copy en la UI ("Esperando decisión del promotor", "Aprobado
+   *  por el promotor"…) DEBE leer este campo · usar el helper
+   *  `getOwnerRoleLabel()` de `src/lib/promotionRole.ts`. */
+  ownerRole?: RoleOption;
 };
 
 export function getBuildingTypeLabel(type?: BuildingType): string | null {

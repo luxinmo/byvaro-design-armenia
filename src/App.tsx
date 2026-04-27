@@ -55,6 +55,8 @@ import AjustesEmpresaSuscripcion from "@/pages/ajustes/empresa/suscripcion";
 import AjustesEmpresaDepartamentos from "@/pages/ajustes/empresa/departamentos";
 import AjustesCalendarioSync from "@/pages/ajustes/calendario/sync";
 import AjustesUsuariosMiembros from "@/pages/ajustes/usuarios/miembros";
+import { CriticalActionGuard } from "@/components/agency-onboarding/CriticalActionGuard";
+import { AdminOnlyRoute } from "@/components/AdminOnlyRoute";
 import AjustesUsuariosRoles from "@/pages/ajustes/usuarios/roles";
 import AjustesUsuariosInvitaciones from "@/pages/ajustes/usuarios/invitaciones";
 import AjustesSeguridadContrasena from "@/pages/ajustes/seguridad/contrasena";
@@ -86,10 +88,14 @@ import { SettingsShell } from "@/components/settings/SettingsShell";
 import { SettingsPlaceholder } from "@/components/settings/SettingsPlaceholder";
 import CrearPromocion from "@/pages/CrearPromocion";
 import Empresa from "@/pages/Empresa";
+import Promotor from "@/pages/Promotor";
+import PromotorPanel from "@/pages/PromotorPanel";
 import PromocionDetalle from "@/pages/PromocionDetalle";
 import PromocionesCardsV1 from "@/pages/design-previews/PromocionesCardsV1";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
+import InviteAccept from "@/pages/InviteAccept";
+import ResponsibleAccept from "@/pages/ResponsibleAccept";
 import { useCurrentUser } from "@/lib/currentUser";
 
 /** Rutas promotor-only · si una agencia entra por URL directa la
@@ -119,6 +125,18 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
+        {/* Aceptación de invitación pública (caso 1 alta nueva, caso 2b
+         *  workspace existente sin sesión, caso 2a redirect tras login).
+         *  No envuelta en RequireAuth · el link debe funcionar incluso
+         *  para emails que aún no tienen cuenta en Byvaro. */}
+        <Route path="/invite/:token" element={<InviteAccept />} />
+
+        {/* Aceptación del rol de Responsable de una agencia (magic-link
+         *  desde email que envía el admin actual al pulsar "Quiero
+         *  invitar al Responsable" en el `<ResponsibleSetupDialog>`).
+         *  Pública · permite crear contraseña + tomar rol admin. */}
+        <Route path="/responsible/:token" element={<ResponsibleAccept />} />
+
         {/* Wizard fullscreen (sin AppLayout) · auth obligatorio. */}
         <Route path="/crear-promocion" element={<RequireAuth><CrearPromocion /></RequireAuth>} />
 
@@ -130,26 +148,35 @@ export default function App() {
 
         {/* Ajustes · fullscreen propio (SettingsShell), no AppLayout.
          * `/ajustes` raíz renderiza la home (directorio de cards),
-         * `/ajustes/<path>` renderiza la sub-página con sidebar. */}
-        <Route path="/ajustes" element={<RequireAuth><Ajustes /></RequireAuth>} />
+         * `/ajustes/<path>` renderiza la sub-página con sidebar.
+         *
+         * Solo admin · el member es redirigido a /inicio si entra por
+         * URL directa (sidebar ya oculta el link). */}
+        <Route path="/ajustes" element={<RequireAuth><AdminOnlyRoute><Ajustes /></AdminOnlyRoute></RequireAuth>} />
         <Route
           path="/ajustes/*"
           element={
             <RequireAuth>
+            <AdminOnlyRoute>
             <SettingsShell>
               <Routes>
                 {/* Páginas reales con contenido funcional */}
                 <Route path="perfil/personal" element={<AjustesPerfilPersonal />} />
                 <Route path="perfil/contacto" element={<AjustesPerfilContacto />} />
-                <Route path="empresa/datos" element={<AjustesEmpresaDatos />} />
-                <Route path="empresa/oficinas" element={<AjustesEmpresaOficinas />} />
-                <Route path="empresa/verificacion" element={<AjustesEmpresaVerificacion />} />
-                <Route path="empresa/suscripcion" element={<AjustesEmpresaSuscripcion />} />
-                <Route path="empresa/departamentos" element={<AjustesEmpresaDepartamentos />} />
+                {/* Empresa · acción crítica · si la agencia tiene
+                 *  setup de Responsable pendiente, el guard bloquea la
+                 *  pantalla y abre el modal · CLAUDE.md regla de oro. */}
+                <Route path="empresa/datos" element={<CriticalActionGuard><AjustesEmpresaDatos /></CriticalActionGuard>} />
+                <Route path="empresa/oficinas" element={<CriticalActionGuard><AjustesEmpresaOficinas /></CriticalActionGuard>} />
+                <Route path="empresa/verificacion" element={<CriticalActionGuard><AjustesEmpresaVerificacion /></CriticalActionGuard>} />
+                <Route path="empresa/suscripcion" element={<CriticalActionGuard><AjustesEmpresaSuscripcion /></CriticalActionGuard>} />
+                <Route path="empresa/departamentos" element={<CriticalActionGuard><AjustesEmpresaDepartamentos /></CriticalActionGuard>} />
                 <Route path="calendario/sync" element={<AjustesCalendarioSync />} />
-                <Route path="usuarios/miembros" element={<AjustesUsuariosMiembros />} />
-                <Route path="usuarios/roles" element={<AjustesUsuariosRoles />} />
-                <Route path="usuarios/invitaciones" element={<AjustesUsuariosInvitaciones />} />
+                {/* Usuarios · misma regla · invitar miembros sin
+                 *  Responsable definido es problema legal. */}
+                <Route path="usuarios/miembros" element={<CriticalActionGuard><AjustesUsuariosMiembros /></CriticalActionGuard>} />
+                <Route path="usuarios/roles" element={<CriticalActionGuard><AjustesUsuariosRoles /></CriticalActionGuard>} />
+                <Route path="usuarios/invitaciones" element={<CriticalActionGuard><AjustesUsuariosInvitaciones /></CriticalActionGuard>} />
                 <Route path="seguridad/contrasena" element={<AjustesSeguridadContrasena />} />
                 <Route path="seguridad/2fa" element={<AjustesSeguridad2fa />} />
                 <Route path="seguridad/sesiones" element={<AjustesSeguridadSesiones />} />
@@ -196,6 +223,7 @@ export default function App() {
                 <Route path="*" element={<SettingsPlaceholder />} />
               </Routes>
             </SettingsShell>
+            </AdminOnlyRoute>
             </RequireAuth>
           }
         />
@@ -215,12 +243,19 @@ export default function App() {
                 <Route path="/estadisticas" element={<Estadisticas />} />
                 <Route path="/promociones" element={<Promociones />} />
                 <Route path="/promociones/:id" element={<PromocionDetalle />} />
-                <Route path="/oportunidades" element={<PromotorOnly><Leads /></PromotorOnly>} />
-                <Route path="/oportunidades/:id" element={<PromotorOnly><LeadDetalle /></PromotorOnly>} />
+                {/* Oportunidades · agencia SÍ entra · la página debe
+                 *  filtrar internamente por agencyId (TODO: si todavía
+                 *  hay fuga en `Leads.tsx`, añadir filtro · verificar
+                 *  cross-tenant). */}
+                <Route path="/oportunidades" element={<Leads />} />
+                <Route path="/oportunidades/:id" element={<LeadDetalle />} />
                 <Route path="/registros" element={<Registros />} />
                 <Route path="/ventas" element={<Ventas />} />
                 <Route path="/calendario" element={<Calendario />} />
                 <Route path="/colaboradores" element={<PromotorOnly><Colaboradores /></PromotorOnly>} />
+                {/* Contratos · solo promotor por ahora · la agencia no
+                 *  lo tiene en su menú. Si en el futuro hace falta, se
+                 *  hace una versión filtrada por `agencyId`. */}
                 <Route path="/contratos" element={<PromotorOnly><Contratos /></PromotorOnly>} />
                 <Route path="/colaboradores/estadisticas" element={<PromotorOnly><ColaboradoresEstadisticas /></PromotorOnly>} />
                 <Route path="/colaboradores/:id" element={<PromotorOnly><AgenciaDetalle /></PromotorOnly>} />
@@ -229,14 +264,26 @@ export default function App() {
                 <Route path="/colaboradores/:id/historial" element={<PromotorOnly><ColaboradorHistorial /></PromotorOnly>} />
                 <Route path="/contactos" element={<Contactos />} />
                 <Route path="/contactos/:id" element={<ContactoDetalle />} />
-                <Route path="/equipo" element={<PromotorOnly><Equipo /></PromotorOnly>} />
-                <Route path="/equipo/:id/estadisticas" element={<PromotorOnly><EquipoMiembroEstadisticas /></PromotorOnly>} />
+                {/* Equipo · solo admin · gestión de miembros + roles. */}
+                <Route path="/equipo" element={<AdminOnlyRoute><CriticalActionGuard><Equipo /></CriticalActionGuard></AdminOnlyRoute>} />
+                <Route path="/equipo/:id/estadisticas" element={<AdminOnlyRoute><EquipoMiembroEstadisticas /></AdminOnlyRoute>} />
                 <Route path="/microsites" element={<PromotorOnly><Microsites /></PromotorOnly>} />
-                <Route path="/emails" element={<PromotorOnly><Emails /></PromotorOnly>} />
+                {/* Emails · agencia SÍ entra · cuenta nativa
+                 *  `<localpart>@mail.byvaro.com` filtrada por user. */}
+                <Route path="/emails" element={<Emails />} />
                 {/* /ajustes/* viven fuera del AppLayout (SettingsShell propio) */}
-                {/* Empresa (administración) — una sola página con tabs internos */}
-                <Route path="/empresa" element={<Empresa />} />
+                {/* Empresa (administración) · solo admin con setup
+                 *  completo · misma regla que Ajustes. La agencia
+                 *  recién creada cae en el modal de Responsable
+                 *  hasta confirmar/aplazar. */}
+                <Route path="/empresa" element={<AdminOnlyRoute><CriticalActionGuard><Empresa /></CriticalActionGuard></AdminOnlyRoute>} />
                 <Route path="/empresa/*" element={<Navigate to="/empresa" replace />} />
+                {/* Promotor · vista desde la AGENCIA. Mirror de
+                 *  /colaboradores/:id (ficha) y /colaboradores/:id/panel
+                 *  (operativa). El helper `developerHref()` decide a
+                 *  cuál mandar según haya colaboración activa. */}
+                <Route path="/promotor/:id" element={<Promotor />} />
+                <Route path="/promotor/:id/panel" element={<PromotorPanel />} />
                 {/* Previews de diseños alternativos (no en el menú, accesibles por URL) */}
                 <Route path="/preview/promociones-cards-v1" element={<PromocionesCardsV1 />} />
                 <Route path="*" element={<Navigate to="/inicio" replace />} />

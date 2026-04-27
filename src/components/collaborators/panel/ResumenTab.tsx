@@ -13,7 +13,7 @@
  * No hay KPIs — todo son señales accionables.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ChevronRight, FileSignature, Home, Plus, Share2,
@@ -33,6 +33,8 @@ import { ContractNewChoiceDialog } from "@/components/collaborators/ContractNewC
 import { ContractUploadDialog } from "@/components/collaborators/ContractUploadDialog";
 import { ContractSignedUploadDialog } from "@/components/collaborators/ContractSignedUploadDialog";
 import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
+import { RequestCollaborationDialog } from "@/components/collaborators/RequestCollaborationDialog";
+import { useAllSolicitudes, findSolicitudVivaParaAgencia, backfillRequestedBy } from "@/lib/solicitudesColaboracion";
 
 /* ─── Helpers ─────────────────────────────────────────────────────── */
 
@@ -57,6 +59,14 @@ type PromoEntry = {
   location?: string;
   commission?: number;
   image?: string;
+  /* Datos comerciales — los muestra el card cuando lo ve la agencia
+   *  (read-only). El promotor sigue viendo Visitas/Ventas/Conversión. */
+  availableUnits?: number;
+  totalUnits?: number;
+  priceMin?: number;
+  priceMax?: number;
+  delivery?: string;
+  constructionProgress?: number;
 };
 
 function usePromoCatalog() {
@@ -71,6 +81,12 @@ function usePromoCatalog() {
         location: p.location,
         commission: typeof p.commission === "number" && p.commission > 0 ? p.commission : undefined,
         image: p.image,
+        availableUnits: p.availableUnits,
+        totalUnits: p.totalUnits,
+        priceMin: p.priceMin,
+        priceMax: p.priceMax,
+        delivery: p.delivery,
+        constructionProgress: p.constructionProgress,
       });
     }
     for (const p of promotions) {
@@ -80,10 +96,67 @@ function usePromoCatalog() {
         location: p.location,
         commission: typeof p.commission === "number" && p.commission > 0 ? p.commission : undefined,
         image: p.image,
+        availableUnits: p.availableUnits,
+        totalUnits: p.totalUnits,
+        priceMin: p.priceMin,
+        priceMax: p.priceMax,
+        delivery: p.delivery,
+        constructionProgress: p.constructionProgress,
       });
     }
     return m;
   }, []);
+}
+
+/** "€344k", "€1.4M" — compacto para chips dentro de cards. */
+function fmtPriceCompact(value?: number): string {
+  if (!value || !Number.isFinite(value) || value <= 0) return "—";
+  if (value >= 1_000_000) {
+    const m = value / 1_000_000;
+    return `€${m >= 10 ? Math.round(m) : m.toFixed(1).replace(/\.0$/, "")}M`;
+  }
+  if (value >= 1_000) return `€${Math.round(value / 1_000)}k`;
+  return `€${Math.round(value)}`;
+}
+
+function fmtPriceRange(min?: number, max?: number): string {
+  const a = fmtPriceCompact(min);
+  const b = fmtPriceCompact(max);
+  if (a === "—" && b === "—") return "—";
+  if (a === b) return a;
+  return `${a} – ${b}`;
+}
+
+/** "27 abr 2026, 20:48" — usado en el chip "Colaboración solicitada". */
+function fmtRequestedAt(ms: number): string {
+  return new Date(ms).toLocaleString("es-ES", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+
+/** Iniciales del nombre · "Laura Sánchez" → "LS". */
+function initials(name: string): string {
+  return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
+}
+
+/** Avatar circular del usuario que envió la solicitud · 16px, fallback
+ *  a iniciales con bg muted. Inline en el chip "Colaboración solicitada". */
+function RequestedByAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string }) {
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name}
+        className="h-4 w-4 rounded-full object-cover border border-border shrink-0"
+      />
+    );
+  }
+  return (
+    <span className="h-4 w-4 rounded-full bg-muted text-[8.5px] font-semibold text-muted-foreground grid place-items-center shrink-0">
+      {initials(name) || "?"}
+    </span>
+  );
 }
 
 const STATUS_LABEL: Record<PromoStatus, string> = {
@@ -97,9 +170,15 @@ interface Props {
   agency: Agency;
   fromPromoId?: string;
   onGoTo: (tab: "documentacion" | "pagos" | "historial") => void;
+  /** Cuando se monta este tab desde el lado AGENCIA (panel del
+   *  promotor en `/promotor/:id/panel`), forzamos read-only · la
+   *  agencia no puede subir contratos · esos flujos los inicia el
+   *  promotor o comercializador y la agencia firma desde el email
+   *  de Firmafy. */
+  readOnly?: boolean;
 }
 
-export function ResumenTab({ agency: a, onGoTo }: Props) {
+export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
   const user = useCurrentUser();
   const actor = { name: user.name, email: user.email };
   const contracts = useContractsForAgency(a.id);
@@ -118,6 +197,31 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
   /* Dialog para compartir una promoción concreta con esta agencia.
      Arranca en el paso de condiciones con la comisión prefill. */
   const [sharePromo, setSharePromo] = useState<{ id: string; name: string } | null>(null);
+
+  /* Dialog para SOLICITAR colaboración (lado agencia · readOnly). El
+     promo completo se pasa al modal para mostrar el resumen visual. */
+  const [requestPromo, setRequestPromo] = useState<PromoEntry | null>(null);
+
+  /* Solicitudes "vivas" (pendiente O rechazada) de esta agencia. La
+     agencia NO ve la diferencia entre "pendiente" y "rechazada" — el
+     descarte del promotor es silencioso. Solo desaparece el chip si:
+       a) La solicitud se aceptó (la promo pasa a Bloque 1).
+       b) El promotor envía una invitación a esa agencia/promo
+          (`acceptInvitationOverride` flipa el status a aceptada). */
+  const pendientes = useAllSolicitudes().filter(
+    (s) => s.agencyId === a.id && (s.status === "pendiente" || s.status === "rechazada"),
+  );
+
+  /* Backfill defensivo · solicitudes creadas antes de que existiera
+     el campo `requestedBy` se quedaron sin actor. Si el usuario
+     actual es de esta agencia (readOnly), rellenamos esas filas
+     antiguas con sus datos · es la única inferencia razonable. */
+  useEffect(() => {
+    if (!readOnly) return;
+    if (user.accountType !== "agency" || user.agencyId !== a.id) return;
+    backfillRequestedBy(a.id, { name: user.name, email: user.email, avatarUrl: user.avatar });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readOnly, a.id, user.accountType, user.agencyId]);
 
   const openScopePicker = (preselect?: string[]) => {
     setScopePreselect(preselect);
@@ -174,11 +278,14 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
     return ids;
   }, [invitationByPromoId, a.promotionsCollaborating]);
 
-  /* Bloque 2 solo lista las activas SIN compartir y SIN invitación
-     pendiente · las invitadas suben al Bloque 1. */
+  /* Bloque 2 lista las activas SIN compartir y SIN invitación
+     pendiente · las invitadas suben al Bloque 1. Las que tienen
+     solicitud pendiente (lado agencia) SE MANTIENEN aquí · solo
+     cambia el CTA por un chip "Colaboración solicitada · fecha · usuario". */
   const notSharedPromos = useMemo(
     () => activePromos.filter((pr) =>
-      !(a.promotionsCollaborating ?? []).includes(pr.id) && !invitedPromoIds.has(pr.id),
+      !(a.promotionsCollaborating ?? []).includes(pr.id)
+      && !invitedPromoIds.has(pr.id),
     ),
     [activePromos, a.promotionsCollaborating, invitedPromoIds],
   );
@@ -366,33 +473,57 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
               </div>
             )}
 
-            {/* ⚠ Incidencia real · promociones sin contrato que cubra */}
+            {/* ⚠ Incidencia real · promociones sin contrato que cubra.
+                Cuando se monta read-only desde el lado AGENCIA mostramos
+                una nota pasiva (no botón) explicando que el contrato lo
+                tiene que iniciar el promotor o comercializador. */}
             {uncoveredPromos.length > 0 && (
-              <button
-                type="button"
-                onClick={() => openScopePicker(uncoveredPromos.map((u) => u.id))}
-                className="w-full text-left rounded-2xl border border-warning/30 bg-warning/5 hover:bg-warning/10 p-4 mb-3 transition-colors"
-              >
-                <div className="flex items-start gap-3">
-                  <span className="h-9 w-9 rounded-xl bg-warning/15 text-warning grid place-items-center shrink-0">
-                    <AlertTriangle className="h-4.5 w-4.5" strokeWidth={2} />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground">
-                      {uncoveredPromos.length} promoción{uncoveredPromos.length === 1 ? "" : "es"} sin contrato firmado
-                    </p>
-                    <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-relaxed">
-                      {uncoveredPromos.slice(0, 3).map((p) => p.name).join(" · ")}
-                      {uncoveredPromos.length > 3 ? ` · y ${uncoveredPromos.length - 3} más` : ""}.
-                      Está trabajando sin marco legal que os cubra — sube un contrato y envíalo a firmar.
-                    </p>
-                    <span className="mt-2 inline-flex items-center gap-1 h-7 px-3 rounded-full bg-foreground text-background text-[11.5px] font-semibold">
-                      <Upload className="h-3 w-3" strokeWidth={2.25} />
-                      Subir contrato ahora
+              readOnly ? (
+                <div className="w-full text-left rounded-2xl border border-warning/30 bg-warning/5 p-4 mb-3">
+                  <div className="flex items-start gap-3">
+                    <span className="h-9 w-9 rounded-xl bg-warning/15 text-warning grid place-items-center shrink-0">
+                      <AlertTriangle className="h-4.5 w-4.5" strokeWidth={2} />
                     </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground">
+                        {uncoveredPromos.length} promoción{uncoveredPromos.length === 1 ? "" : "es"} sin contrato firmado
+                      </p>
+                      <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-relaxed">
+                        {uncoveredPromos.slice(0, 3).map((p) => p.name).join(" · ")}
+                        {uncoveredPromos.length > 3 ? ` · y ${uncoveredPromos.length - 3} más` : ""}.
+                        Solo el promotor o comercializador puede subir el contrato. Cuando lo
+                        envíe a firmar, recibirás un email de Firmafy con el link.
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => openScopePicker(uncoveredPromos.map((u) => u.id))}
+                  className="w-full text-left rounded-2xl border border-warning/30 bg-warning/5 hover:bg-warning/10 p-4 mb-3 transition-colors"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="h-9 w-9 rounded-xl bg-warning/15 text-warning grid place-items-center shrink-0">
+                      <AlertTriangle className="h-4.5 w-4.5" strokeWidth={2} />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground">
+                        {uncoveredPromos.length} promoción{uncoveredPromos.length === 1 ? "" : "es"} sin contrato firmado
+                      </p>
+                      <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-relaxed">
+                        {uncoveredPromos.slice(0, 3).map((p) => p.name).join(" · ")}
+                        {uncoveredPromos.length > 3 ? ` · y ${uncoveredPromos.length - 3} más` : ""}.
+                        Está trabajando sin marco legal que os cubra — sube un contrato y envíalo a firmar.
+                      </p>
+                      <span className="mt-2 inline-flex items-center gap-1 h-7 px-3 rounded-full bg-foreground text-background text-[11.5px] font-semibold">
+                        <Upload className="h-3 w-3" strokeWidth={2.25} />
+                        Subir contrato ahora
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              )
             )}
 
             {/* Activas · una card por cada una con estado de cobertura.
@@ -456,19 +587,44 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
                               </span>
                             )}
                           </div>
-                          {(() => {
-                            const m = metricsFor(p.id, true);
-                            const conversion = m.visits > 0
-                              ? Math.round((m.ventas / m.visits) * 100)
-                              : 0;
-                            return (
-                              <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-muted/40 px-2.5 py-2">
-                                <MetricStat label="Visitas"    value={m.visits} />
-                                <MetricStat label="Ventas"     value={m.ventas} />
-                                <MetricStat label="Conversión" value={`${conversion}%`} />
-                              </div>
-                            );
-                          })()}
+                          {readOnly ? (
+                            /* Vista AGENCIA · datos comerciales para
+                             *  decidir qué empujar al cliente: cuánto
+                             *  queda, rango de precio, cuándo se
+                             *  entrega y % de obra. NO mostramos el
+                             *  rendimiento histórico (visitas/ventas)
+                             *  que es métrica del promotor. */
+                            <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-muted/40 px-2.5 py-2">
+                              <MetricStat
+                                label="Disponibles"
+                                value={
+                                  typeof p.availableUnits === "number" && typeof p.totalUnits === "number"
+                                    ? `${p.availableUnits}/${p.totalUnits}`
+                                    : "—"
+                                }
+                              />
+                              <MetricStat label="Precio" value={fmtPriceRange(p.priceMin, p.priceMax)} />
+                              <MetricStat label="Entrega" value={p.delivery || "—"} />
+                              <MetricStat
+                                label="Obra"
+                                value={typeof p.constructionProgress === "number" ? `${p.constructionProgress}%` : "—"}
+                              />
+                            </div>
+                          ) : (
+                            (() => {
+                              const m = metricsFor(p.id, true);
+                              const conversion = m.visits > 0
+                                ? Math.round((m.ventas / m.visits) * 100)
+                                : 0;
+                              return (
+                                <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-muted/40 px-2.5 py-2">
+                                  <MetricStat label="Visitas"    value={m.visits} />
+                                  <MetricStat label="Ventas"     value={m.ventas} />
+                                  <MetricStat label="Conversión" value={`${conversion}%`} />
+                                </div>
+                              );
+                            })()
+                          )}
                           <div className="mt-3 flex items-center justify-end">
                             <Link
                               to={`/promociones/${p.id}?tab=Agencies`}
@@ -518,21 +674,41 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
         </div>
       </section>
 
-      {/* ═══════════════════ BLOQUE 2 · Aún sin compartir ═══════════════════ */}
+      {/* ═══════════════════ BLOQUE 2 · Promociones disponibles ═══════════════════
+          Promotor ve "Aún sin compartir" + acción "Compartir con X".
+          Agencia ve "Promociones publicadas" + acción "Solicitar colaboración". */}
       {notSharedPromos.length > 0 && (
         <section>
           <BlockHeader
-            title="Aún sin compartir"
-            subtitle={`${notSharedPromos.length} promoción${notSharedPromos.length === 1 ? "" : "es"} activa${notSharedPromos.length === 1 ? "" : "s"} donde podrías invitar a ${a.name}`}
+            title={readOnly ? "Promociones que aún no colaboras" : "Aún sin compartir"}
+            subtitle={
+              readOnly
+                ? `${notSharedPromos.length} promoción${notSharedPromos.length === 1 ? "" : "es"} activa${notSharedPromos.length === 1 ? "" : "s"} del promotor disponibles para solicitar colaboración`
+                : `${notSharedPromos.length} promoción${notSharedPromos.length === 1 ? "" : "es"} activa${notSharedPromos.length === 1 ? "" : "s"} donde podrías invitar a ${a.name}`
+            }
             tone="primary"
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {notSharedPromos.map((p) => (
+            {notSharedPromos.map((p) => {
+              /* En modo agencia · si ya envió solicitud para esta promo,
+                 cambiamos el CTA por un chip pasivo con fecha + usuario.
+                 Sin solicitud todavía → CTA activo "Solicitar colaboración". */
+              const solicitud = readOnly ? findSolicitudVivaParaAgencia(a.id, p.id, pendientes) : undefined;
+              const requested = !!solicitud;
+              const cardCommon = "group text-left rounded-2xl border bg-card/50 overflow-hidden transition-all";
+              const cardClass = requested
+                ? `${cardCommon} border-primary/30 cursor-default`
+                : `${cardCommon} border-dashed border-border hover:bg-card hover:border-foreground/40 hover:shadow-soft`;
+              return (
               <button
                 type="button"
                 key={p.id}
-                onClick={() => setSharePromo({ id: p.id, name: p.name })}
-                className="group text-left rounded-2xl border border-dashed border-border bg-card/50 overflow-hidden hover:bg-card hover:border-foreground/40 hover:shadow-soft transition-all"
+                onClick={() => {
+                  if (requested) return; // chip estático · no reenviar
+                  if (readOnly) setRequestPromo(p);
+                  else setSharePromo({ id: p.id, name: p.name });
+                }}
+                className={cardClass}
               >
                 {/* Cover con imagen de la promoción · color completo */}
                 <div className="relative aspect-[16/8] bg-muted overflow-hidden">
@@ -548,44 +724,101 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
                     </div>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
-                  <span className="absolute top-2 right-2 inline-flex items-center h-5 px-2 rounded-full border border-border bg-background/90 backdrop-blur text-[10px] font-medium text-muted-foreground">
-                    Sin compartir
+                  <span
+                    className={cn(
+                      "absolute top-2 right-2 inline-flex items-center h-5 px-2 rounded-full border text-[10px] font-medium backdrop-blur",
+                      requested
+                        ? "border-primary/30 bg-primary/15 text-primary"
+                        : "border-border bg-background/90 text-muted-foreground",
+                    )}
+                  >
+                    {requested ? "Solicitada" : readOnly ? "Disponible" : "Sin compartir"}
                   </span>
                 </div>
 
                 <div className="p-4">
                   <p className="text-sm font-semibold text-foreground truncate">{p.name}</p>
                   <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{p.location ?? "—"}</p>
-                  <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-muted/40 px-2.5 py-2">
-                    <MetricStat label="Visitas"    value={0}   muted />
-                    <MetricStat label="Ventas"     value={0}   muted />
-                    <MetricStat label="Conversión" value="—"   muted />
-                  </div>
+                  {readOnly ? (
+                    <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-muted/40 px-2.5 py-2">
+                      <MetricStat
+                        label="Disponibles"
+                        value={
+                          typeof p.availableUnits === "number" && typeof p.totalUnits === "number"
+                            ? `${p.availableUnits}/${p.totalUnits}`
+                            : "—"
+                        }
+                      />
+                      <MetricStat label="Precio" value={fmtPriceRange(p.priceMin, p.priceMax)} />
+                      <MetricStat label="Entrega" value={p.delivery || "—"} />
+                      <MetricStat
+                        label="Obra"
+                        value={typeof p.constructionProgress === "number" ? `${p.constructionProgress}%` : "—"}
+                      />
+                    </div>
+                  ) : (
+                    <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-muted/40 px-2.5 py-2">
+                      <MetricStat label="Visitas"    value={0}   muted />
+                      <MetricStat label="Ventas"     value={0}   muted />
+                      <MetricStat label="Conversión" value="—"   muted />
+                    </div>
+                  )}
+                  {/* Footer · CTA activo o chip pasivo "Colaboración solicitada". */}
+                  {requested ? (
+                    <div className="mt-3 rounded-xl bg-primary/10 border border-primary/20 px-2.5 py-2">
+                      <p className="text-[11px] font-semibold text-primary inline-flex items-center gap-1">
+                        <Send className="h-3 w-3" strokeWidth={2.25} /> Colaboración solicitada
+                      </p>
+                      <div className="mt-1 flex items-center gap-1.5 text-[10.5px] text-muted-foreground leading-relaxed">
+                        <span className="tabular-nums">{fmtRequestedAt(solicitud!.createdAt)}</span>
+                        {solicitud!.requestedBy?.name && (
+                          <>
+                            <span aria-hidden>·</span>
+                            <RequestedByAvatar
+                              name={solicitud!.requestedBy.name}
+                              avatarUrl={solicitud!.requestedBy.avatarUrl}
+                            />
+                            <span className="text-foreground/80 truncate">{solicitud!.requestedBy.name}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
                   <div className="mt-3 inline-flex items-center gap-1 text-[11px] text-foreground font-medium group-hover:gap-1.5 transition-all">
-                    <Plus className="h-3 w-3" strokeWidth={2.25} />
-                    Compartir con {a.name.split(" ")[0]}
+                    {readOnly ? (
+                      <><Send className="h-3 w-3" strokeWidth={2.25} /> Solicitar colaboración</>
+                    ) : (
+                      <><Plus className="h-3 w-3" strokeWidth={2.25} /> Compartir con {a.name.split(" ")[0]}</>
+                    )}
                   </div>
+                  )}
                 </div>
               </button>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}
 
-      {/* ═══════════════ Estadísticas útiles ═══════════════ */}
-      <AgencyStats agency={a} />
+      {/* Estadísticas movidas a su propia tab "Estadísticas" en ambos
+          paneles (promotor y agencia). No duplicar aquí. */}
 
-      {/* ═══ Ver actividad ═══ */}
-      <div className="flex flex-wrap gap-2 pt-2">
-        <button
-          type="button"
-          onClick={() => onGoTo("historial")}
-          className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full border border-border bg-card text-xs font-medium text-foreground hover:bg-muted transition-colors"
-        >
-          <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={1.75} />
-          Ver toda la actividad
-        </button>
-      </div>
+      {/* ═══ Ver actividad ═══
+          Atajo a la tab Historial (timeline cross-empresa). Solo en
+          modo PROMOTOR · en agencia el Historial es admin-only y se
+          accede directamente desde la tab bar (no necesita atajo). */}
+      {!readOnly && (
+        <div className="flex flex-wrap gap-2 pt-2">
+          <button
+            type="button"
+            onClick={() => onGoTo("historial")}
+            className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full border border-border bg-card text-xs font-medium text-foreground hover:bg-muted transition-colors"
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Ver toda la actividad
+          </button>
+        </div>
+      )}
 
       {/* ══════ Flujo Subir contrato · picker → choice → upload ══════ */}
       <ContractScopePickerDialog
@@ -634,6 +867,16 @@ export function ResumenTab({ agency: a, onGoTo }: Props) {
           defaultAgencyId={a.id}
         />
       )}
+
+      {/* Modal · solicitar colaboración (lado AGENCIA, readOnly).
+          Ver `RequestCollaborationDialog` · persiste en
+          `byvaro.agency.collab-requests.v1` localStorage hasta backend. */}
+      <RequestCollaborationDialog
+        open={!!requestPromo}
+        onOpenChange={(v) => { if (!v) setRequestPromo(null); }}
+        agencyId={a.id}
+        promo={requestPromo}
+      />
     </div>
   );
 }

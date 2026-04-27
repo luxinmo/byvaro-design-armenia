@@ -71,18 +71,54 @@ Al clicar abre el **drawer lateral** con las solicitudes.
 
 ---
 
-## Drawer · Solicitudes pendientes
+## Drawer · Solicitudes (3 tabs)
 
-Tarjeta por solicitud con info suficiente para identificar quién es,
-sin botones destructivos (aprobar/descartar viven solo en la ficha):
+Drawer lateral derecho (full-screen en mobile) con tabs:
+**Pendientes / Aceptadas / Descartadas**. Cada tab muestra cuenta en
+pill al lado del label. Pintamos dos tipos de solicitud con estética
+unificada (mismo padding `p-3.5`, mismas alturas, mismos botones):
 
-- Cover (80px, con gradiente) + chip `Marketplace` / `Invitada`.
-- Logo circular + nombre + ubicación · tipo.
-- `GoogleRatingBadge` al lado del nombre si tiene rating.
-- Descripción (3 líneas clamp).
-- Señales: banderas de mercados + agentes + oficinas.
-- Mensaje de solicitud en blockquote ámbar (si hay).
-- CTA único **"Ver ficha y decidir ↗"** → navega a `/colaboradores/:id`.
+### Tipo 1 · Solicitud por promoción (`SolicitudPromoCard`)
+
+Origen: agencia clica "Solicitar colaboración" en `/promotor/:id/panel`
+(tab Resumen). Shape canónico en
+`docs/backend/domains/collaboration-requests.md`.
+
+Estructura compacta de la card:
+- **Top**: avatar agencia (h-9) + nombre + verified badge + chip de
+  estado (Pendiente ámbar / Aceptada verde / Descartada destructive).
+- **Sub-card**: thumb 14×10 promo + nombre + ubicación · comisión
+  (botón completo, click = ir a la promoción).
+- **Meta row**: chip "Ya colabora · N promos" o "Sin colaboración previa"
+  + fecha compacta + avatar+nombre del usuario que envió.
+- **Mensaje** (italic, line-clamp-3) si existe.
+- **Bloque "decisión"** (solo si status !== "pendiente"): "Aceptada/
+  Descartada · fecha · avatar+nombre" del usuario del promotor que decidió.
+- **Acciones** (grid responsive según status):
+  - `pendiente` → Ver ficha · Descartar · Aceptar (gate
+    `collaboration.requests.manage`).
+  - `aceptada` → Ver ficha (read-only).
+  - `rechazada` → Ver ficha · Recuperar.
+
+### Tipo 2 · Solicitud agency-level (`SolicitudAgencyCard`)
+
+Origen: agencia se da de alta vía marketplace o respuesta a invitación
+cancelada (`Agency.solicitudPendiente`). Solo aparece en tab
+**Pendientes** bajo header "Alta de agencia · N".
+
+Misma estética compacta:
+- Top: avatar + nombre + verified + chip "Pendiente".
+- Sub-row con chip Marketplace/Invitada + "Alta de agencia · sin
+  colaboración previa".
+- Meta: mercados + teamSize + oficinas + GoogleRatingBadge.
+- Descripción + mensaje italic.
+- Botones: Ver ficha · Descartar · Aceptar.
+
+### Permisos
+
+Sin `collaboration.requests.manage`: aviso lock-icon arriba "Solo
+lectura · necesitas el permiso `collaboration.requests.manage` para
+aceptar, descartar o restaurar". Botones quedan `disabled:opacity-40`.
 
 ---
 

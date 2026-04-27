@@ -491,7 +491,7 @@ export function SendEmailDialog({
   };
 
   /** Ajusta los bloques por defecto cuando el usuario es agencia — cambia
-   *  la voz del copy ("Por My Company" → solo ubicación; "Hemos liberado" →
+   *  la voz del copy ("Por Luxinmo" → solo ubicación; "Hemos liberado" →
    *  "Te comparto") y sobrescribe el branding. Solo se usa al inicializar
    *  blocks y al cambiar de plantilla; el usuario puede seguir editando
    *  libremente después. */

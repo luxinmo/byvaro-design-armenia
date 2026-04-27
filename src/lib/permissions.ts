@@ -48,6 +48,11 @@ export type PermissionKey =
   /** Solicitar documentos a la agencia (factura, IBAN, certificados
    *  fiscales) + aprobar/rechazar los subidos. */
   | "collaboration.documents.manage"
+  /** Aceptar / rechazar / restaurar solicitudes de colaboración que
+   *  envían las agencias (tab Pendientes/Descartadas en el drawer
+   *  de `/colaboradores`). Sin esto el usuario VE las solicitudes
+   *  pero no puede mover su estado. Admin-only por defecto. */
+  | "collaboration.requests.manage"
   /** Ver el dashboard analítico `/actividad` — KPIs financieros
    *  (pipeline €, ventas €, ventas cerradas), embudo de conversión,
    *  rankings de miembros y agencias, salud del equipo,
@@ -72,6 +77,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
     "collaboration.contracts.manage", "collaboration.incidents.view",
     "collaboration.payments.view", "collaboration.payments.manage",
     "collaboration.documents.manage",
+    "collaboration.requests.manage",
     "activity.dashboard.view",
     "records.matchDetails.view",
   ],

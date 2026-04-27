@@ -302,7 +302,9 @@ omitForAgency = [
   "collaboration.diferenciarComisiones",
   "collaboration.hitosComision",  // se sustituye por los de SU contrato
   "comerciales",                  // agentes del promotor
-  "puntosDeVenta",                // showroom interno
+  "puntosDeVentaIds",             // refs a `byvaro-oficinas` · NO inline data
+                                  // (ver docs/backend/domains/empresa-stats-and-offices.md)
+                                  // El campo legacy `puntosDeVenta` (inline) NO existe ya.
   "agencias",                     // listado de agencias rivales en la misma promo
   "marketingProhibitions",        // SE ENVIA · necesita conocerlo (regla a respetar)
   "missingSteps",                 // info interna del promotor
@@ -866,8 +868,14 @@ Disponibilidad aparece condicionalmente).
 | `GET /api/colaboradores/:id` | ficha detalle · `/colaboradores/:id` | `src/pages/AgenciaDetalle.tsx` |
 | `GET /api/promociones?collaboratingAgencyId=:id` | promos donde colabora una agencia | idem (bloque "Promociones compartidas") |
 | `GET /api/colaboradores/estadisticas` | analítica agencia × {nacionalidad, promoción} · ver sub-sección 4.1 | `src/pages/ColaboradoresEstadisticas.tsx` · hoy mock inline |
-| `POST /api/collaborators/:id/approve` | aprobar solicitud pendiente | `src/pages/Colaboradores.tsx:179` |
-| `POST /api/collaborators/:id/reject` | rechazar solicitud | `src/pages/Colaboradores.tsx:184` |
+| `POST /api/collaborators/:id/approve` | aprobar solicitud pendiente **agency-level** (alta marketplace) | `src/pages/Colaboradores.tsx:179` |
+| `POST /api/collaborators/:id/reject` | rechazar solicitud agency-level | `src/pages/Colaboradores.tsx:184` |
+| `POST /api/colaboraciones-solicitadas` | crear solicitud **por promoción** (lado agencia) | doc canónico: `docs/backend/domains/collaboration-requests.md` |
+| `GET /api/me/colaboraciones-solicitadas?status=...` | lista de solicitudes por promoción del agencia logueada | idem |
+| `GET /api/colaboraciones-solicitadas?status=...` | lista de solicitudes por promoción dirigidas a las promos del promotor | idem |
+| `POST /api/colaboraciones-solicitadas/:id/accept` | aceptar (atómico con invitación) | requiere `collaboration.requests.manage` |
+| `POST /api/colaboraciones-solicitadas/:id/reject` | descartar (silencioso para la agencia) | idem |
+| `POST /api/colaboraciones-solicitadas/:id/restore` | recuperar de descartada → pendiente | idem |
 | `POST /api/collaborators/:id/pause` | pausar colaboración | `src/pages/Colaboradores.tsx:200` |
 | `POST /api/collaborators/:id/resume` | reanudar colaboración | idem |
 | `GET /api/agencias/:id/email-contacto` | email de contacto para invitaciones | `src/components/promotions/SharePromotionDialog.tsx:203` |
@@ -1546,27 +1554,109 @@ oportunidad (regla 🥇 `CLAUDE.md`):
 
 ### 8.1 · Google Places API (rating público)
 
-**Usado por**: empresa del promotor (`GoogleRatingCard`) y cada agencia.
+**Usado por**: empresa del promotor / comercializador / agencia
+(`GoogleRatingCard` en `/empresa?tab=about` modo edición · pill compacta
+`HeroGoogleRating` en el hero).
 
-**Flujo:**
+**Por qué existe**: el rating + nº de reseñas reales de Google se
+muestran al lado del nombre de la empresa, en emails a colaboradores y
+en los microsites · aumenta confianza sin que el admin tenga que
+mantener nada.
 
-1. Usuario pega URL de Google Maps en su perfil → `POST /api/empresa/google-place { mapsUrl }`.
-2. Backend extrae `place_id` vía Places **Find Place / Text Search**.
-3. Primer fetch con Places **Details (Atmosphere data)** → rating, ratingsTotal, photos, opening_hours.
-4. **Cron semanal** refresca cada `place_id` (Places ToS: ≤30 días de cache).
-5. Al refrescar actualiza `googleRating`, `googleRatingsTotal`, `googleFetchedAt`.
+#### Endpoints
 
-**Coste**:
-- $200/mes de free tier Google Maps Platform.
-- Places Details (Atmosphere) = $0.005/call. Con 500 agencias ≈ $10/mes.
+```
+POST   /api/empresa/google-place
+       headers: Authorization (JWT con workspace_id, role=admin)
+       body: { mapsUrl: string }
+       200 → {
+         placeId: string,
+         googleMapsUrl: string,           // URL canónica resuelta
+         googleRating: number,            // 0-5 (1 decimal)
+         googleRatingsTotal: number,
+         googleFetchedAt: string,         // ISO 8601
+       }
+       400 → { code: "invalid_url" }       // no es URL de Google Maps
+       404 → { code: "place_not_found" }   // place_id no resuelve
+       402 → { code: "quota_exceeded" }    // Places API quota agotada
+       requires: role === "admin" del workspace propietario.
 
-**Restricciones ToS** (obligatorias):
-- Refresco al menos cada 30 días (no cachear más).
-- Atribución visible al mostrar rating: "Basado en reseñas de Google".
-- No modificar el rating ni las reseñas.
-- Link a la ficha pública de Maps cuando se muestre el rating.
+DELETE /api/empresa/google-place
+       headers: Authorization (admin)
+       204 No Content
+       Limpia placeId, googleMapsUrl, googleRating, googleRatingsTotal,
+       googleFetchedAt en `organizations`. Idempotente.
 
-**UI que ya cumple ToS**: `GoogleRatingBadge` en `ColaboradoresV3.tsx`, `GoogleRatingCard` en `empresa/`.
+GET    /api/empresa/google-refresh
+       cron-only · interno · refresca rating de TODOS los workspaces
+       con place_id. NO se llama desde cliente.
+       Schedule: weekly (lun 03:00 UTC). TTL Places ToS ≤ 30 días.
+```
+
+#### Flujo end-to-end
+
+1. **Admin pega URL de Maps** en `/empresa?tab=about` → modo edición →
+   sección "Reseñas de Google". Click "Conectar".
+2. **Cliente** hace `POST /api/empresa/google-place { mapsUrl }`.
+3. **Backend** parsea la URL para extraer `place_id`:
+   - `maps.app.goo.gl/...` → seguir redirect 302 hasta resolver canonical.
+   - `google.com/maps/place/.../!1s<placeid>!...` → extraer del path con regex
+     (CID o `0x...:0x...` formato).
+   - Si solo hay nombre + lat/lng → llamar a Places **Find Place From Text**.
+4. **Primer fetch** Places Details (`fields: rating,user_ratings_total,
+   url,name`). Persistir en `organizations.google_*`.
+5. Devolver el shape completo al cliente (200). Cliente actualiza
+   `useEmpresa` → la pill `<HeroGoogleRating>` aparece automáticamente.
+6. **Cron semanal** repite paso 4 para todos los workspaces · si rating
+   cambia, dispara webhook interno `google.rating.changed` para invalidar
+   caches downstream (microsites estáticos, emails programados).
+
+#### Mock actual (frontend sin backend)
+
+- `src/components/empresa/GoogleRatingCard.tsx` · click "Conectar"
+  ejecuta inline una simulación: hash determinístico de la URL para
+  generar `placeId` sintético + setea rating fijo `4.7` y total `312`
+  (matching el seed de `defaultEmpresa`). Solo para que el demo se
+  vea poblado.
+- Cuando exista el backend real, sustituir el `onClick` por
+  `await fetch("/api/empresa/google-place", ...)` y aplicar el
+  response al hook `useEmpresa.update()`.
+- TODOs en código: `GoogleRatingCard.tsx` (busca `TODO(backend):`).
+
+#### Restricciones Google Places ToS (obligatorias · NO opcionales)
+
+- Refresco máximo cada **30 días** · NO cachear más allá. Cron semanal
+  cumple sobradamente.
+- **Atribución visible** al mostrar rating: "Basado en reseñas de
+  Google" o variante equivalente. Frontend ya lo cumple en
+  `GoogleRatingCard.tsx:139`.
+- NO modificar el rating ni las reseñas (UI debe mostrar tal cual).
+- **Link a la ficha pública de Maps** cuando se muestre el rating
+  (botón "Ver en Google Maps"). Frontend ya lo cumple.
+- Si el usuario desactiva (`DELETE /api/empresa/google-place`),
+  borrar el rating del display dentro de 24h.
+
+#### Coste estimado
+
+- $200/mes de free tier de Google Maps Platform (cubre la mayoría).
+- Places Details (Atmosphere data) = $0.005/call.
+  - 500 workspaces × 1 refresh/semana × 4 semanas = 2.000 calls/mes ≈ $10/mes.
+  - Bien dentro del free tier.
+
+#### Permisos
+
+- Solo `admin` del workspace puede conectar/desconectar.
+- `member` → 403 en `POST` y `DELETE`. Frontend ya gatea con
+  `isAdmin` en `EmpresaAboutTab`.
+- Cualquier rol/visitor LEE el rating cuando consulta la empresa
+  (`GET /api/empresas/:id/public`).
+
+#### UI que ya cumple ToS
+
+- `GoogleRatingCard` en `src/components/empresa/` (modal grande de config).
+- `HeroGoogleRating` en `src/components/empresa/` (pill compacta del hero).
+- `GoogleRatingBadge` en `src/components/empresa/` (badge inline en
+  cards de agencia).
 
 ### 8.2 · WhatsApp Business (Baileys / Meta OAuth)
 
@@ -2218,6 +2308,156 @@ recordCompanyEvent(agencyId, {
 Ambos lados (Contact + CompanyEvent) son COMPLEMENTARIOS · el Contact
 es la representación del partner como entidad CRM, el CompanyEvent es
 el log de auditoría de la relación.
+
+---
+
+## 17 · Detección por dominio · invitaciones cross-domain
+
+> **Caso 2c.** Un promotor invita a `juan@primeproperties.com`. El email
+> exacto NO está registrado, pero `primeproperties.com` SÍ pertenece a
+> una agencia existente en Byvaro (Prime Properties). En lugar de
+> tratar a Juan como alta nueva (caso 1) y duplicar la agencia, se
+> detecta el match por dominio y se redirige el flujo:
+
+### 17.1 · Reglas de detección
+
+- Dominio público (gmail, outlook, yahoo, etc.) NUNCA cuenta · evitar
+  falsos positivos. Catálogo canónico en
+  **`src/data/emailDomains.ts`** · ~80 dominios agrupados por región
+  (Microsoft localizados, ISPs ES/FR/DE/IT/UK/RU, Asia, LATAM,
+  privacidad). Reutilizable desde frontend y backend.
+- Subdominios distintos NO matchean · `juan@dev.primeproperties.com` ≠
+  `primeproperties.com` (evita lookups laxos a costa de algún falso
+  negativo).
+- Match se busca en 3 fuentes:
+  1. `agencies[].contactoPrincipal.email` (seed).
+  2. `mockUsers[]` con `accountType="agency"` y mismo dominio.
+  3. `byvaro.users.created.v1` localStorage (signup posterior).
+
+### 17.2 · Comportamiento del flujo
+
+| Paso | Acción |
+|---|---|
+| 1 | Promotor envía invitación normal (template `auth-agency-invitation`) al email de Juan. |
+| 2 | Juan abre el link → `/invite/:token` detecta el match por dominio. |
+| 3 | Juan ve landing **caso 2c · "Tu empresa ya está en Byvaro"** con instrucciones · pedir al admin de su agencia que lo invite al equipo. |
+| 4 | El sistema dispara automáticamente un email al admin de la agencia (template `auth-domain-match-notify-admin`) con CTA al panel `/ajustes/usuarios/miembros` para invitarle. |
+| 5 | El admin invita formalmente a Juan → Juan recibe el email canónico de invitación a miembro · al aceptar, queda dado de alta como member. |
+| 6 | Una vez registrado, Juan vuelve a abrir el link de invitación original → flujo continúa como caso 2b (login normal) → puede añadir la promoción a la cartera. |
+
+### 17.3 · Plantillas implicadas
+
+| Plantilla | Destinatario | Cuándo |
+|---|---|---|
+| `auth-agency-invitation` | Email externo (Juan) | Promotor envía la invitación · siempre. |
+| `auth-domain-match-notify-admin` | Admin agencia (Laura) | Sistema detecta caso 2c al abrir Juan el link. |
+| `auth-team-member-invitation` | Email externo (Juan) | Admin invita formalmente al miembro. |
+
+### 17.4 · Endpoints backend
+
+```http
+GET  /api/agencies/by-domain?email=juan@primeproperties.com
+  → 200 { agency: AgencyPublic, adminContact: { email, name } } | 404
+
+POST /api/agencies/:id/domain-match-notify
+  body: { invitedEmail, originalInvitationId, promotionName? }
+  → 204
+  Lado server: idempotente por (agencyId, invitedEmail) · no spamea
+  si ya se envió esta misma combinación recientemente.
+```
+
+### 17.5 · Notificación in-app (TODO)
+
+Además del email a Laura, el admin debería ver una notificación en el
+`<NotificationsBell>` del header. El payload sería:
+```ts
+{
+  kind: "domain_match_invitation_received",
+  invitedEmail: "juan@primeproperties.com",
+  fromInviter: "Luxinmo · Marina Heights",
+  ctaUrl: "/ajustes/usuarios/miembros?invite=juan@primeproperties.com",
+}
+```
+
+### 17.6 · Estado actual (mock)
+
+- Helper canónico · `src/lib/agencyDomainLookup.ts` con
+  `findAgencyByEmailDomain(email)`.
+- Email generador · `src/lib/domainMatchNotifyEmail.ts ::
+  getDomainMatchNotifyHtml()`.
+- Plantilla registrada en `/ajustes/plantillas` como
+  `auth-domain-match-notify-admin` (status `live`).
+- Disparador · effect detector de `InviteAccept.tsx` añade caso
+  `case2c-domain-match` entre 2b y 1 · al detectar match emite
+  `recordSentEmail` con el HTML del notify-admin.
+- Notificación in-app · pendiente.
+
+### 17.7 · Catálogo canónico de dominios · `src/data/emailDomains.ts`
+
+> **Fuente única de verdad** para clasificar un dominio de email
+> como público (gmail, outlook…), temporal (mailinator…) o
+> corporativo. Reutilizable desde frontend Y backend para mantener
+> consistencia entre ambos lados.
+
+**Exports:**
+
+| Símbolo | Tipo | Descripción |
+|---|---|---|
+| `PUBLIC_EMAIL_DOMAINS` | `ReadonlySet<string>` | ~80 dominios públicos · Google, Microsoft (TLDs localizados), Apple, AOL, Privacy (Proton, Tutanota), GMX, FastMail, ISPs de ES/FR/DE/IT/UK/RU/Asia/LATAM. |
+| `DISPOSABLE_EMAIL_DOMAINS` | `ReadonlySet<string>` | ~70 dominios temporales · Mailinator, Guerrillamail, 10MinuteMail, Yopmail, Throwaway/Trashmail, etc. |
+| `getEmailDomain(email)` | helper | Extrae el dominio normalizado en minúscula · null si email inválido. |
+| `isPublicEmailDomain(email)` | helper | true si gmail/outlook/etc. |
+| `isDisposableEmailDomain(email)` | helper | true si email temporal · recomendado RECHAZAR alta. |
+| `isCorporateEmailDomain(email)` | helper | true si NO es público ni temporal. |
+
+**Regiones cubiertas (PUBLIC):**
+
+- **Google** · gmail.com, googlemail.com.
+- **Microsoft** · outlook.{com,es,fr,de,it,com.br,com.ar,com.mx,com.au},
+  hotmail.{com,es,fr,de,it,co.uk,com.ar,com.mx,com.br},
+  live.{com,es,fr,de,it,co.uk,com.mx,com.ar}, msn.com.
+- **Yahoo** · yahoo.{com,es,fr,de,it,co.uk,com.mx,com.ar,com.br},
+  ymail.com, rocketmail.com.
+- **Apple** · icloud.com, me.com, mac.com.
+- **AOL** · aol.com, aim.com.
+- **Privacidad** · proton.me, protonmail.com, pm.me, tutanota.com,
+  tutamail.com, tuta.io, hushmail.com, mailbox.org.
+- **GMX** · gmx.{com,net,de,es,fr,it,co.uk,us,at}.
+- **Otros globales** · fastmail.com, fastmail.fm, mail.com, zoho.com.
+- **España (ISPs)** · terra.es, ya.com, telefonica.net, ono.com,
+  jazztel.es.
+- **Francia (ISPs)** · orange.fr, wanadoo.fr, free.fr, sfr.fr,
+  laposte.net, numericable.fr, neuf.fr, club-internet.fr, bbox.fr.
+- **Alemania** · web.de, t-online.de, freenet.de, arcor.de.
+- **Italia** · libero.it, tin.it, alice.it, virgilio.it, tiscali.it,
+  email.it.
+- **Reino Unido (ISPs)** · btinternet.com, sky.com, talktalk.net,
+  virginmedia.com, ntlworld.com, blueyonder.co.uk.
+- **Rusia / CIS** · mail.ru, list.ru, bk.ru, inbox.ru, rambler.ru,
+  yandex.com, yandex.ru, ukr.net.
+- **Asia** · qq.com, 163.com, 126.com, sina.com, sohu.com, naver.com,
+  daum.net, hanmail.net.
+- **Brasil / LATAM** · uol.com.br, terra.com.br, bol.com.br,
+  ig.com.br.
+
+**Mantenimiento.**
+
+- Añadir nuevos dominios en orden alfabético dentro del bloque
+  regional. Sources oficiales o Wikipedia para confirmar antes de
+  meter.
+- Para `DISPOSABLE_EMAIL_DOMAINS`, sincronizar con el dataset
+  comunitario · ej. https://github.com/disposable/disposable-email-domains
+  · ~3000 dominios. Si se quiere lista completa, importar el JSON y
+  mergear con el subset hardcoded (que cubre los 50 más comunes).
+
+**Backend producción.** Mover este catálogo a una tabla
+`email_domain_classifications(domain text PK, kind enum
+('public', 'disposable', 'corporate'), source, updated_at)` que se
+pueda actualizar sin redeploy. Endpoint público
+`GET /api/email-domains/check?email=foo@bar.com` →
+`{ kind, isPublic, isDisposable }` para reutilización. Mientras tanto,
+**copiar el archivo `src/data/emailDomains.ts` directamente al backend**
+manteniendo la misma fuente de verdad (recomendado · evita drift).
 
 ---
 

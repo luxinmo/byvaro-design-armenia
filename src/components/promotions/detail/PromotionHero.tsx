@@ -37,8 +37,12 @@
  */
 
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Promotion } from "@/data/promotions";
-import { MapPin, Share2, Heart, Printer, ExternalLink, Image as ImageIcon } from "lucide-react";
+import { getPromoterDisplayName } from "@/lib/promotionRole";
+import { useCurrentUser } from "@/lib/currentUser";
+import { developerHref } from "@/lib/developerNavigation";
+import { MapPin, Share2, Heart, Printer, ExternalLink, ArrowUpRight, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ImageLightbox } from "@/components/promotions/detail/ImageLightbox";
 
@@ -60,6 +64,9 @@ const badgeLabels: Record<NonNullable<Promotion["badge"]>, string> = {
 };
 
 export function PromotionHero({ promotion: p }: { promotion: Promotion }) {
+  const currentUser = useCurrentUser();
+  const isAgencyUser = currentUser.accountType === "agency";
+  const promoterHref = developerHref(currentUser, { fromPromoId: p.id });
   // Mock de imágenes — en producción vendrán de `GET /api/promociones/:id/gallery`.
   const galleryImages = [
     p.image || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=1600&h=1000&fit=crop",
@@ -168,9 +175,29 @@ export function PromotionHero({ promotion: p }: { promotion: Promotion }) {
             <span className="text-xs text-border">·</span>
             <span className="text-sm">{p.propertyTypes.join(", ")}</span>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Desarrollado por <span className="font-medium text-foreground">{p.developer}</span>
-          </p>
+          {(() => {
+            const promoter = getPromoterDisplayName(p);
+            if (!promoter) return null;
+            // Solo la agencia clica al promotor · el propio promotor no
+            // se enlaza a sí mismo. El destino lo decide developerHref:
+            // panel operativo si hay colaboración, ficha pública si no.
+            return (
+              <p className="text-xs text-muted-foreground mt-1">
+                Desarrollado por{" "}
+                {isAgencyUser ? (
+                  <Link
+                    to={promoterHref}
+                    className="font-medium text-foreground inline-flex items-center gap-0.5 hover:underline underline-offset-2 group"
+                  >
+                    {promoter}
+                    <ArrowUpRight className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity" />
+                  </Link>
+                ) : (
+                  <span className="font-medium text-foreground">{promoter}</span>
+                )}
+              </p>
+            );
+          })()}
         </div>
 
         <div className="flex items-center gap-2 shrink-0 flex-wrap">

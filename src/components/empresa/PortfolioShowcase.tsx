@@ -18,9 +18,12 @@ import { promotions } from "@/data/promotions";
 import { EditableSection } from "./EditableSection";
 import { cn } from "@/lib/utils";
 
+/* 3 destacadas · grid 1/2/3 (mobile/tablet/desktop). Antes eran 4 ·
+ * el aire del card grande de la izquierda + 3 a la derecha sobraba
+ * en desktop y rompía el ritmo en tablets. */
 const destacadas = promotions
   .filter(p => p.status === "active" || p.status === "incomplete")
-  .slice(0, 4);
+  .slice(0, 3);
 
 function formatMoney(v: number): string {
   if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M €`;
@@ -131,8 +134,23 @@ function PortfolioCard({
   );
 }
 
-export function PortfolioShowcase({ viewMode }: { viewMode: "edit" | "preview" }) {
+export function PortfolioShowcase({
+  viewMode,
+  tenantId,
+}: {
+  viewMode: "edit" | "preview";
+  /** Tenant cuyo portfolio se está mostrando · cuando una agencia
+   *  visita /promotor/:id, "Ver todas" filtra `/promociones` por
+   *  ese promotor. Sin él (ficha propia) lleva al listado completo. */
+  tenantId?: string;
+}) {
   const navigate = useNavigate();
+  /* Si la ficha la mira un visitor (agencia o promotor mirando una
+   * agencia), añadimos el filtro `?developer=<id>` al "Ver todas"
+   * para que aterrice en `/promociones` ya filtrado por ese tenant. */
+  const verTodasHref = tenantId
+    ? `/promociones?developer=${encodeURIComponent(tenantId)}`
+    : "/promociones";
 
   return (
     <EditableSection
@@ -141,7 +159,7 @@ export function PortfolioShowcase({ viewMode }: { viewMode: "edit" | "preview" }
       rightSlot={
         <button
           type="button"
-          onClick={() => navigate("/promociones")}
+          onClick={() => navigate(verTodasHref)}
           className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-primary hover:underline"
         >
           Ver todas
@@ -164,7 +182,10 @@ export function PortfolioShowcase({ viewMode }: { viewMode: "edit" | "preview" }
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-3">
+        /* 3 columnas en desktop · 2 en tablet · 1 en móvil. Coincide
+         * con el slice(0, 3) de `destacadas` · ningún breakpoint
+         * deja huecos. */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {destacadas.map((p) => (
             <PortfolioCard
               key={p.id}

@@ -13,7 +13,7 @@
  *      (navega a # y muestra toast de "próximamente").
  */
 import { NavLink, useLocation } from "react-router-dom";
-import { Home, Tag, Activity, Handshake, FileText, Mail, Contact } from "lucide-react";
+import { Home, Building, Activity, Handshake, FileText, Mail, Contact } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/currentUser";
@@ -36,7 +36,7 @@ type Tab = {
 
 const tabs: Tab[] = [
   { label: "Inicio", url: "/inicio", icon: Home },
-  { label: "Promociones", url: "/promociones", icon: Tag },
+  { label: "Promociones", url: "/promociones", icon: Building },
   { label: "Registros", url: "/registros", icon: FileText, tabletOnly: true },
   { label: "Actividades", url: "#actividades", icon: Activity, pending: true },
   { label: "Red", url: "/colaboradores", icon: Handshake, promotorOnly: true },

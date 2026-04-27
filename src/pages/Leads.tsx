@@ -46,6 +46,7 @@ import { Building2 } from "lucide-react";
 import { UserSelect } from "@/components/ui/UserSelect";
 import { findTeamMember, memberInitials, getMemberAvatarUrl } from "@/lib/team";
 import { useLeadAssignee, setLeadAssignee } from "@/components/leads/leadAssigneeStorage";
+import { useCurrentUser } from "@/lib/currentUser";
 import { cn } from "@/lib/utils";
 
 function flagOf(code?: string): string {
@@ -74,24 +75,34 @@ function relativeTime(iso: string): string {
 
 export default function Leads() {
   const navigate = useNavigate();
+  const currentUser = useCurrentUser();
   const [search, setSearch] = useState("");
   const [quickFilter, setQuickFilter] = useState<LeadStatus | "all">("all");
 
+  /* Privacy cross-tenant · si el viewer es agencia, NO debe ver los
+   * leads del promotor (cross-agencia). El modelo Lead actual no tiene
+   * `agencyId` · hasta que lo tengamos, agency ve lista vacía. Esto
+   * evita fuga. */
+  const visibleLeads = useMemo(() => {
+    if (currentUser.accountType === "agency") return [];
+    return allLeads;
+  }, [currentUser.accountType]);
+
   const counts = useMemo(() => ({
-    total:       allLeads.length,
-    solicitud:   allLeads.filter((l) => l.status === "solicitud").length,
-    contactado:  allLeads.filter((l) => l.status === "contactado").length,
-    visita:      allLeads.filter((l) => l.status === "visita").length,
-    evaluacion:  allLeads.filter((l) => l.status === "evaluacion").length,
-    negociando:  allLeads.filter((l) => l.status === "negociando").length,
-    ganada:      allLeads.filter((l) => l.status === "ganada").length,
-    perdida:     allLeads.filter((l) => l.status === "perdida").length,
-    duplicate:   allLeads.filter((l) => l.status === "duplicate").length,
+    total:       visibleLeads.length,
+    solicitud:   visibleLeads.filter((l) => l.status === "solicitud").length,
+    contactado:  visibleLeads.filter((l) => l.status === "contactado").length,
+    visita:      visibleLeads.filter((l) => l.status === "visita").length,
+    evaluacion:  visibleLeads.filter((l) => l.status === "evaluacion").length,
+    negociando:  visibleLeads.filter((l) => l.status === "negociando").length,
+    ganada:      visibleLeads.filter((l) => l.status === "ganada").length,
+    perdida:     visibleLeads.filter((l) => l.status === "perdida").length,
+    duplicate:   visibleLeads.filter((l) => l.status === "duplicate").length,
   }), []);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return allLeads
+    return visibleLeads
       .filter((l) => {
         if (quickFilter !== "all" && l.status !== quickFilter) return false;
         if (q) {

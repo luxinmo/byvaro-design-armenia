@@ -34,6 +34,7 @@ import { toast } from "sonner";
 import { agencies as allAgencies, type Agency } from "@/data/agencies";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { useInvitaciones } from "@/lib/invitaciones";
+import { acceptInvitationOverride, hasRejectedSolicitud } from "@/lib/solicitudesColaboracion";
 import { useFavoriteAgencies } from "@/lib/favoriteAgencies";
 import { Flag } from "@/components/ui/Flag";
 import { isAgencyVerified } from "@/lib/licenses";
@@ -259,6 +260,21 @@ export function SharePromotionDialog({ open, onOpenChange, promotionName, promot
     [selectedAgencyIds],
   );
 
+  /* Override · ¿alguna de las agencias destino tiene una solicitud
+   *  RECHAZADA para esta promoción? Si sí, mostramos un banner en el
+   *  paso de condiciones avisando al promotor que enviar la
+   *  invitación reactivará la relación (la invitación PREVALECE
+   *  sobre el descarte previo). */
+  const reactivatesAgencies = useMemo(() => {
+    if (multiMode) {
+      return selectedAgenciesList.filter((ag) => hasRejectedSolicitud(ag.id, promotionId));
+    }
+    if (matchedAgency && hasRejectedSolicitud(matchedAgency.id, promotionId)) {
+      return [matchedAgency];
+    }
+    return [];
+  }, [multiMode, selectedAgenciesList, matchedAgency, promotionId]);
+
   const handleSendInvitation = () => {
     if (!splitsValid) return;
     const durationMeses = duration === "custom" ? customDuration : parseInt(duration, 10);
@@ -275,12 +291,16 @@ export function SharePromotionDialog({ open, onOpenChange, promotionName, promot
           mensajePersonalizado: "",
           comisionOfrecida: commission,
           idiomaEmail: "es",
-          promocionId,
+          promocionId: promotionId,
           promocionNombre: promotionName,
-          duracionMeses,
+          duracionMeses: durationMeses,
           formaPago: splits,
           datosRequeridos: REQUIRED_FIELDS,
         });
+        /* Override · si esa agencia tenía una solicitud descartada
+         *  para esta promo, la reactivamos como "aceptada" — la
+         *  invitación prevalece sobre el descarte previo. */
+        acceptInvitationOverride(ag.id, promotionId);
       });
       toast.success(
         `${selectedAgenciesList.length} ${selectedAgenciesList.length === 1 ? "invitación enviada" : "invitaciones enviadas"}`,
@@ -300,12 +320,13 @@ export function SharePromotionDialog({ open, onOpenChange, promotionName, promot
       mensajePersonalizado: "",
       comisionOfrecida: commission,
       idiomaEmail: "es",
-      promocionId,
+      promocionId: promotionId,
       promocionNombre: promotionName,
-      duracionMeses,
+      duracionMeses: durationMeses,
       formaPago: splits,
       datosRequeridos: REQUIRED_FIELDS,
     });
+    if (matchedAgency) acceptInvitationOverride(matchedAgency.id, promotionId);
 
     toast.success("Invitación enviada", {
       description: `${targetName} recibirá la invitación para colaborar en ${promotionName} · ${commission}% · ${durationMeses} ${durationMeses === 1 ? "mes" : "meses"}.`,
@@ -345,6 +366,7 @@ export function SharePromotionDialog({ open, onOpenChange, promotionName, promot
     ids.forEach(pid => {
       const promo = developerOnlyPromotions.find(p => p.id === pid);
       if (!promo) return;
+      if (matchedAgency) acceptInvitationOverride(matchedAgency.id, promo.id);
       invitar({
         emailAgencia: targetEmail,
         nombreAgencia: targetName,
@@ -354,7 +376,7 @@ export function SharePromotionDialog({ open, onOpenChange, promotionName, promot
         idiomaEmail: "es",
         promocionId: promo.id,
         promocionNombre: promo.name,
-        duracionMeses,
+        duracionMeses: durationMeses,
         formaPago: splits,
         datosRequeridos: REQUIRED_FIELDS,
       });
@@ -834,6 +856,16 @@ export function SharePromotionDialog({ open, onOpenChange, promotionName, promot
             </div>
 
             <div className="p-5 space-y-5">
+              {/* Banner override · si alguna de las agencias destino tenía
+                  una solicitud descartada para esta promoción, avisamos
+                  al promotor que la invitación reactivará la relación. */}
+              {reactivatesAgencies.length > 0 && (
+                <RejectedSolicitudBanner
+                  agencies={reactivatesAgencies}
+                  promotionId={promotionId}
+                />
+              )}
+
               {/* ── Comisión (hover para editar) ── */}
               <section>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
@@ -1296,6 +1328,76 @@ function InlineEditNumber({
       <span className={cn("font-medium text-muted-foreground", textSize)}>{suffix}</span>
       <Pencil className={cn("text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-0.5", size === "sm" ? "h-2.5 w-2.5" : "h-3 w-3")} strokeWidth={1.75} />
     </button>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   RejectedSolicitudBanner · aviso al promotor cuando va a invitar a
+   una agencia que tenía una solicitud DESCARTADA para esta misma
+   promoción. La invitación PREVALECE: al confirmar las condiciones,
+   `acceptInvitationOverride()` flipa el status de la solicitud a
+   "aceptada" para mantener trazabilidad limpia.
+
+   Muestra explícitamente quién y cuándo había descartado para que el
+   promotor que envía sepa que está reactivando algo previamente
+   bloqueado por su equipo.
+   ══════════════════════════════════════════════════════════════════════ */
+function RejectedSolicitudBanner({
+  agencies, promotionId,
+}: { agencies: Agency[]; promotionId: string }) {
+  /* Buscamos los detalles del rechazo (decidedAt + decidedBy) para
+   *  cada agencia en el banner. Lectura síncrona de localStorage —
+   *  cuando llegue el backend será un fetch a
+   *  `GET /api/colaboraciones-solicitadas?status=rechazada&promotionId=...`. */
+  const detalles = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("byvaro.agency.collab-requests.v1");
+      const list = raw ? JSON.parse(raw) : [];
+      return agencies.map((ag) => {
+        const s = list.find((x: { agencyId: string; promotionId: string; status: string }) =>
+          x.agencyId === ag.id && x.promotionId === promotionId && x.status === "rechazada");
+        return { agency: ag, solicitud: s };
+      });
+    } catch { return agencies.map((ag) => ({ agency: ag, solicitud: undefined })); }
+  }, [agencies, promotionId]);
+
+  return (
+    <div className="rounded-xl border border-warning/30 bg-warning/5 p-3">
+      <div className="flex items-start gap-2.5">
+        <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" strokeWidth={1.75} />
+        <div className="min-w-0 flex-1">
+          <p className="text-[12px] font-semibold text-foreground">
+            {agencies.length === 1
+              ? "Esta agencia tenía una solicitud descartada"
+              : `${agencies.length} agencias tenían una solicitud descartada`}
+          </p>
+          <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">
+            Enviar la invitación reactivará la relación · la invitación prevalece sobre el descarte previo.
+          </p>
+          <ul className="mt-2 space-y-1">
+            {detalles.map(({ agency: ag, solicitud }) => (
+              <li key={ag.id} className="text-[10.5px] text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                <span className="font-semibold text-foreground/80">{ag.name}</span>
+                {solicitud?.decidedBy?.name && (
+                  <>
+                    <span aria-hidden className="text-border">·</span>
+                    <span>Descartada por <span className="text-foreground/80">{solicitud.decidedBy.name}</span></span>
+                  </>
+                )}
+                {solicitud?.decidedAt && (
+                  <>
+                    <span aria-hidden className="text-border">·</span>
+                    <span className="tabular-nums">
+                      {new Date(solicitud.decidedAt).toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
   );
 }
 
