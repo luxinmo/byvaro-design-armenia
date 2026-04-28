@@ -181,7 +181,7 @@ function SettingsShellInner({ children }: Props) {
       <div className="min-h-screen bg-muted/30">
         {/* Top bar */}
         <header className="sticky top-0 z-30 bg-card/90 backdrop-blur-md border-b border-border/40">
-          <div className="max-w-[1250px] mx-auto px-4 sm:px-8 lg:px-10 h-14 flex items-center gap-3 sm:gap-6">
+          <div className="max-w-reading mx-auto px-4 sm:px-8 lg:px-10 h-14 flex items-center gap-3 sm:gap-6">
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger asChild>
                 <button className="lg:hidden h-9 w-9 rounded-full hover:bg-muted flex items-center justify-center">
@@ -242,8 +242,8 @@ function SettingsShellInner({ children }: Props) {
           className={cn(
             "mx-auto",
             isHome
-              ? "max-w-[1250px] px-4 sm:px-6 lg:px-10 pt-8 sm:pt-10 pb-16"
-              : "max-w-[1250px] px-4 sm:px-8 lg:px-10 pt-6 pb-12 flex gap-8",
+              ? "max-w-reading px-4 sm:px-6 lg:px-10 pt-8 sm:pt-10 pb-16"
+              : "max-w-reading px-4 sm:px-8 lg:px-10 pt-6 pb-12 flex gap-8",
           )}
         >
           {!isHome && (

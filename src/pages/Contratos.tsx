@@ -200,7 +200,7 @@ export default function Contratos() {
 
   return (
     <div className="flex-1 flex flex-col min-h-full bg-background">
-      <div className="px-4 sm:px-6 lg:px-10 pt-6 pb-10 max-w-[1400px] mx-auto w-full">
+      <div className="px-4 sm:px-6 lg:px-10 pt-6 pb-10 max-w-content mx-auto w-full">
 
         {/* ══ Cabecera ══ */}
         <header className="mb-5">

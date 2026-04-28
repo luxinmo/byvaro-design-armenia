@@ -244,7 +244,7 @@ export default function Ventas() {
 
       {/* ═══════════ HEADER ═══════════ */}
       <div className="px-3 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-3">
-        <div className="max-w-[1400px] mx-auto flex flex-col gap-3">
+        <div className="max-w-content mx-auto flex flex-col gap-3">
           <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
             <div className="shrink-0 min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground leading-none">
@@ -278,7 +278,7 @@ export default function Ventas() {
 
       {/* ═══════════ KPIs ═══════════ */}
       <div className="px-3 sm:px-6 lg:px-8 pt-4 sm:pt-5">
-        <div className="max-w-[1400px] mx-auto grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="max-w-content mx-auto grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <KpiCard
             icon={ClipboardCheck}
             label="Reservas activas"
@@ -321,7 +321,7 @@ export default function Ventas() {
 
       {/* ═══════════ FILTER BAR ═══════════ */}
       <div className="px-3 sm:px-6 lg:px-8 pt-4 sm:pt-5 pb-2">
-        <div className="max-w-[1400px] mx-auto flex items-center flex-wrap gap-2">
+        <div className="max-w-content mx-auto flex items-center flex-wrap gap-2">
           {/* Search */}
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60 z-10" />
@@ -383,7 +383,7 @@ export default function Ventas() {
 
       {/* ═══════════ CONTENT ═══════════ */}
       <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8 pt-2">
-        <div className="max-w-[1400px] mx-auto">
+        <div className="max-w-content mx-auto">
           {filtered.length === 0 ? (
             <EmptyState onReset={clearAll} />
           ) : viewMode === "kanban" ? (

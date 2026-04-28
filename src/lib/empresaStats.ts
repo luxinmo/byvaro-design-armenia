@@ -89,10 +89,15 @@ export function useEmpresaStats(
       (m) => m.status === "active" && m.visibleOnProfile,
     );
 
-    /* Helper · idiomas únicos de los miembros públicos · mismo
-     * conjunto que decide los avatares y el contador de equipo. */
+    /* Helper · idiomas únicos · UNION de:
+     *   1. `empresa.idiomasAtencion` (declarados manualmente desde
+     *      "Datos de empresa" · permite anunciar idiomas que el equipo
+     *      cubre aunque no haya un miembro con ese idioma todavía).
+     *   2. Idiomas de los miembros públicos.
+     * El campo manual NO sustituye a los del equipo · los amplía. */
     const collectLangs = (): string[] => {
       const set = new Set<string>();
+      for (const code of empresa.idiomasAtencion ?? []) set.add(code.toUpperCase());
       for (const m of publicMembers) {
         for (const code of m.languages ?? []) set.add(code.toUpperCase());
       }

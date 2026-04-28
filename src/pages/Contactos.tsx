@@ -315,7 +315,7 @@ export default function Contactos() {
     <div className="flex flex-col min-h-full bg-background">
       {/* ═══════════ HEADER (mismo patrón que Promociones) ═══════════ */}
       <div className="px-3 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-3">
-        <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
+        <div className="max-w-content mx-auto flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
           <div className="shrink-0 min-w-0">
             <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight leading-tight">
               Contactos
@@ -386,7 +386,7 @@ export default function Contactos() {
 
       {/* ═══════════ Toolbar (count + sort) ═══════════ */}
       <div className="px-3 sm:px-6 lg:px-8 py-2.5">
-        <div className="max-w-[1400px] mx-auto flex items-center justify-end gap-3 sm:gap-4">
+        <div className="max-w-content mx-auto flex items-center justify-end gap-3 sm:gap-4">
           <span className="text-xs text-muted-foreground">
             <span className="font-semibold text-foreground tnum">{sortedAndFiltered.length}</span>{" "}
             {sortedAndFiltered.length === 1 ? "contacto" : "contactos"}
@@ -397,7 +397,7 @@ export default function Contactos() {
 
       {/* ═══════════ List ═══════════ */}
       <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
-        <div className="max-w-[1400px] mx-auto flex flex-col gap-2">
+        <div className="max-w-content mx-auto flex flex-col gap-2">
           {sortedAndFiltered.length === 0 ? (
             <EmptyState onClear={() => { setSearch(""); clearAllFilters(); }} />
           ) : (

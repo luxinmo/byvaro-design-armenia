@@ -47,7 +47,7 @@ export function PendingResponsibleBanner() {
   return (
     <>
       <div className="sticky top-0 z-30 bg-warning/10 border-b border-warning/30 px-4 sm:px-6 lg:px-8 py-2.5">
-        <div className="max-w-[1400px] mx-auto flex items-center gap-3 flex-wrap">
+        <div className="max-w-content mx-auto flex items-center gap-3 flex-wrap">
           <span className="h-7 w-7 rounded-lg bg-warning/30 text-warning grid place-items-center shrink-0">
             <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2} />
           </span>

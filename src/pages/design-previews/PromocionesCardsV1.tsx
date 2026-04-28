@@ -245,7 +245,7 @@ export default function PromocionesCardsV1() {
     <div className="flex-1 flex flex-col min-h-full bg-background">
       {/* ════ HEADER ════ */}
       <div className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8">
-        <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div className="max-w-content mx-auto flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
             <p className="text-xs text-muted-foreground font-medium">Comercial</p>
             <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight mt-1 leading-tight">
@@ -265,7 +265,7 @@ export default function PromocionesCardsV1() {
 
       {/* ════ STATS BAR (status tabs) ════ */}
       <div className="px-4 sm:px-6 lg:px-8 mt-5">
-        <div className="max-w-[1400px] mx-auto">
+        <div className="max-w-content mx-auto">
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
             <StatTab label="Todas" count={counts.all} active={statusFilter === "all"} onClick={() => setStatusFilter("all")} />
             <StatTab label="Activas" count={counts.active} active={statusFilter === "active"} onClick={() => setStatusFilter("active")} tone="emerald" />
@@ -278,7 +278,7 @@ export default function PromocionesCardsV1() {
 
       {/* ════ TOOLBAR ════ */}
       <div className="px-4 sm:px-6 lg:px-8 mt-4">
-        <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="max-w-content mx-auto flex flex-col sm:flex-row sm:items-center gap-3">
 
           {/* Search */}
           <div className="relative flex-1 max-w-md">
@@ -336,7 +336,7 @@ export default function PromocionesCardsV1() {
 
       {/* ════ CONTENT ════ */}
       <div className="px-4 sm:px-6 lg:px-8 mt-5 pb-8">
-        <div className="max-w-[1400px] mx-auto">
+        <div className="max-w-content mx-auto">
 
           {filtered.length === 0 ? (
             <EmptyState />

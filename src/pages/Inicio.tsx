@@ -59,7 +59,7 @@ export default function Inicio() {
     <div className="flex-1 flex flex-col min-h-full bg-background">
       {/* Header */}
       <div className="px-3 sm:px-6 lg:px-8 pt-6 sm:pt-8">
-        <div className="max-w-[1400px] mx-auto flex items-start sm:items-end justify-between gap-3">
+        <div className="max-w-content mx-auto flex items-start sm:items-end justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               General
@@ -92,7 +92,7 @@ export default function Inicio() {
 
       {/* Contenido · 2 cols en desktop */}
       <div className="px-3 sm:px-6 lg:px-8 mt-6 pb-10">
-        <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4 sm:gap-5">
+        <div className="max-w-content mx-auto grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4 sm:gap-5">
           <div className="space-y-4 sm:space-y-5 min-w-0">
             <ActividadesPendientes selectedUserId={selectedUserId} />
             <Novedades />

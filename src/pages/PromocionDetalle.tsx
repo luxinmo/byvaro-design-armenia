@@ -713,7 +713,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           - Tabs con subrayado (mismo patrón que /empresa) en vez de pills
             con fondo. El <Separator> desaparece porque el borde inferior
             del <nav> hace de separador visual. */}
-      <header className="max-w-[1400px] mx-auto px-3 sm:px-8 lg:px-10 pt-4 sm:pt-6 pb-0">
+      <header className="max-w-content mx-auto px-3 sm:px-8 lg:px-10 pt-4 sm:pt-6 pb-0">
         {/* Back link · visible en todos los tamaños. En móvil el
             MobileHeader también pone una flecha, pero aquí damos
             un camino de vuelta explícito dentro del contenido. */}
@@ -1038,7 +1038,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       </header>
 
       <div
-        className="max-w-[1400px] mx-auto p-3 sm:p-[25px] w-full min-w-0"
+        className="max-w-content mx-auto p-3 sm:p-[25px] w-full min-w-0"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
@@ -1145,7 +1145,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
              *  se forzaba flex-col en modo agencia sin motivo claro; quedaba
              *  incoherente con la tab Disponibilidad que ya usa `lg:flex-row`
              *  en ambos roles. */}
-            <div className="flex gap-4 lg:flex-row flex-col w-full max-w-[1400px] mx-auto min-w-0">
+            <div className="flex gap-4 lg:flex-row flex-col w-full max-w-content mx-auto min-w-0">
               {/* ── LEFT: Main content ── */}
               <div className="flex-1 min-w-0 space-y-5 order-2 lg:order-1">
 
@@ -1739,7 +1739,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
         {/* ═══ TAB: AVAILABILITY ═══ */}
         {activeTabKey === "Availability" && (
-          <div className="flex gap-4 lg:flex-row flex-col w-full max-w-[1400px] mx-auto min-w-0">
+          <div className="flex gap-4 lg:flex-row flex-col w-full max-w-content mx-auto min-w-0">
             {/* Main content */}
             <div className="flex-1 min-w-0 order-2 lg:order-1">
               <PromotionAvailabilityFull
@@ -2040,7 +2040,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           aria-label="Estadísticas de esta promoción"
         >
           <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border">
-            <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+            <div className="max-w-content mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                   Estadísticas · {p.name}
@@ -2651,7 +2651,7 @@ function AgenciesTab({ promotionId, navigate, onInvite, canShare = true, onActiv
   const hasSidebar = otherPromoAgencies.length > 0;
 
   return (
-    <div className="space-y-5 w-full max-w-[1400px] mx-auto min-w-0">
+    <div className="space-y-5 w-full max-w-content mx-auto min-w-0">
       {/* KPI hero — scoped to this promotion */}
       {allRelevant.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -3825,7 +3825,7 @@ function AgencyInvitationBanner({
 
   return (
     <div className="sticky top-0 z-40 bg-primary/5 border-b border-primary/20 px-4 sm:px-6 lg:px-8 py-3">
-      <div className="max-w-[1400px] mx-auto flex items-start sm:items-center gap-3 flex-wrap">
+      <div className="max-w-content mx-auto flex items-start sm:items-center gap-3 flex-wrap">
         <span className="h-9 w-9 rounded-xl bg-primary text-primary-foreground grid place-items-center shrink-0">
           <MailPlus className="h-4 w-4" strokeWidth={2} />
         </span>

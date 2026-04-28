@@ -560,6 +560,138 @@ es un code-smell. Se extrae al catálogo canónico.
 
 ---
 
+## 📐 REGLA DE ORO · Anchos del contenedor de página
+
+> **El sistema tiene EXACTAMENTE dos anchos de contenedor de página:
+> `max-w-content` (1400px) y `max-w-reading` (1250px). Toda pantalla
+> nueva debe usar uno de los dos · cualquier otro valor (1200, 1300,
+> 1500…) es un bug del diseño y se rechaza en review.**
+
+### Tokens
+
+Declarados en `tailwind.config.ts`:
+
+```ts
+maxWidth: {
+  content: "1400px",   // listados, dashboards, master-detail
+  reading: "1250px",   // perfiles, ajustes, lectura larga
+}
+```
+
+### Cuál usar
+
+| Tipo de pantalla | Token | Razón |
+|---|---|---|
+| Listado con grid de cards (Promociones, Colaboradores, Contactos…) | `max-w-content` | A 1280px+ caben 4 cards/fila · a 1250 pierdes 1 columna. |
+| Master-detail (Registros, ContactoDetalle, LeadDetalle…) | `max-w-content` | Lista (~420px) + detalle (≥800px) + gaps + márgenes ≈ 1300+. |
+| Dashboard con KPI strip (Inicio, Estadísticas, Equipo) | `max-w-content` | 4-5 tiles + gráficas necesitan ese ancho sin comprimir. |
+| Wizard largo (CrearPromocion) | `max-w-content` | Pasos con grids de unidades / tablas anchas. |
+| **Perfil / ficha pública** (Empresa, AgenciaDetalle, ColaboracionPanel) | `max-w-reading` | Hero + secciones one-column · texto cómodo a 75 chars/línea. |
+| **Settings / Ajustes** (AjustesHome y todas las sub-páginas) | `max-w-reading` | Forms + listas one-column · inputs no se ven grotescos. |
+| Banner global (`PendingResponsibleBanner`, `RecomendacionesStrip`) | `max-w-content` | Banner cubre el ancho de la página debajo. |
+
+### Padding lateral
+
+Junto al ancho, padding canónico (NO inventar otros):
+
+```tsx
+className="px-4 sm:px-6 lg:px-8"  // estándar · TODA pantalla
+```
+
+NO usar `lg:px-10` ni otros valores · son legacy a deprecar cuando se vea.
+
+### Patrón canónico
+
+```tsx
+<div className="px-4 sm:px-6 lg:px-8 pt-6 pb-10 max-w-content mx-auto w-full">
+  {/* contenido del listado / dashboard */}
+</div>
+
+<div className="px-4 sm:px-6 lg:px-8 pt-4 pb-10 max-w-reading mx-auto w-full">
+  {/* contenido del perfil / ajustes */}
+</div>
+```
+
+### Por qué dos anchos y no uno
+
+- **A 1400 todo** rompe la legibilidad de Empresa / Ajustes · líneas de
+  texto a 100+ chars mata la lectura (Bringhurst recomienda 60-75).
+- **A 1250 todo** colapsa los listados · grids de Promociones pierden
+  una columna en pantallas grandes y se nota visiblemente.
+- Linear, GitHub, Stripe, Notion usan el mismo patrón: contenedor
+  más ancho para listados/dashboards, narrower para perfiles/settings.
+
+### Checklist al crear/auditar una pantalla
+
+- [ ] ¿Uso `max-w-content` o `max-w-reading` (no un valor hardcoded)?
+- [ ] ¿Padding `px-4 sm:px-6 lg:px-8`?
+- [ ] ¿Reúno la decisión a la tabla de arriba?
+- [ ] Si es ambigua (listado dentro de un perfil, etc.) → preguntar
+      antes de elegir un ancho propio.
+
+### Cómo migrar valores hardcoded
+
+```bash
+# Reemplazo masivo (idempotente · seguro):
+grep -rl "max-w-\[1400px\]" src | xargs sed -i '' 's/max-w-\[1400px\]/max-w-content/g'
+grep -rl "max-w-\[1250px\]" src | xargs sed -i '' 's/max-w-\[1250px\]/max-w-reading/g'
+```
+
+Si encuentras un valor que NO es 1400 ni 1250 (ej. 1200 en un wizard
+intermedio) → puede ser intencional para una pantalla específica.
+Documentarlo inline con un comentario y abrir Open Question si no
+está claro.
+
+---
+
+## 👁 REGLA DE ORO · Preview = Visitor
+
+> **El toggle "Previsualizar como usuario" del owner DEBE mostrar
+> exactamente lo mismo que un colaborador externo (visitor) ·
+> bit-a-bit.** Si un dato/sección/CTA no es visible para el visitor,
+> tampoco se ve en preview. La razón: el owner usa preview para
+> validar qué expone su ficha pública · si preview muestra datos
+> internos (verificación pendiente, formularios de edición, drafts),
+> el owner llega a producción confiando en algo que NO está bien.
+
+**Cómo se aplica · guard canónico**:
+
+```ts
+const isPublicView = isVisitor || viewMode === "preview";
+{!isPublicView && <SeccionInternaQueElVisitorNoVe />}
+```
+
+Equivalente: si una sección usa `viewMode === "edit"`, ya está bien
+(porque `edit` ≠ `preview`). El bug típico es usar `!isVisitor`
+solo, que deja la sección visible al togglear preview.
+
+**Ejemplos de qué oculta preview** (no exhaustivo):
+
+- Card de verificación legal pendiente · admin only.
+- Sección "Redes sociales y web" del tab About (los iconos ya viven
+  en el hero · el listado solo lo ve el owner).
+- Banner "Pendiente del responsable" para agencia onboarding.
+- Mock controls del prototipo (`<details>` con simuladores).
+- Sidebar "Fuerza del perfil" del owner.
+- Cualquier `<EditableSection>` con `editContent` SIN `viewMode=edit`.
+
+**Lo que SÍ ve el preview** (igual que el visitor):
+
+- Todo el contenido público: hero · subtitle · datos de empresa
+  públicos · equipo · oficinas · marketing snapshot · portfolio ·
+  reseñas Google · sello de verificada (cuando ya está aprobada).
+
+**Checklist al añadir una sección nueva en `/empresa`**:
+
+- [ ] ¿Es contenido público? Sin guard ni con `!isVisitor`.
+- [ ] ¿Es interno? `viewMode === "edit"` (incluye no-visitor por
+      construcción) o el guard canónico `!isVisitor && viewMode !==
+      "preview"`.
+- [ ] Probé el toggle "Previsualizar como usuario" · todo lo interno
+      desaparece · solo queda lo que un visitor real vería.
+
+---
+
 ## 🪞 REGLA DE ORO · Mirror del panel del promotor desde la agencia
 
 > Cuando una agencia ve a "su" promotor, accede a las pantallas espejo

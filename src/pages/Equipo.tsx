@@ -220,7 +220,7 @@ export default function Equipo() {
     <div className="flex flex-col min-h-full bg-background">
       {/* Header */}
       <div className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-4">
-        <div className="max-w-[1400px] mx-auto">
+        <div className="max-w-content mx-auto">
           {/* Fila superior · título + CTA */}
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="min-w-0">
@@ -273,7 +273,7 @@ export default function Equipo() {
 
       {/* Secciones */}
       <div className="flex-1 px-4 sm:px-6 lg:px-8 pb-12">
-        <div className="max-w-[1400px] mx-auto space-y-10">
+        <div className="max-w-content mx-auto space-y-10">
           {view === "gallery" ? (
             <>
               {groups.requests.length > 0 && (

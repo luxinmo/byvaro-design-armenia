@@ -754,7 +754,7 @@ export default function Promociones() {
     <div className="flex flex-col min-h-full bg-background">
       {/* ═══════════ HEADER ═══════════ */}
       <div className="px-3 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-3">
-        <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
+        <div className="max-w-content mx-auto flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
           {/* Title · visible en todos los breakpoints, tamaño igual a Inicio */}
           <div className="shrink-0 min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground leading-none">Comercial</p>
@@ -816,7 +816,7 @@ export default function Promociones() {
 
       {/* ═══════════ Toolbar ═══════════ */}
       <div className="px-3 sm:px-6 lg:px-8 py-2.5">
-        <div className="max-w-[1400px] mx-auto flex items-center gap-2 sm:gap-3 flex-wrap">
+        <div className="max-w-content mx-auto flex items-center gap-2 sm:gap-3 flex-wrap">
           {/* Izquierda: status tabs · "Todas" oculto en móvil. */}
           <div className="flex items-center gap-0.5">
             {statusFilterOptions.map((opt) => (
@@ -865,7 +865,7 @@ export default function Promociones() {
       {/* ═══════════ Vista MAPA ═══════════ */}
       {effectiveViewMode === "map" && (
         <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
-          <div className="max-w-[1400px] mx-auto">
+          <div className="max-w-content mx-auto">
             <PromocionesMap promotions={sortedAndFiltered} />
           </div>
         </div>
@@ -874,7 +874,7 @@ export default function Promociones() {
       {/* ═══════════ Vista CUADRÍCULA ═══════════ */}
       {effectiveViewMode === "grid" && (
         <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
-          <div className="max-w-[1400px] mx-auto">
+          <div className="max-w-content mx-auto">
             {sortedAndFiltered.length === 0 ? (
               <EmptyState />
             ) : (
@@ -902,7 +902,7 @@ export default function Promociones() {
       {/* ═══════════ Vista LISTA (horizontal cards) ═══════════ */}
       {effectiveViewMode === "list" && (
       <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
-        <div className="max-w-[1400px] mx-auto flex flex-col gap-3 lg:gap-4">
+        <div className="max-w-content mx-auto flex flex-col gap-3 lg:gap-4">
           {sortedAndFiltered.length === 0 ? (
             <EmptyState />
           ) : (

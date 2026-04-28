@@ -9,7 +9,7 @@ export default function Sugerencias() {
   return (
     <div className="flex-1 flex flex-col min-h-full bg-background">
       <div className="px-3 sm:px-6 lg:px-8 pt-6 sm:pt-8">
-        <div className="max-w-[1400px] mx-auto">
+        <div className="max-w-content mx-auto">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             General
           </p>

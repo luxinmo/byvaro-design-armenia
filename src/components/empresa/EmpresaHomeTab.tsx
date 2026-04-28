@@ -6,7 +6,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  Building2, Users, ChevronRight, Plus, Lock, ArrowUpRight,
+  Building2, Users, ChevronRight, Plus, Lock, ArrowUpRight, X, Search,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { Empresa } from "@/lib/empresa";
@@ -14,14 +14,23 @@ import type { EmpresaStats } from "@/lib/empresaStats";
 import { agencies } from "@/data/agencies";
 import { useWorkspaceMembers, tenantToWorkspaceKey } from "@/lib/useWorkspaceMembers";
 import { EditableSection, InfoItem } from "./EditableSection";
-import { OfficesSection } from "./OfficesSection";
 import { HeroStatsStrip } from "./HeroStatsStrip";
-import { ZonasEspecialidadesCard } from "./ZonasEspecialidadesCard";
-import { TestimoniosCard } from "./TestimoniosCard";
+/* `ZonasEspecialidadesCard` ya no se renderiza aquí · `MarketingSnapshot`
+ * ofrece un resumen más rico y alineado con el bloque del tab Sobre
+ * nosotros. Se mantiene en repo por si se reutiliza desde el wizard. */
+import { Globe2, Building2 as BuildingIcon, Megaphone, Compass } from "lucide-react";
+import { languageCountryIso as _ } from "@/lib/languages"; /* eslint-disable-line @typescript-eslint/no-unused-vars */
+import { PHONE_COUNTRIES } from "@/lib/phoneCountries";
+import {
+  MARKETING_CHANNELS, channelFaviconUrl,
+} from "@/lib/marketingChannels";
+import {
+  productTypeLabel, fuenteClienteLabel, sumPct, PCT_OTROS,
+} from "@/lib/marketingCatalog";
 import { PortfolioShowcase } from "./PortfolioShowcase";
 import { cn } from "@/lib/utils";
 import { Flag } from "@/components/ui/Flag";
-import { languageCountryIso, languageName } from "@/lib/languages";
+import { languageCountryIso, languageName, LANGUAGES, sortLanguagesByImportance } from "@/lib/languages";
 
 /* ─── Helpers ──────────────────────────────────────────────────────── */
 const inputClass = "h-9 w-full px-3 text-[13px] bg-card border border-border rounded-xl focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground/60";
@@ -150,41 +159,28 @@ export function EmpresaHomeTab({
         </p>
       </EditableSection>
 
-      {/* ═════ Datos de la empresa (derivados del sistema · NO editables) ═════ */}
+      {/* ═════ Datos de la empresa ═════
+          Oficinas + Equipo derivados del sistema (NO editables aquí ·
+          se cambian desde sus pantallas dedicadas). Idiomas SÍ
+          editables: el campo `empresa.idiomasAtencion` se UNE con los
+          idiomas declarados por los miembros · permite anunciar
+          idiomas adicionales que la empresa cubre aunque ningún
+          miembro los tenga listados todavía. */}
       <EditableSection title="Datos de la empresa" viewMode={viewMode}>
         <div className="grid grid-cols-3 gap-4">
           <InfoItem icon={Building2} label="Oficinas" value={String(stats.oficinas)} />
           <InfoItem icon={Users} label="Equipo" value={String(stats.agentes)} />
-          <div>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">
-              Idiomas <span className="tnum">({stats.idiomas.length})</span>
-            </p>
-            {stats.idiomas.length === 0 ? (
-              <p className="text-[11.5px] text-muted-foreground/70 italic">
-                Sin agentes activos con idiomas
-              </p>
-            ) : (
-              <div className="flex flex-wrap items-center gap-1">
-                {visibleIdiomas.map((code) => {
-                  const iso = languageCountryIso(code) ?? code;
-                  return (
-                    <span key={code} title={languageName(code)}>
-                      <Flag iso={iso} size={14} />
-                    </span>
-                  );
-                })}
-                {hiddenIdiomasCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setLangExpanded((v) => !v)}
-                    className="text-[10.5px] font-medium text-muted-foreground hover:text-foreground transition-colors px-1"
-                  >
-                    {langExpanded ? "ver menos" : `+${hiddenIdiomasCount}`}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+          <IdiomasCell
+            empresa={empresa}
+            update={update}
+            stats={stats}
+            viewMode={viewMode}
+            isVisitor={isVisitor}
+            visibleIdiomas={visibleIdiomas}
+            hiddenIdiomasCount={hiddenIdiomasCount}
+            langExpanded={langExpanded}
+            setLangExpanded={setLangExpanded}
+          />
         </div>
       </EditableSection>
 
@@ -294,20 +290,14 @@ export function EmpresaHomeTab({
       {/* ═════ Portfolio destacado ═════ */}
       <PortfolioShowcase viewMode={viewMode} tenantId={tenantId} />
 
-      {/* ═════ Zonas y especialidades ═════ */}
-      <ZonasEspecialidadesCard
-        viewMode={viewMode}
-        empresa={empresa}
-        update={update}
-        idiomas={stats.idiomas}
-        idiomasReadOnly
-      />
+      {/* `MarketingSnapshot` se quitó del tab Inicio · la info de
+          marketing vive solo en el tab "Sobre nosotros" · Inicio
+          queda más limpio · el componente sigue en el archivo por
+          si se reusa más adelante. */}
 
-      {/* ═════ Offices ═════ */}
-      <OfficesSection viewMode={viewMode} />
-
-      {/* ═════ Testimonios ═════ */}
-      <TestimoniosCard viewMode={viewMode} empresa={empresa} update={update} />
+      {/* La sección de Oficinas se movió al tab "Sobre nosotros"
+          junto al resto de datos institucionales · el tab Inicio
+          queda enfocado en producto + equipo + marketing. */}
     </div>
   );
 }
@@ -323,6 +313,422 @@ export function EmpresaHomeTab({
    avanzado (CTA) si tiene colaboración activa, o avisa que solo
    colaboradores activos lo ven (locked) si no.
    ═══════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════
+   IdiomasCell · ficha "Datos de empresa" · idiomas editables.
+   ───────────────────────────────────────────────────────────────────
+   Vista (visitor / preview): solo lee `stats.idiomas` y pinta
+   banderas con toggle "+N / ver menos" si hay más de 5.
+
+   Edición (owner viewMode=edit): además de las banderas, permite
+   añadir/quitar idiomas declarados manualmente en
+   `empresa.idiomasAtencion`. Los idiomas que vienen del equipo
+   (members.languages) NO se pueden quitar desde aquí · solo se
+   editan desde la ficha de cada miembro en /equipo.
+   ═══════════════════════════════════════════════════════════════════ */
+function IdiomasCell({
+  empresa, update, stats, viewMode, isVisitor,
+  visibleIdiomas, hiddenIdiomasCount, langExpanded, setLangExpanded,
+}: {
+  empresa: Empresa;
+  update: <K extends keyof Empresa>(key: K, value: Empresa[K]) => void;
+  stats: EmpresaStats;
+  viewMode: "edit" | "preview";
+  isVisitor: boolean;
+  visibleIdiomas: string[];
+  hiddenIdiomasCount: number;
+  langExpanded: boolean;
+  setLangExpanded: (v: boolean | ((prev: boolean) => boolean)) => void;
+}) {
+  const isEditable = !isVisitor && viewMode === "edit";
+  const manualLangs = useMemo(
+    () => new Set((empresa.idiomasAtencion ?? []).map((c) => c.toUpperCase())),
+    [empresa.idiomasAtencion],
+  );
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQ, setPickerQ] = useState("");
+
+  const removeManual = (code: string) => {
+    const upper = code.toUpperCase();
+    update(
+      "idiomasAtencion",
+      (empresa.idiomasAtencion ?? []).filter((c) => c.toUpperCase() !== upper),
+    );
+  };
+  const addManual = (code: string) => {
+    const upper = code.toUpperCase();
+    if (manualLangs.has(upper)) return;
+    update(
+      "idiomasAtencion",
+      sortLanguagesByImportance([...(empresa.idiomasAtencion ?? []), upper]),
+    );
+    setPickerQ("");
+    setPickerOpen(false);
+  };
+
+  /* Opciones disponibles en el picker · todos los idiomas que aún
+   * NO están en la unión actual (manual + miembros). */
+  const currentUnion = useMemo(() => {
+    const set = new Set<string>(stats.idiomas.map((c) => c.toUpperCase()));
+    return set;
+  }, [stats.idiomas]);
+  const availableLanguages = useMemo(() => {
+    const q = pickerQ.trim().toLowerCase();
+    return LANGUAGES.filter((l) => !currentUnion.has(l.code.toUpperCase()))
+      .filter((l) => !q || l.name.toLowerCase().includes(q) || l.code.toLowerCase().includes(q))
+      .slice(0, 10);
+  }, [pickerQ, currentUnion]);
+
+  return (
+    <div>
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">
+        Idiomas <span className="tnum">({stats.idiomas.length})</span>
+      </p>
+      {stats.idiomas.length === 0 && !isEditable ? (
+        <p className="text-[11.5px] text-muted-foreground/70 italic">
+          Sin agentes activos con idiomas
+        </p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {visibleIdiomas.map((code) => {
+            const upper = code.toUpperCase();
+            const iso = languageCountryIso(code) ?? code;
+            const isManual = manualLangs.has(upper);
+            if (!isEditable) {
+              return (
+                <span key={code} title={languageName(code)}>
+                  <Flag iso={iso} size={14} />
+                </span>
+              );
+            }
+            return (
+              <span
+                key={code}
+                title={`${languageName(code)}${isManual ? " · añadido manualmente" : " · cubierto por el equipo"}`}
+                className={cn(
+                  "inline-flex items-center gap-1 px-1.5 h-6 rounded-full border",
+                  isManual
+                    ? "border-primary/30 bg-primary/[0.06]"
+                    : "border-border bg-muted/40",
+                )}
+              >
+                <Flag iso={iso} size={12} />
+                <span className="text-[10.5px] text-foreground">{upper}</span>
+                {isManual && (
+                  <button
+                    type="button"
+                    onClick={() => removeManual(code)}
+                    className="text-muted-foreground hover:text-destructive transition-colors"
+                    aria-label={`Quitar ${languageName(code)}`}
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                )}
+              </span>
+            );
+          })}
+          {hiddenIdiomasCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setLangExpanded((v) => !v)}
+              className="text-[10.5px] font-medium text-muted-foreground hover:text-foreground transition-colors px-1"
+            >
+              {langExpanded ? "ver menos" : `+${hiddenIdiomasCount}`}
+            </button>
+          )}
+          {isEditable && (
+            <button
+              type="button"
+              onClick={() => setPickerOpen((v) => !v)}
+              className="inline-flex items-center gap-0.5 px-1.5 h-6 rounded-full border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors text-[10.5px] font-medium"
+            >
+              <Plus className="h-2.5 w-2.5" /> Añadir
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Picker · search-only · evitamos volcar 250 idiomas a pelo */}
+      {isEditable && pickerOpen && (
+        <div className="mt-2 rounded-xl border border-border bg-card shadow-soft p-2 max-w-xs">
+          <div className="relative mb-1.5">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/60" />
+            <input
+              type="text"
+              autoFocus
+              value={pickerQ}
+              onChange={(e) => setPickerQ(e.target.value)}
+              placeholder="Buscar idioma…"
+              className="w-full h-7 pl-7 pr-2 text-[11.5px] bg-background border border-border rounded-lg focus:border-primary outline-none"
+            />
+          </div>
+          <div className="flex flex-col gap-0.5 max-h-[180px] overflow-y-auto">
+            {availableLanguages.length === 0 ? (
+              <p className="text-[10.5px] text-muted-foreground italic px-2 py-1">
+                {pickerQ ? "Sin coincidencias" : "Empieza a escribir"}
+              </p>
+            ) : (
+              availableLanguages.map((l) => (
+                <button
+                  key={l.code}
+                  type="button"
+                  onClick={() => addManual(l.code)}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted/40 transition-colors text-left"
+                >
+                  <Flag iso={l.countryIso ?? l.code} size={12} />
+                  <span className="text-[11.5px] text-foreground flex-1">{l.name}</span>
+                  <span className="text-[10px] text-muted-foreground tabular-nums">{l.code.toUpperCase()}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MarketingSnapshot · resumen compacto en el tab Inicio.
+   ───────────────────────────────────────────────────────────────────
+   Mismo lenguaje visual que `HeroStatsStrip`: 4 tiles en fila con
+   icono · label uppercase tracking · valor en grande. Sober · sin
+   colores fuertes. Cada tile usa la información declarada en el
+   bloque "Marketing y mercado" del tab Sobre nosotros:
+
+     · Globe2     → Top nacionalidad de clientes
+     · Building   → Tipo de inmueble principal
+     · Megaphone  → Portales activos (count + favicons)
+     · Compass    → Fuente principal de clientes
+
+   Si la empresa no ha rellenado ningún dato de marketing, el
+   componente devuelve null · evita ruido visual. Si rellenó solo
+   algunos datos, los demás tiles muestran "—".
+   ═══════════════════════════════════════════════════════════════════ */
+function MarketingSnapshot({ empresa }: { empresa: Empresa }) {
+  /* ─── Top nacionalidad ─── */
+  const naciones = empresa.marketingTopNacionalidades ?? [];
+  const topNacion = useMemo(() => {
+    const reales = naciones.filter(n => n.countryIso !== PCT_OTROS);
+    if (reales.length === 0) return null;
+    const top = [...reales].sort((a, b) => b.pct - a.pct)[0];
+    const c = PHONE_COUNTRIES.find(p => p.iso === top.countryIso);
+    return { iso: top.countryIso, name: c?.name ?? top.countryIso, pct: top.pct };
+  }, [naciones]);
+
+  /* ─── Tipo principal ─── */
+  const tipos = empresa.marketingTiposProducto ?? [];
+  const topTipo = useMemo(() => (tipos[0] ? productTypeLabel(tipos[0].tipo) : null), [tipos]);
+  const tiposCount = tipos.length;
+
+  /* ─── Portales activos ─── */
+  const portales = empresa.marketingPortales ?? [];
+  const portalesCount = portales.length;
+  const portalesPreview = portales
+    .slice(0, 3)
+    .map(id => MARKETING_CHANNELS.find(c => c.id === id))
+    .filter(Boolean) as Array<{ id: string; label: string; domain?: string; icon: React.ComponentType<{ className?: string }> }>;
+
+  /* ─── Fuente principal ─── */
+  const fuentes = empresa.marketingFuentesClientes ?? [];
+  const topFuente = useMemo(() => {
+    if (fuentes.length === 0) return null;
+    const top = [...fuentes].sort((a, b) => b.pct - a.pct)[0];
+    return { label: fuenteClienteLabel(top.fuente), pct: top.pct };
+  }, [fuentes]);
+
+  /* ¿Algún dato rellenado? · si todo está vacío, ocultamos el snapshot. */
+  const hasAny = !!topNacion || !!topTipo || portalesCount > 0 || !!topFuente;
+  if (!hasAny) return null;
+
+  /* Top 3 nacionalidades + Otros para apilar banderas */
+  const top3Naciones = [...naciones.filter(n => n.countryIso !== PCT_OTROS)]
+    .sort((a, b) => b.pct - a.pct)
+    .slice(0, 3);
+  const restNaciones = Math.max(0, 100 - sumPct(top3Naciones));
+
+  /* Top fuente desglose · top + segunda */
+  const fuentesSorted = [...fuentes].sort((a, b) => b.pct - a.pct);
+  const fuente1 = fuentesSorted[0];
+  const fuente2 = fuentesSorted[1];
+
+  return (
+    <section className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
+      {/* Header con eyebrow + título · mismo estilo que `Datos de empresa` */}
+      <div className="px-5 sm:px-7 pt-4 pb-3 flex items-baseline justify-between gap-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">
+            Marketing y mercado
+          </p>
+          <h3 className="text-[14px] font-bold tracking-tight text-foreground mt-0.5">
+            Cómo trabajamos
+          </h3>
+        </div>
+      </div>
+
+      {/* Strip horizontal de 4 columnas separadas por línea fina ·
+          mismo lenguaje del HeroStatsStrip (icon top · label tracking ·
+          contenido grande). Sober, sin colores fuertes. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border border-t border-border">
+        {/* Columna 1 · Mercados */}
+        <SnapPanel icon={Globe2} label="Mercados">
+          {topNacion ? (
+            <div className="flex flex-col gap-2">
+              {/* Stack horizontal de banderas top */}
+              <div className="flex items-center gap-1.5">
+                {top3Naciones.map((n, i) => {
+                  const c = PHONE_COUNTRIES.find(p => p.iso === n.countryIso);
+                  return (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1 text-[11.5px]"
+                      title={`${c?.name ?? n.countryIso} · ${n.pct}%`}
+                    >
+                      <Flag iso={n.countryIso} size={14} />
+                      <span className="text-muted-foreground tabular-nums">{n.pct}%</span>
+                    </span>
+                  );
+                })}
+                {restNaciones > 0 && (
+                  <span className="text-[11px] text-muted-foreground/70 tabular-nums">+{restNaciones}%</span>
+                )}
+              </div>
+              {/* Mini barra apilada · 4 segmentos sin colores fuertes */}
+              <StackedBar
+                segments={[
+                  ...top3Naciones.map(n => n.pct),
+                  ...(restNaciones > 0 ? [restNaciones] : []),
+                ]}
+              />
+            </div>
+          ) : (
+            <p className="text-[12px] text-muted-foreground/60">Sin datos declarados</p>
+          )}
+        </SnapPanel>
+
+        {/* Columna 2 · Producto */}
+        <SnapPanel icon={BuildingIcon} label="Producto">
+          {topTipo ? (
+            <div className="flex flex-wrap gap-1">
+              {tipos.slice(0, 3).map((t, i) => (
+                <span
+                  key={i}
+                  className="inline-flex items-center px-2 h-5 rounded-full bg-muted/50 border border-border text-[10.5px] text-foreground"
+                >
+                  {productTypeLabel(t.tipo)}
+                </span>
+              ))}
+              {tiposCount > 3 && (
+                <span className="text-[10.5px] text-muted-foreground tabular-nums self-center">+{tiposCount - 3}</span>
+              )}
+              {/* Precio "desde" del primer tipo si existe */}
+              {tipos[0]?.precioDesde && tipos[0].precioDesde > 0 && (
+                <p className="basis-full text-[10.5px] text-muted-foreground mt-1 tabular-nums">
+                  Desde {tipos[0].precioDesde.toLocaleString("es-ES")} €
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-[12px] text-muted-foreground/60">Sin datos declarados</p>
+          )}
+        </SnapPanel>
+
+        {/* Columna 3 · Canales */}
+        <SnapPanel icon={Megaphone} label="Canales activos">
+          {portalesCount > 0 ? (
+            <div className="flex flex-col gap-1.5">
+              <p className="text-[20px] font-bold leading-none text-foreground tabular-nums">{portalesCount}</p>
+              <div className="flex items-center gap-1 flex-wrap">
+                {portales.slice(0, 6).map((id) => {
+                  const ch = MARKETING_CHANNELS.find(c => c.id === id);
+                  if (!ch) return null;
+                  const fav = channelFaviconUrl(ch, 32);
+                  return (
+                    <span
+                      key={id}
+                      title={ch.label}
+                      className="h-4 w-4 rounded-sm border border-border bg-background grid place-items-center overflow-hidden"
+                    >
+                      {fav ? (
+                        <img src={fav} alt="" className="h-full w-full object-contain" />
+                      ) : (
+                        <ch.icon className="h-2.5 w-2.5 text-muted-foreground" />
+                      )}
+                    </span>
+                  );
+                })}
+                {portalesCount > 6 && (
+                  <span className="text-[10.5px] text-muted-foreground tabular-nums">+{portalesCount - 6}</span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[12px] text-muted-foreground/60">Sin datos declarados</p>
+          )}
+        </SnapPanel>
+
+        {/* Columna 4 · Origen de leads */}
+        <SnapPanel icon={Compass} label="Origen de leads">
+          {topFuente && fuente1 ? (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-baseline gap-1.5">
+                <p className="text-[20px] font-bold leading-none text-foreground tabular-nums">{fuente1.pct}%</p>
+                <p className="text-[11px] text-muted-foreground truncate">{fuenteClienteLabel(fuente1.fuente)}</p>
+              </div>
+              {fuente2 && fuente2.pct > 0 && (
+                <p className="text-[10.5px] text-muted-foreground truncate">
+                  +{fuente2.pct}% {fuenteClienteLabel(fuente2.fuente)}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-[12px] text-muted-foreground/60">Sin datos declarados</p>
+          )}
+        </SnapPanel>
+      </div>
+    </section>
+  );
+}
+
+function SnapPanel({
+  icon: Icon, label, children,
+}: {
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="px-5 sm:px-6 py-4 flex flex-col gap-2">
+      <div className="flex items-center gap-1.5">
+        <Icon className="h-3.5 w-3.5 text-muted-foreground/70" strokeWidth={1.75} />
+        <p className="text-[9.5px] uppercase tracking-[0.14em] text-muted-foreground/80 font-medium">{label}</p>
+      </div>
+      <div className="text-[12.5px] min-w-0">{children}</div>
+    </div>
+  );
+}
+
+/* Mini barra apilada · sober, mismo color base con grados de
+ * opacidad para distinguir segmentos sin colores fuertes. */
+function StackedBar({ segments }: { segments: number[] }) {
+  const total = segments.reduce((a, b) => a + b, 0) || 1;
+  return (
+    <div className="flex h-1 rounded-full overflow-hidden bg-muted">
+      {segments.map((s, i) => (
+        <div
+          key={i}
+          className="h-full"
+          style={{
+            width: `${(s / total) * 100}%`,
+            backgroundColor: i === segments.length - 1
+              ? "hsl(var(--muted-foreground) / 0.3)"
+              : `hsl(var(--foreground) / ${0.55 - i * 0.12})`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function StatsTeaserCard({
   empresaName, entityType, panelHref, hasActiveCollab,
 }: {
