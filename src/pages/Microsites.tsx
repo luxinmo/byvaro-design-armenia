@@ -168,7 +168,7 @@ export default function Microsites() {
 
       {/* ═══════════ HEADER ═══════════ */}
       <div className="px-3 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-4">
-        <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div className="max-w-content mx-auto flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground leading-none">Contenido</p>
             <div className="flex items-baseline gap-3 mt-1">
@@ -196,7 +196,7 @@ export default function Microsites() {
 
       {/* ═══════════ CONTENIDO ═══════════ */}
       <div className="px-3 sm:px-6 lg:px-8 py-5 sm:py-6 space-y-5 sm:space-y-6 flex-1">
-        <div className="max-w-[1400px] mx-auto space-y-5 sm:space-y-6">
+        <div className="max-w-content mx-auto space-y-5 sm:space-y-6">
 
           {/* ─── KPIs ─── */}
           <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

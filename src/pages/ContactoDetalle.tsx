@@ -141,7 +141,7 @@ export default function ContactoDetalle() {
   };
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-12">
+    <div className="w-full max-w-content mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-12">
 
       {/* ══════ Back ══════ */}
       <div className="mb-4">

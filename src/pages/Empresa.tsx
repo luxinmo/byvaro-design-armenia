@@ -197,14 +197,54 @@ export default function Empresa({
     setEditingImage(null);
   };
 
-  /* ─── Subtitle display ─── */
+  /* ─── Subtitle display ───
+   *  Compone: Ciudad, Provincia, País · Fundada en YYYY · LICENCIA Nº.
+   *  La licencia es la primera de `empresa.licencias` (la más
+   *  representativa · típicamente la del registro autonómico
+   *  obligatorio en la sede fiscal). Solo se muestra si tiene número
+   *  rellenado · si está vacía no aparece. */
+  const primaryLicencia = empresa.licencias?.find((l) => l.numero?.trim());
+  const licenciaTxt = primaryLicencia
+    ? (() => {
+        const label = primaryLicencia.tipo === "custom"
+          ? primaryLicencia.etiqueta ?? "Licencia"
+          : primaryLicencia.tipo;
+        /* Strip prefijo redundante · si el usuario introdujo
+         * "AICAT-12345" o "AICAT 12345", quitamos el label para que
+         * el render quede "AICAT 12345" en vez de "AICAT AICAT-12345". */
+        const rawNum = (primaryLicencia.numero ?? "").trim();
+        const cleaned = rawNum.replace(
+          new RegExp(`^${label}[\\s\\-_]*`, "i"),
+          "",
+        ).trim();
+        return `${label} ${cleaned || rawNum}`;
+      })()
+    : "";
+  /* Dirección fiscal · prioriza `direccionFiscalCompleta` (línea
+   * única que rellenará Google Places Autocomplete). Si está vacía,
+   * compone desde los campos estructurados como fallback. */
+  let direccionFiscalTxt = empresa.direccionFiscalCompleta?.trim() ?? "";
+  if (!direccionFiscalTxt) {
+    const direccionParts: string[] = [];
+    const calle = empresa.direccionFiscal.direccion?.trim();
+    if (calle) direccionParts.push(calle);
+    const cpCiudad = [
+      empresa.direccionFiscal.codigoPostal?.trim(),
+      empresa.direccionFiscal.ciudad?.trim(),
+    ].filter(Boolean).join(" ");
+    if (cpCiudad) direccionParts.push(cpCiudad);
+    if (empresa.direccionFiscal.provincia?.trim()) direccionParts.push(empresa.direccionFiscal.provincia);
+    if (empresa.direccionFiscal.pais?.trim()) direccionParts.push(empresa.direccionFiscal.pais);
+    direccionFiscalTxt = direccionParts.join(", ");
+  }
+
+  /* La licencia se renderiza ahora en el slot del slogan (debajo del
+   * nombre), no en el subtitle · evitamos duplicarla en ambos sitios. */
   const subtitleDisplay = empresa.subtitle
     || [
-      empresa.direccionFiscal.ciudad,
-      empresa.direccionFiscal.provincia,
-      empresa.direccionFiscal.pais,
-    ].filter(Boolean).join(", ") +
-      (empresa.fundadaEn ? ` · Fundada en ${empresa.fundadaEn}` : "");
+      direccionFiscalTxt,
+      empresa.fundadaEn ? `Fundada en ${empresa.fundadaEn}` : null,
+    ].filter(Boolean).join(" · ");
 
   /* ─── Tabs config · solo 3 ─── La tab "Estadísticas" se quitó del
    *  nav porque las estadísticas operativas viven en el panel
@@ -223,7 +263,7 @@ export default function Empresa({
           checklist) ya vive en el sidebar derecho como "Fuerza del
           perfil" · evita duplicar y deja la cabecera más limpia. */}
 
-      <div className="px-4 sm:px-6 lg:px-10 pt-4 pb-10 max-w-[1250px] mx-auto w-full">
+      <div className="px-4 sm:px-6 lg:px-10 pt-4 pb-10 max-w-reading mx-auto w-full">
         {/* ═════ Cabecera ═════ */}
         <div className="flex items-end justify-between gap-3 flex-wrap mb-4">
           <div>
@@ -352,10 +392,19 @@ export default function Empresa({
                   </h1>
                   {empresa.verificada && <VerifiedBadge size="md" />}
                 </div>
-                {viewMode === "edit" ? (
-                  /* Modo edición · input siempre editable (incluso si
-                   *  ya hay tagline). El usuario puede sobreescribir
-                   *  o vaciar la frase desde aquí mismo. */
+                {/* En el slot bajo el nombre va la licencia
+                    inmobiliaria principal (AICAT, RAICV, EKAIA…) ·
+                    sustituye al antiguo eslogan/tagline. Si no hay
+                    licencia, caemos al tagline para no dejar el
+                    espacio vacío en perfiles legacy. En edit mode el
+                    promotor sigue pudiendo editar el tagline · al
+                    declarar una licencia, ésta tiene prioridad de
+                    render sobre el tagline. */}
+                {primaryLicencia ? (
+                  <p className="mt-1 text-[12.5px] font-semibold text-primary leading-snug tracking-wide">
+                    {licenciaTxt}
+                  </p>
+                ) : viewMode === "edit" ? (
                   <input
                     type="text"
                     value={empresa.tagline}
@@ -463,7 +512,7 @@ export default function Empresa({
             outputSize={{ width: 512, height: 512 }}
           />
           {/* Aspect ratio del recorte = aspect real del hero `h-56`
-              dentro del card (max-w-[1250px]). Render aprox 1168×224
+              dentro del card (max-w-reading). Render aprox 1168×224
               en desktop · 5.214:1. WYSIWYG: el área del recorte tiene
               la MISMA proporción que el cover en la ficha → todo lo
               visible dentro del recorte aparece tal cual al guardar. */}

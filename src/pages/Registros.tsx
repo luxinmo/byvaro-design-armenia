@@ -828,7 +828,7 @@ export default function Registros() {
 
       {/* ═══════════ HEADER ═══════════ */}
       <div className="px-3 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-3">
-        <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
+        <div className="max-w-content mx-auto flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
           <div className="shrink-0 min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground leading-none">
               Comercial
@@ -866,7 +866,7 @@ export default function Registros() {
 
       {/* ═══════════ Toolbar · tabs estado + botón Filtros ═══════════ */}
       <div className="px-3 sm:px-6 lg:px-8 py-2.5">
-        <div className="max-w-[1400px] mx-auto flex items-center gap-3">
+        <div className="max-w-content mx-auto flex items-center gap-3">
           {/* Tabs de estado · scroll horizontal en mobile con fade
               degradado a la derecha que indica "hay más". */}
           <div className="relative flex-1 min-w-0">
@@ -906,7 +906,7 @@ export default function Registros() {
 
       {/* ═══════════ Contenido master-detail ═══════════ */}
       <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-24 lg:pb-8">
-        <div className="max-w-[1400px] mx-auto">
+        <div className="max-w-content mx-auto">
           {filtered.length === 0 ? (
             <EmptyState hasFilters={hasFilters} onReset={clearFilters} />
           ) : (

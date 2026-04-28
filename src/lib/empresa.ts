@@ -82,11 +82,62 @@ export interface Empresa {
   comisionNacionalDefault: number;      // 3
   comisionInternacionalDefault: number; // 5
   plazoPagoComisionDias: number;        // 30
-  // Certificaciones y testimonios
+  // Certificaciones (testimonios eliminados del producto · ver
+  // ADR sobre simplificación de la ficha pública).
   certificaciones: { nombre: string; logoUrl?: string; desde?: string }[];
-  testimonios: { autor: string; empresa: string; texto: string; rating: number }[];
+  /* Licencias inmobiliarias por región española / internacional ·
+   * mismo shape canónico que las agencias (`LicenciaInmobiliaria`
+   * en `src/lib/licenses.ts`). Una empresa puede tener varias si
+   * opera en distintas CCAA con registros propios (Cataluña → AICAT,
+   * Comunitat Valenciana → RAICV, País Vasco → EKAIA, etc.). */
+  licencias?: import("./licenses").LicenciaInmobiliaria[];
+
+  /* ─── Marketing y mercado ─────────────────────────────────────
+   *  Datos que ayudan a las agencias a saber con quién están
+   *  hablando · % de clientes por nacionalidad, tipo de producto que
+   *  comercializan, fuentes de clientes. Se ven en la ficha pública
+   *  + en el panel del colaborador.
+   *
+   *  Reglas:
+   *    · Las distribuciones porcentuales suman 100 (validación UI).
+   *      El último ítem "OTROS" se computa automáticamente como
+   *      complemento (100 - suma del resto).
+   *    · Tipos de producto son chips libres (villa-moderna,
+   *      villa-lujo, obra-nueva, parcela, comercial, …) con un
+   *      precio "desde" opcional por tipo.
+   */
+  marketingTopNacionalidades?: Array<{
+    /** ISO 3166-1 alpha-2 · "OTROS" sentinel para el resto. */
+    countryIso: string;
+    pct: number; // 0-100 entero
+  }>;
+  marketingTiposProducto?: Array<{
+    /** Slug libre · ver catálogo sugerido en `MARKETING_PRODUCT_TYPES`. */
+    tipo: string;
+    /** Precio mínimo desde el que comercializan ese tipo · EUR. */
+    precioDesde?: number;
+  }>;
+  marketingFuentesClientes?: Array<{
+    fuente: "portales" | "colab-nac" | "colab-int" | "referidos" | "cartera-propia";
+    pct: number; // 0-100 entero
+  }>;
+  /** Portales y canales donde la empresa publica sus inmuebles ·
+   *  array de ids del catálogo canónico `MARKETING_CHANNELS`
+   *  (ver `src/lib/marketingChannels.ts`). Se reusa el mismo
+   *  catálogo que los `marketingProhibitions` de las promociones
+   *  para que matchear por id sea trivial cuando se conecten los
+   *  conectores reales (Idealista API, Fotocasa API, etc.). */
+  marketingPortales?: string[];
   // Fiscal
   direccionFiscal: DireccionFiscal;
+  /* Dirección fiscal en una sola línea · futuro `formatted_address`
+   * de Google Places Autocomplete. Cuando está rellena se prioriza
+   * sobre los campos estructurados de `direccionFiscal` para el
+   * subtitle del hero · es lo que el promotor edita realmente.
+   * TODO(backend/ui): conectar `<input>` con Places Autocomplete y
+   * además guardar los componentes estructurados (street, locality,
+   * postalCode, country) en `direccionFiscal` para uso interno. */
+  direccionFiscalCompleta?: string;
   // Preferencias
   moneda: "EUR" | "USD" | "GBP";
   idiomaDefault: "es" | "en" | "fr" | "de" | "pt" | "it" | "nl" | "ar";
@@ -208,7 +259,6 @@ export const defaultEmpresa: Empresa = {
   comisionInternacionalDefault: 5,
   plazoPagoComisionDias: 30,
   certificaciones: [],
-  testimonios: [],
   direccionFiscal: { pais: "", provincia: "", ciudad: "", direccion: "", codigoPostal: "" },
   moneda: "EUR",
   idiomaDefault: "es",

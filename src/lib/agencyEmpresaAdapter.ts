@@ -65,7 +65,6 @@ export function agencyToEmpresa(a: Agency): Empresa {
     comisionInternacionalDefault: a.comisionMedia ?? 0,
     plazoPagoComisionDias: 30,
     certificaciones: [],
-    testimonios: [],
     direccionFiscal: {
       pais:         fiscal?.pais         ?? "",
       provincia:    fiscal?.provincia    ?? "",

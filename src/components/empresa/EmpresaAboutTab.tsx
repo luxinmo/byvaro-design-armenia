@@ -4,7 +4,7 @@
  * name, CIF, founded, phone, email, schedule), Webs, Verificación.
  */
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Globe, Phone, Mail, Clock, Linkedin, Instagram, Facebook,
   Youtube, Music2, ShieldCheck, Upload, Trash2, ChevronDown, CheckCircle2,
@@ -14,12 +14,26 @@ import { toast } from "sonner";
 import { useWorkspaceMembers } from "@/lib/useWorkspaceMembers";
 import { memberInitials, type TeamMember } from "@/lib/team";
 import type { Empresa } from "@/lib/empresa";
+import {
+  type LicenciaInmobiliaria, type LicenciaTipo, LICENCIA_META,
+} from "@/lib/licenses";
+import {
+  MARKETING_PRODUCT_TYPES, productTypeLabel,
+  FUENTES_CLIENTES, type FuenteCliente, fuenteClienteLabel,
+  PCT_OTROS, sumPct,
+} from "@/lib/marketingCatalog";
+import { PHONE_COUNTRIES } from "@/lib/phoneCountries";
+import {
+  MARKETING_CHANNELS, CATEGORY_LABEL, channelFaviconUrl,
+  groupMarketingChannels, type MarketingChannelCategory,
+} from "@/lib/marketingChannels";
+import { Flag } from "@/components/ui/Flag";
 import { EditableSection } from "./EditableSection";
 import { GoogleRatingCard } from "./GoogleRatingCard";
+import { OfficesSection } from "./OfficesSection";
 import { cn } from "@/lib/utils";
 
 const inputClass = "h-9 w-full px-3 text-[13px] bg-card border border-border rounded-xl focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground/60";
-const textareaClass = cn(inputClass, "h-auto py-2.5 resize-y min-h-[120px]");
 
 export function EmpresaAboutTab({
   viewMode,
@@ -41,11 +55,6 @@ export function EmpresaAboutTab({
    *  caller no tiene permiso. */
   isAdmin?: boolean;
 }) {
-  /** En modo "público" (visitor o el propio promotor en preview) no
-   *  mostramos placeholders tipo "Añade tu sitio web" — el visitante
-   *  externo nunca lee CTA del owner. Renderizamos `null` cuando el
-   *  campo está vacío. */
-  const isPublic = isVisitor || viewMode === "preview";
   /** El CIF se trata como dato fiscal sensible · solo el admin del
    *  workspace lo ve. Member lo NO ve aunque sea de su propia empresa. */
   const showCif = isAdmin && !isVisitor;
@@ -56,27 +65,22 @@ export function EmpresaAboutTab({
           Primera sección del About · una vez verificada desaparece
           para siempre (el sello queda en el hero junto al nombre).
           Sin verificar, vale 30% de la "Fuerza del perfil". */}
-      {!isVisitor && !empresa.verificada && (
+      {/* `viewMode === "preview"` (toggle "Previsualizar como
+          usuario") cuenta como visitor · ver REGLA DE ORO "Preview =
+          Visitor" en CLAUDE.md. */}
+      {!isVisitor && viewMode !== "preview" && !empresa.verificada && (
         <VerificationSection empresa={empresa} update={update} />
       )}
 
-      {/* ═════ Historia ═════ */}
-      <EditableSection
-        title="Historia"
-        viewMode={viewMode}
-        editContent={
-          <textarea
-            value={empresa.aboutOverview}
-            onChange={(e) => update("aboutOverview", e.target.value)}
-            placeholder="Cuenta la historia de tu empresa: origen, hitos, cómo habéis llegado aquí…"
-            className={textareaClass}
-          />
-        }
-      >
-        <p className="text-[12.5px] text-muted-foreground leading-relaxed">
-          {empresa.aboutOverview || "Cuenta la historia de tu empresa. Origen, hitos, equipo…"}
-        </p>
-      </EditableSection>
+      {/* ═════ Licencias inmobiliarias por región (primero) ═════
+          Catálogo canónico en `src/lib/licenses.ts`. La primera
+          licencia con número se renderiza también debajo del nombre
+          en el hero (sustituye al antiguo eslogan/tagline). */}
+      <LicenciasSection empresa={empresa} update={update} viewMode={viewMode} isVisitor={isVisitor} />
+
+      {/* La sección "Historia" se eliminó del producto · `aboutOverview`
+          permanece en el modelo Empresa por retro-compat pero ya no
+          se renderiza · simplifica la ficha pública. */}
 
       {/* ═════ Detalles ═════ */}
       <EditableSection
@@ -117,6 +121,23 @@ export function EmpresaAboutTab({
               </div>
             </div>
             <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-muted-foreground">
+                Dirección fiscal
+                <span className="ml-1 text-muted-foreground/60 normal-case">· una línea · autocompletado vía Google Maps próximamente</span>
+              </label>
+              {/* TODO(ui): conectar Google Places Autocomplete aquí ·
+                  el `formatted_address` rellena este campo y los
+                  componentes estructurados (calle, CP, ciudad,
+                  país) van a `direccionFiscal` para uso interno. Sin
+                  mapa · solo input. */}
+              <input
+                value={empresa.direccionFiscalCompleta ?? ""}
+                onChange={(e) => update("direccionFiscalCompleta", e.target.value)}
+                className={inputClass}
+                placeholder="Av. del Mar 15, 29602 Marbella, Málaga, España"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
               <label className="text-[10px] text-muted-foreground">Horario</label>
               <input value={empresa.horario} onChange={(e) => update("horario", e.target.value)} className={inputClass} placeholder="L-S 9:30-14:00 / 16:30-19:00" />
             </div>
@@ -155,6 +176,12 @@ export function EmpresaAboutTab({
             </p>
           </div>
           <div className="col-span-2 flex flex-col gap-1">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Dirección fiscal</p>
+            <p className="text-[12px] text-muted-foreground">
+              {empresa.direccionFiscalCompleta?.trim() || "—"}
+            </p>
+          </div>
+          <div className="col-span-2 flex flex-col gap-1">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Horario</p>
             <p className="text-[12px] text-muted-foreground flex items-center gap-1.5">
               <Clock className="h-3 w-3" /> {empresa.horario || "—"}
@@ -173,109 +200,94 @@ export function EmpresaAboutTab({
         <GoogleRatingCard empresa={empresa} viewMode={viewMode} update={update} />
       )}
 
-      {/* ═════ Redes sociales y web ═════ */}
-      <EditableSection
-        title="Redes sociales y web"
-        viewMode={viewMode}
-        editContent={
-          <div className="flex flex-col gap-3">
-            <p className="text-[11.5px] text-muted-foreground leading-relaxed">
-              Estos enlaces aparecen en el header de tu ficha pública (iconos
-              discretos · click → abre el perfil correspondiente). Pega la URL
-              completa o el handle (`@empresa`) — soportamos ambos.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
-                  <Globe className="h-3 w-3" /> Sitio web
-                </label>
-                <input value={empresa.sitioWeb} onChange={(e) => update("sitioWeb", e.target.value)} className={inputClass} placeholder="www.empresa.com" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
-                  <Linkedin className="h-3 w-3" /> LinkedIn
-                </label>
-                <input value={empresa.linkedin} onChange={(e) => update("linkedin", e.target.value)} className={inputClass} placeholder="linkedin.com/company/…" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
-                  <Instagram className="h-3 w-3" /> Instagram
-                </label>
-                <input value={empresa.instagram} onChange={(e) => update("instagram", e.target.value)} className={inputClass} placeholder="@tu_instagram" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
-                  <Facebook className="h-3 w-3" /> Facebook
-                </label>
-                <input value={empresa.facebook} onChange={(e) => update("facebook", e.target.value)} className={inputClass} placeholder="facebook.com/tuempresa" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
-                  <Youtube className="h-3 w-3" /> YouTube
-                </label>
-                <input value={empresa.youtube} onChange={(e) => update("youtube", e.target.value)} className={inputClass} placeholder="youtube.com/@tuempresa" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
-                  <Music2 className="h-3 w-3" /> TikTok
-                </label>
-                <input value={empresa.tiktok} onChange={(e) => update("tiktok", e.target.value)} className={inputClass} placeholder="@tu_tiktok" />
+      {/* ═════ Redes sociales y web · SOLO owner ═════
+          Usa el patrón canónico `<EditableSection>` (botón Editar →
+          form en edit mode, readout compacto en preview/idle).
+          NO se muestra a visitors (los iconos ya viven en el hero
+          via `<HeroSocialIcons>`). */}
+      {!isVisitor && viewMode !== "preview" && (
+        <EditableSection
+          title="Redes sociales y web"
+          viewMode={viewMode}
+          editContent={
+            <div className="flex flex-col gap-3">
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Los enlaces aparecen como iconos discretos en el header de tu
+                ficha pública. No se muestran como listado a los colaboradores.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
+                    <Globe className="h-3 w-3" /> Sitio web
+                  </label>
+                  <input value={empresa.sitioWeb} onChange={(e) => update("sitioWeb", e.target.value)} className={inputClass} placeholder="www.empresa.com" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
+                    <Linkedin className="h-3 w-3" /> LinkedIn
+                  </label>
+                  <input value={empresa.linkedin} onChange={(e) => update("linkedin", e.target.value)} className={inputClass} placeholder="linkedin.com/company/…" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
+                    <Instagram className="h-3 w-3" /> Instagram
+                  </label>
+                  <input value={empresa.instagram} onChange={(e) => update("instagram", e.target.value)} className={inputClass} placeholder="@tu_instagram" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
+                    <Facebook className="h-3 w-3" /> Facebook
+                  </label>
+                  <input value={empresa.facebook} onChange={(e) => update("facebook", e.target.value)} className={inputClass} placeholder="facebook.com/tuempresa" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
+                    <Youtube className="h-3 w-3" /> YouTube
+                  </label>
+                  <input value={empresa.youtube} onChange={(e) => update("youtube", e.target.value)} className={inputClass} placeholder="youtube.com/@tuempresa" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
+                    <Music2 className="h-3 w-3" /> TikTok
+                  </label>
+                  <input value={empresa.tiktok} onChange={(e) => update("tiktok", e.target.value)} className={inputClass} placeholder="@tu_tiktok" />
+                </div>
               </div>
             </div>
+          }
+        >
+          {/* Readout compacto · solo iconos con el handle/URL al lado */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+            {empresa.sitioWeb && (
+              <SocialReadout icon={Globe} value={empresa.sitioWeb} href={empresa.sitioWeb.startsWith("http") ? empresa.sitioWeb : `https://${empresa.sitioWeb}`} />
+            )}
+            {empresa.linkedin && <SocialReadout icon={Linkedin} value={empresa.linkedin} href={empresa.linkedin.startsWith("http") ? empresa.linkedin : `https://${empresa.linkedin}`} />}
+            {empresa.instagram && <SocialReadout icon={Instagram} value={empresa.instagram} />}
+            {empresa.facebook && <SocialReadout icon={Facebook} value={empresa.facebook} />}
+            {empresa.youtube && <SocialReadout icon={Youtube} value={empresa.youtube} />}
+            {empresa.tiktok && <SocialReadout icon={Music2} value={empresa.tiktok} />}
+            {!empresa.sitioWeb && !empresa.linkedin && !empresa.instagram && !empresa.facebook && !empresa.youtube && !empresa.tiktok && (
+              <p className="text-[12px] text-muted-foreground italic col-span-2">
+                Aún no has añadido enlaces. Pulsa <b>Editar</b> para añadirlos.
+              </p>
+            )}
           </div>
-        }
-      >
-        <div className="flex flex-col gap-2">
-          {(empresa.sitioWeb || !isPublic) && (
-            <div className="flex items-center gap-3">
-              <Globe className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <a href={empresa.sitioWeb ? (empresa.sitioWeb.startsWith("http") ? empresa.sitioWeb : `https://${empresa.sitioWeb}`) : "#"} target="_blank" rel="noreferrer" className="text-[12.5px] text-primary hover:underline">
-                {empresa.sitioWeb || "Añade tu sitio web"}
-              </a>
-            </div>
-          )}
-          {empresa.linkedin && (
-            <div className="flex items-center gap-3">
-              <Linkedin className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <a href={empresa.linkedin.startsWith("http") ? empresa.linkedin : `https://${empresa.linkedin}`} target="_blank" rel="noreferrer" className="text-[12.5px] text-primary hover:underline truncate">
-                {empresa.linkedin}
-              </a>
-            </div>
-          )}
-          {empresa.instagram && (
-            <div className="flex items-center gap-3">
-              <Instagram className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="text-[12.5px] text-foreground truncate">{empresa.instagram}</span>
-            </div>
-          )}
-          {empresa.facebook && (
-            <div className="flex items-center gap-3">
-              <Facebook className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="text-[12.5px] text-foreground truncate">{empresa.facebook}</span>
-            </div>
-          )}
-          {empresa.youtube && (
-            <div className="flex items-center gap-3">
-              <Youtube className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="text-[12.5px] text-foreground truncate">{empresa.youtube}</span>
-            </div>
-          )}
-          {empresa.tiktok && (
-            <div className="flex items-center gap-3">
-              <Music2 className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="text-[12.5px] text-foreground truncate">{empresa.tiktok}</span>
-            </div>
-          )}
-          {empresa.nombreComercial && (
-            <div className="flex items-center gap-3">
-              <Globe className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <a href="#" className="text-[12.5px] text-primary hover:underline">
-                {empresa.nombreComercial.toLowerCase().replace(/\s+/g, "")}.byvaro.com
-              </a>
-            </div>
-          )}
-        </div>
-      </EditableSection>
+        </EditableSection>
+      )}
+
+      {/* ═════ Marketing y mercado ═════
+          Top nacionalidades (% sum=100), Tipo de producto, Fuentes de
+          clientes (% sum=100). En modo display los bloques se
+          renderizan compactos · sólo el block que el usuario edita
+          se expande temporalmente. */}
+      <MarketingSection empresa={empresa} update={update} viewMode={viewMode} isVisitor={isVisitor} />
+
+      {/* ═════ Oficinas · al final ═════
+          La lista de oficinas cierra el tab Sobre nosotros · es la
+          última pieza institucional (junto al resto de Detalles).
+          Sigue usando `byvaro-oficinas` como única fuente de verdad
+          (ver REGLA DE ORO en CLAUDE.md). */}
+      <OfficesSection viewMode={viewMode} />
 
       {/* La sección de Verificación que vivía aquí abajo se ha
           movido al TOP del tab y desaparece para siempre una vez
@@ -306,6 +318,979 @@ export function EmpresaAboutTab({
        `verificada=true`, `verificadaEl=ISO`. Ver
        `docs/screens/admin-verificaciones.md` (a crear).
    ═══════════════════════════════════════════════════════════════════ */
+/* SocialReadout · una línea con icono + handle/URL · clickable. */
+function SocialReadout({
+  icon: Icon, value, href,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  value: string;
+  href?: string;
+}) {
+  const content = (
+    <span className="inline-flex items-center gap-2 min-w-0">
+      <Icon className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+      <span className="text-[12.5px] truncate">{value}</span>
+    </span>
+  );
+  if (href) {
+    return (
+      <a href={href} target="_blank" rel="noreferrer" className="text-primary hover:underline truncate">
+        {content}
+      </a>
+    );
+  }
+  return <span className="text-foreground">{content}</span>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LicenciasSection · catálogo de licencias inmobiliarias.
+   ───────────────────────────────────────────────────────────────────
+   Cada licencia tiene:
+     - tipo (dropdown · catálogo `LicenciaTipo` de licenses.ts).
+     - número (input libre · formato lo emite la autoridad).
+     - desde (opcional · fecha alta).
+   Render: lista de chips compactas en modo público. En edit, una
+   fila por licencia con los inputs. Botón "+ Añadir licencia".
+
+   La primera licencia aparece en el subtitle del hero ("AICAT 12345 ·
+   Marbella · Fundada en 2012") · ver Empresa.tsx::subtitleDisplay.
+   ═══════════════════════════════════════════════════════════════════ */
+function LicenciasSection({
+  empresa, update, viewMode, isVisitor,
+}: {
+  empresa: Empresa;
+  update: <K extends keyof Empresa>(key: K, value: Empresa[K]) => void;
+  viewMode: "edit" | "preview";
+  isVisitor?: boolean;
+}) {
+  const licencias = empresa.licencias ?? [];
+
+  /* Draft local · permite editar sin que cada keystroke commitee al
+   * storage. Se sincroniza al storage cuando el usuario pulsa
+   * Guardar; al pulsar Cancelar se descartan los cambios. */
+  const [draft, setDraft] = useState<LicenciaInmobiliaria[]>(() => licencias.map(l => ({ ...l })));
+  /* Re-sincroniza el draft cuando cambia la fuente (otro tab guardó,
+   * o se acaba de salvar). useEffect (no useMemo) para no llamar a
+   * setState durante el render · usamos JSON.stringify como hash. */
+  const licenciasJson = JSON.stringify(licencias);
+  useEffect(() => {
+    setDraft(licencias.map(l => ({ ...l })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [licenciasJson]);
+  const commit = () => { update("licencias", draft); toast.success("Licencias guardadas"); };
+  const cancel = () => { setDraft(licencias.map((l) => ({ ...l }))); };
+
+  const tiposOpciones: LicenciaTipo[] = [
+    "AICAT", "RAICV", "EKAIA", "RAIA", "COAPI", "API", "GIPE", "RICS", "FIABCI", "FMI", "custom",
+  ];
+
+  /* ─── Vista pública (no admin / no edit) ─── */
+  if (isVisitor || viewMode !== "edit") {
+    /* Si no hay licencias declaradas, NO mostramos la sección al
+     * visitor · evita ruido de un card "Sin licencias declaradas"
+     * que no aporta nada. El owner sí ve la sección vacía con el
+     * CTA "Editar" (en modo edit · más abajo). */
+    if (licencias.length === 0) return null;
+    return (
+      <EditableSection title="Licencias inmobiliarias" viewMode={viewMode}>
+        <div className="flex flex-col gap-2">
+          {licencias.map((l, i) => (
+            <LicenciaRow
+              key={i}
+              licencia={l}
+              isEditable={false}
+              tiposOpciones={tiposOpciones}
+              onChange={() => {}}
+              onRemove={() => {}}
+            />
+          ))}
+        </div>
+      </EditableSection>
+    );
+  }
+
+  /* ─── Modo edición · usa EditableSection con editContent + draft ─── */
+  const editContent = (
+    <div className="flex flex-col gap-2">
+      {draft.length === 0 && (
+        <p className="text-[11.5px] text-muted-foreground italic">
+          Aún no has añadido ninguna licencia. Pulsa el botón de abajo.
+        </p>
+      )}
+      {draft.map((l, i) => (
+        <LicenciaRow
+          key={i}
+          licencia={l}
+          isEditable
+          tiposOpciones={tiposOpciones}
+          onChange={(patch) => setDraft(draft.map((x, j) => (j === i ? { ...x, ...patch } : x)))}
+          onRemove={() => setDraft(draft.filter((_, j) => j !== i))}
+        />
+      ))}
+      <button
+        type="button"
+        onClick={() => setDraft([...draft, { tipo: "AICAT", numero: "" } as LicenciaInmobiliaria])}
+        className="self-start inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-dashed border-border text-[11.5px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors mt-1"
+      >
+        <Plus className="h-3 w-3" /> Añadir licencia
+      </button>
+      <p className="text-[10.5px] text-muted-foreground/80 leading-relaxed mt-1">
+        Las licencias se guardan al pulsar <b>Guardar</b> · puedes
+        cancelar para descartar los cambios.
+      </p>
+    </div>
+  );
+
+  return (
+    <EditableSection
+      title="Licencias inmobiliarias"
+      viewMode={viewMode}
+      editContent={editContent}
+      onSave={commit}
+      onCancel={cancel}
+    >
+      {licencias.length === 0 ? (
+        <p className="text-[12.5px] text-muted-foreground italic">
+          Sin licencias declaradas. Pulsa <b>Editar</b> para añadir tu primera.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {licencias.map((l, i) => (
+            <LicenciaRow
+              key={i}
+              licencia={l}
+              isEditable={false}
+              tiposOpciones={tiposOpciones}
+              onChange={() => {}}
+              onRemove={() => {}}
+            />
+          ))}
+        </div>
+      )}
+    </EditableSection>
+  );
+}
+
+function LicenciaRow({
+  licencia, isEditable, tiposOpciones, onChange, onRemove,
+}: {
+  licencia: LicenciaInmobiliaria;
+  isEditable: boolean;
+  tiposOpciones: LicenciaTipo[];
+  onChange: (patch: Partial<LicenciaInmobiliaria>) => void;
+  onRemove: () => void;
+}) {
+  const meta = licencia.tipo === "custom" ? null : LICENCIA_META[licencia.tipo];
+  /* Logo del registro · usamos un avatar dicebear determinista por
+   * label · simple y libre de derechos. En producción se sustituye
+   * por el logo oficial del organismo (`autoridadUrl/logo.svg`). */
+  const label = meta?.label ?? licencia.etiqueta ?? "Licencia";
+  const logoUrl = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(label)}&backgroundColor=1D74E7&textColor=ffffff&fontWeight=700`;
+
+  if (!isEditable) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-3 flex items-center gap-2.5">
+        <img src={logoUrl} alt="" className="h-8 w-8 rounded-md bg-white shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="text-[12.5px] font-semibold text-foreground">{label}</p>
+          <p className="text-[11px] text-muted-foreground truncate">
+            {licencia.numero || "—"}
+            {meta && <> · {meta.ambito}</>}
+            {meta?.obligatorio && <> · obligatoria</>}
+          </p>
+        </div>
+        {licencia.verificada && (
+          <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-background p-3 flex items-start gap-2.5">
+      <img src={logoUrl} alt="" className="h-9 w-9 rounded-md bg-white shrink-0" />
+      <div className="min-w-0 flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {/* Tipo · select nativo (popover sería overkill aquí) */}
+        <div className="sm:col-span-1">
+          <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-0.5 block">Registro</label>
+          <select
+            value={licencia.tipo}
+            onChange={(e) => onChange({ tipo: e.target.value as LicenciaTipo })}
+            className="h-8 w-full px-2 text-[12px] bg-card border border-border rounded-lg focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+          >
+            {tiposOpciones.map((t) => {
+              const m = t === "custom" ? null : LICENCIA_META[t];
+              return (
+                <option key={t} value={t}>
+                  {m ? `${m.label} · ${m.ambito}` : "Otra (personalizada)"}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+        {licencia.tipo === "custom" && (
+          <div className="sm:col-span-1">
+            <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-0.5 block">Etiqueta</label>
+            <input
+              type="text"
+              value={licencia.etiqueta ?? ""}
+              onChange={(e) => onChange({ etiqueta: e.target.value })}
+              placeholder="Nombre del registro"
+              className="h-8 w-full px-2 text-[12px] bg-card border border-border rounded-lg focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+            />
+          </div>
+        )}
+        <div className={cn(licencia.tipo === "custom" ? "sm:col-span-1" : "sm:col-span-2")}>
+          <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-0.5 block">Número</label>
+          <input
+            type="text"
+            value={licencia.numero}
+            onChange={(e) => onChange({ numero: e.target.value })}
+            placeholder={licencia.tipo === "AICAT" ? "Ej. AICAT-123456" : "Número de registro"}
+            className="h-8 w-full px-2 text-[12px] tabular-nums bg-card border border-border rounded-lg focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+          />
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="text-muted-foreground hover:text-destructive transition-colors shrink-0 mt-5"
+        aria-label="Quitar licencia"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MarketingSection · 3 bloques editables.
+   ───────────────────────────────────────────────────────────────────
+   1. Top nacionalidades · % por país · suma 100. Última fila "Otros"
+      auto-completa el restante.
+   2. Tipo de producto · chips de slugs + precio "desde" por tipo.
+   3. Fuentes de clientes · % por canal · suma 100.
+
+   Cada bloque tiene su propio toggle Editar/Guardar. El draft es
+   local hasta pulsar "Guardar", igual que LicenciasSection.
+
+   TODO(backend): GET/PATCH /api/empresa/marketing → shape
+   `{ topNacionalidades, tiposProducto, fuentesClientes }`. Se valida
+   suma=100 server-side antes de aceptar.
+   ═══════════════════════════════════════════════════════════════════ */
+function MarketingSection({
+  empresa, update, viewMode, isVisitor,
+}: {
+  empresa: Empresa;
+  update: <K extends keyof Empresa>(key: K, value: Empresa[K]) => void;
+  viewMode: "edit" | "preview";
+  isVisitor?: boolean;
+}) {
+  return (
+    <section className="rounded-2xl border border-border bg-card shadow-soft">
+      <header className="px-5 sm:px-6 pt-4 pb-3">
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <h2 className="text-[13.5px] font-semibold text-foreground">Marketing y mercado</h2>
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+            Opcional · recomendado
+          </span>
+        </div>
+        <p className="text-[12px] text-muted-foreground leading-relaxed mt-1.5 max-w-[680px]">
+          Esta sección es <b className="text-foreground">la presentación comercial de tu
+          empresa</b> ante quienes la miran desde fuera. Cuanto más completa esté,
+          más fácil les será a otras agencias y promotores decidir si encajáis.
+          Saber con qué <b className="text-foreground">nacionalidades</b> trabajas, qué{" "}
+          <b className="text-foreground">tipo de inmuebles</b> comercializas, en qué{" "}
+          <b className="text-foreground">portales</b> publicas y de dónde te llegan los{" "}
+          <b className="text-foreground">leads</b> es lo que diferencia una ficha
+          confiable de una vacía. Es <b className="text-foreground">opcional</b> ·
+          puedes rellenar lo que quieras y dejar el resto en blanco.
+        </p>
+      </header>
+      <div className="px-5 sm:px-6 pb-5 pt-2 flex flex-col gap-4">
+        <NacionalidadesBlock empresa={empresa} update={update} viewMode={viewMode} isVisitor={isVisitor} />
+        <ProductoBlock      empresa={empresa} update={update} viewMode={viewMode} isVisitor={isVisitor} />
+        <PortalesBlock      empresa={empresa} update={update} viewMode={viewMode} isVisitor={isVisitor} />
+        <FuentesBlock       empresa={empresa} update={update} viewMode={viewMode} isVisitor={isVisitor} />
+      </div>
+    </section>
+  );
+}
+
+/* ─── Block 1 · Top nacionalidades ────────────────────────────── */
+function NacionalidadesBlock({
+  empresa, update, viewMode, isVisitor,
+}: {
+  empresa: Empresa;
+  update: <K extends keyof Empresa>(key: K, value: Empresa[K]) => void;
+  viewMode: "edit" | "preview";
+  isVisitor?: boolean;
+}) {
+  const stored = empresa.marketingTopNacionalidades ?? [];
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(stored.filter(x => x.countryIso !== PCT_OTROS).map(x => ({ ...x })));
+  const isEditable = !isVisitor && viewMode === "edit";
+  /* `total` incluye el "Otros" auto-calculado · siempre suma 100
+   * cuando la suma de los reales no excede 100. saveDisabled solo
+   * se activa cuando la suma manual supera 100. */
+  const sumReales = sumPct(draft.filter(r => r.countryIso !== PCT_OTROS));
+  const otrosPct = Math.max(0, 100 - sumReales);
+  const total = sumReales <= 100 ? 100 : sumReales;
+
+  const start = () => { setDraft(stored.filter(x => x.countryIso !== PCT_OTROS).map(x => ({ ...x }))); setEditing(true); };
+  const save = () => {
+    if (sumReales > 100) { toast.error("La suma supera 100% · ajusta los porcentajes"); return; }
+    const cleaned = draft.filter(x => x.countryIso && x.countryIso !== PCT_OTROS && Number.isFinite(x.pct) && x.pct > 0);
+    /* Inyectamos "Otros" sólo si queda residual · si todo suma 100
+     * exacto entre los reales, no se persiste el sentinel. */
+    const persisted = otrosPct > 0
+      ? [...cleaned, { countryIso: PCT_OTROS, pct: otrosPct }]
+      : cleaned;
+    update("marketingTopNacionalidades", persisted);
+    toast.success("Nacionalidades guardadas");
+    setEditing(false);
+  };
+  const cancel = () => { setEditing(false); };
+
+  return (
+    <BlockShell
+      title="Top nacionalidades de tus clientes"
+      hint="% de clientes por país · la suma debe ser 100"
+      editing={editing}
+      isEditable={isEditable}
+      onEdit={start}
+      onSave={save}
+      onCancel={cancel}
+      saveDisabled={sumReales > 100}
+      sumIndicator={editing ? <SumBadge total={total} /> : null}
+    >
+      {!editing ? (
+        stored.length === 0 ? (
+          <EmptyHint isEditable={isEditable} text="Aún no has declarado tus principales nacionalidades de clientes." />
+        ) : (
+          <NacionalidadesReadout items={stored} />
+        )
+      ) : (
+        <div className="flex flex-col gap-2">
+          {draft.map((row, i) => (
+            <NacionalidadRow
+              key={i}
+              row={row}
+              usedIsos={draft.map(x => x.countryIso).filter((_, j) => j !== i)}
+              maxPct={Math.max(0, 100 - sumPct(draft.filter((_, j) => j !== i)))}
+              onChange={(patch) => setDraft(draft.map((x, j) => j === i ? { ...x, ...patch } : x))}
+              onRemove={() => setDraft(draft.filter((_, j) => j !== i))}
+            />
+          ))}
+          {/* Fila "Otros" siempre al final · % auto-calculado. */}
+          <OtrosRow pct={otrosPct} />
+          {draft.length < 8 && (
+            <button
+              type="button"
+              onClick={() => setDraft([...draft, { countryIso: "", pct: 0 }])}
+              className="self-start inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-dashed border-border text-[11.5px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+            >
+              <Plus className="h-3 w-3" /> Añadir nacionalidad
+            </button>
+          )}
+          <p className="text-[10.5px] text-muted-foreground/80">
+            "Otros" se completa automáticamente · ajusta los porcentajes
+            de los países hasta que sumen 100 o menos.
+          </p>
+        </div>
+      )}
+    </BlockShell>
+  );
+}
+
+/* Fila "Otros" · % auto-calculado (read-only) · no se quita. */
+function OtrosRow({ pct }: { pct: number }) {
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 p-2 flex items-center gap-2">
+      <span className="flex items-center gap-2 h-8 px-2.5 flex-1 text-[12.5px] text-muted-foreground">
+        <span className="h-3.5 w-3.5 rounded-full bg-muted-foreground/30 shrink-0" />
+        Otros
+        <span className="ml-1 text-[10px] uppercase tracking-wider text-muted-foreground/70">auto</span>
+      </span>
+      <div className="flex items-center gap-1 shrink-0">
+        <span className="h-8 w-16 px-2 text-[12.5px] text-right tabular-nums bg-muted/40 border border-border rounded-lg flex items-center justify-end text-foreground font-semibold">
+          {pct}
+        </span>
+        <span className="text-[12px] text-muted-foreground">%</span>
+      </div>
+      <span className="w-3.5 shrink-0" />
+    </div>
+  );
+}
+
+function NacionalidadRow({
+  row, usedIsos, maxPct, onChange, onRemove,
+}: {
+  row: { countryIso: string; pct: number };
+  usedIsos: string[];
+  /** Tope dinámico para el input · evita que el usuario teclee un %
+   *  que haga que la suma supere 100. Si tienes 80+7 y vienes a esta
+   *  fila vacía, maxPct será 13 · escribe 20 y se clampea a 13. */
+  maxPct: number;
+  onChange: (patch: Partial<{ countryIso: string; pct: number }>) => void;
+  onRemove: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const selected = PHONE_COUNTRIES.find(c => c.iso === row.countryIso);
+  const filtered = useMemo(() => {
+    const qq = q.trim().toLowerCase();
+    return PHONE_COUNTRIES
+      .filter(c => !usedIsos.includes(c.iso))
+      .filter(c => !qq || c.name.toLowerCase().includes(qq) || c.nameEn.toLowerCase().includes(qq) || c.iso.toLowerCase() === qq);
+  }, [q, usedIsos]);
+
+  return (
+    <div className="rounded-lg border border-border bg-background p-2 flex items-center gap-2 relative">
+      {/* Country selector */}
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-2 h-8 px-2.5 rounded-lg bg-card border border-border hover:border-primary/40 text-[12.5px] min-w-[160px] flex-1"
+      >
+        {selected ? <Flag iso={selected.iso} size={14} /> : <span className="h-3.5 w-3.5 rounded-full bg-muted shrink-0" />}
+        <span className="flex-1 text-left truncate text-foreground">
+          {selected?.name ?? "Seleccionar país"}
+        </span>
+        <ChevronDown className="h-3 w-3 text-muted-foreground" />
+      </button>
+      {/* % input · auto-clamp al `maxPct` para no superar 100 */}
+      <div className="flex items-center gap-1 shrink-0">
+        <input
+          type="number"
+          min={0}
+          max={maxPct}
+          value={Number.isFinite(row.pct) ? row.pct : 0}
+          onChange={(e) => {
+            const raw = Math.max(0, Math.round(Number(e.target.value) || 0));
+            onChange({ pct: Math.min(raw, maxPct) });
+          }}
+          className="h-8 w-16 px-2 text-[12.5px] text-right tabular-nums bg-card border border-border rounded-lg focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+        />
+        <span className="text-[12px] text-muted-foreground">%</span>
+      </div>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+        aria-label="Quitar"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+
+      {/* Country picker dropdown · z-30 para flotar sobre otros bloques
+          de la sección · sin overflow-hidden en los wrappers padres
+          para que se vea fuera del card. */}
+      {open && (
+        <div className="absolute top-full left-2 right-2 z-30 mt-1 rounded-xl border border-border bg-card shadow-lg p-2">
+          <div className="relative mb-1.5">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/60" />
+            <input
+              type="text"
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar país…"
+              className="w-full h-7 pl-7 pr-2 text-[11.5px] bg-background border border-border rounded-lg outline-none focus:border-primary"
+            />
+          </div>
+          <div className="flex flex-col gap-0.5 max-h-[180px] overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="text-[10.5px] text-muted-foreground italic px-2 py-1">Sin coincidencias</p>
+            ) : (
+              filtered.map(c => (
+                <button
+                  key={c.iso}
+                  type="button"
+                  onClick={() => { onChange({ countryIso: c.iso }); setOpen(false); setQ(""); }}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted/40 text-left"
+                >
+                  <Flag iso={c.iso} size={14} />
+                  <span className="text-[11.5px] text-foreground flex-1">{c.name}</span>
+                  <span className="text-[10px] text-muted-foreground">{c.iso}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NacionalidadesReadout({ items }: { items: Array<{ countryIso: string; pct: number }> }) {
+  /* Inline chips compactas tipo: 🇪🇸 ES 30% · 🇬🇧 GB 25% · 🇩🇪 DE 20% · Otros 25% */
+  const reales = items.filter(x => x.countryIso !== PCT_OTROS);
+  const stored = items.find(x => x.countryIso === PCT_OTROS)?.pct ?? Math.max(0, 100 - sumPct(reales));
+  return (
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+      {reales.map((x, i) => {
+        const c = PHONE_COUNTRIES.find(p => p.iso === x.countryIso);
+        return (
+          <span key={i} className="inline-flex items-center gap-1 text-[11.5px]">
+            <Flag iso={x.countryIso || "ES"} size={12} />
+            <span className="text-foreground">{c?.name ?? x.countryIso}</span>
+            <span className="text-muted-foreground tabular-nums">{x.pct}%</span>
+          </span>
+        );
+      })}
+      {stored > 0 && (
+        <span className="inline-flex items-center gap-1 text-[11.5px] text-muted-foreground">
+          <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground/30" />
+          Otros <span className="tabular-nums">{stored}%</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ─── Block 2 · Tipo de producto ──────────────────────────────── */
+function ProductoBlock({
+  empresa, update, viewMode, isVisitor,
+}: {
+  empresa: Empresa;
+  update: <K extends keyof Empresa>(key: K, value: Empresa[K]) => void;
+  viewMode: "edit" | "preview";
+  isVisitor?: boolean;
+}) {
+  const stored = empresa.marketingTiposProducto ?? [];
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(stored.map(x => ({ ...x })));
+  const isEditable = !isVisitor && viewMode === "edit";
+
+  const start = () => { setDraft(stored.map(x => ({ ...x }))); setEditing(true); };
+  const save = () => {
+    update("marketingTiposProducto", draft.filter(x => x.tipo.trim()));
+    toast.success("Tipos de producto guardados");
+    setEditing(false);
+  };
+  const cancel = () => setEditing(false);
+
+  const toggleType = (slug: string) => {
+    if (draft.some(x => x.tipo === slug)) {
+      setDraft(draft.filter(x => x.tipo !== slug));
+    } else {
+      setDraft([...draft, { tipo: slug }]);
+    }
+  };
+
+  return (
+    <BlockShell
+      title="Tipo de producto que comercializas"
+      hint="Selecciona los tipos de inmueble principales y opcionalmente el precio mínimo"
+      editing={editing}
+      isEditable={isEditable}
+      onEdit={start}
+      onSave={save}
+      onCancel={cancel}
+    >
+      {!editing ? (
+        stored.length === 0 ? (
+          <EmptyHint isEditable={isEditable} text="Aún no has declarado los tipos de producto que comercializas." />
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {stored.map((p, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full border border-border bg-muted/40 text-[11.5px] text-foreground"
+              >
+                {productTypeLabel(p.tipo)}
+                {typeof p.precioDesde === "number" && p.precioDesde > 0 && (
+                  <span className="text-muted-foreground tabular-nums">desde {p.precioDesde.toLocaleString("es-ES")} €</span>
+                )}
+              </span>
+            ))}
+          </div>
+        )
+      ) : (
+        <div className="flex flex-col gap-3">
+          {/* Catálogo de chips · click para activar/desactivar */}
+          <div className="flex flex-wrap gap-1.5">
+            {MARKETING_PRODUCT_TYPES.map((t) => {
+              const active = draft.some(x => x.tipo === t.slug);
+              return (
+                <button
+                  key={t.slug}
+                  type="button"
+                  onClick={() => toggleType(t.slug)}
+                  className={cn(
+                    "inline-flex items-center px-2.5 h-7 rounded-full border text-[11.5px] transition-colors",
+                    active
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted/40 text-muted-foreground hover:text-foreground border-border",
+                  )}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+          {/* Precios desde por tipo activado */}
+          {draft.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Precio desde (opcional)</p>
+              {draft.map((p, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-[12px] text-foreground flex-1 truncate">{productTypeLabel(p.tipo)}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={p.precioDesde ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value === "" ? undefined : Math.max(0, Math.round(Number(e.target.value) || 0));
+                      setDraft(draft.map((x, j) => j === i ? { ...x, precioDesde: v } : x));
+                    }}
+                    placeholder="—"
+                    className="h-8 w-32 px-2 text-[12px] text-right tabular-nums bg-card border border-border rounded-lg outline-none focus:border-primary"
+                  />
+                  <span className="text-[12px] text-muted-foreground">€</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </BlockShell>
+  );
+}
+
+/* ─── Block · Portales donde publica ──────────────────────────
+   Reutiliza el catálogo canónico `MARKETING_CHANNELS` (mismo que
+   las promociones usan para `marketingProhibitions`). Cada portal
+   tiene logo (Google Favicon) + label + categoría. Multi-select
+   con chips toggle agrupados por categoría. */
+function PortalesBlock({
+  empresa, update, viewMode, isVisitor,
+}: {
+  empresa: Empresa;
+  update: <K extends keyof Empresa>(key: K, value: Empresa[K]) => void;
+  viewMode: "edit" | "preview";
+  isVisitor?: boolean;
+}) {
+  const stored = empresa.marketingPortales ?? [];
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<string[]>(stored);
+  const isEditable = !isVisitor && viewMode === "edit";
+  const grouped = useMemo(() => groupMarketingChannels(), []);
+
+  const start = () => { setDraft([...stored]); setEditing(true); };
+  const save = () => {
+    update("marketingPortales", draft);
+    toast.success("Portales guardados");
+    setEditing(false);
+  };
+  const cancel = () => setEditing(false);
+
+  const toggle = (id: string) => {
+    setDraft(draft.includes(id) ? draft.filter(x => x !== id) : [...draft, id]);
+  };
+
+  return (
+    <BlockShell
+      title="Portales en los que publicas"
+      hint="Selecciona los portales y canales donde la empresa publica sus inmuebles"
+      editing={editing}
+      isEditable={isEditable}
+      onEdit={start}
+      onSave={save}
+      onCancel={cancel}
+    >
+      {!editing ? (
+        stored.length === 0 ? (
+          <EmptyHint isEditable={isEditable} text="Aún no has declarado los portales donde publicas." />
+        ) : (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {stored.map((id) => {
+              const ch = MARKETING_CHANNELS.find(c => c.id === id);
+              if (!ch) return null;
+              const favicon = channelFaviconUrl(ch, 32);
+              return (
+                <span
+                  key={id}
+                  className="inline-flex items-center gap-1.5 px-2 h-6 rounded-full bg-muted/50 border border-border text-[11px] text-foreground"
+                  title={ch.hint ?? ch.domain ?? ch.label}
+                >
+                  {favicon ? (
+                    <img src={favicon} alt="" className="h-3.5 w-3.5 rounded-sm" />
+                  ) : (
+                    <ch.icon className="h-3 w-3 text-muted-foreground" />
+                  )}
+                  {ch.label}
+                </span>
+              );
+            })}
+          </div>
+        )
+      ) : (
+        <div className="flex flex-col gap-3">
+          {(Object.keys(grouped) as MarketingChannelCategory[]).map((cat) => (
+            <div key={cat}>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5">
+                {CATEGORY_LABEL[cat]}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {grouped[cat].map((ch) => {
+                  const active = draft.includes(ch.id);
+                  const favicon = channelFaviconUrl(ch, 32);
+                  return (
+                    <button
+                      key={ch.id}
+                      type="button"
+                      onClick={() => toggle(ch.id)}
+                      title={ch.hint ?? ch.domain ?? ch.label}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full border text-[11.5px] transition-colors",
+                        active
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted/40 text-muted-foreground hover:text-foreground border-border",
+                      )}
+                    >
+                      {favicon ? (
+                        <img
+                          src={favicon}
+                          alt=""
+                          className={cn(
+                            "h-3.5 w-3.5 rounded-sm",
+                            active ? "" : "opacity-80",
+                          )}
+                        />
+                      ) : (
+                        <ch.icon className="h-3 w-3" />
+                      )}
+                      {ch.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          <p className="text-[10.5px] text-muted-foreground/80">
+            {draft.length} canal{draft.length === 1 ? "" : "es"} seleccionado{draft.length === 1 ? "" : "s"}.
+          </p>
+        </div>
+      )}
+    </BlockShell>
+  );
+}
+
+/* ─── Block 3 · Fuentes de clientes ───────────────────────────── */
+function FuentesBlock({
+  empresa, update, viewMode, isVisitor,
+}: {
+  empresa: Empresa;
+  update: <K extends keyof Empresa>(key: K, value: Empresa[K]) => void;
+  viewMode: "edit" | "preview";
+  isVisitor?: boolean;
+}) {
+  const stored = empresa.marketingFuentesClientes ?? [];
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(() => buildFuentesDraft(stored));
+  const isEditable = !isVisitor && viewMode === "edit";
+  /* "Otros" auto-calculado · sumReales son las 6 fuentes editables. */
+  const sumReales = sumPct(draft);
+  const otrosPct = Math.max(0, 100 - sumReales);
+  const total = sumReales <= 100 ? 100 : sumReales;
+
+  const start = () => { setDraft(buildFuentesDraft(stored)); setEditing(true); };
+  const save = () => {
+    if (sumReales > 100) { toast.error("La suma supera 100% · ajusta los porcentajes"); return; }
+    const cleaned = draft.filter(x => x.pct > 0);
+    update("marketingFuentesClientes", cleaned);
+    toast.success("Fuentes de clientes guardadas");
+    setEditing(false);
+  };
+  const cancel = () => setEditing(false);
+
+  return (
+    <BlockShell
+      title="Fuente de clientes"
+      hint="% de leads por canal · la suma debe ser 100"
+      editing={editing}
+      isEditable={isEditable}
+      onEdit={start}
+      onSave={save}
+      onCancel={cancel}
+      saveDisabled={sumReales > 100}
+      sumIndicator={editing ? <SumBadge total={total} /> : null}
+    >
+      {!editing ? (
+        stored.length === 0 ? (
+          <EmptyHint isEditable={isEditable} text="Aún no has declarado tus fuentes de clientes." />
+        ) : (
+          <FuentesReadout items={stored} />
+        )
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {draft.map((row, i) => {
+            const maxThis = Math.max(0, 100 - sumPct(draft.filter((_, j) => j !== i)));
+            return (
+              <div key={row.fuente} className="flex items-center gap-2">
+                <span className="text-[12.5px] text-foreground flex-1 truncate">{fuenteClienteLabel(row.fuente)}</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={maxThis}
+                  value={Number.isFinite(row.pct) ? row.pct : 0}
+                  onChange={(e) => {
+                    const raw = Math.max(0, Math.round(Number(e.target.value) || 0));
+                    const v = Math.min(raw, maxThis);
+                    setDraft(draft.map((x, j) => j === i ? { ...x, pct: v } : x));
+                  }}
+                  className="h-8 w-16 px-2 text-[12.5px] text-right tabular-nums bg-card border border-border rounded-lg outline-none focus:border-primary"
+                />
+                <span className="text-[12px] text-muted-foreground w-3">%</span>
+              </div>
+            );
+          })}
+          {/* Otros auto-calculado · siempre al final · read-only */}
+          <OtrosRow pct={otrosPct} />
+          <p className="text-[10.5px] text-muted-foreground/80 mt-1">
+            "Otros" se completa automáticamente · ajusta los porcentajes
+            de los canales hasta que sumen 100 o menos.
+          </p>
+        </div>
+      )}
+    </BlockShell>
+  );
+}
+
+function buildFuentesDraft(stored: Array<{ fuente: FuenteCliente; pct: number }>): Array<{ fuente: FuenteCliente; pct: number }> {
+  const map = new Map(stored.map(x => [x.fuente, x.pct]));
+  return FUENTES_CLIENTES.map(f => ({ fuente: f.value, pct: map.get(f.value) ?? 0 }));
+}
+
+function FuentesReadout({ items }: { items: Array<{ fuente: FuenteCliente; pct: number }> }) {
+  const total = sumPct(items);
+  const otros = Math.max(0, 100 - total);
+  return (
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+      {items.filter(x => x.pct > 0).map((x, i) => (
+        <span key={i} className="inline-flex items-center gap-1 text-[11.5px]">
+          <span className="text-foreground">{fuenteClienteLabel(x.fuente)}</span>
+          <span className="text-muted-foreground tabular-nums">{x.pct}%</span>
+        </span>
+      ))}
+      {otros > 0 && (
+        <span className="inline-flex items-center gap-1 text-[11.5px] text-muted-foreground">
+          <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground/30" />
+          Otros <span className="tabular-nums">{otros}%</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ─── Helpers compartidos ─────────────────────────────────────── */
+function BlockShell({
+  title, hint, editing, isEditable, onEdit, onSave, onCancel,
+  saveDisabled = false, sumIndicator, children,
+}: {
+  title: string;
+  hint?: string;
+  editing: boolean;
+  isEditable: boolean;
+  onEdit: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+  /** Si true, deshabilita el botón Guardar · típicamente cuando una
+   *  validación inline (suma=100, etc.) no pasa. */
+  saveDisabled?: boolean;
+  sumIndicator?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  /* Compactamos verticalmente cuando NO estamos editando · solo dejamos
+   * el padding necesario para el header + el contenido leído. Antes
+   * cada bloque ocupaba mucha altura aún sin contenido. */
+  return (
+    <div className={cn(
+      "rounded-xl border border-border bg-background",
+      editing ? "py-1" : "py-0.5",
+    )}>
+      <div className={cn(
+        "px-4 flex items-center justify-between gap-2",
+        editing ? "pt-3 pb-1" : "py-2",
+      )}>
+        <div className="min-w-0 flex-1">
+          <p className="text-[12.5px] font-semibold text-foreground">{title}</p>
+          {editing && hint && <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">{hint}</p>}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {sumIndicator}
+          {!editing && isEditable && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="text-[11.5px] font-semibold text-primary hover:underline"
+            >
+              Editar
+            </button>
+          )}
+          {editing && (
+            <>
+              <button
+                type="button"
+                onClick={onCancel}
+                className="text-[11.5px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={onSave}
+                disabled={saveDisabled}
+                className="inline-flex items-center gap-1 h-7 px-3 rounded-full bg-primary text-primary-foreground text-[11.5px] font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <CheckCircle2 className="h-3 w-3" /> Guardar
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      <div className={cn("px-4", editing ? "pb-4 pt-2" : "pb-3")}>{children}</div>
+    </div>
+  );
+}
+
+function SumBadge({ total }: { total: number }) {
+  const ok = total === 100;
+  const over = total > 100;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center px-2 h-6 rounded-full text-[10.5px] font-semibold tabular-nums",
+        ok    ? "bg-success/10 text-success"
+              : over ? "bg-destructive/10 text-destructive"
+              : "bg-warning/15 text-warning",
+      )}
+    >
+      {total}% / 100%
+    </span>
+  );
+}
+
+function PctBar({ pct, muted }: { pct: number; muted?: boolean }) {
+  const w = Math.max(0, Math.min(100, pct));
+  return (
+    <div className="hidden sm:block flex-1 max-w-[120px] h-1.5 rounded-full bg-muted overflow-hidden">
+      <div className={cn("h-full rounded-full", muted ? "bg-muted-foreground/30" : "bg-primary")} style={{ width: `${w}%` }} />
+    </div>
+  );
+}
+
+function EmptyHint({ isEditable, text }: { isEditable: boolean; text: string }) {
+  return (
+    <p className="text-[12px] text-muted-foreground italic">
+      {text}
+      {isEditable && <> Pulsa <b>Editar</b> para empezar.</>}
+    </p>
+  );
+}
+
 function VerificationSection({
   empresa, update,
 }: {
@@ -490,165 +1475,100 @@ function VerificationSection({
     const isFirmafy = estado === "firmafy-pendiente";
     const isRevision = estado === "revision-byvaro";
     const isRejected = estado === "rechazada";
+    /* Mensaje único para los dos estados de "en curso" · el promotor
+     * solo necesita saber que la solicitud está enviada y que Byvaro
+     * la revisa en 24-48h · la firma del representante es un detalle
+     * técnico interno del flujo Firmafy/superadmin, no aporta aquí. */
+    const label = isRejected
+      ? "Verificación rechazada"
+      : "Solicitud de verificación enviada";
+    const sublabel = isRejected
+      ? null
+      : "En 24-48h Byvaro la revisa y aprueba";
     return (
       <section className={cn(
-        "rounded-2xl border shadow-soft overflow-hidden",
+        "rounded-2xl border shadow-soft",
         isRejected ? "border-destructive/30 bg-destructive/[0.04]" : "border-primary/30 bg-primary/[0.04]",
       )}>
-        <div className="px-5 sm:px-6 py-4 flex items-start gap-3">
-          <div className={cn(
-            "h-9 w-9 rounded-2xl grid place-items-center shrink-0",
-            isRejected ? "bg-destructive/10" : "bg-primary/10",
-          )}>
-            <ShieldCheck className={cn(
-              "h-4.5 w-4.5",
-              isRejected ? "text-destructive" : "text-primary",
-            )} strokeWidth={2} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className={cn(
-              "text-[10px] font-semibold uppercase tracking-[0.14em]",
-              isRejected ? "text-destructive" : "text-primary",
-            )}>
-              {isFirmafy && "Esperando firma"}
-              {isRevision && "En revisión por Byvaro"}
-              {isRejected && "Verificación rechazada"}
-            </p>
-            <h3 className="text-[14px] font-bold tracking-tight text-foreground mt-0.5">
-              {isFirmafy && "Pendiente de firma del representante"}
-              {isRevision && "Validación manual del equipo Byvaro"}
-              {isRejected && "Hay que reintentar la verificación"}
-            </h3>
-            <p className="text-[12px] text-muted-foreground leading-relaxed mt-1">
-              {isFirmafy && (
-                <>Hemos enviado un documento de declaración responsable a{" "}
-                <b className="text-foreground">{rep.email}</b> mediante Firmafy.
-                Una vez firmado por todos los firmantes, el equipo Byvaro
-                validará los datos manualmente.</>
-              )}
-              {isRevision && (
-                <>Documento firmado. Estamos validando los datos contra el
-                Registro Mercantil y la AEAT. Te avisaremos por email cuando
-                tu empresa quede verificada (24-48h hábiles).</>
-              )}
-              {isRejected && (
-                <>El equipo Byvaro ha rechazado la verificación. Revisa los
-                datos del representante y los documentos subidos antes de
-                volver a intentarlo.</>
-              )}
-            </p>
-
-            {/* Resumen compacto de lo enviado */}
-            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11.5px]">
-              <div className="rounded-lg border border-border bg-background px-2.5 py-1.5">
-                <p className="text-muted-foreground">Representante</p>
-                <p className="text-foreground font-medium truncate">{rep.nombreCompleto || "—"}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-background px-2.5 py-1.5">
-                <p className="text-muted-foreground">Firmantes</p>
-                <p className="text-foreground font-medium">
-                  {firmaUnica ? "Solo el representante" : `${1 + autorizados.length} firmantes`}
-                </p>
-              </div>
-            </div>
-
-            {isRejected && (
-              <button
-                type="button"
-                onClick={() => {
-                  update("verificacionEstado", "datos-pendientes");
-                  toast.message("Revisa los datos y vuelve a enviar la solicitud");
-                }}
-                className="mt-3 inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-primary text-primary-foreground text-[12.5px] font-semibold hover:bg-primary/90 transition-colors"
-              >
-                Volver a intentar
-              </button>
+        <div className="px-5 py-2.5 flex items-center gap-3">
+          <ShieldCheck className={cn(
+            "h-4 w-4 shrink-0",
+            isRejected ? "text-destructive" : "text-primary",
+          )} strokeWidth={2} />
+          <p className="text-[12.5px] text-foreground min-w-0 flex-1 truncate">
+            <b className="font-semibold">{label}</b>
+            {sublabel && (
+              <span className="ml-1.5 text-muted-foreground hidden sm:inline">· {sublabel}</span>
             )}
-
-            {/* MOCK controls · solo en prototipo · en producción los
-                cambios de estado vienen del webhook Firmafy + acción
-                del superadmin Byvaro. Ver
-                `docs/screens/admin-verificaciones.md`. */}
-            {(isFirmafy || isRevision) && (
-              <details className="mt-3 group">
-                <summary className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer list-none inline-flex items-center gap-1">
-                  <span className="group-open:hidden">Controles mock (sólo prototipo)</span>
-                  <span className="hidden group-open:inline">Ocultar controles mock</span>
-                </summary>
-                <div className="mt-2 flex items-center gap-3 flex-wrap">
-                  {isFirmafy && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        update("verificacionEstado", "revision-byvaro");
-                        toast.success("Firma simulada · pasa a revisión Byvaro");
-                      }}
-                      className="text-[11px] font-semibold text-primary hover:underline"
-                    >
-                      Simular firma del representante
-                    </button>
-                  )}
-                  {isRevision && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          update("verificada", true);
-                          update("verificadaEl", new Date().toISOString());
-                          update("verificacionEstado", "verificada");
-                          toast.success("Empresa verificada por superadmin");
-                        }}
-                        className="text-[11px] font-semibold text-primary hover:underline"
-                      >
-                        Aprobar como superadmin
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          update("verificacionEstado", "rechazada");
-                          toast.message("Solicitud rechazada (mock)");
-                        }}
-                        className="text-[11px] font-semibold text-destructive hover:underline"
-                      >
-                        Rechazar como superadmin
-                      </button>
-                    </>
-                  )}
-                </div>
-              </details>
-            )}
-          </div>
+          </p>
+          {isRejected && (
+            <button
+              type="button"
+              onClick={() => {
+                update("verificacionEstado", "datos-pendientes");
+                toast.message("Revisa los datos y vuelve a enviar la solicitud");
+              }}
+              className="inline-flex items-center gap-1 h-7 px-3 rounded-full bg-primary text-primary-foreground text-[11.5px] font-semibold hover:bg-primary/90 transition-colors shrink-0"
+            >
+              Reintentar
+            </button>
+          )}
+          {/* MOCK controls · solo prototipo · acciones del superadmin
+              Byvaro · en producción no existen aquí · la decisión
+              llega por webhook tras revisión humana. */}
+          {(isFirmafy || isRevision) && (
+            <details className="relative shrink-0">
+              <summary className="list-none cursor-pointer text-muted-foreground hover:text-foreground transition-colors h-6 w-6 grid place-items-center">
+                <span className="text-[14px] leading-none">···</span>
+              </summary>
+              <div className="absolute right-0 top-7 z-10 rounded-xl border border-border bg-card shadow-lg p-1.5 w-[230px] flex flex-col gap-0.5">
+                <p className="text-[9.5px] uppercase tracking-wider text-muted-foreground/70 font-medium px-2 pt-1">Mock · sólo prototipo</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    update("verificada", true);
+                    update("verificadaEl", new Date().toISOString());
+                    update("verificacionEstado", "verificada");
+                    toast.success("Empresa verificada por superadmin");
+                  }}
+                  className="text-left text-[11.5px] hover:bg-muted rounded-lg px-2 py-1.5 text-primary"
+                >
+                  Aprobar como superadmin
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    update("verificacionEstado", "rechazada");
+                    toast.message("Solicitud rechazada (mock)");
+                  }}
+                  className="text-left text-[11.5px] hover:bg-muted rounded-lg px-2 py-1.5 text-destructive"
+                >
+                  Rechazar como superadmin
+                </button>
+              </div>
+            </details>
+          )}
         </div>
       </section>
     );
   }
 
-  /* Estado colapsado · ocupa poco · CTA para abrir el form */
+  /* Estado colapsado · UNA sola línea · icon + texto + badge + CTA */
   if (!open) {
     return (
-      <section className="rounded-2xl border border-primary/30 bg-primary/[0.04] shadow-soft overflow-hidden">
-        <div className="px-5 sm:px-6 py-4 flex items-center gap-3 flex-wrap">
-          <div className="h-9 w-9 rounded-2xl bg-primary/10 grid place-items-center shrink-0">
-            <ShieldCheck className="h-4.5 w-4.5 text-primary" strokeWidth={2} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
-              Pendiente · suma 30% al perfil
-            </p>
-            <h3 className="text-[13.5px] font-bold tracking-tight text-foreground mt-0.5">
-              Verifica legalmente tu empresa
-            </h3>
-            <p className="text-[11.5px] text-muted-foreground leading-relaxed mt-0.5">
-              Las agencias confían en promotores verificados. Validamos tu CIF
-              y la identidad del representante con una declaración firmada.
-            </p>
-          </div>
+      <section className="rounded-2xl border border-primary/30 bg-primary/[0.04] shadow-soft">
+        <div className="px-5 py-2.5 flex items-center gap-3">
+          <ShieldCheck className="h-4 w-4 text-primary shrink-0" strokeWidth={2} />
+          <p className="text-[12.5px] text-foreground min-w-0 flex-1 truncate">
+            <b className="font-semibold">Verifica legalmente tu empresa</b>
+            <span className="ml-1.5 text-muted-foreground hidden sm:inline">· suma 30% al perfil</span>
+          </p>
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-primary text-primary-foreground text-[12.5px] font-semibold hover:bg-primary/90 transition-colors shrink-0"
+            className="inline-flex items-center gap-1 h-7 px-3 rounded-full bg-primary text-primary-foreground text-[11.5px] font-semibold hover:bg-primary/90 transition-colors shrink-0"
           >
-            Iniciar verificación
+            Iniciar
           </button>
         </div>
       </section>

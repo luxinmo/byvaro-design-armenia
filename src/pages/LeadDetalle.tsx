@@ -150,7 +150,7 @@ export default function LeadDetalle() {
     <div className="flex flex-col min-h-full bg-background pb-12">
       {/* ─── Back + Header sticky ─── */}
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-content mx-auto px-4 sm:px-6 lg:px-8">
           <div className="pt-5 pb-3">
             <button
               onClick={() => navigate("/oportunidades")}
@@ -264,7 +264,7 @@ export default function LeadDetalle() {
       </header>
 
       {/* ─── Tabs del cuerpo (no afectan la sidebar derecha) ─── */}
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-4 w-full">
+      <div className="max-w-content mx-auto px-4 sm:px-6 lg:px-8 pt-4 w-full">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2">
             <div className="border-b border-border/60">
@@ -296,7 +296,7 @@ export default function LeadDetalle() {
       </div>
 
       {/* ─── Contenido ─── */}
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-5 w-full">
+      <div className="max-w-content mx-auto px-4 sm:px-6 lg:px-8 pt-5 w-full">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
           {/* ─── Columna izquierda · 2/3 ─── */}

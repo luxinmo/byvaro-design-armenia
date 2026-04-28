@@ -104,10 +104,12 @@ export function EmpresaSidebar({
   const done = checklist.filter(c => c.done).length;
   const total = checklist.length;
 
-  /* Una vez al 100% no aporta nada mantener el card · ya está todo
-   * hecho. Devolvemos null para no ocupar espacio en la columna. */
+  /* Una vez al 100% no aporta nada el sidebar · devolvemos `null`
+   * para que el layout flex-row del padre colapse y la columna de
+   * contenido (`flex-1`) ocupe todo el ancho · misma estructura que
+   * la vista de agencia, donde no hay sidebar de fuerza del perfil. */
   if (percent >= 100) {
-    return <aside className="hidden xl:flex w-[280px] shrink-0 flex-col gap-4" />;
+    return null;
   }
 
   return (

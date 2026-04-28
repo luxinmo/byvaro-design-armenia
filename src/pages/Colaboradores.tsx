@@ -409,7 +409,7 @@ export default function Colaboradores() {
     <div className="flex flex-col min-h-full bg-background">
       {/* Header limpio */}
       <section className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8">
-        <div className="max-w-[1400px] mx-auto">
+        <div className="max-w-content mx-auto">
           {/* Row 1 · título + CTAs */}
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
             <div className="min-w-0">
@@ -517,7 +517,7 @@ export default function Colaboradores() {
           que envían las agencias colaboradoras desde su panel. */}
       {totalPending > 0 && (
         <section className="px-4 sm:px-6 lg:px-8 mt-4">
-          <div className="max-w-[1400px] mx-auto">
+          <div className="max-w-content mx-auto">
             <button
               onClick={() => setRequestsOpen(true)}
               className="w-full group flex items-center gap-3 rounded-full border border-border bg-card px-4 py-2.5 text-left hover:bg-muted transition-colors"
@@ -540,7 +540,7 @@ export default function Colaboradores() {
 
       {/* Red completa */}
       <section className="px-4 sm:px-6 lg:px-8 mt-8 pb-12">
-        <div className="max-w-[1400px] mx-auto">
+        <div className="max-w-content mx-auto">
           <header className="mb-4 flex items-end justify-between gap-3">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">

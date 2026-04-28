@@ -12,6 +12,16 @@ export default {
     },
     extend: {
       fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+      /* Anchos canónicos del contenedor de página · ver REGLA DE ORO
+       * "Anchos del contenedor de página" en CLAUDE.md.
+       *   · `max-w-content` (1400px) → listados, dashboards, master-detail.
+       *   · `max-w-reading` (1250px) → perfiles, ajustes, lectura larga.
+       * NO añadir un tercer valor sin discutir · cualquier divergencia
+       * rompe la consistencia entre pantallas. */
+      maxWidth: {
+        content: "1400px",
+        reading: "1250px",
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

@@ -111,7 +111,7 @@ export default function ColaboradorHistorial() {
 
   return (
     <div className="flex-1 flex flex-col min-h-full bg-background">
-      <div className="px-4 sm:px-6 lg:px-10 pt-6 pb-10 max-w-[1250px] mx-auto w-full">
+      <div className="px-4 sm:px-6 lg:px-10 pt-6 pb-10 max-w-reading mx-auto w-full">
         {/* Header */}
         <div className="mb-5">
           <Link

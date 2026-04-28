@@ -121,7 +121,7 @@ export default function Leads() {
     <div className="flex flex-col min-h-full bg-background">
       {/* Header */}
       <section className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8">
-        <div className="max-w-[1400px] mx-auto">
+        <div className="max-w-content mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
             <div className="min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -234,7 +234,7 @@ export default function Leads() {
 
       {/* Listado */}
       <section className="px-4 sm:px-6 lg:px-8 mt-6 pb-12">
-        <div className="max-w-[1400px] mx-auto">
+        <div className="max-w-content mx-auto">
           <div className="mb-3 flex items-end justify-between gap-3">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               {filtered.length} {filtered.length === 1 ? "oportunidad" : "oportunidades"}

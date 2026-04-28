@@ -98,7 +98,7 @@ export default function Estadisticas() {
     <div className="flex-1 flex flex-col min-h-full bg-background">
       {/* ══════════════ PAGE HEADER ══════════════ */}
       <div className="px-3 sm:px-6 lg:px-8 pt-6 sm:pt-8">
-        <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div className="max-w-content mx-auto flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Comercial
@@ -122,7 +122,7 @@ export default function Estadisticas() {
 
       {/* ══════════════ CONTENT ══════════════ */}
       <div className="px-3 sm:px-6 lg:px-8 mt-6 space-y-5 pb-8">
-        <div className="max-w-[1400px] mx-auto space-y-5">
+        <div className="max-w-content mx-auto space-y-5">
 
           {/* ─── KPIs ─── */}
           <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

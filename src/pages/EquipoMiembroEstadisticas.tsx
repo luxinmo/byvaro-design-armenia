@@ -77,7 +77,7 @@ export default function EquipoMiembroEstadisticas() {
     <div className="flex flex-col min-h-full bg-background">
       {/* ═══ Header ═══ */}
       <div className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-4 border-b border-border/60">
-        <div className="max-w-[1400px] mx-auto">
+        <div className="max-w-content mx-auto">
           <button
             onClick={() => navigate("/equipo")}
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-4"
@@ -181,7 +181,7 @@ export default function EquipoMiembroEstadisticas() {
 
       {/* ═══ Contenido ═══ */}
       <div className="flex-1 px-4 sm:px-6 lg:px-8 py-6">
-        <div className="max-w-[1400px] mx-auto space-y-6">
+        <div className="max-w-content mx-auto space-y-6">
           {!stats ? (
             <EmptyStats />
           ) : (

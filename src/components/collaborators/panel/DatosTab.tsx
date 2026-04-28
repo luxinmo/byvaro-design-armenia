@@ -30,6 +30,7 @@ import {
   type LicenciaInmobiliaria,
 } from "@/lib/licenses";
 import { getAgencyLicenses } from "@/lib/agencyLicenses";
+import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
 
 interface Props {
   agency: Agency;

@@ -113,7 +113,7 @@ export default function AgenciaDetalle() {
   /* ─── Footer sticky con acciones ─── */
   const visitorFooter = (
     <footer className="sticky bottom-0 border-t border-border bg-card/95 backdrop-blur-sm z-20">
-      <div className="max-w-[1250px] mx-auto px-4 sm:px-6 lg:px-10 py-3 flex items-center gap-2 flex-wrap">
+      <div className="max-w-reading mx-auto px-4 sm:px-6 lg:px-10 py-3 flex items-center gap-2 flex-wrap">
         <p className="text-xs text-muted-foreground mr-auto">
           {isPending
             ? "Revisa la solicitud y decide:"

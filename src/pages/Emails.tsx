@@ -102,7 +102,7 @@ export default function Emails() {
     <div className="flex flex-col h-full min-h-0">
       {showByvaroBanner && (
         <div className="shrink-0 bg-primary/5 border-b border-primary/15 px-4 sm:px-6 lg:px-8 py-2.5">
-          <div className="max-w-[1400px] mx-auto flex items-start gap-3 flex-wrap">
+          <div className="max-w-content mx-auto flex items-start gap-3 flex-wrap">
             <span className="h-7 w-7 rounded-lg bg-primary/15 text-primary grid place-items-center shrink-0 mt-0.5">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
             </span>

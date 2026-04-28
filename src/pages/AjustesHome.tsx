@@ -54,7 +54,7 @@ export default function AjustesHome() {
   }
 
   return (
-    <div className="w-full max-w-[1250px] mx-auto space-y-6">
+    <div className="w-full max-w-reading mx-auto space-y-6">
       {filtered.map((section) => (
         <section
           key={section.id}

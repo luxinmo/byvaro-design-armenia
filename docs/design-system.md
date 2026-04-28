@@ -99,10 +99,38 @@ className="shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-al
 |---|---|
 | Page container horizontal | `px-4 sm:px-6 lg:px-8` |
 | Page container vertical | `pt-6 sm:pt-8 pb-8` |
-| Max-width contenedor | `max-w-[1400px] mx-auto` |
+| Max-width contenedor | `max-w-content` (1400px) o `max-w-reading` (1250px) — ver siguiente sección |
 | Cards | `p-4 sm:p-5` (hero: `p-5 sm:p-6`) |
 | Gap items de lista | `gap-3` |
 | Space entre secciones | `space-y-5` o `gap-4 sm:gap-5` |
+
+## Anchos de página (canónicos · 2 valores)
+
+> Regla canónica en CLAUDE.md → "REGLA DE ORO · Anchos del contenedor de
+> página". Resumen:
+
+Tokens en `tailwind.config.ts`:
+
+```ts
+maxWidth: {
+  content: "1400px",   // listados, dashboards, master-detail
+  reading: "1250px",   // perfiles, ajustes, lectura larga
+}
+```
+
+| Token | Tamaño | Cuándo |
+|---|---:|---|
+| `max-w-content` | 1400px | Listados con grids de cards (Promociones, Colaboradores, Contactos, Equipo, Registros, Ventas, Microsites, Emails, Leads). Dashboards (Inicio, Estadísticas, Calendario). Master-detail (Registros, ContactoDetalle, LeadDetalle). Wizard largo (CrearPromocion). |
+| `max-w-reading` | 1250px | Perfil / ficha pública (Empresa · `/empresa`, `/promotor/:id`, `/colaboradores/:id`). Settings (AjustesHome y sub-páginas). Footer sticky de AgenciaDetalle. |
+
+**Por qué dos**: a 1400 las pantallas de perfil/ajustes producen líneas
+de texto de 100+ chars (rompe legibilidad · Bringhurst recomienda
+60-75 chars/línea). A 1250 los listados pierden una columna de cards
+en pantallas grandes.
+
+**No inventar otros valores**: 1100, 1200, 1300, 1500 son `bug del
+diseño`. Para wizards y dialogs internos hay otros tokens (`max-w-md`,
+`max-w-2xl`, etc. — pero NO para el contenedor de página).
 
 ## Componentes base
 

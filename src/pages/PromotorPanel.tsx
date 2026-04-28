@@ -167,7 +167,7 @@ export default function PromotorPanel() {
 
   return (
     <div className="h-full overflow-auto bg-background" data-scroll-container>
-      <div className="px-4 sm:px-6 lg:px-10 pt-6 pb-16 max-w-[1400px] mx-auto w-full">
+      <div className="px-4 sm:px-6 lg:px-10 pt-6 pb-16 max-w-content mx-auto w-full">
 
         {/* ══════ Back + eyebrow ══════ */}
         <div className="mb-4">

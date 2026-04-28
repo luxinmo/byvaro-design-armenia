@@ -140,72 +140,81 @@ export function GoogleRatingCard({ empresa, viewMode, update }: Props) {
             API y devuelve los valores reales). */}
         {viewMode === "edit" && (
           <div className="mt-3 space-y-2">
-            <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium block">
-              Enlace a tu ficha Google Maps
-            </label>
-            <div className="flex gap-2">
-              <input
-                id="google-maps-url-input"
-                type="url"
-                value={empresa.googleMapsUrl}
-                onChange={(e) => update("googleMapsUrl", e.target.value)}
-                placeholder="Pega aquí el enlace de tu ficha"
-                className="flex-1 min-w-0 h-9 px-3 text-xs bg-background border border-border rounded-lg focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground/60"
-              />
-              {/* Botón SIEMPRE visible · disabled si el input está
-                  vacío. */}
-              <button
-                type="button"
-                disabled={!empresa.googleMapsUrl?.trim()}
-                onClick={() => {
-                  /* MOCK · usamos los valores del seed (4.7 · 312
-                   *  reseñas) para que el demo refleje tu Google real
-                   *  sin tener que parsear nada.
-                   *  TODO(backend): POST /api/empresa/google-place
-                   *    { mapsUrl } · resolverá place_id real, hará
-                   *    fetch a Places API y devolverá los valores
-                   *    actualizados. Cron semanal refresca rating. */
-                  const seed = hashStringToInt(empresa.googleMapsUrl);
-                  update("googlePlaceId", `MOCK_${seed.toString(36)}`);
-                  update("googleRating", 4.7);
-                  update("googleRatingsTotal", 312);
-                  update("googleFetchedAt", new Date().toISOString());
-                }}
-                className="h-9 px-4 rounded-full bg-foreground text-background text-xs font-semibold hover:bg-foreground/90 transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Conectar
-              </button>
-            </div>
-            <details className="group">
-              <summary className="text-[11px] text-primary hover:underline cursor-pointer list-none inline-flex items-center gap-1">
-                <span className="group-open:hidden">¿Cómo obtengo el enlace?</span>
-                <span className="hidden group-open:inline">Ocultar pasos</span>
-              </summary>
-              <ol className="mt-2 ml-4 text-[11px] text-muted-foreground leading-relaxed list-decimal space-y-0.5">
-                <li>Abre <a href="https://www.google.com/maps" target="_blank" rel="noreferrer" className="underline hover:text-foreground">Google Maps</a> y busca tu empresa.</li>
-                <li>Pulsa en el botón <b>Compartir</b>.</li>
-                <li>Copia el enlace y pégalo arriba.</li>
-              </ol>
-            </details>
-            {(empresa.googleRating > 0 || empresa.googlePlaceId) && (
-              <button
-                type="button"
-                onClick={() => {
-                  /* TODO(backend): DELETE /api/empresa/google-place */
-                  update("googleMapsUrl", "");
-                  update("googlePlaceId", "");
-                  update("googleRating", 0);
-                  update("googleRatingsTotal", 0);
-                  update("googleFetchedAt", "");
-                }}
-                className="text-[11px] text-destructive/80 hover:text-destructive hover:underline transition-colors"
-              >
-                Desactivar conexión
-              </button>
+            {/* Si la ficha YA está conectada, ocultamos el input de URL
+                + el botón Conectar · solo dejamos el aviso de refresco
+                automático y un enlace discreto "Desactivar conexión".
+                Antes el link aparecía siempre y ocupaba un input + botón
+                cuando ya no hacía falta. */}
+            {!connected ? (
+              <>
+                <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium block">
+                  Enlace a tu ficha Google Maps
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    id="google-maps-url-input"
+                    type="url"
+                    value={empresa.googleMapsUrl}
+                    onChange={(e) => update("googleMapsUrl", e.target.value)}
+                    placeholder="Pega aquí el enlace de tu ficha"
+                    className="flex-1 min-w-0 h-9 px-3 text-xs bg-background border border-border rounded-lg focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground/60"
+                  />
+                  <button
+                    type="button"
+                    disabled={!empresa.googleMapsUrl?.trim()}
+                    onClick={() => {
+                      /* MOCK · usamos los valores del seed (4.7 · 312
+                       *  reseñas) para que el demo refleje tu Google real
+                       *  sin tener que parsear nada.
+                       *  TODO(backend): POST /api/empresa/google-place
+                       *    { mapsUrl } · resolverá place_id real, hará
+                       *    fetch a Places API y devolverá los valores
+                       *    actualizados. Cron semanal refresca rating. */
+                      const seed = hashStringToInt(empresa.googleMapsUrl);
+                      update("googlePlaceId", `MOCK_${seed.toString(36)}`);
+                      update("googleRating", 4.7);
+                      update("googleRatingsTotal", 312);
+                      update("googleFetchedAt", new Date().toISOString());
+                    }}
+                    className="h-9 px-4 rounded-full bg-foreground text-background text-xs font-semibold hover:bg-foreground/90 transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Conectar
+                  </button>
+                </div>
+                <details className="group">
+                  <summary className="text-[11px] text-primary hover:underline cursor-pointer list-none inline-flex items-center gap-1">
+                    <span className="group-open:hidden">¿Cómo obtengo el enlace?</span>
+                    <span className="hidden group-open:inline">Ocultar pasos</span>
+                  </summary>
+                  <ol className="mt-2 ml-4 text-[11px] text-muted-foreground leading-relaxed list-decimal space-y-0.5">
+                    <li>Abre <a href="https://www.google.com/maps" target="_blank" rel="noreferrer" className="underline hover:text-foreground">Google Maps</a> y busca tu empresa.</li>
+                    <li>Pulsa en el botón <b>Compartir</b>.</li>
+                    <li>Copia el enlace y pégalo arriba.</li>
+                  </ol>
+                </details>
+              </>
+            ) : (
+              /* Conectada · solo aviso de refresco + desconectar */
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-[10.5px] text-muted-foreground leading-relaxed">
+                  Refrescamos los datos automáticamente cada semana desde Google.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    /* TODO(backend): DELETE /api/empresa/google-place */
+                    update("googleMapsUrl", "");
+                    update("googlePlaceId", "");
+                    update("googleRating", 0);
+                    update("googleRatingsTotal", 0);
+                    update("googleFetchedAt", "");
+                  }}
+                  className="text-[11px] text-destructive/80 hover:text-destructive hover:underline transition-colors shrink-0"
+                >
+                  Desactivar conexión
+                </button>
+              </div>
             )}
-            <p className="text-[10px] text-muted-foreground/80 leading-relaxed">
-              Refrescamos los datos automáticamente cada semana desde Google.
-            </p>
           </div>
         )}
 

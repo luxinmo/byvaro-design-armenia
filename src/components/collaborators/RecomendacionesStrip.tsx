@@ -29,7 +29,7 @@ export function RecomendacionesStrip({
 
   return (
     <section className="px-4 sm:px-6 lg:px-8 mt-8">
-      <div className="max-w-[1400px] mx-auto">
+      <div className="max-w-content mx-auto">
         <header className="mb-4 flex items-end justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1.5">

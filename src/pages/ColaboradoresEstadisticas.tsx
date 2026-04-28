@@ -238,7 +238,7 @@ export default function ColaboradoresEstadisticas({
 
       {/* ─── Back + header ─── */}
       <div className={cn("px-4 sm:px-6 lg:px-8", embedded ? "pt-5" : "pt-6 sm:pt-8")}>
-        <div className="max-w-[1400px] mx-auto">
+        <div className="max-w-content mx-auto">
           {!embedded && (
             <button
               onClick={() => navigate("/colaboradores")}
@@ -375,7 +375,7 @@ export default function ColaboradoresEstadisticas({
       </div>
 
       {/* ─── Tab content ─── */}
-      <div className="px-4 sm:px-6 lg:px-8 pb-12 max-w-[1400px] mx-auto w-full">
+      <div className="px-4 sm:px-6 lg:px-8 pb-12 max-w-content mx-auto w-full">
         {tab === "registros" && (
           <TabRegistros
             visibleAgencies={visibleAgencies}

@@ -116,7 +116,7 @@ export default function AgencyHome() {
     <div className="flex-1 flex flex-col min-h-full bg-background">
       {/* Header */}
       <div className="px-3 sm:px-6 lg:px-8 pt-6 sm:pt-8">
-        <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div className="max-w-content mx-auto flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
             <p className="text-xs text-muted-foreground font-medium">
               {agency ? `${agency.name} · Agencia colaboradora` : "Agencia colaboradora"}
@@ -143,7 +143,7 @@ export default function AgencyHome() {
 
       {/* KPIs */}
       <div className="px-3 sm:px-6 lg:px-8 mt-6 pb-8">
-        <div className="max-w-[1400px] mx-auto space-y-5">
+        <div className="max-w-content mx-auto space-y-5">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <AgencyKpi
               icon={Building2}
