@@ -365,6 +365,194 @@ export function hydrateFromSupabase(): Promise<void> {
         console.warn("[hydrate] collab_requests skipped:", e);
       }
 
+      /* ─── CRM core · registros, sales, calendar_events,
+       *      notifications, user_favorites, contacts ───
+       *  Pulamos los datos relevantes al workspace y los escribimos
+       *  en las claves localStorage que ya consumen los stores
+       *  legacy (`byvaro.registros.created.v1`, etc.). RLS filtra
+       *  cross-tenant automáticamente. */
+      try {
+        const [registrosR, salesR, calR, notifR, favsR] = await Promise.all([
+          supabase.from("registros").select("*"),
+          supabase.from("sales").select("*, sale_payments(*)"),
+          supabase.from("calendar_events").select("*"),
+          supabase.from("notifications").select("*").order("created_at", { ascending: false }),
+          supabase.from("user_favorites").select("*").eq("kind", "agency"),
+        ]);
+
+        if (registrosR.data) {
+          /* Map columnas snake_case → shape mock TS. */
+          type DBRegistro = {
+            id: string; organization_id: string; agency_organization_id: string | null;
+            promotion_id: string; estado: string; tipo: string; origen: string;
+            cliente_nombre: string; cliente_email: string | null;
+            cliente_telefono: string | null; cliente_nacionalidad: string | null;
+            cliente_nationality_iso: string | null; cliente_dni: string | null;
+            match_percentage: number | null; match_with: string | null;
+            match_cliente: unknown; recommendation: string | null;
+            visit_date: string | null; visit_time: string | null;
+            visit_outcome: string | null; origin_registro_id: string | null;
+            decided_at: string | null; decided_by_name: string | null;
+            decided_by_role: string | null;
+            notas: string | null; consent: boolean | null;
+            response_time: string | null; public_ref: string | null;
+            fecha: string;
+          };
+          const mapped = (registrosR.data as DBRegistro[]).map((r) => ({
+            id: r.id,
+            origen: r.origen,
+            promotionId: r.promotion_id,
+            agencyId: r.agency_organization_id ?? undefined,
+            tipo: r.tipo,
+            estado: r.estado,
+            cliente: {
+              nombre: r.cliente_nombre,
+              email: r.cliente_email ?? undefined,
+              telefono: r.cliente_telefono ?? undefined,
+              nacionalidad: r.cliente_nacionalidad ?? undefined,
+              nationalityIso: r.cliente_nationality_iso ?? undefined,
+              dni: r.cliente_dni ?? undefined,
+            },
+            matchPercentage: r.match_percentage ?? 0,
+            matchWith: r.match_with ?? undefined,
+            matchCliente: r.match_cliente ?? undefined,
+            recommendation: r.recommendation ?? undefined,
+            visitDate: r.visit_date ?? undefined,
+            visitTime: r.visit_time ?? undefined,
+            visitOutcome: r.visit_outcome ?? undefined,
+            originRegistroId: r.origin_registro_id ?? undefined,
+            decidedAt: r.decided_at ?? undefined,
+            decidedBy: r.decided_by_name ?? undefined,
+            decidedByRole: r.decided_by_role ?? undefined,
+            notas: r.notas ?? undefined,
+            consent: r.consent ?? false,
+            responseTime: r.response_time ?? undefined,
+            publicRef: r.public_ref ?? undefined,
+            fecha: r.fecha,
+          }));
+          try {
+            localStorage.setItem("byvaro.registros.created.v1", JSON.stringify(mapped));
+          } catch { /* skip */ }
+        }
+
+        if (salesR.data) {
+          type DBSale = {
+            id: string; organization_id: string; agency_organization_id: string | null;
+            promotion_id: string; registro_id: string | null;
+            unit_id: string | null; unit_label: string | null;
+            cliente_nombre: string; cliente_email: string | null;
+            cliente_telefono: string | null; cliente_nacionalidad: string | null;
+            agent_name: string | null; estado: string;
+            fecha_reserva: string | null; fecha_contrato: string | null;
+            fecha_escritura: string | null; fecha_caida: string | null;
+            precio_reserva: number | null; precio_final: number | null;
+            precio_listado: number | null; descuento_aplicado: number | null;
+            comision_pct: number | null; comision_pagada: boolean | null;
+            metodo_pago: string | null; siguiente_paso: string | null;
+            siguiente_paso_fecha: string | null; nota: string | null;
+            sale_payments: Array<{ fecha: string; concepto: string; importe: number }>;
+          };
+          const mapped = (salesR.data as DBSale[]).map((s) => ({
+            id: s.id,
+            registroId: s.registro_id ?? undefined,
+            promotionId: s.promotion_id,
+            unitId: s.unit_id ?? undefined,
+            unitLabel: s.unit_label ?? undefined,
+            clienteNombre: s.cliente_nombre,
+            clienteEmail: s.cliente_email ?? undefined,
+            clienteTelefono: s.cliente_telefono ?? undefined,
+            clienteNacionalidad: s.cliente_nacionalidad ?? undefined,
+            agencyId: s.agency_organization_id ?? undefined,
+            agentName: s.agent_name ?? undefined,
+            estado: s.estado,
+            fechaReserva: s.fecha_reserva ?? undefined,
+            fechaContrato: s.fecha_contrato ?? undefined,
+            fechaEscritura: s.fecha_escritura ?? undefined,
+            fechaCaida: s.fecha_caida ?? undefined,
+            precioReserva: s.precio_reserva ?? undefined,
+            precioFinal: s.precio_final ?? undefined,
+            precioListado: s.precio_listado ?? undefined,
+            descuentoAplicado: s.descuento_aplicado ?? undefined,
+            comisionPct: s.comision_pct ?? undefined,
+            comisionPagada: s.comision_pagada ?? false,
+            metodoPago: s.metodo_pago ?? undefined,
+            siguientePaso: s.siguiente_paso ?? undefined,
+            siguientePasoFecha: s.siguiente_paso_fecha ?? undefined,
+            nota: s.nota ?? undefined,
+            pagos: (s.sale_payments ?? []).map((p) => ({
+              fecha: p.fecha, concepto: p.concepto, importe: Number(p.importe),
+            })),
+          }));
+          try {
+            localStorage.setItem("byvaro.sales.created.v1", JSON.stringify(mapped));
+          } catch { /* skip */ }
+        }
+
+        if (calR.data) {
+          type DBCal = {
+            id: string; type: string; status: string;
+            title: string; description: string | null;
+            starts_at: string; ends_at: string;
+            contact_id: string | null; registro_id: string | null;
+            promotion_id: string | null; lead_id: string | null;
+            location: string | null; assignee_user_id: string | null;
+          };
+          const mapped = (calR.data as DBCal[]).map((c) => ({
+            id: c.id, type: c.type, status: c.status,
+            title: c.title, description: c.description ?? undefined,
+            startsAt: c.starts_at, endsAt: c.ends_at,
+            start: c.starts_at, end: c.ends_at,
+            contactId: c.contact_id ?? undefined,
+            registroId: c.registro_id ?? undefined,
+            promotionId: c.promotion_id ?? undefined,
+            leadId: c.lead_id ?? undefined,
+            location: c.location ?? undefined,
+            assigneeUserId: c.assignee_user_id ?? undefined,
+          }));
+          try {
+            localStorage.setItem("byvaro.calendar.created.v1", JSON.stringify(mapped));
+          } catch { /* skip */ }
+        }
+
+        if (notifR.data) {
+          type DBNotif = {
+            id: string; type: string; title: string; body: string | null;
+            link: string | null; read_at: string | null;
+            recipient_user_id: string | null; metadata: unknown;
+            created_at: string; priority: string;
+          };
+          const mapped = (notifR.data as DBNotif[]).map((n) => ({
+            id: n.id,
+            recipientUserId: n.recipient_user_id ?? undefined,
+            type: n.type,
+            title: n.title,
+            body: n.body ?? undefined,
+            link: n.link ?? undefined,
+            priority: n.priority,
+            readAt: n.read_at ?? null,
+            createdAt: Date.parse(n.created_at),
+            metadata: n.metadata ?? undefined,
+          }));
+          try {
+            localStorage.setItem("byvaro.notifications.v1", JSON.stringify(mapped));
+          } catch { /* skip */ }
+        }
+
+        if (favsR.data) {
+          const ids = (favsR.data as Array<{ target_id: string }>).map((f) => f.target_id);
+          try {
+            localStorage.setItem("byvaro-favoritos-agencias", JSON.stringify(ids));
+          } catch { /* skip */ }
+        }
+
+        window.dispatchEvent(new CustomEvent("byvaro:registros-change"));
+        window.dispatchEvent(new CustomEvent("byvaro:notifications-change"));
+        window.dispatchEvent(new CustomEvent("byvaro:favoritos-agencias-changed"));
+        window.dispatchEvent(new CustomEvent("byvaro:calendar-change"));
+      } catch (e) {
+        console.warn("[hydrate] CRM data skipped:", e);
+      }
+
       lastHydratedAt = Date.now();
     } finally {
       hydratePromise = null;

@@ -43,6 +43,77 @@ function write(list: Registro[]) {
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
 
+/** Persiste UN registro a Supabase · async write-through. Llamar tras
+ *  cualquier mutación que añada/edite. RLS valida que el caller es
+ *  member del workspace dueño O del workspace agencia. */
+async function syncRegistroToSupabase(r: Registro, ownerOrgId: string) {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { error } = await supabase.from("registros").upsert({
+      id: r.id,
+      organization_id: ownerOrgId,
+      agency_organization_id: r.agencyId ?? null,
+      promotion_id: r.promotionId,
+      origen: r.origen,
+      tipo: (r as { tipo?: string }).tipo ?? "registration",
+      estado: r.estado,
+      cliente_nombre: r.cliente.nombre,
+      cliente_email: r.cliente.email ?? null,
+      cliente_telefono: r.cliente.telefono ?? null,
+      cliente_nacionalidad: r.cliente.nacionalidad ?? null,
+      cliente_nationality_iso: r.cliente.nationalityIso ?? null,
+      cliente_dni: r.cliente.dni ?? null,
+      match_percentage: r.matchPercentage ?? 0,
+      match_with: r.matchWith ?? null,
+      match_cliente: r.matchCliente ?? null,
+      recommendation: r.recommendation ?? null,
+      visit_date: (r as { visitDate?: string }).visitDate ?? null,
+      visit_time: (r as { visitTime?: string }).visitTime ?? null,
+      visit_outcome: (r as { visitOutcome?: string }).visitOutcome ?? null,
+      origin_registro_id: (r as { originRegistroId?: string }).originRegistroId ?? null,
+      decided_at: r.decidedAt ?? null,
+      decided_by_name: r.decidedBy ?? null,
+      decided_by_role: r.decidedByRole ?? null,
+      notas: r.notas ?? null,
+      consent: r.consent ?? false,
+      response_time: r.responseTime ?? null,
+      public_ref: r.publicRef ?? null,
+      fecha: r.fecha,
+    });
+    if (error) console.warn("[registros:sync] upsert failed:", error.message);
+  } catch (e) { console.warn("[registros:sync] skipped:", e); }
+}
+
+/** Actualiza el estado/decision de un registro existente · usado por
+ *  los flows de aprobar/rechazar. Persiste en localStorage + Supabase. */
+export function updateRegistroState(id: string, patch: Partial<Registro>) {
+  const list = read();
+  const idx = list.findIndex((r) => r.id === id);
+  let updated: Registro | undefined;
+  if (idx >= 0) {
+    updated = { ...list[idx], ...patch };
+    const next = [...list];
+    next[idx] = updated;
+    write(next);
+  } else {
+    /* Si no está en created, puede ser un seed · creamos override
+     *  local para que `useAllRegistros()` que mergea seed+created
+     *  refleje el cambio. Persistencia Supabase aún así. */
+    const seed = SEED_REGISTROS.find((r) => r.id === id);
+    if (seed) {
+      updated = { ...seed, ...patch };
+      write([updated, ...list]);
+    }
+  }
+  if (updated) {
+    /* TODO(backend): organization_id viene del registro original · en
+     * mock single-tenant es siempre developer-default. Cuando Phase 3
+     * llegue, leemos el campo del registro existente. */
+    void syncRegistroToSupabase(updated, "developer-default");
+  }
+}
+
 /* ══════ Helpers de normalización · "first-come silent" ══════════ */
 
 function normEmail(s?: string): string {
@@ -141,6 +212,11 @@ export function addCreatedRegistro(r: Registro) {
     : ensured;
   const list = read();
   write([finalRegistro, ...list]);
+  /* Write-through · el dueño es el promotor de la promoción. En mock
+   * single-tenant siempre developer-default · cuando Phase 3 los
+   * promotores externos creen sus propias promos, derivamos del
+   * `promotions.owner_organization_id`. */
+  void syncRegistroToSupabase(finalRegistro, "developer-default");
 }
 
 /** Helper exportado · permite a la UI calcular el score de un cliente
