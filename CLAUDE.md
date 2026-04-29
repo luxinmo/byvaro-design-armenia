@@ -11,6 +11,58 @@
 
 ---
 
+## 🥇 REGLA DE ORO · Backend acoplado · helpers permanentes
+
+> **Desde 2026-04-29 · cada cambio en el producto que toque datos se
+> hace frontend + backend a la vez. Los helpers de `src/lib/*` son la
+> frontera estable: cuando este Supabase cambie por backend custom o
+> por cualquier otra cosa, lo único que cambia es la implementación
+> interna de los helpers · componentes y páginas siguen iguales.**
+
+### Las 5 leyes
+
+1. **Cero `supabase.from(...)` en componentes / páginas.** Toda
+   interacción con Supabase pasa por un helper de `src/lib/*`.
+   Excepciones documentadas: `supabaseClient.ts` (cliente singleton),
+   `supabaseHydrate.ts` (hidratador), `Login.tsx` (auth boundary),
+   `SupabaseHydrator.tsx` (event subscription).
+2. **Cero `localStorage.(get|set)Item("byvaro-...")` en componentes.**
+   localStorage es un detalle de implementación del helper, no del UI.
+3. **Toda tabla nueva → migración SQL + RLS + bridge view en `api`
+   schema + helper TS + hidratación + test E2E + doc backend.**
+   Sin uno de estos pasos, la feature no está completa.
+4. **Toda mutación es write-through · optimistic local + Supabase
+   async.** UI refresca instantáneo, backend recibe la escritura,
+   si falla se loggea (no silencioso para siempre · phase 3 añade
+   retry/queue).
+5. **Multi-tenant por defecto · `organization_id` en cada tabla
+   business · RLS desde día 1.** Sin `organization_id` no hay
+   aislamiento posible y el privacy gap es seguro.
+
+### Antes de cerrar cualquier PR que toque datos
+
+- [ ] ¿La tabla existe en Supabase? · `psql "$SUPABASE_DB_URL" -c "\dt public.*"`.
+- [ ] ¿Tiene RLS habilitada y al menos una policy?
+- [ ] ¿Tiene su bridge view en `api.*` con `security_invoker = on`?
+- [ ] ¿Existe el helper en `src/lib/<feature>Storage.ts`?
+- [ ] ¿El helper tiene write-through a Supabase + dispatch event?
+- [ ] ¿El componente USA solo el helper · sin tocar Supabase ni localStorage?
+- [ ] ¿El hydrator pulla la tabla al login si los datos se renderizan tras login?
+- [ ] ¿`grep -rE "supabase\.from\(" src/components src/pages` devuelve 0 resultados (excluyendo Login.tsx)?
+- [ ] ¿`npx tsc --noEmit && npx vite build` pasa?
+- [ ] ¿Test E2E que verifica persistencia cross-device?
+
+### Doc canónico completo
+
+**`docs/backend-development-rules.md`** — patrones, plantillas de
+helper, plantillas de RLS, naming conventions, migration workflow,
+checklists, anti-patterns prohibidos, estado actual de helpers.
+
+**Léelo entero la primera vez · revisa la sección relevante en cada
+PR.**
+
+---
+
 ## 🚀 FASE 1 · Backend real · Single Source of Truth
 
 > Bloque obligatorio para cualquier agente que toque plan, paywall, billing,
