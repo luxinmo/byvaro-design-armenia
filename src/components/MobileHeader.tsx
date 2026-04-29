@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Home, Tag, FileText, CircleDollarSign, CalendarDays,
-  Handshake, Contact, Globe, Mail, Settings, Users, Building2,
+  Handshake, Contact, Globe, Mail, Settings, Users, Building2, KeyRound, LayoutGrid,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -16,12 +16,14 @@ const drawerGroups = [
   { label: "General", items: [{ title: "Inicio", url: "/inicio", icon: Home }] },
   { label: "Comercial", items: [
     { title: "Promociones", url: "/promociones", icon: Tag },
+    { title: "Inmuebles", url: "/inmuebles", icon: KeyRound },
+    { title: "Inmuebles · cuadrícula", url: "/inmuebles/cuadricula", icon: LayoutGrid },
     { title: "Registros", url: "/registros", icon: FileText },
     { title: "Ventas", url: "/ventas", icon: CircleDollarSign },
     { title: "Calendario", url: "/calendario", icon: CalendarDays },
   ]},
   { label: "Red", items: [
-    { title: "Colaboradores", url: "/colaboradores", icon: Handshake },
+    { title: "Inmobiliarias", url: "/colaboradores", icon: Handshake },
     { title: "Contactos", url: "/contactos", icon: Contact },
   ]},
   { label: "Administración", items: [
@@ -57,7 +59,7 @@ export function MobileHeader() {
   // la izquierda del logo que lleva a `/inicio` (atajo "ir a home").
   // Fuera de raíces (detalles) · flecha de volver clásica con
   // `navigate(-1)`.
-  const rootPaths = ["/inicio", "/promociones", "/registros", "/ventas", "/calendario", "/colaboradores", "/contactos", "/equipo", "/microsites", "/emails", "/ajustes", "/empresa"];
+  const rootPaths = ["/inicio", "/promociones", "/inmuebles", "/inmuebles/cuadricula", "/registros", "/ventas", "/calendario", "/colaboradores", "/contactos", "/equipo", "/microsites", "/emails", "/ajustes", "/empresa"];
   const isRoot = rootPaths.includes(location.pathname);
   const isInicio = location.pathname === "/inicio";
 

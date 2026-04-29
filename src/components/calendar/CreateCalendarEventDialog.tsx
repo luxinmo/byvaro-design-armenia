@@ -6,7 +6,7 @@
  *   - Tipos 3 cols en mobile, 5 en desktop.
  *   - Fecha/Hora/Duración en 1 col mobile, 3 desktop.
  *
- * Detección de conflicto DURA (ADR-056): si el agente ya tiene un
+ * Detección de solapamiento DURA (ADR-056): si el agente ya tiene un
  * evento solapando, NO se permite guardar. Banner rojo + CTA.
  *
  * Flujo de visita (type=visit):
@@ -295,7 +295,7 @@ export function CreateCalendarEventDialog({
           <DialogTitle>{isEdit ? "Editar evento" : "Nuevo evento"}</DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "Modifica los detalles del evento. Si cambias fecha/hora se vuelve a comprobar el conflicto."
+              ? "Modifica los detalles del evento. Si cambias fecha/hora se vuelve a comprobar el solapamiento."
               : "Añade una visita, llamada, reunión o bloqueo a la agenda del agente."}
           </DialogDescription>
         </DialogHeader>
@@ -376,14 +376,14 @@ export function CreateCalendarEventDialog({
             />
           </Field>
 
-          {/* Conflicto · banner rojo bloqueante */}
+          {/* Solapamiento · banner rojo bloqueante */}
           {conflict && (
             <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3">
               <div className="flex items-start gap-2.5">
                 <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" strokeWidth={2} />
                 <div className="min-w-0 flex-1">
                   <p className="text-[12.5px] font-semibold text-destructive">
-                    Conflicto de agenda
+                    Solapamiento de agenda
                   </p>
                   <p className="text-[11.5px] text-foreground mt-0.5 leading-relaxed">
                     El agente ya tiene <strong>{conflict.title}</strong>
@@ -397,11 +397,11 @@ export function CreateCalendarEventDialog({
                       onOpenChange(false);
                       if (conflict.leadId) navigate(`/oportunidades/${conflict.leadId}`);
                       else navigate("/calendario");
-                      toast.info("Abre el evento en conflicto para modificarlo");
+                      toast.info("Abre el evento solapado para modificarlo");
                     }}
                     className="mt-2 inline-flex items-center gap-1 text-[11.5px] font-semibold text-destructive hover:underline"
                   >
-                    Ir al evento en conflicto <ArrowRight className="h-3 w-3" />
+                    Ir al evento solapado <ArrowRight className="h-3 w-3" />
                   </button>
                 </div>
               </div>

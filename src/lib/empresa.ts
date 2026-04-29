@@ -14,11 +14,25 @@
  *     garantiza a la hora de crear/editar/eliminar.
  *   - Si al eliminar la principal quedan otras, la primera restante
  *     se convierte en principal automáticamente.
+ *
+ * BACKEND ENDPOINT NAMING · paths en INGLÉS (ver
+ * `docs/backend-dual-role-architecture.md §7`).
+ * NOTE · Los TODO(backend) heredados que mencionan rutas en español
+ * (`/api/empresas/...`, `/api/oficinas/...`) se mapean 1:1 a los
+ * canónicos en inglés:
+ *   · `/api/empresas/me`              → `GET/PATCH /organizations/me`
+ *   · `/api/empresas/:id/public`      → `GET /organizations/:id/public`
+ *   · `/api/empresas/:id/sensitive`   → `GET /organizations/:id/sensitive`
+ *   · `/api/empresas/:id/oficinas`    → `GET /organizations/:id/offices`
+ *   · `/api/empresas/me/oficinas`     → `GET /organizations/me/offices`
+ *   · `POST /api/oficinas`            → `POST /organizations/me/offices`
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { agencies } from "@/data/agencies";
+import { promotores } from "@/data/promotores";
 import { agencyToEmpresa } from "./agencyEmpresaAdapter";
+import { useCurrentUser } from "./currentUser";
 
 /* ═══════════════════════════════════════════════════════════════════
    Tipos
@@ -313,10 +327,38 @@ export function isValidCifBasico(cif: string): boolean {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   Persistencia low-level
+   Persistencia low-level · multi-tenant (mock)
+
+   REGLA · cada org tiene su propio perfil editable. Las claves
+   canónicas son scoped por orgId:
+     · `byvaro-empresa:developer-default`
+     · `byvaro-empresa:ag-1`, `byvaro-empresa:ag-2`, …
+     · `byvaro-empresa:prom-1`, `byvaro-empresa:prom-2`, …
+     · `byvaro-oficinas:<orgId>` (mismo patrón)
+
+   Compatibilidad temporal · las claves antiguas single-tenant
+   `byvaro-empresa` y `byvaro-oficinas` siguen leídas como FALLBACK
+   solo para `developer-default`, para no perder los datos editados
+   por el promotor antes de la migración. Una vez se escribe en la
+   nueva clave scoped, ésta toma prioridad. Después de un par de
+   releases podemos retirar el fallback legacy.
+
+   TODO(backend): replace with `organizations.id` scoping vía RLS y
+   endpoint `GET /api/empresas/:orgId/public`. Las claves localStorage
+   desaparecen — el JWT lleva `organization_id` y el backend filtra.
    ═══════════════════════════════════════════════════════════════════ */
-const EMPRESA_KEY = "byvaro-empresa";
-const OFICINAS_KEY = "byvaro-oficinas";
+const EMPRESA_KEY_LEGACY  = "byvaro-empresa";
+const OFICINAS_KEY_LEGACY = "byvaro-oficinas";
+
+export const DEFAULT_DEVELOPER_TENANT_ID = "developer-default";
+
+function empresaKeyFor(orgId: string): string {
+  return `byvaro-empresa:${orgId}`;
+}
+
+function oficinasKeyFor(orgId: string): string {
+  return `byvaro-oficinas:${orgId}`;
+}
 
 /* Seed inicial · `byvaro-oficinas` es la ÚNICA fuente de verdad de
  * oficinas del workspace. Toda promoción que muestre un punto de
@@ -433,51 +475,250 @@ const OFICINAS_SEED: Oficina[] = [
   },
 ];
 
+/** Lee el perfil empresa de un orgId concreto (mock).
+ *
+ *  Cadena de fallbacks (en orden):
+ *    1. Clave scoped `byvaro-empresa:<orgId>` (canónica).
+ *    2. Si `orgId === "developer-default"` y la scoped no existe →
+ *       `byvaro-empresa` legacy (compat).
+ *    3. Seed correspondiente al tipo de org:
+ *         · `developer-*`  → `LUXINMO_PROFILE` fixture.
+ *         · `ag-*`         → `agencyToEmpresa(agencies.find(id))`.
+ *         · `prom-*`       → `agencyToEmpresa(promotores.find(id))`.
+ *    4. `defaultEmpresa` · vacío.
+ *
+ *  TODO(backend): reemplazar por `GET /api/empresas/:orgId/public` ·
+ *  RLS scoped al organization_id del JWT. */
+export function loadEmpresaForOrg(orgId: string): Empresa {
+  if (typeof window === "undefined") return defaultEmpresa;
+  // 1. Scoped key (canónica)
+  try {
+    const raw = window.localStorage.getItem(empresaKeyFor(orgId));
+    if (raw) return { ...defaultEmpresa, ...JSON.parse(raw) };
+  } catch { /* fallthrough */ }
+  // 2. Legacy fallback solo para developer-default (single-tenant histórico)
+  if (orgId === DEFAULT_DEVELOPER_TENANT_ID) {
+    try {
+      const raw = window.localStorage.getItem(EMPRESA_KEY_LEGACY);
+      if (raw) return { ...defaultEmpresa, ...JSON.parse(raw) };
+    } catch { /* fallthrough */ }
+  }
+  // 3. Seed según tipo de org
+  if (orgId.startsWith(DEVELOPER_TENANT_PREFIX)) {
+    return getDeveloperProfile(orgId) ?? defaultEmpresa;
+  }
+  const promotor = promotores.find((p) => p.id === orgId);
+  if (promotor) return agencyToEmpresa(promotor);
+  const agency = agencies.find((a) => a.id === orgId);
+  if (agency) return agencyToEmpresa(agency);
+  // 4. Empty
+  return defaultEmpresa;
+}
+
+/** Wrapper legacy · sigue pidiendo el perfil de `developer-default`.
+ *  Helpers no-React (`promotionRole`, `publicationRequirements`,
+ *  `empresaOnboarding`) lo siguen llamando. NO usar en componentes
+ *  nuevos · usa `useEmpresa(tenantId)` o `loadEmpresaForOrg(orgId)`
+ *  con el orgId resuelto del usuario. */
 export function loadEmpresa(): Empresa {
-  try {
-    const raw = localStorage.getItem(EMPRESA_KEY);
-    if (!raw) return defaultEmpresa;
-    return { ...defaultEmpresa, ...JSON.parse(raw) };
-  } catch {
-    return defaultEmpresa;
+  return loadEmpresaForOrg(DEFAULT_DEVELOPER_TENANT_ID);
+}
+
+function saveEmpresaForOrg(orgId: string, e: Empresa) {
+  if (typeof window === "undefined") return;
+  const payload = JSON.stringify({ ...e, updatedAt: Date.now() });
+  /* Optimistic local write · UI refresca inmediato. Si Supabase
+   * rechaza (RLS, network), revertimos y re-emitimos. */
+  window.localStorage.setItem(empresaKeyFor(orgId), payload);
+  if (orgId === DEFAULT_DEVELOPER_TENANT_ID) {
+    window.localStorage.setItem(EMPRESA_KEY_LEGACY, payload);
   }
+  window.dispatchEvent(new CustomEvent("byvaro:empresa-changed", { detail: { orgId } }));
+
+  /* Write-through a Supabase · async sin bloquear el caller.
+   *  El cliente Supabase no se importa estáticamente para evitar
+   *  acoplar este módulo (que también se usa server-side en scripts).
+   *  Si Supabase no está configurado · no-op. */
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+
+      /* Map Empresa shape → split entre `organizations` (campos core)
+       * y `organization_profiles` (resto). Mantenemos la convención
+       * de que el cliente nunca toca `kind` ni `id` del row. */
+      const orgPatch: Record<string, unknown> = {
+        legal_name: e.razonSocial || null,
+        display_name: e.nombreComercial || null,
+        tax_id: e.cif || null,
+        email: e.email || null,
+        phone: e.telefono || null,
+        website: e.sitioWeb || null,
+        logo_url: e.logoUrl || null,
+        cover_url: e.coverUrl || null,
+        address_line: e.direccionFiscalCompleta || null,
+        address_street: e.direccionFiscal?.direccion || null,
+        address_postal_code: e.direccionFiscal?.codigoPostal || null,
+        address_city: e.direccionFiscal?.ciudad || null,
+        address_province: e.direccionFiscal?.provincia || null,
+        country: e.direccionFiscal?.pais || null,
+        verified: e.verificada,
+        verified_at: e.verificadaEl || null,
+      };
+      const { error: orgErr } = await supabase
+        .from("organizations").update(orgPatch).eq("id", orgId);
+      if (orgErr) {
+        console.warn("[saveEmpresa] organizations update failed:", orgErr.message);
+      }
+
+      const profilePatch: Record<string, unknown> = {
+        organization_id: orgId,
+        description: e.overview || null,
+        public_description: e.aboutOverview || null,
+        tagline: e.tagline || null,
+        quote: e.quote || null,
+        quote_description: e.quoteDescription || null,
+        founded_year: e.fundadaEn ? parseInt(e.fundadaEn, 10) : null,
+        license_number: e.licencias?.[0]?.numero ?? null,
+        licenses: e.licencias ?? null,
+        attention_languages: e.idiomasAtencion ?? null,
+        commission_national_default: e.comisionNacionalDefault,
+        commission_international_default: e.comisionInternacionalDefault,
+        commission_payment_term_days: e.plazoPagoComisionDias,
+        main_contact_email: e.email || null,
+        main_contact_phone: e.telefono || null,
+        schedule: e.horario || null,
+        linkedin: e.linkedin || null,
+        instagram: e.instagram || null,
+        facebook: e.facebook || null,
+        youtube: e.youtube || null,
+        tiktok: e.tiktok || null,
+        marketing_top_nationalities: e.marketingTopNacionalidades ?? null,
+        marketing_product_types: e.marketingTiposProducto ?? null,
+        marketing_client_sources: e.marketingFuentesClientes ?? null,
+        marketing_portals: e.marketingPortales ?? null,
+        google_place_id: e.googlePlaceId || null,
+        google_rating: e.googleRating || null,
+        google_ratings_total: e.googleRatingsTotal || null,
+        google_fetched_at: e.googleFetchedAt || null,
+        google_maps_url: e.googleMapsUrl || null,
+      };
+      const { error: profErr } = await supabase
+        .from("organization_profiles").upsert(profilePatch, { onConflict: "organization_id" });
+      if (profErr) {
+        console.warn("[saveEmpresa] organization_profiles upsert failed:", profErr.message);
+      }
+    } catch (err) {
+      console.warn("[saveEmpresa] supabase write skipped:", err);
+    }
+  })();
 }
 
-function saveEmpresa(e: Empresa) {
-  localStorage.setItem(EMPRESA_KEY, JSON.stringify({ ...e, updatedAt: Date.now() }));
-  // Evento cross-hook para sincronizar múltiples useEmpresa en la misma pestaña
-  window.dispatchEvent(new CustomEvent("byvaro:empresa-changed"));
+/** Lee oficinas de un orgId concreto (mock).
+ *
+ *  Cadena de fallbacks:
+ *    1. Clave scoped `byvaro-oficinas:<orgId>`.
+ *    2. Solo para `developer-default` · `byvaro-oficinas` legacy.
+ *    3. Seed: `OFICINAS_SEED` (Luxinmo) o `visitorOfficesFor(orgId)`.
+ *
+ *  REGLA · nunca leas la clave legacy global desde una agencia o
+ *  promotor externo · es la fuga histórica documentada en
+ *  CLAUDE.md "Datos del workspace son por tenant".
+ *
+ *  TODO(backend): `GET /api/empresas/:orgId/oficinas` scoped por RLS. */
+export function loadOficinasForOrg(orgId: string): Oficina[] {
+  if (typeof window === "undefined") return [];
+  // 1. Scoped key (canónica)
+  try {
+    const raw = window.localStorage.getItem(oficinasKeyFor(orgId));
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed as Oficina[];
+      // Si scoped existe pero vacío para developer-default, re-seedea
+      if (orgId === DEFAULT_DEVELOPER_TENANT_ID && Array.isArray(parsed) && parsed.length === 0) {
+        window.localStorage.setItem(oficinasKeyFor(orgId), JSON.stringify(OFICINAS_SEED));
+        return [...OFICINAS_SEED];
+      }
+      if (Array.isArray(parsed)) return parsed as Oficina[];
+    }
+  } catch { /* fallthrough */ }
+  // 2. Legacy fallback solo para developer-default
+  if (orgId === DEFAULT_DEVELOPER_TENANT_ID) {
+    try {
+      const raw = window.localStorage.getItem(OFICINAS_KEY_LEGACY);
+      if (raw !== null) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Migrar a scoped key automáticamente · la siguiente lectura ya
+          // pasa por la canónica.
+          window.localStorage.setItem(oficinasKeyFor(orgId), JSON.stringify(parsed));
+          return parsed as Oficina[];
+        }
+      }
+    } catch { /* fallthrough */ }
+    // Primera carga developer-default · persiste seed
+    window.localStorage.setItem(oficinasKeyFor(orgId), JSON.stringify(OFICINAS_SEED));
+    return [...OFICINAS_SEED];
+  }
+  // 3. Seed por tenant · agencias y promotores externos
+  return visitorOfficesFor(orgId);
 }
 
+/** Wrapper legacy · oficinas de developer-default. Solo para módulos
+ *  históricos · NO usar en código nuevo. */
 function loadOficinas(): Oficina[] {
-  try {
-    const raw = localStorage.getItem(OFICINAS_KEY);
-    if (raw === null) {
-      // Primera carga · persiste el seed para que el usuario pueda
-      // editar/borrar y los cambios se mantengan.
-      localStorage.setItem(OFICINAS_KEY, JSON.stringify(OFICINAS_SEED));
-      return [...OFICINAS_SEED];
-    }
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    // Demo · si el array existe pero está vacío (sesión previa que aún
-    // no había seedeado), re-seedeamos. Las promociones tienen
-    // `puntosDeVentaIds` que apuntan a estas oficinas, y mostrar 0
-    // oficinas en /empresa con esas promociones referenciándolas
-    // dejaría "oficinas fantasma".
-    if (parsed.length === 0) {
-      localStorage.setItem(OFICINAS_KEY, JSON.stringify(OFICINAS_SEED));
-      return [...OFICINAS_SEED];
-    }
-    return parsed as Oficina[];
-  } catch {
-    return [];
-  }
+  return loadOficinasForOrg(DEFAULT_DEVELOPER_TENANT_ID);
 }
 
-function saveOficinas(list: Oficina[]) {
-  localStorage.setItem(OFICINAS_KEY, JSON.stringify(list));
-  window.dispatchEvent(new CustomEvent("byvaro:oficinas-changed"));
+function saveOficinasForOrg(orgId: string, list: Oficina[]) {
+  if (typeof window === "undefined") return;
+  const payload = JSON.stringify(list);
+  /* Optimistic local write. */
+  window.localStorage.setItem(oficinasKeyFor(orgId), payload);
+  if (orgId === DEFAULT_DEVELOPER_TENANT_ID) {
+    window.localStorage.setItem(OFICINAS_KEY_LEGACY, payload);
+  }
+  window.dispatchEvent(new CustomEvent("byvaro:oficinas-changed", { detail: { orgId } }));
+
+  /* Write-through · sync diff con Supabase. Estrategia simple para
+   *  Phase 2: borrar todas las oficinas del orgId y re-insertar.
+   *  Cuando aterricen tests con cantidades grandes lo cambiamos a
+   *  upsert + delete-de-las-que-no-aparecen. */
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+
+      /* Borramos las existentes y re-insertamos · evita inconsistencias
+       *  cuando se borra una oficina del UI. */
+      await supabase.from("offices").delete().eq("organization_id", orgId);
+      if (list.length === 0) return;
+
+      const rows = list.map((o) => ({
+        id: o.id,
+        organization_id: orgId,
+        name: o.nombre,
+        address: o.direccion || null,
+        city: o.ciudad || null,
+        province: o.provincia || null,
+        phone: o.telefono || null,
+        phone_prefix: o.phonePrefix || null,
+        email: o.email || null,
+        whatsapp: o.whatsapp || null,
+        schedule: o.horario || null,
+        logo_url: o.logoUrl || null,
+        cover_url: o.coverUrl || null,
+        is_main: o.esPrincipal,
+        status: o.activa ? "active" : "archived",
+      }));
+      const { error } = await supabase.from("offices").insert(rows);
+      if (error) {
+        console.warn("[saveOficinas] insert failed:", error.message);
+      }
+    } catch (err) {
+      console.warn("[saveOficinas] supabase write skipped:", err);
+    }
+  })();
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -496,86 +737,275 @@ function saveOficinas(list: Oficina[]) {
 /** Sentinel del promotor único en single-tenant mock · ver
  *  `src/lib/developerNavigation.ts`. Cuando `tenantId` arranca con
  *  este prefijo, `useEmpresa` resuelve los datos del promotor desde
- *  el storage del workspace (`byvaro-empresa`) en vez de la lista
- *  de agencias · permite que la ruta `/promotor/:id` muestre la
- *  ficha pública del promotor en modo visitor. */
+ *  el fixture canónico `LUXINMO_PROFILE` (representa el equivalente
+ *  a `GET /api/promotor/:id/profile` del backend real). NO se lee
+ *  `byvaro-empresa` del navegador actual: en una agencia logueada
+ *  ese key contiene los datos de la PROPIA agencia, no del promotor
+ *  · ver REGLA DE ORO "Datos del workspace son por tenant" en
+ *  CLAUDE.md y `docs/backend/domains/agency-developer-mirror.md`. */
 const DEVELOPER_TENANT_PREFIX = "developer-";
+/* `DEFAULT_DEVELOPER_TENANT_ID` · re-export en bloque de claves scoped
+ * arriba en el archivo · NO redeclarar aquí. */
+
+/* ═══════════════════════════════════════════════════════════════════
+   Fixture canónico del promotor mock (Luxinmo)
+
+   Single source of truth para el lado AGENCIA cuando visita
+   `/promotor/:id` y `/promotor/:id/panel`. El fixture coincide en
+   espíritu con lo que devolverá `GET /api/promotor/:id/profile`
+   cuando aterrice multi-tenant · campos públicos del workspace
+   developer. NO se lee `byvaro-empresa` porque ese key es local al
+   navegador y representa al workspace logueado (la agencia).
+
+   TODO(backend): borrar este fixture y resolver vía fetch real.
+   ═══════════════════════════════════════════════════════════════════ */
+export const LUXINMO_PROFILE: Empresa = {
+  ...defaultEmpresa,
+  nombreComercial: "Luxinmo",
+  razonSocial: "Luxinmo Inversiones SL",
+  cif: "B98765432",
+  logoUrl: "https://api.dicebear.com/9.x/shapes/svg?seed=luxinmo&backgroundColor=1d4ed8&size=120",
+  logoShape: "circle",
+  coverUrl: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1600&q=80",
+  colorCorporativo: "#1D74E7",
+  fundadaEn: "2012",
+  subtitle: "Alicante, España · Fundada en 2012",
+  tagline: "Inversión segura en la Costa Blanca",
+  overview:
+    "Promotor inmobiliario especializado en obra nueva premium en la Costa Blanca. Más de una década entregando proyectos a clientes nacionales e internacionales.",
+  aboutOverview:
+    "Desde 2012 hemos entregado más de 800 viviendas en Alicante, Valencia y Murcia. Trabajamos con un equipo internacional que atiende a compradores en cinco idiomas y colaboramos con agencias verificadas en toda Europa.",
+  quote: "Construimos lo que firmaríamos.",
+  quoteDescription:
+    "Cada promoción se diseña pensando en cómo viviríamos nosotros allí · materiales nobles, ubicaciones estratégicas y atención post-venta de por vida.",
+  email: "info@luxinmo.com",
+  telefono: "+34 965 123 456",
+  horario: "L-V 9:30-19:00",
+  sitioWeb: "www.luxinmo.com",
+  linkedin: "luxinmo",
+  instagram: "luxinmo.es",
+  facebook: "",
+  youtube: "",
+  tiktok: "",
+  zonasOperacion: ["Costa Blanca", "Costa del Sol", "Comunitat Valenciana"],
+  especialidades: ["Obra nueva premium", "Costa", "Inversores extranjeros"],
+  idiomasAtencion: ["es", "en", "fr", "de", "ru"],
+  comisionNacionalDefault: 3,
+  comisionInternacionalDefault: 5,
+  plazoPagoComisionDias: 30,
+  certificaciones: [],
+  licencias: [
+    { tipo: "RAICV", numero: "RAICV-V-2345", verificada: true },
+  ],
+  marketingTopNacionalidades: [
+    { countryIso: "ES", pct: 35 },
+    { countryIso: "GB", pct: 20 },
+    { countryIso: "DE", pct: 12 },
+    { countryIso: "FR", pct: 10 },
+    { countryIso: "BE", pct: 8 },
+    { countryIso: "NL", pct: 8 },
+    { countryIso: "OTROS", pct: 7 },
+  ],
+  marketingTiposProducto: [
+    { tipo: "obra-nueva", precioDesde: 350000 },
+    { tipo: "villa-lujo", precioDesde: 1500000 },
+  ],
+  marketingFuentesClientes: [
+    { fuente: "portales", pct: 40 },
+    { fuente: "colab-int", pct: 30 },
+    { fuente: "colab-nac", pct: 15 },
+    { fuente: "referidos", pct: 10 },
+    { fuente: "cartera-propia", pct: 5 },
+  ],
+  marketingPortales: ["idealista", "fotocasa", "thinkspain", "kyero"],
+  direccionFiscal: {
+    pais: "España",
+    provincia: "Alicante",
+    ciudad: "Alicante",
+    direccion: "Av. de la Estación 5",
+    codigoPostal: "03001",
+  },
+  direccionFiscalCompleta: "Av. de la Estación 5, 03001 Alicante, España",
+  moneda: "EUR",
+  idiomaDefault: "es",
+  zonaHoraria: "Europe/Madrid",
+  verificada: true,
+  verificadaEl: "2025-09-10",
+  googlePlaceId: "ChIJ_LuxinmoDemoPlaceId",
+  googleRating: 4.7,
+  googleRatingsTotal: 312,
+  googleFetchedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  googleMapsUrl: "https://maps.app.goo.gl/luxinmo",
+  onboardingCompleto: true,
+  updatedAt: 0,
+};
+
+/** Resuelve el perfil público del workspace developer mock · alias de
+ *  `GET /api/promotor/:id/profile` cuando aterrice backend. Devuelve
+ *  `undefined` si el id no matchea ningún developer conocido (caller
+ *  debe tener un fallback). */
+export function getDeveloperProfile(tenantId: string): Empresa | undefined {
+  if (tenantId === DEFAULT_DEVELOPER_TENANT_ID) return LUXINMO_PROFILE;
+  return undefined;
+}
+
+/** Resuelve el orgId desde un usuario actual sin importar de
+ *  `currentUser.ts` para evitar ciclos · usa solo accountType+agencyId. */
+function userOrgId(user: { accountType: string; agencyId?: string } | null | undefined): string {
+  if (user?.accountType === "agency" && user.agencyId) return user.agencyId;
+  return DEFAULT_DEVELOPER_TENANT_ID;
+}
 
 export function useEmpresa(tenantId?: string) {
-  const isVisitor = !!tenantId;
+  /* Resolvemos el orgId efectivo · si el caller pasa `tenantId`, ése
+   *  manda. Si no, usamos el del workspace logueado. Esto permite que
+   *  `/empresa` (sin tenantId) sea editable para el dueño y que
+   *  `/colaboradores/:id` o `/promotor/:id` (con tenantId) sea
+   *  visitor cuando NO coincide con mi org.
+   *
+   *  REGLA · `isVisitor` se decide al final comparando contra mi
+   *  propio orgId · NUNCA por el mero hecho de que `tenantId` venga
+   *  rellenado (un caller puede pasar mi propio orgId explícitamente
+   *  · es own ficha igualmente). */
+  const user = useCurrentUser();
+  const myOrgId = userOrgId(user);
+  const effectiveOrgId = tenantId ?? myOrgId;
+  const isVisitor = effectiveOrgId !== myOrgId;
 
   const loadTenant = useCallback((): Empresa => {
-    if (!tenantId) return loadEmpresa();
-    if (tenantId.startsWith(DEVELOPER_TENANT_PREFIX)) {
-      // Promotor · datos vienen del workspace (mock single-tenant).
-      return loadEmpresa();
-    }
-    // Resolución mock · cuando haya backend: fetch a /api/empresas/:id/public
-    const agency = agencies.find((a) => a.id === tenantId);
-    return agency ? agencyToEmpresa(agency) : defaultEmpresa;
-  }, [tenantId]);
+    return loadEmpresaForOrg(effectiveOrgId);
+  }, [effectiveOrgId]);
 
   const [empresa, setEmpresa] = useState<Empresa>(() => loadTenant());
 
   useEffect(() => {
     setEmpresa(loadTenant());
-    if (isVisitor) return; // visitor no escucha cambios propios
-    const onChange = () => setEmpresa(loadEmpresa());
-    window.addEventListener("byvaro:empresa-changed", onChange);
-    window.addEventListener("storage", onChange);
-    return () => {
-      window.removeEventListener("byvaro:empresa-changed", onChange);
-      window.removeEventListener("storage", onChange);
+    /* Listener · refrescamos siempre · los eventos llevan el `orgId`
+     *  del cambio en `detail`. Si el evento es de OTRO orgId, ignoramos.
+     *  TODO(backend): listener desaparece · invalidate via SWR/TanStack
+     *  Query al recibir webhook/SSE de cambio. */
+    const onChange = (e: Event) => {
+      const detail = (e as CustomEvent<{ orgId?: string }>).detail;
+      if (detail?.orgId && detail.orgId !== effectiveOrgId) return;
+      setEmpresa(loadTenant());
     };
-  }, [isVisitor, loadTenant]);
+    const onStorage = () => setEmpresa(loadTenant());
+    window.addEventListener("byvaro:empresa-changed", onChange as EventListener);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("byvaro:empresa-changed", onChange as EventListener);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [effectiveOrgId, loadTenant]);
 
   const update = useCallback(<K extends keyof Empresa>(key: K, value: Empresa[K]) => {
     if (isVisitor) return; // visitor no edita datos ajenos
     setEmpresa(prev => {
       const next = { ...prev, [key]: value };
       next.onboardingCompleto = !!next.nombreComercial.trim() && !!next.razonSocial.trim() && !!next.cif.trim();
-      saveEmpresa(next);
+      saveEmpresaForOrg(effectiveOrgId, next);
       return next;
     });
-  }, [isVisitor]);
+  }, [isVisitor, effectiveOrgId]);
 
   const patch = useCallback((partial: Partial<Empresa>) => {
     if (isVisitor) return;
     setEmpresa(prev => {
       const next = { ...prev, ...partial };
       next.onboardingCompleto = !!next.nombreComercial.trim() && !!next.razonSocial.trim() && !!next.cif.trim();
-      saveEmpresa(next);
+      saveEmpresaForOrg(effectiveOrgId, next);
       return next;
     });
-  }, [isVisitor]);
+  }, [isVisitor, effectiveOrgId]);
 
   return { empresa, update, patch, isVisitor };
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   useOficinas hook
+   useOficinas hook · multi-tenant aware
+
+   `byvaro-oficinas` localStorage es la fuente de verdad SOLO para el
+   workspace logueado (que en mock single-tenant es el developer
+   Luxinmo). Para visitor mode (ficha de OTRO tenant), las oficinas
+   se resuelven desde el shape público del tenant:
+     · `developer-*`   → seed Luxinmo (loadOficinas).
+     · `prom-*`        → `promotores` seed (offices array mapeado).
+     · cualquier otro  → `agencies` seed (offices array mapeado).
+   Sin esto, una agencia o promotor externo mostraría las oficinas
+   del workspace logueado · fuga grave reportada 2026-04-29.
+
+   TODO(backend): GET /api/empresas/:id/oficinas público devuelve la
+   lista del tenant scoped al organization_id del JWT.
    ═══════════════════════════════════════════════════════════════════ */
-export function useOficinas() {
-  const [oficinas, setOficinas] = useState<Oficina[]>(() => loadOficinas());
+function visitorOfficesFor(tenantId: string): Oficina[] {
+  const found = promotores.find((p) => p.id === tenantId)
+    ?? agencies.find((a) => a.id === tenantId);
+  if (!found?.offices) return [];
+  return found.offices.map((o, idx) => ({
+    id: `${tenantId}-of-${idx}`,
+    nombre: `Oficina ${o.city}`,
+    direccion: o.address ?? "",
+    ciudad: o.city ?? "",
+    provincia: "",
+    telefono: "",
+    phonePrefix: "+34",
+    email: "",
+    whatsapp: "",
+    horario: "",
+    logoUrl: "",
+    coverUrl: "",
+    esPrincipal: idx === 0,
+    activa: true,
+    createdAt: 0,
+  }));
+}
+
+export function useOficinas(tenantId?: string) {
+  /* Resolución del orgId · si el caller pasa un `tenantId` explícito,
+   *  manda. Si no, usamos el orgId del workspace logueado. Las
+   *  oficinas se persisten en clave scoped `byvaro-oficinas:<orgId>`
+   *  · cada org edita las suyas sin contaminar a otras.
+   *
+   *  REGLA · `isVisitor` se decide comparando contra mi propio orgId,
+   *  NO por el simple hecho de que `tenantId` venga rellenado. */
+  const user = useCurrentUser();
+  const myOrgId = userOrgId(user);
+  const effectiveOrgId = tenantId ?? myOrgId;
+  const isVisitor = effectiveOrgId !== myOrgId;
+
+  const [oficinas, setOficinas] = useState<Oficina[]>(() =>
+    loadOficinasForOrg(effectiveOrgId),
+  );
 
   useEffect(() => {
-    const onChange = () => setOficinas(loadOficinas());
-    window.addEventListener("byvaro:oficinas-changed", onChange);
-    window.addEventListener("storage", onChange);
-    return () => {
-      window.removeEventListener("byvaro:oficinas-changed", onChange);
-      window.removeEventListener("storage", onChange);
+    setOficinas(loadOficinasForOrg(effectiveOrgId));
+    /* Listener · solo refrescamos si el evento es del mismo orgId.
+     *  Visitor de otra org no necesita escuchar nuestros cambios
+     *  pero igual lo dejamos por simplicidad · el predicado de orgId
+     *  filtra. */
+    const onChange = (e: Event) => {
+      const detail = (e as CustomEvent<{ orgId?: string }>).detail;
+      if (detail?.orgId && detail.orgId !== effectiveOrgId) return;
+      setOficinas(loadOficinasForOrg(effectiveOrgId));
     };
-  }, []);
+    const onStorage = () => setOficinas(loadOficinasForOrg(effectiveOrgId));
+    window.addEventListener("byvaro:oficinas-changed", onChange as EventListener);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("byvaro:oficinas-changed", onChange as EventListener);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [effectiveOrgId]);
 
   const persist = (list: Oficina[]) => {
+    if (isVisitor) return; // visitor no edita oficinas ajenas
     setOficinas(list);
-    saveOficinas(list);
+    saveOficinasForOrg(effectiveOrgId, list);
   };
 
   /** Crear nueva oficina. Si es la primera, se marca principal automáticamente. */
   const addOficina = useCallback((data: Partial<Oficina> & { nombre: string }) => {
-    const list = loadOficinas();
+    const list = loadOficinasForOrg(effectiveOrgId);
     const nuevaId = `ofc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const esPrincipal = list.length === 0 ? true : !!data.esPrincipal;
     const next: Oficina = {
@@ -599,20 +1029,22 @@ export function useOficinas() {
     const normalizadas = esPrincipal ? list.map(o => ({ ...o, esPrincipal: false })) : list;
     persist([...normalizadas, next]);
     return next;
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveOrgId]);
 
   const updateOficina = useCallback((id: string, patch: Partial<Oficina>) => {
-    const list = loadOficinas();
+    const list = loadOficinasForOrg(effectiveOrgId);
     let updated = list.map(o => (o.id === id ? { ...o, ...patch } : o));
     // Si el patch marca esta como principal, desmarca las demás
     if (patch.esPrincipal === true) {
       updated = updated.map(o => (o.id === id ? { ...o, esPrincipal: true } : { ...o, esPrincipal: false }));
     }
     persist(updated);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveOrgId]);
 
   const deleteOficina = useCallback((id: string) => {
-    const list = loadOficinas();
+    const list = loadOficinasForOrg(effectiveOrgId);
     const oficinaBorrada = list.find(o => o.id === id);
     let next = list.filter(o => o.id !== id);
     // Si borramos la principal y quedan otras, la primera restante pasa a principal
@@ -620,17 +1052,19 @@ export function useOficinas() {
       next = next.map((o, i) => ({ ...o, esPrincipal: i === 0 }));
     }
     persist(next);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveOrgId]);
 
   const setPrincipal = useCallback((id: string) => {
-    const list = loadOficinas();
+    const list = loadOficinasForOrg(effectiveOrgId);
     persist(list.map(o => ({ ...o, esPrincipal: o.id === id })));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveOrgId]);
 
   /** Devuelve la oficina principal, o undefined si no hay ninguna. */
   const oficinaPrincipal = oficinas.find(o => o.esPrincipal);
 
-  return { oficinas, addOficina, updateOficina, deleteOficina, setPrincipal, oficinaPrincipal };
+  return { oficinas, addOficina, updateOficina, deleteOficina, setPrincipal, oficinaPrincipal, isVisitor };
 }
 
 /* ═══════════════════════════════════════════════════════════════════

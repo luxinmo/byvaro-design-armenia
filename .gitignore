@@ -25,3 +25,9 @@ pnpm-debug.log*
 .env.local
 .env.*.local
 .vercel
+
+# Supabase · solo trackeamos config.toml + migrations + seed.
+# Branches y data local NO se suben.
+supabase/.branches
+supabase/.temp
+supabase/.env

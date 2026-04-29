@@ -63,7 +63,43 @@ export type PermissionKey =
    *  registro entrante en el diálogo de confirmación de match
    *  (nombre completo · email). Sin este permiso se muestra solo
    *  "un contacto existente" sin identificarlo. Admin-only. */
-  | "records.matchDetails.view";
+  | "records.matchDetails.view"
+  /* ═══════════════════════════════════════════════════════════════
+     Permisos backend-dual-role · alineados con
+     `docs/backend-dual-role-architecture.md §6`. Default solo admin
+     (en `DEFAULT_ROLE_PERMISSIONS` abajo). Cuando aterrice backend,
+     cada endpoint mutante valida estas keys server-side · el
+     frontend solo OCULTA UI · NO es de confianza.
+     ═══════════════════════════════════════════════════════════════ */
+  /** Editar el perfil público y privado de la organización
+   *  (`organizations` + `organization_profiles`). Cubre nombre
+   *  comercial, razón social, CIF, dirección, descripción, logo,
+   *  cover, color corporativo, idiomas, marketing snapshot, etc.
+   *  Backend · `PATCH /organizations/me`. */
+  | "organization.editProfile"
+  /** CRUD de oficinas del workspace · crear, editar, archivar,
+   *  marcar principal. Backend ·
+   *  `POST/PATCH/DELETE /organizations/me/offices`. */
+  | "offices.manage"
+  /** Invitar / desactivar / cambiar rol de miembros del equipo.
+   *  Cubre el flujo de handover obligatorio al desactivar. Backend ·
+   *  `POST/PATCH/DELETE /organizations/me/members` y
+   *  `POST /members/:id/handover`. */
+  | "members.manage"
+  /** Crear una promoción (activa o draft). El gate de paywall
+   *  (`createPromotion` · 2/5 según tier) es ortogonal · ese vive en
+   *  `usageGuard.ts` y se enforce con HTTP 402. Backend ·
+   *  `POST /promotions`. */
+  | "promotions.create"
+  /** Editar una promoción ya creada · cambios al hero, unidades,
+   *  precios, brochure, contactos, marketing rules. Backend ·
+   *  `PATCH /promotions/:id`. */
+  | "promotions.edit"
+  /** Transicionar una promoción a `status='active'` (publicar) o de
+   *  vuelta a `paused/archived`. Es una sub-acción de `edit` que
+   *  algunos flujos prefieren gating por separado · admin-only por
+   *  defecto. Backend · `PATCH /promotions/:id { status }`. */
+  | "promotions.publish";
 
 const STORAGE_KEY = "byvaro.workspace.rolePermissions.v1";
 
@@ -80,6 +116,13 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
     "collaboration.requests.manage",
     "activity.dashboard.view",
     "records.matchDetails.view",
+    /* Dual-role · default solo admin. Member NO los tiene. */
+    "organization.editProfile",
+    "offices.manage",
+    "members.manage",
+    "promotions.create",
+    "promotions.edit",
+    "promotions.publish",
   ],
   member: [
     "whatsapp.viewOwn",

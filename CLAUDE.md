@@ -513,6 +513,79 @@ es un code-smell. Se extrae al catálogo canónico.
 
 ---
 
+## 🛡️ REGLA DE ORO · Acciones bulk solo sobre colaboradores
+
+> **En `/colaboradores` (Inmobiliarias) y `/promotores` solo se puede
+> seleccionar ni marcar como favorito a empresas con las que YA
+> colaboras.** Una empresa "es colaboradora" cuando se ha enviado
+> una invitación Y la empresa la ha aceptado (es decir,
+> `agency.status === "active" && agency.estadoColaboracion === "activa"`).
+> Las empresas en cualquier otro estado (pausada, contrato pendiente,
+> pendiente, sin colaboración, marketplace) NO permiten estas
+> acciones · al hacer click se muestra un toast informativo y se
+> aborta.
+
+**Por qué.** Las acciones bulk de la card (selección + envío de
+emails masivos, marcar como favorito para listados rápidos) son
+operativas internas dirigidas a la red real. Permitirlas sobre
+empresas ajenas o pausadas:
+
+1. **Privacidad** · enviar un email masivo a una empresa con la que
+   no se ha establecido relación = spam comercial.
+2. **Coherencia de datos** · el favorito se usa como acceso rápido
+   en otras pantallas (filtros, recipient picker del email modal).
+   Marcar a una "no colaboradora" rompe la semántica.
+3. **Onboarding del producto** · el flujo correcto es invitar →
+   esperar aceptación → entonces interactuar.
+
+**Cómo se aplica.**
+
+`AgencyGridCard` (`src/components/agencies/AgencyGridCard.tsx`) recibe
+prop `canInteract: boolean` (default `true`). Cuando `false`:
+
+- Checkbox `<RowCheckbox>` se renderiza con `disabled` visual
+  (border muted, color gris claro, cursor not-allowed).
+- Estrella `<Star>` igual · color muted, cursor not-allowed.
+- Click en cualquiera muestra un toast Sonner explícito:
+  - "Solo puedes seleccionar empresas con las que ya colaboras ·
+    Envía una invitación y, cuando la acepten, podrás
+    seleccionarlas y enviarles emails."
+  - "Solo puedes marcar como favorito a empresas con las que ya
+    colaboras · Envía una invitación y, cuando la acepten, podrás
+    guardarlas en favoritos."
+- El handler original (`onToggleSelect` / `onToggleFavorite`) NO
+  se ejecuta.
+
+**Consumers** que pasan correctamente `canInteract`:
+
+- `src/pages/Colaboradores.tsx` · listado developer.
+- `src/pages/Promotores.tsx` · agency view + developer view.
+
+**Definición de "colaborador" en el modelo:**
+
+```ts
+const canInteract = a.status === "active"
+  && a.estadoColaboracion === "activa";
+```
+
+**Excepciones intencionales** que SÍ permiten interacción:
+- Ningún caso · es regla dura. Si un caso futuro requiere
+  permitirlo, declararlo aquí explícitamente con motivo.
+
+**TODO(backend).** Cuando el backend valide envíos masivos por
+endpoint, repetir el check server-side con un 403:
+```json
+{
+  "code": "not_a_collaborator",
+  "agency_id": "ag-X",
+  "current_status": "pausada"
+}
+```
+El frontend vuelve a renderizar la card como `canInteract=false` si
+el estado cambia · listener de `byvaro:agency-status-changed`.
+
+---
+
 ## 🤝 REGLA DE ORO · Solicitud de colaboración por promoción
 
 > **Las solicitudes de colaboración por promoción son distintas de las
@@ -1732,6 +1805,353 @@ devuelve `ownerRole`. Si en el futuro un workspace solo opera como
 comercializador, considerar mover el campo también a
 `organizations.kind` para defaults; per-promoción sigue siendo la
 fuente de verdad.
+
+---
+
+## ⏳ REGLA DE ORO · Contratos · alerta a 60 días
+
+> **Toda UI que muestre estado de un contrato firmado con `expiresAt`
+> DEBE avisar cuando queden ≤ 60 días para que venza.** Es el margen
+> mínimo razonable para que el promotor renegocie/renueve antes de
+> quedarse sin marco legal con la agencia. Por debajo de eso queda
+> "Sin contrato" en cuanto caduca · ya es tarde.
+
+**Por qué 60 y no 30 ni 90.**
+
+- 30 días → no da tiempo a redactar, revisar, mandar a firma y firmar
+  un contrato nuevo. Negociación + Firmafy + email + lectura suele
+  comer 2-3 semanas; el último día siempre se acumula con vacaciones,
+  contrato pendiente del legal, etc.
+- 90 días → ruidoso · el promotor ve la alerta meses antes, la
+  ignora, y cuando llega el momento crítico la alerta es ambiental
+  (lobo lobo).
+- 60 días → margen suficiente para mover ficha sin saturar el panel.
+
+**Fuente única de verdad.**
+
+```ts
+// src/lib/collaborationContracts.ts
+export const CONTRACT_NEAR_EXPIRY_DAYS = 60;
+export function daysUntilContractExpiry(c, refDate?): number | null;
+```
+
+Cambiar el número aquí impacta a TODOS los consumidores · NO
+duplicar el threshold en otra parte.
+
+**Consumidores actuales** (auditar al añadir uno nuevo):
+
+- `getContractStatus()` en `src/data/agencies.ts` · estado global
+  de la agencia · aparece en:
+  - Header del panel `/colaboradores/:id/panel` (chip "Vence en Xd").
+  - Listado `/colaboradores` (filtro "Por expirar" + chip por agencia).
+  - `AgenciasTabStats` en `/promociones/:id?tab=Agencies`.
+- `ResumenTab.tsx` · chip por promoción dentro del panel
+  (`Sin contrato | Vence en Xd | Contrato vigente`).
+
+**Tres estados visuales** en cualquier chip de contrato firmado:
+
+| Estado          | Token de color               | Icono           | Label                  |
+|-----------------|------------------------------|-----------------|------------------------|
+| `sin-contrato`  | `text-warning bg-warning/10` | `AlertTriangle` | "Sin contrato"         |
+| `por-expirar`   | `text-warning bg-warning/10` | `Clock`         | "Vence en {N}d"        |
+| `vigente`       | `text-success bg-success/10` | `Check`         | "Contrato vigente"     |
+
+`sin-contrato` y `por-expirar` comparten color · son ambos avisos.
+La diferencia visual es el icono + el label · no inventes una
+tercera tonalidad (rojo más fuerte) que rompa la paleta.
+
+**Contratos sin `expiresAt`** (indefinidos) NUNCA caen en
+`por-expirar` · se tratan como vigentes infinitos. Si una promoción
+está cubierta por al menos un contrato indefinido, se considera
+"vigente" aunque otros contratos de la misma agencia estén por
+vencer · cubre lo que necesita cubrir.
+
+**TODO(backend).** Cuando se conecte el real, mantener:
+
+- `GET /api/agencias/:id/contract-status` · devuelve
+  `{ state, daysLeft }` para el chip global.
+- `GET /api/agencias/:id/promotions/:promoId/contract-status` ·
+  per-promo, mismo shape.
+- Cron diario (00:00 UTC) que dispara
+  `recordCompanyEvent("contract.near_expiry", { agencyId, contractId, daysLeft })`
+  el día que un contrato cruza el umbral (de 61 → 60 días). Se
+  registra UNA sola vez por contrato · no spam.
+- Email automático al promotor cuando `daysLeft = 60` y `daysLeft = 14`
+  (plantilla `contract-near-expiry` registrada en
+  `/ajustes/plantillas`, categoría "Notificaciones transaccionales").
+
+**Checklist al añadir UI nueva con estado de contrato:**
+
+- [ ] ¿Importé `CONTRACT_NEAR_EXPIRY_DAYS` o uso `getContractStatus()`?
+- [ ] ¿Renderizo los TRES estados (sin-contrato / por-expirar / vigente)?
+- [ ] ¿Uso los tokens canónicos (`text-warning` para los dos primeros,
+      `text-success` para el tercero)?
+- [ ] ¿Actualicé esta sección con la nueva ubicación si añadí un sitio?
+
+---
+
+## 🔁 REGLA DE ORO · Ciclo de vida de la colaboración por promoción
+
+> **El menú de "3 puntos" sobre cada card de promoción compartida en
+> el panel de colaboración expone EXACTAMENTE tres acciones:
+> Renovar contrato, Pausar/Reanudar colaboración, Anular colaboración.
+> Solo lo ve quien comparte la promoción** (promotor, comercializador,
+> o agencia que comparte con otra agencia · NO la receptora).
+
+**Modelo de estado.**
+
+Estado per-promo en `src/lib/promoCollabStatus.ts`:
+
+```ts
+type PromoCollabStatus = "activa" | "pausada" | "anulada";
+```
+
+Distinto del campo global `Agency.estadoColaboracion` (a nivel
+agencia, todas las promos). Aquí la fuente de verdad vive por par
+`(agencyId, promotionId)`. `activa` es el default · no se persiste
+fila en el store.
+
+**Reglas de las 3 acciones.**
+
+1. **Renovar contrato.** Solo aparece si la promo TIENE al menos un
+   contrato firmado no archivado que la cubre. Abre el flujo normal
+   de subida de contrato con scope preseleccionado a esa promo. Al
+   subir el nuevo, los contratos sustituidos se archivan
+   automáticamente (`uploadContract({ replacesContractIds })` con
+   evento "Sustituido por renovación · contrato {newId}" en cada
+   antiguo). En `DocumentacionTab` el contrato nuevo lleva chip
+   "Renovación" + nota "Sustituye al contrato anterior por
+   renovación"; el archivado lleva chip "Sustituido por renovación".
+
+2. **Pausar / Reanudar colaboración.** Stand-by reversible. La
+   agencia NO puede registrar nuevos clientes ni compartir la promo
+   mientras esté `pausada`. Las ventas, registros, visitas y
+   comisiones existentes SE MANTIENEN intactas. Quien comparte
+   reanuda con un click. Dispara `recordCollaborationPaused` /
+   `recordCollaborationResumed` en el historial cross-empresa.
+
+3. **Anular colaboración.** Fin para esta promo (per-promo, no
+   afecta a otras). La promo desaparece del panel. Variant
+   destructive. El confirm dialog DEBE explicar literalmente:
+   - La agencia dejará de ver la promoción.
+   - No podrá registrar nuevos clientes ni programar visitas.
+   - Las ventas cerradas, registros aprobados, visitas realizadas
+     y comisiones devengadas hasta ahora se MANTIENEN intactas.
+   - Solo se cierra la puerta a actividad nueva.
+   Dispara `recordCompanyAny(agencyId, "collaboration_ended", ...)`.
+
+**REGLA DURA · datos históricos NUNCA se borran.** Pausar y anular
+SOLO controlan visibilidad / capacidad de operar a futuro. Las
+comisiones devengadas siguen pagándose, las ventas siguen contando
+en estadísticas, los registros siguen apareciendo en el historial.
+Si alguna métrica nueva en el futuro depende de "colaboración viva",
+filtrar por `getPromoCollabStatus !== "anulada"` en el agregador,
+NUNCA borrando filas.
+
+**Quién ve el menú.** Solo quien comparte la promoción puede
+disparar las acciones · en `ResumenTab` el dropdown se renderiza
+únicamente cuando `!readOnly`. La receptora (agencia colaboradora
+viendo la ficha del promotor) lo ve oculto.
+
+**Backend.**
+
+```http
+PATCH /api/agencias/:agencyId/promotions/:promoId/collab-status
+Body: { status: "activa"|"pausada"|"anulada", reason?: string }
+```
+
+Mutación atómica · un único cambio dispara:
+- Update de `(agencyId, promotionId, status)` en tabla
+  `promotion_collab_status`.
+- Insert en `company_events_log` con el tipo correspondiente.
+- Si `anulada`: notificación email a la agencia receptora avisando
+  del cierre + lista de operaciones históricas que sigue pudiendo
+  consultar en su panel histórico.
+
+Renovación · `POST /api/contracts` con campo
+`replacesContractIds: string[]` opcional. El backend hace la
+transacción `INSERT new + UPDATE old SET archived=true,
+replaced_by_contract_id=newId` en una sola tx para que la UI
+nunca vea estado intermedio inconsistente.
+
+**Checklist al añadir UI nueva con estas acciones:**
+
+- [ ] ¿La acción solo se muestra a quien comparte (no readOnly)?
+- [ ] ¿El confirm de "Anular" lista explícitamente qué se preserva?
+- [ ] ¿La acción dispara el `recordCompanyEvent` correspondiente?
+- [ ] ¿El estado se persiste vía `setPromoCollabStatus` (no
+      mutación directa de localStorage)?
+- [ ] Si añado una vista que dependa de "colaboración viva",
+      ¿filtro por `!== "anulada"` en lugar de borrar filas?
+
+---
+
+## ✍️ REGLA DE ORO · Firma del contrato desde el lado agencia
+
+> **El canal principal de firma es Firmafy (email + SMS con OTP) ·
+> Byvaro es un recordatorio en pantalla, NO el canal de firma.**
+> Cuando un contrato se envía a firmar (`status: "sent"` o
+> `"viewed"`), la agencia receptora debe poder verlo y entrar a
+> firmar desde su panel también, por si pierde el email/SMS.
+
+**Flujo end-to-end** (ya descrito en `docs/backend/integrations/firmafy.md`):
+
+```
+Promotor sube → Picker scope → Upload Dialog → uploadContract +
+sendContractToSign → backend POST Firmafy action=request → CSV +
+status=sent → Firmafy envía email + SMS al firmante → agencia
+firma con OTP → webhook type=1 → backend marca status=signed +
+guarda PDFs → cron actualiza UI promotor + agencia.
+```
+
+**Lo que ve la AGENCIA en Byvaro** (cuando `readOnly`):
+
+1. **Banner arriba del Resumen** — `<FileSignature>` primary tone:
+   "Tienes N contrato(s) pendiente(s) de firmar · revisa tu email y
+   SMS de Firmafy o ábrelo desde aquí". Click → abre
+   `<AgencySignContractDialog>` con el primer pendiente.
+
+2. **Chip por promoción** — en cada card cuya promo está cubierta
+   por un contrato `sent`/`viewed` aparece chip clickable
+   "Pendiente de firma" (primary tone). Tiene PRIORIDAD sobre los
+   chips "Sin contrato" / "Vence en Nd" / "Contrato vigente".
+
+3. **Banner ámbar "Sin contrato firmado"** — solo cuenta promos
+   SIN contrato vivo (signed o sent). Las que tienen pendiente NO
+   entran ahí · la copy sería contradictoria.
+
+4. **`<AgencySignContractDialog>`** — al hacer click, dialog con:
+   - Resumen del acuerdo (alcance, comisión, duración, fecha límite).
+   - Lista de firmantes con su `signerStatus` y badge "Tú" si email
+     coincide con el del usuario actual.
+   - Aviso: "La firma se realiza en Firmafy con código OTP por SMS"
+     · "Te ha llegado el link a tu email y un SMS al {teléfono}".
+   - CTA primary "Firmar en Firmafy" (`window.open(signUrl, "_blank")`).
+   - Si el usuario NO es firmante o no hay `signUrl`, mensaje pasivo
+     ("Solo los firmantes designados pueden firmar" / "Link no
+     disponible · revisa tu email/SMS").
+
+**El backend NUNCA devuelve `signUrl` de OTRA agencia ni del
+promotor** · solo el del usuario actual si es firmante. RLS en la
+tabla `contract_signers` filtra por email del JWT.
+
+**Variantes admitidas** según `Contract.shipmentType` (Firmafy):
+- `form` (default) → form pre-rellenado.
+- `link` → link directo de firma.
+- `email` → email con PDF adjunto.
+- `sms` → SMS con link corto.
+
+Independientemente del tipo, en la UI siempre exponemos `signUrl`
+en pestaña nueva. Firmafy se encarga del envoltorio.
+
+**Validación legal.** Firmafy emite el PDF firmado + PDF de
+auditoría · ambos quedan guardados en storage privado
+(`docSignedKey`, `docAuditKey`). La auditoría incluye IP, datesign,
+email + teléfono OTP del firmante · válido en España según eIDAS.
+
+**TODO(backend) · cuando aterrice la API real:**
+
+- `GET /api/contracts/pending-for-me` (lado agencia · usa JWT) →
+  lista de contratos `sent`/`viewed` donde el usuario actual es
+  firmante con `signerStatus !== "signed"`. Incluye
+  `signers[].signUrl` SOLO del firmante actual.
+- `GET /api/contracts/:id` (cross-tenant lectura) · si el
+  workspace_id del usuario es la agencia receptora, devuelve la
+  vista filtrada. El promotor lo ve con todos los detalles +
+  acciones de gestión (extender, revocar, reenviar).
+- Push realtime al webhook · cuando llegue `signed`, los paneles
+  de ambos tenants reciben actualización vía Pusher/Ably/SSE para
+  que el chip pase de "Pendiente de firma" → "Contrato vigente"
+  sin reload.
+
+**Checklist al añadir UI nueva con contratos pendientes de firma:**
+
+- [ ] ¿Solo se renderiza cuando `readOnly` (lado agencia)?
+- [ ] ¿Usa `<AgencySignContractDialog>` (no recreas el dialog)?
+- [ ] ¿Pasa `currentUserEmail` para resaltar SU firmante?
+- [ ] ¿Abre `signUrl` en pestaña nueva con `noopener,noreferrer`?
+- [ ] ¿Mensaje genérico que NO asume canal único (Firmafy email +
+      SMS son los principales · pero podría haber rebote de email)?
+
+---
+
+## 🚧 REGLA DE ORO · `canPublishPromotion` es del DUEÑO, no del visor
+
+> **`canPublishPromotion(p)` (y por extensión `getMissingForPromotion`,
+> `empresaTieneIdentidad`) valida si EL DUEÑO de la promoción
+> (promotor / comercializador) puede publicarla. NUNCA aplicar este
+> check al lado AGENCIA / receptor.** Es un gate del workspace dueño,
+> no del workspace que la observa.
+
+**Por qué.** `empresaTieneIdentidad()` lee `byvaro-empresa` del
+localStorage del navegador actual y comprueba `nombreComercial ||
+razonSocial`. En el modelo single-tenant mock, ese localStorage
+representa la empresa del workspace logueado:
+
+- Promotor logueado → `byvaro-empresa` contiene los datos del promotor
+  → check válido para validar publicación.
+- Agencia logueada → `byvaro-empresa` contiene los datos de la AGENCIA
+  → el check valida la identidad de la AGENCIA, no del promotor dueño
+  de la promoción · semánticamente incorrecto.
+
+Si la agencia tiene `byvaro-empresa` vacío (navegador limpio o
+onboarding sin completar), TODAS las promociones del promotor se
+marcan como "no publicables" y desaparecen del listado / dashboard
+de la agencia. Ese fue el bug de Erik (admin de Nordic Home Finders)
+viendo 0 promociones en navegador limpio mientras Anna (member) las
+veía porque su navegador tenía estado anterior.
+
+**Regla.** Las promociones que llegan a la cartera de una agencia
+(`agency.promotionsCollaborating` + overrides en `agencyCartera.ts`)
+YA pasaron por el panel del owner — el promotor no la habría
+compartido si no la pudiera publicar. Reverificar al lado agencia
+es pelado. Worse: filtra en falso.
+
+**Sitios donde NO se debe llamar a `canPublishPromotion` al lado
+agencia** (auditar al añadir uno nuevo):
+
+- `Promociones.tsx` · pool agencia + filtro de tabs.
+- `AgencyHome.tsx` · `promocionesAsignadas` del dashboard.
+- Cualquier listado / KPI / banner que use `useAgencyCartera` o
+  `agency.promotionsCollaborating`.
+
+**Patrón canónico:**
+
+```ts
+const isAgencyUser = currentUser.accountType === "agency";
+
+pool.filter((p) => {
+  if (!ids.has(p.id)) return false;
+  if (p.status !== "active") return false;
+  if (!isAgencyUser && !canPublishPromotion(p)) return false;
+  if (p.canShareWithAgencies === false) return false;
+  return true;
+});
+```
+
+**Cuándo SÍ aplica `canPublishPromotion`.**
+
+- Lado promotor · `Promociones.tsx` con tab "published" · cards del
+  promotor que aún no rellenó identidad muestran "Sin publicar".
+- `CrearPromocion.tsx` · botón "Publicar" deshabilitado si `false`.
+- `useUsageGuard("createPromotion")` cuando se intenta activar.
+
+**Backend.** Cuando aterrice multi-tenancy real, `byvaro-empresa`
+desaparece y cada promo lleva su `ownerOrganizationId`.
+`canPublishPromotion(p)` aceptará un `Empresa` parameter (de
+`GET /api/empresas/:ownerOrganizationId`) en vez de leer de
+localStorage. El bug se elimina por construcción.
+
+**Checklist al añadir UI nueva del lado agencia:**
+
+- [ ] ¿Estoy filtrando por `canPublishPromotion` o
+      `getMissingForPromotion` el lado agencia? Si sí, fallo · usa
+      `isAgencyUser` para skipearlo.
+- [ ] ¿La data viene de `agencyCartera` / `promotionsCollaborating`?
+      Si sí, no necesita re-validación.
+- [ ] Probar con navegador 100% limpio (sin localStorage) logueado
+      como agency · si ves 0 promociones, hay un check
+      contaminado leyendo `byvaro-empresa`.
 
 ---
 

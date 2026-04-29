@@ -26,6 +26,35 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+/**
+ * Umbral canónico de "contrato próximo a vencer" · 60 días.
+ *
+ * REGLA DE ORO (CLAUDE.md "Contratos · alerta a 60 días"): toda UI
+ * que muestre estado de contrato firmado con `expiresAt` debe avisar
+ * cuando queden ≤ 60 días para que el promotor tenga margen para
+ * renegociar/renovar. No usar 30 (no da tiempo a firmar uno nuevo) ni
+ * 90 (alerta prematura · ruidoso). Cambiar este número aquí impacta
+ * a TODOS los consumidores · es la fuente única de verdad.
+ *
+ * Consumidores actuales:
+ *   · `getContractStatus()` en `src/data/agencies.ts` · chip global de
+ *     la agencia (panel header, listado /colaboradores, AgenciasTabStats).
+ *   · `ResumenTab.tsx` · chip por promoción ("Vence en Xd").
+ */
+export const CONTRACT_NEAR_EXPIRY_DAYS = 60;
+
+/** Días hasta caducidad de un contrato firmado · null si no expira
+ *  o no está firmado · negativo si ya caducó. */
+export function daysUntilContractExpiry(
+  c: Pick<CollaborationContract, "status" | "expiresAt" | "archived">,
+  refDate: Date = new Date(),
+): number | null {
+  if (c.archived) return null;
+  if (c.status !== "signed") return null;
+  if (!c.expiresAt) return null;
+  return Math.ceil((c.expiresAt - refDate.getTime()) / (24 * 60 * 60 * 1000));
+}
+
 export type ContractStatus =
   | "draft" | "sent" | "viewed" | "signed" | "expired" | "revoked";
 
@@ -155,6 +184,20 @@ export interface CollaborationContract {
    *  "Archivados" al pie. No se borra · recuperable con "Desarchivar". */
   archived?: boolean;
   archivedAt?: number;
+
+  /* ─── Renovación / sustitución ───
+   * Cuando un contrato se sube como RENOVACIÓN del/los contrato(s)
+   * anteriores que cubrían la misma promoción, guardamos la cadena
+   * de cambio para que la UI de Documentación pueda mostrar el
+   * cross-reference: "Sustituye a {contrato X} por renovación" en
+   * el nuevo y "Sustituido por {contrato Y} por renovación · fecha"
+   * en el antiguo (que queda archivado automáticamente). */
+
+  /** IDs de contratos a los que sustituye este (los antiguos quedaron
+   *  archivados con `replacedByContractId === this.id`). */
+  replacesContractIds?: string[];
+  /** ID del contrato que sustituyó a este (ya archivado). */
+  replacedByContractId?: string;
 }
 
 const STORAGE_KEY = "byvaro.collaborationContracts.v1";
@@ -208,6 +251,11 @@ export function uploadContract(data: {
   /** Si `alreadySignedAt`, índices de firmantes que efectivamente
    *  firmaron. Si vacío/undefined, se asume que todos. */
   alreadySignedSignerIndices?: number[];
+  /** Si se indica, este contrato sustituye al/los listados (renovación).
+   *  Cada antiguo queda archivado automáticamente con
+   *  `replacedByContractId = newId` + evento "Sustituido por
+   *  renovación · contrato {newId}". */
+  replacesContractIds?: string[];
   actor?: { name: string; email?: string };
 }): CollaborationContract {
   const now = Date.now();
@@ -239,6 +287,9 @@ export function uploadContract(data: {
     language: data.language ?? "es",
     signerPriority: data.signerPriority,
     expiresAt: data.expiresAt,
+    replacesContractIds: data.replacesContractIds && data.replacesContractIds.length > 0
+      ? data.replacesContractIds
+      : undefined,
     createdBy: data.actor,
     createdAt: now,
     events: isPreSigned
@@ -257,7 +308,36 @@ export function uploadContract(data: {
           note: `Subido ${data.pdfFilename}`,
         }],
   };
-  writeStore([contract, ...readStore()]);
+  /* Si es renovación · auto-archiva los contratos sustituidos con
+     cross-reference + evento explicativo. La UI de Documentación lee
+     `replacedByContractId` y `replacesContractIds` para pintar el
+     "Sustituido por renovación · contrato {X}" / "Sustituye al
+     contrato {Y} por renovación". */
+  let store = [contract, ...readStore()];
+  if (data.replacesContractIds && data.replacesContractIds.length > 0) {
+    const replaceSet = new Set(data.replacesContractIds);
+    store = store.map((c) =>
+      replaceSet.has(c.id)
+        ? {
+            ...c,
+            archived: true,
+            archivedAt: now,
+            replacedByContractId: contract.id,
+            events: [
+              ...c.events,
+              {
+                id: `ev-${now}-renew-arch`,
+                type: "archived" as const,
+                at: now,
+                by: data.actor,
+                note: `Sustituido por renovación · contrato "${contract.title}"`,
+              },
+            ],
+          }
+        : c,
+    );
+  }
+  writeStore(store);
   return contract;
 }
 

@@ -22,7 +22,7 @@ import { useEffect, useState } from "react";
 import {
   FileSignature, Plus, Trash2, Pause, Play, FileText, Download,
   Receipt, Landmark, Shield, ShieldCheck, Sparkles, Check, X,
-  ClipboardCheck, Upload, ChevronDown,
+  ClipboardCheck, Upload, ChevronDown, RefreshCcw,
 } from "lucide-react";
 import { PdfIcon } from "@/components/icons/PdfIcon";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -291,6 +291,12 @@ function ContractRow({
         <div className="flex items-center gap-2 flex-wrap">
           <p className="text-sm font-semibold text-foreground truncate hover:underline">{c.title}</p>
           <StateBadge label={status.label} tone={status.tone} />
+          {c.replacesContractIds && c.replacesContractIds.length > 0 && (
+            <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-primary/10 text-primary text-[10px] font-medium">
+              <RefreshCcw className="h-2.5 w-2.5" strokeWidth={2.25} />
+              Renovación
+            </span>
+          )}
         </div>
         <p className="text-[11.5px] text-muted-foreground truncate mt-0.5">
           {c.pdfFilename}
@@ -304,6 +310,11 @@ function ContractRow({
           {c.signedAt ? ` · firmado ${formatRelative(c.signedAt)}` : ""}
           {c.createdBy?.name ? ` · por ${c.createdBy.name}` : ""}
         </p>
+        {c.replacesContractIds && c.replacesContractIds.length > 0 && (
+          <p className="text-[10.5px] text-primary/80 mt-0.5 truncate">
+            Sustituye al contrato anterior por renovación
+          </p>
+        )}
       </div>
       <div className="pt-0.5 shrink-0">
         <ContractRowKebab contract={c} onOpenDetail={onOpenDetail} />
@@ -373,6 +384,12 @@ function ArchivedRow({
         <div className="flex items-center gap-2 flex-wrap">
           <p className="text-[13px] font-medium text-foreground truncate">{c.title}</p>
           <StateBadge label={status.label} tone={status.tone} />
+          {c.replacedByContractId && (
+            <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-warning/10 text-warning text-[10px] font-medium">
+              <RefreshCcw className="h-2.5 w-2.5" strokeWidth={2.25} />
+              Sustituido por renovación
+            </span>
+          )}
         </div>
         <p className="text-[11px] text-muted-foreground truncate mt-0.5">
           {c.pdfFilename}

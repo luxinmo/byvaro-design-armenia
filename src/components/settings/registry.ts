@@ -259,6 +259,9 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         { label: "Transferir propiedad", to: "/ajustes/zona-critica/transferir", live: true },
         { label: "Eliminar workspace", to: "/ajustes/zona-critica/eliminar-workspace", live: true },
         { label: "Eliminar cuenta", to: "/ajustes/zona-critica/eliminar-cuenta", live: true },
+        /* Solo prototipo · cargar/limpiar fixture del promotor para
+         *  testear con varias cuentas a la vez sin tocar DevTools. */
+        { label: "Datos de prueba (demo)", to: "/ajustes/zona-critica/datos-prueba", live: true },
       ]},
     ],
   },

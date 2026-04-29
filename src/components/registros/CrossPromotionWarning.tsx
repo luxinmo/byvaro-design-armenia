@@ -3,7 +3,7 @@
  *
  * Detecta si el cliente entrante (por email o teléfono) ya está
  * ACTIVO en otra promoción del MISMO workspace (aprobado o con
- * venta). Indica posible conflicto de comisión · la agencia podría
+ * venta). Indica posible interferencia de comisión · la agencia podría
  * estar intentando registrar a un cliente que ya pertenece a otra.
  *
  * Este es un diferencial del producto mencionado en la regla de oro
@@ -52,7 +52,7 @@ function findCrossPromotionHits(
   const hits: CrossHit[] = [];
   for (const r of all) {
     if (r.id === current.id) continue;
-    if (r.estado !== "aprobado") continue;          // solo aprobados cuentan como conflicto
+    if (r.estado !== "aprobado") continue;          // solo aprobados cuentan como duplicado
     if (r.promotionId === current.promotionId) continue; // misma promo = duplicado normal, ya lo cubre la IA
     const matched: ("email" | "telefono")[] = [];
     const otherEmail = normalizeEmail(r.cliente.email);
@@ -95,10 +95,10 @@ export function CrossPromotionWarning({ record, className }: Props) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-semibold text-destructive leading-snug">
-            Posible conflicto cross-promoción
+            Posible duplicado cross-promoción
           </p>
           <p className="text-[11.5px] text-foreground mt-1 leading-relaxed">
-            Este cliente ya está aprobado en {hits.length === 1 ? "otra promoción" : `${hits.length} promociones`} del workspace. Revisa antes de aprobar para evitar conflictos de comisión.
+            Este cliente ya está aprobado en {hits.length === 1 ? "otra promoción" : `${hits.length} promociones`} del workspace. Revisa antes de aprobar para evitar comisiones duplicadas.
           </p>
           <ul className="mt-2.5 space-y-1">
             {hits.map((h) => {

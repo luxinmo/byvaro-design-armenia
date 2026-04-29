@@ -11,7 +11,11 @@
     "lint": "eslint .",
     "audit:responsive": "node scripts/responsive-audit.mjs",
     "audit:wizard": "node scripts/wizard-audit.mjs",
-    "audit:dead-buttons": "node scripts/dead-buttons-scan.mjs"
+    "audit:dead-buttons": "node scripts/dead-buttons-scan.mjs",
+    "seed:gen": "tsx scripts/generate-supabase-seed.ts",
+    "seed:bootstrap": "tsx scripts/bootstrap-supabase.ts",
+    "db:push": "supabase db push",
+    "db:reset": "supabase db reset"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",
@@ -28,6 +32,7 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@supabase/supabase-js": "^2.105.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -55,6 +60,7 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
+    "tsx": "^4.21.0",
     "typescript": "^5.8.3",
     "vite": "^5.4.19"
   }

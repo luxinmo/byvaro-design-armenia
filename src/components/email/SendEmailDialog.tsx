@@ -146,15 +146,19 @@ export function SendEmailDialog({
 }: SendEmailDialogProps) {
   const { toast } = useToast();
   const { ids: FAVORITE_AGENCY_IDS } = useFavoriteAgencies();
-  /* La agencia nunca envía emails a otras agencias desde una ficha — solo
-   * a clientes propios. Forzamos audience="client" y saltamos el paso de
-   * selección de audiencia. Capa de protección adicional a la que pone
-   * el caller al pasar `defaultAudience="client"`. */
+  /* Resolución de la audiencia inicial · respeta lo que el caller
+   *  pasa explícitamente. Para agency users, si NO viene
+   *  `defaultAudience` o viene "client", forzamos "client" como
+   *  capa defensiva (la mayoría de flujos de agencia mandan a sus
+   *  propios clientes). Pero si el caller pasa "collaborator"
+   *  explícito (ej. /colaboradores → enviar a otras inmobiliarias),
+   *  lo respetamos · la agencia SÍ puede mandar a su red. */
   const currentUser = useCurrentUser();
   const isAgencyUser = currentUser.accountType === "agency";
-  const effectiveDefaultAudience: Audience | undefined = isAgencyUser
-    ? "client"
-    : defaultAudience;
+  const effectiveDefaultAudience: Audience | undefined =
+    isAgencyUser && defaultAudience !== "collaborator"
+      ? "client"
+      : defaultAudience;
 
   // ── Derive forced template based on mode ──
   // unit / promotion → "new-availability" by default (most common case).
@@ -385,10 +389,28 @@ export function SendEmailDialog({
     onOpenChange(false);
   };
 
+  /* Pool de inmobiliarias eligibles · regla Byvaro: solo
+   *  colaboradoras activas (status=active + estadoColaboracion=activa)
+   *  y nunca la propia agencia. Usado por todos los selectores
+   *  ("Todos los colaboradores", "Favoritos", "Elegir entre…") y
+   *  por el cálculo de los counters del collab-mode step. */
+  const eligibleAgencies = useMemo(
+    () => agencies.filter((a) =>
+      a.status === "active"
+      && a.estadoColaboracion === "activa"
+      && (currentUser.accountType !== "agency" || a.id !== currentUser.agencyId)
+    ),
+    [currentUser],
+  );
+  const eligibleFavoritesCount = useMemo(
+    () => eligibleAgencies.filter((a) => FAVORITE_AGENCY_IDS.has(a.id)).length,
+    [eligibleAgencies, FAVORITE_AGENCY_IDS],
+  );
+
   // ── Build the recipient pool based on current audience ──
   const allRecipients: Recipient[] = useMemo(() => {
     if (audience === "collaborator") {
-      return agencies.map(a => ({
+      return eligibleAgencies.map(a => ({
         id: a.id,
         name: a.name,
         email: `contact@${a.name.toLowerCase().replace(/[^a-z0-9]+/g, "")}.com`,
@@ -618,7 +640,7 @@ export function SendEmailDialog({
               {/* Opción 1 · TODOS LOS COLABORADORES */}
               <button
                 onClick={() => {
-                  setSelectedRecipients(agencies.map(a => `contact@${a.name.toLowerCase().replace(/[^a-z0-9]+/g, "")}.com`));
+                  setSelectedRecipients(eligibleAgencies.map(a => `contact@${a.name.toLowerCase().replace(/[^a-z0-9]+/g, "")}.com`));
                   setRecipientMode("all");
                   setStep("template");
                 }}
@@ -631,11 +653,11 @@ export function SendEmailDialog({
                   <div className="flex items-center gap-2 mb-0.5">
                     <p className="text-sm font-semibold text-foreground">Todos los colaboradores</p>
                     <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-foreground text-background">
-                      {agencies.length}
+                      {eligibleAgencies.length}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Enviar a las {agencies.length} agencias colaboradoras de esta promoción
+                    Enviar a {eligibleAgencies.length === 1 ? "la inmobiliaria colaboradora" : `las ${eligibleAgencies.length} inmobiliarias colaboradoras`}
                   </p>
                 </div>
                 <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" strokeWidth={1.5} />
@@ -644,7 +666,7 @@ export function SendEmailDialog({
               {/* Opción 2 · COLABORADORES FAVORITOS */}
               <button
                 onClick={() => {
-                  const favs = agencies.filter(a => FAVORITE_AGENCY_IDS.has(a.id));
+                  const favs = eligibleAgencies.filter(a => FAVORITE_AGENCY_IDS.has(a.id));
                   setSelectedRecipients(favs.map(a => `contact@${a.name.toLowerCase().replace(/[^a-z0-9]+/g, "")}.com`));
                   setRecipientMode("favorites");
                   setStep("template");
@@ -658,11 +680,11 @@ export function SendEmailDialog({
                   <div className="flex items-center gap-2 mb-0.5">
                     <p className="text-sm font-semibold text-foreground">Colaboradores favoritos</p>
                     <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-warning/10 text-warning">
-                      {FAVORITE_AGENCY_IDS.size}
+                      {eligibleFavoritesCount}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Enviar solo a tus {FAVORITE_AGENCY_IDS.size} agencias marcadas como favoritas
+                    Enviar solo a tus {eligibleFavoritesCount} {eligibleFavoritesCount === 1 ? "inmobiliaria marcada como favorita" : "inmobiliarias marcadas como favoritas"}
                   </p>
                 </div>
                 <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" strokeWidth={1.5} />

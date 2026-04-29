@@ -33,7 +33,7 @@ export type NotificationEvent =
   /* Lado promotor · 6 eventos */
   | "registration.received"
   | "registration.duplicate_detected"
-  | "cross_promo.conflict"
+  | "cross_promo.duplicate_promotion"
   | "visit.completed_ready_to_register"
   | "registration.pending_decision"
   | "preregistration.expired_admin"

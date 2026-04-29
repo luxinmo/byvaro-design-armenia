@@ -5,18 +5,21 @@ import { ConfirmDialogHost } from "@/components/ui/ConfirmDialog";
 import { UpgradeModal } from "@/components/paywall/UpgradeModal";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { RequireAuth } from "@/components/RequireAuth";
+import { SupabaseHydrator } from "@/components/SupabaseHydrator";
 import Inicio from "@/pages/Inicio";
 import Notificaciones from "@/pages/Notificaciones";
 import Actividad from "@/pages/Actividad";
 import Sugerencias from "@/pages/Sugerencias";
 import Estadisticas from "@/pages/Estadisticas";
 import Promociones from "@/pages/Promociones";
+import Inmuebles from "@/pages/Inmuebles";
 import Registros from "@/pages/Registros";
 import Leads from "@/pages/Leads";
 import LeadDetalle from "@/pages/LeadDetalle";
 import Ventas from "@/pages/Ventas";
 import Calendario from "@/pages/Calendario";
-import Colaboradores from "@/pages/Colaboradores";
+import Colaboradores, { ColaboradoresTestPage } from "@/pages/Colaboradores";
+import Promotores from "@/pages/Promotores";
 import Contratos from "@/pages/Contratos";
 import AgenciaDetalle from "@/pages/AgenciaDetalle";
 import ColaboracionPanel from "@/pages/ColaboracionPanel";
@@ -84,6 +87,7 @@ import AjustesZonaCriticaCerrarSesion from "@/pages/ajustes/zona-critica/cerrar-
 import AjustesZonaCriticaTransferir from "@/pages/ajustes/zona-critica/transferir";
 import AjustesZonaCriticaEliminarWorkspace from "@/pages/ajustes/zona-critica/eliminar-workspace";
 import AjustesZonaCriticaEliminarCuenta from "@/pages/ajustes/zona-critica/eliminar-cuenta";
+import AjustesZonaCriticaDatosPrueba from "@/pages/ajustes/zona-critica/datos-prueba";
 import { SettingsShell } from "@/components/settings/SettingsShell";
 import { SettingsPlaceholder } from "@/components/settings/SettingsPlaceholder";
 import CrearPromocion from "@/pages/CrearPromocion";
@@ -113,6 +117,10 @@ export default function App() {
       {/* Resetea el scroll al top en cada cambio de pathname. Regla
        * global · ver docs/scroll-restoration.md y CLAUDE.md. */}
       <ScrollToTop />
+      {/* Hydrator · al login (o refresh con sesión activa) tira datos
+       *  de Supabase a localStorage scoped para que los hooks síncronos
+       *  (`useEmpresa`, `useOficinas`, etc.) sirvan datos reales. */}
+      <SupabaseHydrator />
       {/* Toasts globales (sonner). Antes faltaba → todas las llamadas
        * a toast.success/info/error eran silenciosas. */}
       <Toaster position="top-right" richColors closeButton />
@@ -218,6 +226,7 @@ export default function App() {
                 <Route path="zona-critica/transferir" element={<AjustesZonaCriticaTransferir />} />
                 <Route path="zona-critica/eliminar-workspace" element={<AjustesZonaCriticaEliminarWorkspace />} />
                 <Route path="zona-critica/eliminar-cuenta" element={<AjustesZonaCriticaEliminarCuenta />} />
+                <Route path="zona-critica/datos-prueba" element={<AjustesZonaCriticaDatosPrueba />} />
                 {/* Catch-all → SettingsPlaceholder. Detecta el link en el
                  * registry y muestra un cartel "En diseño" con el contexto. */}
                 <Route path="*" element={<SettingsPlaceholder />} />
@@ -243,6 +252,12 @@ export default function App() {
                 <Route path="/estadisticas" element={<Estadisticas />} />
                 <Route path="/promociones" element={<Promociones />} />
                 <Route path="/promociones/:id" element={<PromocionDetalle />} />
+                {/* Inmuebles · catálogo de unidades sueltas del workspace.
+                 *  Accesible a developer Y agency · cada org ve sólo los
+                 *  suyos (storage scopeado por workspace).
+                 *  Dos rutas · misma página, distinta vista inicial. */}
+                <Route path="/inmuebles" element={<Inmuebles defaultView="list" />} />
+                <Route path="/inmuebles/cuadricula" element={<Inmuebles defaultView="grid" />} />
                 {/* Oportunidades · agencia SÍ entra · la página debe
                  *  filtrar internamente por agencyId (TODO: si todavía
                  *  hay fuga en `Leads.tsx`, añadir filtro · verificar
@@ -252,14 +267,35 @@ export default function App() {
                 <Route path="/registros" element={<Registros />} />
                 <Route path="/ventas" element={<Ventas />} />
                 <Route path="/calendario" element={<Calendario />} />
-                <Route path="/colaboradores" element={<PromotorOnly><Colaboradores /></PromotorOnly>} />
+                {/* /colaboradores · accesible a developer Y agency · el
+                    componente ramifica: developer → lista de agencias,
+                    agency → lista de promotores con los que colabora.
+                    Las sub-rutas (`:id`, `:id/panel`, `:id/historial`,
+                    `estadisticas`) siguen `PromotorOnly` · son ficha y
+                    panel del PROMOTOR mirando una agencia. La agencia
+                    tiene su mirror en `/promotor/:id` y `/promotor/:id/panel`. */}
+                <Route path="/colaboradores" element={<Colaboradores />} />
+                {/* Variante "test" · misma maquinaria de filtros + sort,
+                 *  pero con la card antigua `FeatureCardV3` para A/B
+                 *  comparar con la nueva `AgencyGridCard`. */}
+                <Route path="/colaboradores-test" element={<PromotorOnly><ColaboradoresTestPage /></PromotorOnly>} />
+                {/* Promotores & comercializadores · accesible a developer
+                 *  Y agency · cada rol ve la lista que le corresponde.
+                 *  Developer: empresas con las que colabora como
+                 *  comercializador. Agency: promotores cuya cartera tiene. */}
+                <Route path="/promotores" element={<Promotores />} />
                 {/* Contratos · solo promotor por ahora · la agencia no
                  *  lo tiene en su menú. Si en el futuro hace falta, se
                  *  hace una versión filtrada por `agencyId`. */}
                 <Route path="/contratos" element={<PromotorOnly><Contratos /></PromotorOnly>} />
                 <Route path="/colaboradores/estadisticas" element={<PromotorOnly><ColaboradoresEstadisticas /></PromotorOnly>} />
-                <Route path="/colaboradores/:id" element={<PromotorOnly><AgenciaDetalle /></PromotorOnly>} />
-                <Route path="/colaboradores/:id/ficha" element={<PromotorOnly><AgenciaDetalle /></PromotorOnly>} />
+                {/* Ficha pública de inmobiliaria · accesible a TODOS
+                    los usuarios (developer + agency). El componente
+                    `AgenciaDetalle` esconde las acciones de gestión
+                    (aprobar/pausar/eliminar) para visitor agency · son
+                    acciones del workspace dueño. */}
+                <Route path="/colaboradores/:id" element={<AgenciaDetalle />} />
+                <Route path="/colaboradores/:id/ficha" element={<AgenciaDetalle />} />
                 <Route path="/colaboradores/:id/panel" element={<PromotorOnly><ColaboracionPanel /></PromotorOnly>} />
                 <Route path="/colaboradores/:id/historial" element={<PromotorOnly><ColaboradorHistorial /></PromotorOnly>} />
                 <Route path="/contactos" element={<Contactos />} />

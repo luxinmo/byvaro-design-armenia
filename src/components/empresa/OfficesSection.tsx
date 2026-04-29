@@ -238,8 +238,16 @@ function OfficeEditRow({
 /* ═══════════════════════════════════════════════════════════════════
    OfficesSection principal
    ═══════════════════════════════════════════════════════════════════ */
-export function OfficesSection({ viewMode }: { viewMode: "edit" | "preview" }) {
-  const { oficinas, addOficina, updateOficina, deleteOficina, setPrincipal } = useOficinas();
+export function OfficesSection({
+  viewMode, tenantId,
+}: {
+  viewMode: "edit" | "preview";
+  /** Tenant cuya lista de oficinas se muestra · si viene, render
+   *  read-only de las oficinas de ese tenant (visitor). Sin él,
+   *  modo owner sobre el workspace logueado. */
+  tenantId?: string;
+}) {
+  const { oficinas, addOficina, updateOficina, deleteOficina, setPrincipal } = useOficinas(tenantId);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Oficina[]>([]);
 

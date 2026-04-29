@@ -28,6 +28,8 @@
 
 import { useMemo } from "react";
 import { agencies } from "@/data/agencies";
+import { promotores } from "@/data/promotores";
+import { getActivePromotionsByOwner } from "./promotionsByOwner";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { sales } from "@/data/sales";
 import { unitsByPromotion } from "@/data/units";
@@ -49,6 +51,13 @@ export interface EmpresaStats {
   importeEnVenta: number;
   /** Unidades cerradas (escrituradas) · histórico de ventas terminadas. */
   unidadesVendidas: number;
+  /** Unidades en colaboración · suma de `availableUnits` de las
+   *  promociones donde la agencia colabora con un promotor.
+   *  Usado en el hero de una ficha de agencia (entity=agency) para
+   *  reflejar "qué cartera tienen disponible vía sus colaboraciones".
+   *  Solo aplica a inmobiliarias puras · si la empresa es promotor
+   *  o comercializador, ahí lo natural es `unidadesEnVenta`. */
+  unidadesEnColaboracion: number;
   agencias: number;
   oficinas: number;
   agentes: number;
@@ -110,13 +119,44 @@ export function useEmpresaStats(
      * coincidían con los miembros reales de la agencia · "5/12 vs 2".
      * Ahora derivan de los mismos `members` que pinta la ficha. */
     if (tenantId && !tenantId.startsWith("developer-")) {
-      const a = agencies.find((x) => x.id === tenantId);
+      /* Primero busca en `agencies` · si es un prom-* lo resuelve
+       *  contra `promotores` (mismo shape Agency). Evita devolver
+       *  todo a 0 cuando es promotor externo. */
+      const a = agencies.find((x) => x.id === tenantId)
+        ?? promotores.find((x) => x.id === tenantId);
+      /* Portfolio del tenant · si es promotor externo (`prom-*`),
+       *  el helper devuelve sus promociones del mock. Si es agencia,
+       *  devuelve [] (las agencias no tienen portfolio publicado). */
+      const portfolio = getActivePromotionsByOwner(tenantId);
+      let unidadesEnVenta = 0;
+      let importeEnVenta = 0;
+      for (const p of portfolio) {
+        const available = p.availableUnits ?? 0;
+        unidadesEnVenta += available;
+        const avg = ((p.priceMin ?? 0) + (p.priceMax ?? 0)) / 2;
+        importeEnVenta += avg * available;
+      }
+      /* Unidades en colaboración · suma de availableUnits de las
+       *  promociones que la AGENCIA colabora con sus promotores
+       *  (Luxinmo + externals). Solo tiene sentido cuando es una
+       *  agencia · para promotores externos queda 0. */
+      let unidadesEnColaboracion = 0;
+      if (a && !tenantId.startsWith("prom-")) {
+        const allPromos = [
+          ...getActivePromotionsByOwner("developer-default"),
+        ];
+        const collabIds = new Set(a.promotionsCollaborating ?? []);
+        for (const p of allPromos) {
+          if (collabIds.has(p.id)) unidadesEnColaboracion += p.availableUnits ?? 0;
+        }
+      }
       return {
         aniosOperando: yearsSince(a?.fundadaEn),
-        promociones: 0,
-        unidadesEnVenta: 0,
-        importeEnVenta: 0,
+        promociones: portfolio.length,
+        unidadesEnVenta,
+        importeEnVenta,
         unidadesVendidas: a?.ventasCerradas ?? 0,
+        unidadesEnColaboracion,
         agencias: 0,
         oficinas: a?.offices?.length ?? 0,
         agentes: publicMembers.length,
@@ -155,6 +195,9 @@ export function useEmpresaStats(
       unidadesEnVenta,
       importeEnVenta,
       unidadesVendidas: sales.filter((s) => s.estado === "escriturada").length,
+      /* Para developer en su propia ficha el concepto "en
+       *  colaboración" no aplica (él es el dueño) · 0. */
+      unidadesEnColaboracion: 0,
       agencias: agencies.filter(
         (a) => a.status === "active" && a.estadoColaboracion === "activa",
       ).length,

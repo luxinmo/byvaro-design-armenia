@@ -2,18 +2,29 @@
  * solicitudesColaboracion.ts · solicitudes de colaboración que la
  * agencia envía al promotor por una promoción concreta.
  *
- * Mock single-tenant · localStorage. Cuando llegue el backend:
+ * Mock single-tenant · localStorage. BACKEND · este store fusiona con
+ * `invitaciones` y `orgCollabRequests` en la tabla unificada
+ * `collab_requests` con `kind='promotion_request'` (ver
+ * `docs/backend-dual-role-architecture.md §3.6`).
  *
- *   POST /api/agencias/me/colaboraciones-solicitadas
- *     { promotionId, message? }
- *     → 201 { solicitudId, status: "pendiente" }
+ * Endpoints canónicos en INGLÉS (los stubs heredados en español se
+ * mapean 1:1):
+ *   · `POST /collab-requests`              { kind:'promotion_request',
+ *                                             to_organization_id, promotion_id, message? }
+ *      ANTES (legacy): `POST /api/agencias/me/colaboraciones-solicitadas`
+ *   · `GET  /collab-requests?direction=inbound&kind=promotion_request`
+ *      ANTES (legacy): `GET /api/promociones/:id/solicitudes-pendientes`
+ *   · `POST /collab-requests/:id/{accept,reject,cancel,restore}`
  *
- *   GET /api/promociones/:id/solicitudes-pendientes (lado promotor)
- *     → lista las solicitudes que recibe y puede aceptar/rechazar.
+ * REGLA · descarte SILENCIOSO para `promotion_request` · ver
+ * `docs/backend-dual-role-architecture.md §5.5` · cuando el caller es
+ * el sender, el backend debe ENMASCARAR `status='rejected'` como
+ * `'pending'` (la agencia nunca se entera del rechazo). El frontend
+ * adapter `collabRequests.ts` ya implementa este masking.
  *
  * Estado · "pendiente" tras crear · pasa a "aceptada" cuando el
  * promotor aprueba (lo que implica añadir la promo a
- * `agency.promotionsCollaborating`) o "rechazada" si la denega.
+ * `agency.promotionsCollaborating`) o "rechazada" si la deniega.
  */
 
 import { useEffect, useState } from "react";

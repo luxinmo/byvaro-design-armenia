@@ -12,6 +12,19 @@
  *   - caducada:  expiró sin respuesta (>30 días)
  *
  * Hoy → todo en localStorage (MVP). Mañana → backend + email real.
+ *
+ * BACKEND · este store fusiona con `solicitudesColaboracion` y
+ * `orgCollabRequests` en la tabla unificada `collab_requests` con
+ * `kind='invitation'` (token + expires_at + metadata.commission_*).
+ * Ver `docs/backend-dual-role-architecture.md §3.6 + §5.3`.
+ *
+ * Endpoints canónicos en INGLÉS (legacy stubs en español arriba se
+ * mapean 1:1):
+ *   · `POST /collab-requests`        { kind:'invitation', to_organization_id?,
+ *                                       promotion_id?, metadata: { token, ... },
+ *                                       expires_at }
+ *   · `POST /collab-requests/:id/{accept,reject,cancel}`
+ *   · Cron diario marca `pending → cancelled` cuando `expires_at < now()`.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";

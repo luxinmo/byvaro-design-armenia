@@ -58,7 +58,11 @@ export default function AgencyHome() {
     return pool.filter((p) => {
       if (!ids.has(p.id)) return false;
       if (p.status !== "active") return false;
-      if (!canPublishPromotion(p as unknown as Promotion)) return false;
+      /* No re-validamos `canPublishPromotion` lado agencia · ese gate
+         es del owner (promotor/comercializador). Las promos que entran
+         aquí ya pasaron por su propio panel. Re-validar leería el
+         `byvaro-empresa` local de la agencia (que NO es el workspace
+         del owner) y filtraría en falso. Ver REGLA DE ORO CLAUDE.md. */
       if ((p as { canShareWithAgencies?: boolean }).canShareWithAgencies === false) return false;
       return true;
     });

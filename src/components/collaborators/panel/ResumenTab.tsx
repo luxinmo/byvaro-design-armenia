@@ -17,14 +17,19 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ChevronRight, FileSignature, Home, Plus, Share2,
-  Upload, ArrowRight, Check, MoreHorizontal, AlertTriangle, Send,
+  Upload, ArrowRight, Check, MoreHorizontal, AlertTriangle, Send, Clock,
+  MoreVertical, RefreshCcw, PauseCircle, PlayCircle, Ban,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Agency } from "@/data/agencies";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { promotions } from "@/data/promotions";
-import { useContractsForAgency } from "@/lib/collaborationContracts";
+import {
+  CONTRACT_NEAR_EXPIRY_DAYS,
+  daysUntilContractExpiry,
+  useContractsForAgency,
+} from "@/lib/collaborationContracts";
 import { useAgencyDocRequests } from "@/lib/agencyDocRequests";
 import { useCurrentUser } from "@/lib/currentUser";
 import { useInvitacionesForAgency } from "@/lib/invitaciones";
@@ -32,9 +37,20 @@ import { ContractScopePickerDialog } from "@/components/collaborators/ContractSc
 import { ContractNewChoiceDialog } from "@/components/collaborators/ContractNewChoiceDialog";
 import { ContractUploadDialog } from "@/components/collaborators/ContractUploadDialog";
 import { ContractSignedUploadDialog } from "@/components/collaborators/ContractSignedUploadDialog";
+import { AgencySignContractDialog } from "@/components/collaborators/AgencySignContractDialog";
 import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
 import { RequestCollaborationDialog } from "@/components/collaborators/RequestCollaborationDialog";
 import { useAllSolicitudes, findSolicitudVivaParaAgencia, backfillRequestedBy } from "@/lib/solicitudesColaboracion";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
+import {
+  setPromoCollabStatus, usePromoCollabStatusMap, getPromoCollabStatusFromMap,
+} from "@/lib/promoCollabStatus";
+import {
+  recordCollaborationPaused, recordCollaborationResumed, recordCompanyAny,
+} from "@/lib/companyEvents";
 
 /* ─── Helpers ─────────────────────────────────────────────────────── */
 
@@ -59,6 +75,11 @@ type PromoEntry = {
   location?: string;
   commission?: number;
   image?: string;
+  /* Rol del owner de la promo · "promotor" | "comercializador" ·
+   *  marcado al crearla. Lo usamos en la copy del lado agencia
+   *  ("solo el promotor puede subir el contrato" vs "solo el
+   *  comercializador..."). Ver REGLA DE ORO en CLAUDE.md. */
+  ownerRole?: "promotor" | "comercializador";
   /* Datos comerciales — los muestra el card cuando lo ve la agencia
    *  (read-only). El promotor sigue viendo Visitas/Ventas/Conversión. */
   availableUnits?: number;
@@ -81,6 +102,7 @@ function usePromoCatalog() {
         location: p.location,
         commission: typeof p.commission === "number" && p.commission > 0 ? p.commission : undefined,
         image: p.image,
+        ownerRole: p.ownerRole,
         availableUnits: p.availableUnits,
         totalUnits: p.totalUnits,
         priceMin: p.priceMin,
@@ -96,6 +118,7 @@ function usePromoCatalog() {
         location: p.location,
         commission: typeof p.commission === "number" && p.commission > 0 ? p.commission : undefined,
         image: p.image,
+        ownerRole: p.ownerRole,
         availableUnits: p.availableUnits,
         totalUnits: p.totalUnits,
         priceMin: p.priceMin,
@@ -194,6 +217,17 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
   const [uploadContractOpen, setUploadContractOpen] = useState(false);
   const [signedUploadOpen, setSignedUploadOpen] = useState(false);
 
+  /* ─── Renovación · IDs de contratos a sustituir cuando el usuario
+     elige "Renovar contrato" desde el menú · se propaga a los upload
+     dialogs como `defaultReplacesContractIds`. Al subir el nuevo, los
+     antiguos se archivan auto con cross-ref vía `uploadContract`. ─── */
+  const [renewalReplaceIds, setRenewalReplaceIds] = useState<string[] | undefined>(undefined);
+
+  /* Estado de colaboración por (agency, promo). `pausada` o
+     `anulada` se persiste en localStorage; `activa` es el default. */
+  const collabStatusMap = usePromoCollabStatusMap(a.id);
+  const confirm = useConfirm();
+
   /* Dialog para compartir una promoción concreta con esta agencia.
      Arranca en el paso de condiciones con la comisión prefill. */
   const [sharePromo, setSharePromo] = useState<{ id: string; name: string } | null>(null);
@@ -226,6 +260,70 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
   const openScopePicker = (preselect?: string[]) => {
     setScopePreselect(preselect);
     setScopePickerOpen(true);
+  };
+
+  /* ─── Acciones del menú "3 puntos" por promo (solo lado quien
+       comparte: promotor / comercializador / agencia que comparte). ─── */
+  const findCoveringContractIds = useCallback((promoId: string): string[] => {
+    return contracts
+      .filter((c) => !c.archived && c.status === "signed")
+      .filter((c) =>
+        !c.scopePromotionIds
+        || c.scopePromotionIds.length === 0
+        || c.scopePromotionIds.includes(promoId),
+      )
+      .map((c) => c.id);
+  }, [contracts]);
+
+  const handleRenovar = (p: PromoEntry) => {
+    const ids = findCoveringContractIds(p.id);
+    setRenewalReplaceIds(ids.length > 0 ? ids : undefined);
+    setScopePreselect([p.id]);
+    setScopePickerOpen(true);
+  };
+
+  const handlePausar = async (p: PromoEntry) => {
+    const ok = await confirm({
+      title: `¿Pausar colaboración en "${p.name}"?`,
+      description:
+        `Mientras esté pausada, ${a.name} no podrá registrar nuevos clientes ni compartir esta promoción. ` +
+        `Las ventas, registros, visitas y comisiones existentes se MANTIENEN intactas. ` +
+        `Puedes reanudarla cuando quieras.`,
+      confirmLabel: "Pausar colaboración",
+    });
+    if (!ok) return;
+    setPromoCollabStatus(a.id, p.id, "pausada", actor);
+    recordCollaborationPaused(a.id, actor, `Promoción "${p.name}"`);
+    toast.success(`Colaboración pausada en "${p.name}"`);
+  };
+
+  const handleReanudar = (p: PromoEntry) => {
+    setPromoCollabStatus(a.id, p.id, "activa", actor);
+    recordCollaborationResumed(a.id, actor);
+    toast.success(`Colaboración reanudada en "${p.name}"`);
+  };
+
+  const handleAnular = async (p: PromoEntry) => {
+    const ok = await confirm({
+      title: `¿Anular colaboración en "${p.name}"?`,
+      description:
+        `${a.name} dejará de ver esta promoción y no podrá registrar nuevos clientes ni ` +
+        `programar visitas a través de Byvaro. Las ventas cerradas, registros aprobados, ` +
+        `visitas realizadas y comisiones devengadas hasta ahora se MANTIENEN intactas y ` +
+        `siguen contando en estadísticas e historial. Solo se cierra la puerta a actividad nueva.`,
+      confirmLabel: "Anular colaboración",
+      variant: "destructive",
+    });
+    if (!ok) return;
+    setPromoCollabStatus(a.id, p.id, "anulada", actor);
+    recordCompanyAny(
+      a.id,
+      "collaboration_ended",
+      `Colaboración anulada en "${p.name}"`,
+      "Datos históricos preservados (ventas / registros / visitas / comisiones).",
+      actor,
+    );
+    toast.success(`Colaboración anulada en "${p.name}"`);
   };
 
   /* Solo contamos como "compartibles" las promos publicadas Y donde
@@ -302,6 +400,34 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
     () => contracts.filter((c) => !c.archived && (c.status === "draft" || c.status === "sent" || c.status === "viewed")),
     [contracts],
   );
+
+  /* Contratos enviados a firmar (sent/viewed) · vivos para la AGENCIA
+     porque en algún momento debe firmarlos. Cuando readOnly mostramos
+     banner de "te toca firmar" + chip por promoción. */
+  const sentContracts = useMemo(
+    () => contracts.filter((c) => !c.archived && (c.status === "sent" || c.status === "viewed")),
+    [contracts],
+  );
+  /* Map promoId → contrato sent/viewed que la cubre · usado para
+     pintar chip "Pendiente de firma" en la card del lado agencia. */
+  const pendingSignByPromoId = useMemo(() => {
+    const m = new Map<string, typeof sentContracts[number]>();
+    for (const c of sentContracts) {
+      const ids = c.scopePromotionIds && c.scopePromotionIds.length > 0
+        ? c.scopePromotionIds
+        : sharedPromos.map((p) => p.id); // blanket
+      for (const pid of ids) {
+        const prev = m.get(pid);
+        /* Si hay varios pendientes que cubren la misma promo, quedate
+           con el más reciente · es el que el promotor habrá enviado. */
+        if (!prev || c.createdAt > prev.createdAt) m.set(pid, c);
+      }
+    }
+    return m;
+  }, [sentContracts, sharedPromos]);
+
+  /* Dialog de firma · para la agencia. */
+  const [signContract, setSignContract] = useState<typeof sentContracts[number] | null>(null);
   const pendingDocs = useMemo(
     () => docRequests.filter((d) => d.status === "pending" || d.status === "uploaded"),
     [docRequests],
@@ -310,8 +436,11 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
   /* Cobertura contractual · una promoción está "cubierta" si existe un
      contrato firmado, no archivado y no expirado/revocado, cuyo `scopePromotionIds`
      la incluye (o es vacío = cubre todo). El resto son promociones SIN CONTRATO ·
-     trabajar sin marco legal es la incidencia real. */
-  const { uncoveredPromos, hasBlanketSigned } = useMemo(() => {
+     trabajar sin marco legal es la incidencia real.
+     Además computamos qué promos están "por expirar" (el contrato más
+     lejano que las cubre vence en ≤ CONTRACT_NEAR_EXPIRY_DAYS=60 días).
+     Fuente única de verdad del umbral: `collaborationContracts.ts`. */
+  const { uncoveredPromos, hasBlanketSigned, expiringByPromoId } = useMemo(() => {
     const signed = contracts.filter((c) => !c.archived && c.status === "signed");
     const blanket = signed.some((c) => !c.scopePromotionIds || c.scopePromotionIds.length === 0);
     const coveredIds = new Set<string>();
@@ -321,7 +450,32 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
     const uncovered = blanket
       ? []
       : sharedPromos.filter((p) => p.active && !coveredIds.has(p.id));
-    return { uncoveredPromos: uncovered, hasBlanketSigned: blanket };
+
+    /* Para cada promo cubierta, calculamos el `daysLeft` MÁXIMO entre
+       todos los contratos firmados que la cubren · si alguno es
+       indefinido (sin expiresAt) la promo NUNCA está por vencer.
+       Una promo está "por expirar" si daysLeft ∈ [0, 60]. */
+    const expiring = new Map<string, number>();
+    const allCovered = blanket
+      ? sharedPromos.filter((p) => p.active)
+      : sharedPromos.filter((p) => p.active && coveredIds.has(p.id));
+    for (const p of allCovered) {
+      const covers = blanket
+        ? signed
+        : signed.filter((c) => !c.scopePromotionIds || c.scopePromotionIds.length === 0 || c.scopePromotionIds.includes(p.id));
+      const someInfinite = covers.some((c) => !c.expiresAt);
+      if (someInfinite) continue;
+      const days = covers
+        .map((c) => daysUntilContractExpiry(c))
+        .filter((d): d is number => d !== null);
+      if (days.length === 0) continue;
+      const maxDays = Math.max(...days);
+      if (maxDays >= 0 && maxDays <= CONTRACT_NEAR_EXPIRY_DAYS) {
+        expiring.set(p.id, maxDays);
+      }
+    }
+
+    return { uncoveredPromos: uncovered, hasBlanketSigned: blanket, expiringByPromoId: expiring };
   }, [contracts, sharedPromos]);
 
   /* Mock determinista · visits + registros + ventas por (agencyId,
@@ -366,55 +520,50 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
     success: "bg-success",
   }[headerTone];
 
+  /* Texto de la línea secundaria del hero · una sola intención
+     visible (lo más urgente). Manteniendo la lógica de prioridad
+     existente · no cambia funcionalidad. */
+  const heroNote =
+    uncoveredPromos.length > 0
+      ? `${uncoveredPromos.length} sin contrato`
+      : inFlightCount > 0
+        ? `${inFlightCount} ${inFlightCount === 1 ? "trámite en curso" : "trámites en curso"}`
+        : notSharedPromos.length > 0
+          ? `${notSharedPromos.length} sin compartir aún`
+          : sharedActiveCount > 0
+            ? "todo al día"
+            : null;
+  const heroNoteCls = {
+    warning: "text-warning",
+    primary: "text-muted-foreground",
+    success: "text-success",
+  }[headerTone];
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
 
       {/* ═══════════════ Cabecera unificada · estado + bloque 1 ═══════════════ */}
       <section>
-        <div className="flex items-center gap-2 mb-2">
-          <span className={cn("h-2 w-2 rounded-full shrink-0", headerDotCls)} />
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Estado de la colaboración
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80 mb-2">
+          Estado de la colaboración
+        </p>
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <h2 className="text-[20px] sm:text-[24px] font-semibold tracking-tight text-foreground leading-none tabular-nums">
+            {sharedActiveCount}
+            <span className="text-muted-foreground/50"> / </span>
+            {activePromos.length}
+          </h2>
+          <p className="text-[13px] text-muted-foreground">
+            {activePromos.length === 1 ? "promoción compartida" : "promociones compartidas"}
           </p>
+          {heroNote && (
+            <p className={cn("text-[13px] ml-auto inline-flex items-center gap-1.5", heroNoteCls)}>
+              <span className={cn("h-1.5 w-1.5 rounded-full", headerDotCls)} />
+              {heroNote}
+            </p>
+          )}
         </div>
-        <h2 className="text-[17px] sm:text-[19px] font-bold tracking-tight text-foreground leading-snug">
-          Compartes{" "}
-          <span className="tabular-nums">{sharedActiveCount}</span>
-          <span className="text-muted-foreground"> de </span>
-          <span className="tabular-nums">{activePromos.length}</span>
-          <span className="text-muted-foreground">
-            {activePromos.length === 1 ? " promoción" : " promociones"}
-          </span>
-          {uncoveredPromos.length > 0 ? (
-            <>
-              <span className="text-muted-foreground"> · </span>
-              <span className="tabular-nums text-warning">{uncoveredPromos.length}</span>{" "}
-              <span className="text-warning">sin contrato</span>
-            </>
-          ) : inFlightCount > 0 ? (
-            <>
-              <span className="text-muted-foreground"> · </span>
-              <span className="tabular-nums text-foreground">{inFlightCount}</span>{" "}
-              <span className="text-foreground">
-                {inFlightCount === 1 ? "trámite en curso" : "trámites en curso"}
-              </span>
-            </>
-          ) : notSharedPromos.length > 0 ? (
-            <>
-              <span className="text-muted-foreground"> · </span>
-              <span className="tabular-nums text-primary">{notSharedPromos.length}</span>{" "}
-              <span className="text-primary">
-                {notSharedPromos.length === 1 ? "sin compartir aún" : "sin compartir aún"}
-              </span>
-            </>
-          ) : sharedActiveCount > 0 ? (
-            <>
-              <span className="text-muted-foreground"> · </span>
-              <span className="text-success">todo cubierto y al día</span>
-            </>
-          ) : null}
-        </h2>
-        <div className="mt-5">
+        <div className="mt-6">
 
         {sharedPromos.length === 0 && invitedPromos.length === 0 ? (
           <EmptyCard
@@ -431,7 +580,7 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
                 {invitedPromos.map((p) => (
                   <div
                     key={p.id}
-                    className="rounded-2xl border border-primary/30 bg-primary/[0.04] shadow-soft overflow-hidden transition-all"
+                    className="rounded-2xl border border-border bg-card overflow-hidden transition-all"
                   >
                     {/* Cover */}
                     <div className="relative aspect-[16/8] bg-muted overflow-hidden">
@@ -442,9 +591,8 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
                           <Home className="h-6 w-6 text-muted-foreground/50" strokeWidth={1.25} />
                         </div>
                       )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent pointer-events-none" />
-                      <span className="absolute top-2 right-2 inline-flex items-center gap-1 h-5 px-2 rounded-full border border-primary/30 bg-primary/90 text-primary-foreground text-[10px] font-semibold backdrop-blur">
-                        <Send className="h-2.5 w-2.5" strokeWidth={2.5} />
+                      <span className="absolute top-2 left-2 inline-flex items-center gap-1 h-5 px-2 rounded-full bg-background/85 text-primary text-[10px] font-medium backdrop-blur-md">
+                        <Send className="h-2.5 w-2.5" strokeWidth={2.25} />
                         Invitado · {formatInvitedAt(p.invitedAt)}
                       </span>
                     </div>
@@ -473,78 +621,131 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
               </div>
             )}
 
+            {/* ✍️ Lado AGENCIA · contratos enviados a firmar pendientes.
+                Es lo MÁS accionable que tiene · va arriba del banner
+                amarillo de "sin contrato". El email/SMS de Firmafy es
+                el canal principal · este banner es un recordatorio en
+                Byvaro para no perderlo. */}
+            {readOnly && sentContracts.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSignContract(sentContracts[0])}
+                className="w-full flex items-start gap-2.5 rounded-xl border border-primary/25 bg-primary/[0.05] hover:bg-primary/[0.08] px-3.5 py-2.5 mb-3 transition-colors text-left"
+              >
+                <FileSignature className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" strokeWidth={2} />
+                <p className="text-[12px] text-foreground flex-1 min-w-0 leading-relaxed">
+                  <span className="font-medium">
+                    {sentContracts.length === 1
+                      ? "Tienes 1 contrato pendiente de firmar"
+                      : `Tienes ${sentContracts.length} contratos pendientes de firmar`}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {" · "}revisa tu email y SMS de Firmafy o ábrelo desde aquí.
+                  </span>
+                </p>
+                <span className="text-[11.5px] font-medium text-primary inline-flex items-center gap-1 shrink-0 mt-0.5">
+                  Ver y firmar
+                  <ArrowRight className="h-3 w-3" strokeWidth={2} />
+                </span>
+              </button>
+            )}
+
             {/* ⚠ Incidencia real · promociones sin contrato que cubra.
                 Cuando se monta read-only desde el lado AGENCIA mostramos
                 una nota pasiva (no botón) explicando que el contrato lo
-                tiene que iniciar el promotor o comercializador. */}
-            {uncoveredPromos.length > 0 && (
+                tiene que iniciar el promotor o comercializador.
+                IMPORTANTE: las promos con contrato pendiente de firma
+                NO entran aquí · ya tienen el banner "Tienes contrato
+                pendiente de firmar" arriba y chip propio en la card. */}
+            {(() => {
+              const trulyUncovered = readOnly
+                ? uncoveredPromos.filter((p) => !pendingSignByPromoId.has(p.id))
+                : uncoveredPromos;
+              if (trulyUncovered.length === 0) return null;
+              return (
               readOnly ? (
-                <div className="w-full text-left rounded-2xl border border-warning/30 bg-warning/5 p-4 mb-3">
-                  <div className="flex items-start gap-3">
-                    <span className="h-9 w-9 rounded-xl bg-warning/15 text-warning grid place-items-center shrink-0">
-                      <AlertTriangle className="h-4.5 w-4.5" strokeWidth={2} />
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-foreground">
-                        {uncoveredPromos.length} promoción{uncoveredPromos.length === 1 ? "" : "es"} sin contrato firmado
-                      </p>
-                      <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-relaxed">
-                        {uncoveredPromos.slice(0, 3).map((p) => p.name).join(" · ")}
-                        {uncoveredPromos.length > 3 ? ` · y ${uncoveredPromos.length - 3} más` : ""}.
-                        Solo el promotor o comercializador puede subir el contrato. Cuando lo
-                        envíe a firmar, recibirás un email de Firmafy con el link.
+                (() => {
+                  /* Resolución dinámica del rol del owner · puede haber
+                     mezcla (algunas promos las lleva el promotor, otras
+                     el comercializador). Ver REGLA DE ORO "Promotor vs
+                     Comercializador · label dinámico". */
+                  const roles = new Set(trulyUncovered.map((p) => p.ownerRole ?? "promotor"));
+                  const ownerText = roles.size > 1
+                    ? "el promotor o comercializador"
+                    : roles.has("comercializador")
+                      ? "el comercializador"
+                      : "el promotor";
+                  return (
+                    <div className="w-full flex items-start gap-2.5 rounded-xl border border-warning/25 bg-warning/[0.04] px-3.5 py-2.5 mb-3">
+                      <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" strokeWidth={2} />
+                      <p className="text-[12px] text-foreground flex-1 min-w-0 leading-relaxed">
+                        <span className="font-medium">
+                          {trulyUncovered.length} sin contrato firmado
+                        </span>
+                        <span className="text-muted-foreground">
+                          {" · "}{ownerText} de la promoción es quien lo
+                          inicia · te llegará a firmar cuando esté listo.
+                        </span>
                       </p>
                     </div>
-                  </div>
-                </div>
+                  );
+                })()
               ) : (
                 <button
                   type="button"
                   onClick={() => openScopePicker(uncoveredPromos.map((u) => u.id))}
-                  className="w-full text-left rounded-2xl border border-warning/30 bg-warning/5 hover:bg-warning/10 p-4 mb-3 transition-colors"
+                  className="w-full flex items-center gap-2.5 rounded-xl border border-warning/25 bg-warning/[0.04] hover:bg-warning/[0.08] px-3.5 py-2.5 mb-3 transition-colors text-left"
                 >
-                  <div className="flex items-start gap-3">
-                    <span className="h-9 w-9 rounded-xl bg-warning/15 text-warning grid place-items-center shrink-0">
-                      <AlertTriangle className="h-4.5 w-4.5" strokeWidth={2} />
+                  <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0" strokeWidth={2} />
+                  <p className="text-[12px] text-foreground flex-1 min-w-0 truncate">
+                    <span className="font-medium">
+                      {uncoveredPromos.length} sin contrato firmado
                     </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-foreground">
-                        {uncoveredPromos.length} promoción{uncoveredPromos.length === 1 ? "" : "es"} sin contrato firmado
-                      </p>
-                      <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-relaxed">
-                        {uncoveredPromos.slice(0, 3).map((p) => p.name).join(" · ")}
-                        {uncoveredPromos.length > 3 ? ` · y ${uncoveredPromos.length - 3} más` : ""}.
-                        Está trabajando sin marco legal que os cubra — sube un contrato y envíalo a firmar.
-                      </p>
-                      <span className="mt-2 inline-flex items-center gap-1 h-7 px-3 rounded-full bg-foreground text-background text-[11.5px] font-semibold">
-                        <Upload className="h-3 w-3" strokeWidth={2.25} />
-                        Subir contrato ahora
-                      </span>
-                    </div>
-                  </div>
+                    <span className="text-muted-foreground"> · trabajáis sin marco legal</span>
+                  </p>
+                  <span className="text-[11.5px] font-medium text-foreground inline-flex items-center gap-1 shrink-0">
+                    Subir contrato
+                    <ArrowRight className="h-3 w-3" strokeWidth={2} />
+                  </span>
                 </button>
               )
-            )}
+              );
+            })()}
 
             {/* Activas · una card por cada una con estado de cobertura.
                 Las `incomplete`/`inactive`/`sold-out` se ocultan del
                 panel · no aportan información operativa. */}
             {(() => {
-              const activeShared = sharedPromos.filter((p) => p.active);
+              /* Excluimos las anuladas · siguen vivas en la BD pero
+                 ya no operan, así que no las pintamos en el panel. */
+              const activeShared = sharedPromos.filter(
+                (p) => p.active
+                  && getPromoCollabStatusFromMap(collabStatusMap, a.id, p.id) !== "anulada",
+              );
               if (activeShared.length === 0) return null;
               return (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {activeShared.map((p) => {
                     const isUncovered = !hasBlanketSigned && uncoveredPromos.some((u) => u.id === p.id);
+                    const expiringDays = expiringByPromoId.get(p.id);
+                    const isExpiringSoon = !isUncovered && typeof expiringDays === "number";
+                    const promoStatus = getPromoCollabStatusFromMap(collabStatusMap, a.id, p.id);
+                    const isPaused = promoStatus === "pausada";
+                    const hasCoveringContract = !isUncovered;
+                    /* Lado AGENCIA · si la promo está cubierta por un
+                       contrato sent/viewed (no firmado todavía), el chip
+                       cambia a "Pendiente de firma" · click → abre el
+                       dialog para firmar en Firmafy. Tiene prioridad
+                       sobre "Sin contrato" porque ya hay algo en marcha. */
+                    const pendingSign = readOnly ? pendingSignByPromoId.get(p.id) : undefined;
                     return (
                       <div
                         key={p.id}
-                        className={cn(
-                          "rounded-2xl border bg-card shadow-soft overflow-hidden transition-all",
-                          isUncovered ? "border-warning/30" : "border-border",
-                        )}
+                        className="rounded-2xl border border-border bg-card overflow-hidden transition-all"
                       >
-                        {/* Cover con imagen + chip de estado superpuesto */}
+                        {/* Cover con imagen + menú de acciones (3 puntos)
+                            arriba a la derecha · solo lo ve quien
+                            comparte (`!readOnly`). */}
                         <div className="relative aspect-[16/8] bg-muted overflow-hidden">
                           {p.image ? (
                             <img src={p.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
@@ -553,17 +754,56 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
                               <Home className="h-6 w-6 text-muted-foreground/50" strokeWidth={1.25} />
                             </div>
                           )}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none" />
-                          <span className={cn(
-                            "absolute top-2 right-2 inline-flex items-center gap-1 h-5 px-2 rounded-full border text-[10px] font-medium backdrop-blur",
-                            isUncovered
-                              ? "border-warning/30 bg-warning/90 text-warning-foreground"
-                              : "border-success/25 bg-success/90 text-success-foreground",
-                          )}>
-                            {isUncovered
-                              ? <><AlertTriangle className="h-2.5 w-2.5" strokeWidth={2.5} />Sin contrato</>
-                              : <><Check className="h-2.5 w-2.5" strokeWidth={2.5} />Contrato en vigor</>}
-                          </span>
+                          {!readOnly && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  aria-label="Acciones de la colaboración"
+                                  className="absolute top-2 right-2 inline-flex items-center justify-center h-7 w-7 rounded-full bg-background/90 backdrop-blur-md text-foreground hover:bg-background transition-colors"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MoreVertical className="h-3.5 w-3.5" strokeWidth={2} />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" sideOffset={6} className="w-56">
+                                {hasCoveringContract ? (
+                                  <DropdownMenuItem onSelect={() => handleRenovar(p)}>
+                                    <RefreshCcw className="mr-2 h-3.5 w-3.5" strokeWidth={1.75} />
+                                    Renovar contrato
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem onSelect={() => {
+                                    setRenewalReplaceIds(undefined);
+                                    setScopePreselect([p.id]);
+                                    setScopePickerOpen(true);
+                                  }}>
+                                    <Upload className="mr-2 h-3.5 w-3.5" strokeWidth={1.75} />
+                                    Subir contrato
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator />
+                                {isPaused ? (
+                                  <DropdownMenuItem onSelect={() => handleReanudar(p)}>
+                                    <PlayCircle className="mr-2 h-3.5 w-3.5" strokeWidth={1.75} />
+                                    Reanudar colaboración
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem onSelect={() => handlePausar(p)}>
+                                    <PauseCircle className="mr-2 h-3.5 w-3.5" strokeWidth={1.75} />
+                                    Pausar colaboración
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem
+                                  onSelect={() => handleAnular(p)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Ban className="mr-2 h-3.5 w-3.5" strokeWidth={1.75} />
+                                  Anular colaboración
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </div>
 
                         <div className="p-4">
@@ -586,6 +826,40 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
                                 {p.location}
                               </span>
                             )}
+                            {isPaused ? (
+                              <span className="ml-auto inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-medium shrink-0 bg-muted text-muted-foreground">
+                                <PauseCircle className="h-2.5 w-2.5" strokeWidth={2.25} />
+                                Pausada
+                              </span>
+                            ) : pendingSign ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setSignContract(pendingSign);
+                                }}
+                                className="ml-auto inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-medium shrink-0 bg-primary/10 text-primary hover:bg-primary/15 transition-colors"
+                              >
+                                <FileSignature className="h-2.5 w-2.5" strokeWidth={2.25} />
+                                Pendiente de firma
+                              </button>
+                            ) : (
+                              <span className={cn(
+                                "ml-auto inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-medium shrink-0",
+                                isUncovered || isExpiringSoon
+                                  ? "bg-warning/10 text-warning"
+                                  : "bg-success/10 text-success",
+                              )}>
+                                {isUncovered ? (
+                                  <><AlertTriangle className="h-2.5 w-2.5" strokeWidth={2.25} />Sin contrato</>
+                                ) : isExpiringSoon ? (
+                                  <><Clock className="h-2.5 w-2.5" strokeWidth={2.25} />Vence en {expiringDays}d</>
+                                ) : (
+                                  <><Check className="h-2.5 w-2.5" strokeWidth={2.25} />Contrato vigente</>
+                                )}
+                              </span>
+                            )}
                           </div>
                           {readOnly ? (
                             /* Vista AGENCIA · datos comerciales para
@@ -594,7 +868,7 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
                              *  entrega y % de obra. NO mostramos el
                              *  rendimiento histórico (visitas/ventas)
                              *  que es métrica del promotor. */
-                            <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-muted/40 px-2.5 py-2">
+                            <div className="mt-3 grid grid-cols-2 gap-y-2 border-t border-border/60 pt-3">
                               <MetricStat
                                 label="Disponibles"
                                 value={
@@ -617,8 +891,9 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
                                 ? Math.round((m.ventas / m.visits) * 100)
                                 : 0;
                               return (
-                                <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-muted/40 px-2.5 py-2">
+                                <div className="mt-3 grid grid-cols-4 gap-x-2 border-t border-border/60 pt-3">
                                   <MetricStat label="Visitas"    value={m.visits} />
+                                  <MetricStat label="Registros"  value={m.registros} />
                                   <MetricStat label="Ventas"     value={m.ventas} />
                                   <MetricStat label="Conversión" value={`${conversion}%`} />
                                 </div>
@@ -683,10 +958,9 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
             title={readOnly ? "Promociones que aún no colaboras" : "Aún sin compartir"}
             subtitle={
               readOnly
-                ? `${notSharedPromos.length} promoción${notSharedPromos.length === 1 ? "" : "es"} activa${notSharedPromos.length === 1 ? "" : "s"} del promotor disponibles para solicitar colaboración`
-                : `${notSharedPromos.length} promoción${notSharedPromos.length === 1 ? "" : "es"} activa${notSharedPromos.length === 1 ? "" : "s"} donde podrías invitar a ${a.name}`
+                ? `${notSharedPromos.length} ${notSharedPromos.length === 1 ? "promoción activa" : "promociones activas"} del promotor`
+                : `${notSharedPromos.length} ${notSharedPromos.length === 1 ? "promoción activa" : "promociones activas"} donde podrías invitar a ${a.name}`
             }
-            tone="primary"
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {notSharedPromos.map((p) => {
@@ -695,10 +969,10 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
                  Sin solicitud todavía → CTA activo "Solicitar colaboración". */
               const solicitud = readOnly ? findSolicitudVivaParaAgencia(a.id, p.id, pendientes) : undefined;
               const requested = !!solicitud;
-              const cardCommon = "group text-left rounded-2xl border bg-card/50 overflow-hidden transition-all";
+              const cardCommon = "group text-left rounded-2xl border bg-card/40 overflow-hidden transition-all";
               const cardClass = requested
-                ? `${cardCommon} border-primary/30 cursor-default`
-                : `${cardCommon} border-dashed border-border hover:bg-card hover:border-foreground/40 hover:shadow-soft`;
+                ? `${cardCommon} border-border cursor-default`
+                : `${cardCommon} border-border/60 hover:bg-card hover:border-border`;
               return (
               <button
                 type="button"
@@ -723,24 +997,18 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
                       <Home className="h-6 w-6 text-muted-foreground/50" strokeWidth={1.25} />
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
-                  <span
-                    className={cn(
-                      "absolute top-2 right-2 inline-flex items-center h-5 px-2 rounded-full border text-[10px] font-medium backdrop-blur",
-                      requested
-                        ? "border-primary/30 bg-primary/15 text-primary"
-                        : "border-border bg-background/90 text-muted-foreground",
-                    )}
-                  >
-                    {requested ? "Solicitada" : readOnly ? "Disponible" : "Sin compartir"}
-                  </span>
+                  {requested && (
+                    <span className="absolute top-2 left-2 inline-flex items-center h-5 px-2 rounded-full bg-background/85 backdrop-blur-md text-[10px] font-medium text-primary">
+                      Solicitada
+                    </span>
+                  )}
                 </div>
 
                 <div className="p-4">
                   <p className="text-sm font-semibold text-foreground truncate">{p.name}</p>
                   <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{p.location ?? "—"}</p>
                   {readOnly ? (
-                    <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-muted/40 px-2.5 py-2">
+                    <div className="mt-3 grid grid-cols-2 gap-y-2 border-t border-border/60 pt-3">
                       <MetricStat
                         label="Disponibles"
                         value={
@@ -756,20 +1024,14 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
                         value={typeof p.constructionProgress === "number" ? `${p.constructionProgress}%` : "—"}
                       />
                     </div>
-                  ) : (
-                    <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-muted/40 px-2.5 py-2">
-                      <MetricStat label="Visitas"    value={0}   muted />
-                      <MetricStat label="Ventas"     value={0}   muted />
-                      <MetricStat label="Conversión" value="—"   muted />
-                    </div>
-                  )}
+                  ) : null}
                   {/* Footer · CTA activo o chip pasivo "Colaboración solicitada". */}
                   {requested ? (
-                    <div className="mt-3 rounded-xl bg-primary/10 border border-primary/20 px-2.5 py-2">
-                      <p className="text-[11px] font-semibold text-primary inline-flex items-center gap-1">
+                    <div className="mt-3 border-t border-border/60 pt-2.5">
+                      <p className="text-[11px] font-medium text-primary inline-flex items-center gap-1">
                         <Send className="h-3 w-3" strokeWidth={2.25} /> Colaboración solicitada
                       </p>
-                      <div className="mt-1 flex items-center gap-1.5 text-[10.5px] text-muted-foreground leading-relaxed">
+                      <div className="mt-1 flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
                         <span className="tabular-nums">{fmtRequestedAt(solicitud!.createdAt)}</span>
                         {solicitud!.requestedBy?.name && (
                           <>
@@ -784,13 +1046,13 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
                       </div>
                     </div>
                   ) : (
-                  <div className="mt-3 inline-flex items-center gap-1 text-[11px] text-foreground font-medium group-hover:gap-1.5 transition-all">
-                    {readOnly ? (
-                      <><Send className="h-3 w-3" strokeWidth={2.25} /> Solicitar colaboración</>
-                    ) : (
-                      <><Plus className="h-3 w-3" strokeWidth={2.25} /> Compartir con {a.name.split(" ")[0]}</>
-                    )}
-                  </div>
+                    <div className="mt-3 inline-flex items-center gap-1 text-[11px] text-foreground font-medium group-hover:gap-1.5 transition-all">
+                      {readOnly ? (
+                        <><Send className="h-3 w-3" strokeWidth={2.25} /> Solicitar colaboración</>
+                      ) : (
+                        <><Plus className="h-3 w-3" strokeWidth={2.25} /> Compartir con {a.name.split(" ")[0]}</>
+                      )}
+                    </div>
                   )}
                 </div>
               </button>
@@ -843,17 +1105,25 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
       />
       <ContractUploadDialog
         open={uploadContractOpen}
-        onOpenChange={setUploadContractOpen}
+        onOpenChange={(v) => {
+          setUploadContractOpen(v);
+          if (!v) setRenewalReplaceIds(undefined);
+        }}
         agency={a}
         actor={actor}
         defaultScopePromotionIds={resolvedScope}
+        defaultReplacesContractIds={renewalReplaceIds}
       />
       <ContractSignedUploadDialog
         open={signedUploadOpen}
-        onOpenChange={setSignedUploadOpen}
+        onOpenChange={(v) => {
+          setSignedUploadOpen(v);
+          if (!v) setRenewalReplaceIds(undefined);
+        }}
         agency={a}
         actor={actor}
         defaultScopePromotionIds={resolvedScope}
+        defaultReplacesContractIds={renewalReplaceIds}
       />
 
       {/* Dialog · compartir promoción con ESTA agencia · entra
@@ -876,6 +1146,15 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
         onOpenChange={(v) => { if (!v) setRequestPromo(null); }}
         agencyId={a.id}
         promo={requestPromo}
+      />
+
+      {/* Modal · firma del contrato (lado AGENCIA, readOnly). Abre
+          `signUrl` de Firmafy en pestaña nueva. */}
+      <AgencySignContractDialog
+        open={!!signContract}
+        onOpenChange={(v) => { if (!v) setSignContract(null); }}
+        contract={signContract}
+        currentUserEmail={user.email}
       />
     </div>
   );
