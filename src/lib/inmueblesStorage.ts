@@ -49,46 +49,112 @@ function persist(workspaceKey: string, list: Inmueble[]): void {
   window.dispatchEvent(new CustomEvent(CHANNEL_EVENT, { detail: { workspaceKey } }));
 }
 
+/* Mapper TS → DB row para upsert. workspaceKey es `agency-<id>` o
+ * `developer-default` · el organization_id real es el sufijo (ag-1)
+ * O `developer-default`. Lo derivamos. */
+function workspaceKeyToOrgId(workspaceKey: string): string {
+  if (workspaceKey.startsWith("agency-")) return workspaceKey.slice("agency-".length);
+  return workspaceKey;
+}
+
+async function syncInmuebleToSupabase(orgId: string, i: Inmueble) {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { error } = await supabase.from("inmuebles").upsert({
+      id: i.id,
+      organization_id: orgId,
+      reference: i.reference || null,
+      type: i.type,
+      operation: i.operation,
+      status: i.status,
+      price: i.price,
+      address: i.address || null,
+      city: i.city || null,
+      province: i.province || null,
+      bedrooms: i.bedrooms ?? null,
+      bathrooms: i.bathrooms ?? null,
+      useful_area_m2: i.usefulArea ?? null,
+      built_area_m2: i.builtArea ?? null,
+      branch_label: i.branchLabel || null,
+      owner_member_id: null,
+      photos: i.photos ?? [],
+      description: i.description || null,
+      tags: i.tags ?? [],
+      share_with_network: i.shareWithNetwork,
+      is_favorite: i.isFavorite ?? false,
+    });
+    if (error) console.warn("[inmuebles:sync] upsert failed:", error.message);
+  } catch (e) { console.warn("[inmuebles:sync] skipped:", e); }
+}
+
+async function deleteInmuebleFromSupabase(id: string) {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { error } = await supabase.from("inmuebles").delete().eq("id", id);
+    if (error) console.warn("[inmuebles:delete] failed:", error.message);
+  } catch (e) { console.warn("[inmuebles:delete] skipped:", e); }
+}
+
 /* ─── Mutaciones ─────────────────────────────────────────────────── */
 
 export function createInmueble(workspaceKey: string, draft: Omit<Inmueble, "id" | "organizationId" | "createdAt" | "updatedAt">): Inmueble {
   const now = new Date().toISOString();
+  const orgId = workspaceKeyToOrgId(workspaceKey);
   const inmueble: Inmueble = {
     ...draft,
     id: `inm-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    organizationId: workspaceKey,
+    organizationId: orgId,
     createdAt: now,
     updatedAt: now,
   };
   const list = [inmueble, ...getInmueblesForWorkspace(workspaceKey)];
   persist(workspaceKey, list);
+  void syncInmuebleToSupabase(orgId, inmueble);
   return inmueble;
 }
 
 export function updateInmueble(workspaceKey: string, id: string, patch: Partial<Inmueble>): void {
-  const list = getInmueblesForWorkspace(workspaceKey).map((i) =>
-    i.id === id ? { ...i, ...patch, updatedAt: new Date().toISOString() } : i,
-  );
+  const orgId = workspaceKeyToOrgId(workspaceKey);
+  let updated: Inmueble | undefined;
+  const list = getInmueblesForWorkspace(workspaceKey).map((i) => {
+    if (i.id !== id) return i;
+    updated = { ...i, ...patch, updatedAt: new Date().toISOString() };
+    return updated;
+  });
   persist(workspaceKey, list);
+  if (updated) void syncInmuebleToSupabase(orgId, updated);
 }
 
 export function deleteInmueble(workspaceKey: string, id: string): void {
   const list = getInmueblesForWorkspace(workspaceKey).filter((i) => i.id !== id);
   persist(workspaceKey, list);
+  void deleteInmuebleFromSupabase(id);
 }
 
 export function toggleFavoriteInmueble(workspaceKey: string, id: string): void {
-  const list = getInmueblesForWorkspace(workspaceKey).map((i) =>
-    i.id === id ? { ...i, isFavorite: !i.isFavorite, updatedAt: new Date().toISOString() } : i,
-  );
+  const orgId = workspaceKeyToOrgId(workspaceKey);
+  let updated: Inmueble | undefined;
+  const list = getInmueblesForWorkspace(workspaceKey).map((i) => {
+    if (i.id !== id) return i;
+    updated = { ...i, isFavorite: !i.isFavorite, updatedAt: new Date().toISOString() };
+    return updated;
+  });
   persist(workspaceKey, list);
+  if (updated) void syncInmuebleToSupabase(orgId, updated);
 }
 
 export function toggleShareInmueble(workspaceKey: string, id: string): void {
-  const list = getInmueblesForWorkspace(workspaceKey).map((i) =>
-    i.id === id ? { ...i, shareWithNetwork: !i.shareWithNetwork, updatedAt: new Date().toISOString() } : i,
-  );
+  const orgId = workspaceKeyToOrgId(workspaceKey);
+  let updated: Inmueble | undefined;
+  const list = getInmueblesForWorkspace(workspaceKey).map((i) => {
+    if (i.id !== id) return i;
+    updated = { ...i, shareWithNetwork: !i.shareWithNetwork, updatedAt: new Date().toISOString() };
+    return updated;
+  });
   persist(workspaceKey, list);
+  if (updated) void syncInmuebleToSupabase(orgId, updated);
 }
 
 /* ─── Hook reactivo · scopeado al usuario actual ─────────────────── */

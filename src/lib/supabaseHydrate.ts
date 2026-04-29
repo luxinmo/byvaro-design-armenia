@@ -553,6 +553,146 @@ export function hydrateFromSupabase(): Promise<void> {
         console.warn("[hydrate] CRM data skipped:", e);
       }
 
+      /* ─── Inmuebles · contactos · promociones creadas ───
+       *  Datos del workspace logueado · RLS los devuelve scoped. */
+      try {
+        const [inmR, contactsR, promosR] = await Promise.all([
+          supabase.from("inmuebles").select("*"),
+          supabase.from("contacts").select("*"),
+          supabase.from("promotions").select("*").like("id", "prom-c-%"),
+        ]);
+
+        if (inmR.data) {
+          /* Group por organization_id y escribir clave scoped del helper. */
+          type DBInm = {
+            id: string; organization_id: string; reference: string | null;
+            type: string; operation: string; status: string;
+            price: number | null; address: string | null; city: string | null;
+            province: string | null; bedrooms: number | null; bathrooms: number | null;
+            useful_area_m2: number | null; built_area_m2: number | null;
+            branch_label: string | null; photos: unknown;
+            description: string | null; tags: string[] | null;
+            share_with_network: boolean; is_favorite: boolean | null;
+            created_at: string; updated_at: string;
+          };
+          const byOrg: Record<string, unknown[]> = {};
+          for (const r of inmR.data as DBInm[]) {
+            const wsKey = r.organization_id === "developer-default"
+              ? "developer-default"
+              : `agency-${r.organization_id}`;
+            (byOrg[wsKey] ??= []).push({
+              id: r.id,
+              organizationId: r.organization_id,
+              reference: r.reference ?? "",
+              type: r.type, operation: r.operation, status: r.status,
+              price: r.price ?? 0,
+              address: r.address ?? "", city: r.city ?? "", province: r.province ?? "",
+              bedrooms: r.bedrooms ?? undefined,
+              bathrooms: r.bathrooms ?? undefined,
+              usefulArea: r.useful_area_m2 ?? undefined,
+              builtArea: r.built_area_m2 ?? undefined,
+              branchLabel: r.branch_label ?? undefined,
+              photos: Array.isArray(r.photos) ? r.photos : [],
+              description: r.description ?? "",
+              tags: r.tags ?? [],
+              shareWithNetwork: r.share_with_network,
+              isFavorite: r.is_favorite ?? false,
+              createdAt: r.created_at, updatedAt: r.updated_at,
+            });
+          }
+          for (const [ws, list] of Object.entries(byOrg)) {
+            try {
+              localStorage.setItem(`byvaro.inmuebles.v1:${ws}`, JSON.stringify(list));
+            } catch { /* skip */ }
+          }
+          window.dispatchEvent(new CustomEvent("byvaro:inmuebles-changed"));
+        }
+
+        if (contactsR.data) {
+          /* Mappea a shape Contact que usa el frontend. Mezclamos en
+           *  byvaro.contacts.created.v1 (creados manualmente) · los
+           *  importados se mantienen por separado en
+           *  byvaro.contacts.imported.v1 si vienen del flow de import. */
+          type DBContact = {
+            id: string; full_name: string; email: string | null;
+            phone: string | null; nationality: string | null;
+            status: string; public_ref: string | null;
+            primary_source: string | null; latest_source: string | null;
+            origins: unknown; last_activity_at: string | null;
+            notes: string | null; created_at: string;
+          };
+          const mapped = (contactsR.data as DBContact[]).map((c) => ({
+            id: c.id,
+            name: c.full_name,
+            fullName: c.full_name,
+            email: c.email ?? undefined,
+            phone: c.phone ?? undefined,
+            nationality: c.nationality ?? undefined,
+            status: c.status,
+            publicRef: c.public_ref ?? undefined,
+            primarySource: c.primary_source ? { source: c.primary_source, label: c.primary_source } : undefined,
+            latestSource: c.latest_source ? { source: c.latest_source, label: c.latest_source } : undefined,
+            origins: c.origins ?? [],
+            lastActivityAt: c.last_activity_at ?? undefined,
+            notes: c.notes ?? undefined,
+            tags: [],
+            assignedTo: [],
+            totalRegistrations: 0,
+            activeOpportunities: 0,
+            hasUpcomingVisit: false,
+            hasVisitDone: false,
+            hasRecentWebActivity: false,
+            firstSeen: c.created_at,
+            lastActivity: "",
+          }));
+          try {
+            localStorage.setItem("byvaro.contacts.created.v1", JSON.stringify(mapped));
+          } catch { /* skip */ }
+          window.dispatchEvent(new CustomEvent("byvaro:contacts-changed"));
+        }
+
+        if (promosR.data) {
+          /* Promociones creadas desde el wizard (id `prom-c-*`).
+           *  Las del seed estático no se rehidratan · siguen viviendo
+           *  en `data/promotions.ts`. Cuando Phase 3 migre todo,
+           *  cambiamos el filtro. */
+          type DBPromo = {
+            id: string; name: string; status: string;
+            owner_organization_id: string; owner_role: string;
+            description: string | null; address: string | null;
+            city: string | null; country: string | null;
+            total_units: number; available_units: number;
+            price_from: number | null; price_to: number | null;
+            delivery: string | null; image_url: string | null;
+          };
+          const mapped = (promosR.data as DBPromo[]).map((p) => ({
+            id: p.id,
+            name: p.name,
+            ownerOrganizationId: p.owner_organization_id,
+            ownerRole: p.owner_role,
+            status: p.status,
+            description: p.description ?? "",
+            address: p.address ?? "",
+            city: p.city ?? "",
+            country: p.country ?? "ES",
+            totalUnits: p.total_units,
+            availableUnits: p.available_units,
+            priceFrom: p.price_from,
+            priceTo: p.price_to,
+            delivery: p.delivery ?? null,
+            imageUrl: p.image_url ?? null,
+            metadata: {},
+            createdAt: "",
+          }));
+          try {
+            localStorage.setItem("byvaro.promotions.created.v1", JSON.stringify(mapped));
+          } catch { /* skip */ }
+          window.dispatchEvent(new CustomEvent("byvaro:promotions-changed"));
+        }
+      } catch (e) {
+        console.warn("[hydrate] inmuebles/contacts/promotions skipped:", e);
+      }
+
       lastHydratedAt = Date.now();
     } finally {
       hydratePromise = null;
