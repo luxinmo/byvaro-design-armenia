@@ -99,13 +99,24 @@ export function recordNotification(input: Omit<Notification, "id" | "createdAt">
   return notif;
 }
 
-/** Marca como leída una notificación · idempotente. */
+/** Marca como leída una notificación · idempotente.
+ *  Write-through async a Supabase. */
 export function markRead(id: string) {
   const list = read();
   const idx = list.findIndex((n) => n.id === id);
   if (idx < 0 || list[idx].readAt) return;
-  list[idx] = { ...list[idx], readAt: new Date().toISOString() };
+  const readAt = new Date().toISOString();
+  list[idx] = { ...list[idx], readAt };
   write(list);
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { error } = await supabase.from("notifications")
+        .update({ read_at: readAt }).eq("id", id);
+      if (error) console.warn("[notifications:markRead]", error.message);
+    } catch (e) { console.warn("[notifications:markRead] skipped:", e); }
+  })();
 }
 
 /** Marca todas como leídas para un usuario · útil en bulk. */
