@@ -24,7 +24,8 @@ import { ViewToggle } from "@/components/ui/ViewToggle";
 import { ColaboradoresMap } from "@/components/agencies/ColaboradoresMap";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner"; // Toaster global en App.tsx
-import { agencies as baseAgencies, getContractStatus, getAgencyShareStats, type Agency } from "@/data/agencies";
+import { getContractStatus, getAgencyShareStats, type Agency } from "@/data/agencies";
+import { useResolvedAgencies } from "@/lib/useResolvedAgencies";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { promotions } from "@/data/promotions";
 import {
@@ -295,6 +296,11 @@ function ColaboradoresDeveloperView({ useTestCard = false }: { useTestCard?: boo
     return map;
   }, [invitaciones]);
 
+  /* Resolved agencies · merge seed + cache hidratado desde Supabase
+   *  para que logo/nombre/datos editados desde `/empresa` se reflejen
+   *  inmediatamente en el listado. */
+  const baseAgencies = useResolvedAgencies();
+
   const agencies = useMemo<Agency[]>(() => {
     return baseAgencies
       .map((a) => {
@@ -303,7 +309,7 @@ function ColaboradoresDeveloperView({ useTestCard = false }: { useTestCard?: boo
         return ov ? { ...a, ...ov } : a;
       })
       .filter(Boolean) as Agency[];
-  }, [overrides]);
+  }, [overrides, baseAgencies]);
 
   const pendientes = useMemo(
     () => agencies.filter((a) => a.solicitudPendiente || a.isNewRequest),
