@@ -114,6 +114,12 @@ export default {
           "60%":  { boxShadow: "0 0 0 10px hsl(var(--warning) / 0)" },
           "100%": { boxShadow: "0 0 0 0 hsl(var(--warning) / 0)" },
         },
+        /* Variante en loop · halo continuo más sutil para banners
+         * que necesitan llamar la atención de forma persistente. */
+        "attention-pulse-loop": {
+          "0%, 100%": { boxShadow: "0 0 0 0 hsl(var(--warning) / 0.35)" },
+          "50%":      { boxShadow: "0 0 0 8px hsl(var(--warning) / 0)" },
+        },
         /* Ping sutil del dot indicador · continuo (ritmo lento). */
         "ping-slow": {
           "0%":   { transform: "scale(1)",   opacity: "0.9" },
@@ -124,7 +130,8 @@ export default {
       animation: {
         "fade-up":         "fade-up 0.4s ease both",
         "quick-tile-in":   "quick-tile-in 0.55s cubic-bezier(0.2,0.8,0.2,1) both",
-        "attention-pulse": "attention-pulse 1.8s ease-out 0.3s 2",
+        "attention-pulse":      "attention-pulse 1.8s ease-out 0.3s 2",
+        "attention-pulse-loop": "attention-pulse-loop 2.4s ease-in-out infinite",
         "ping-slow":       "ping-slow 2s cubic-bezier(0,0,0.2,1) infinite",
       },
     },

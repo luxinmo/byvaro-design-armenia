@@ -46,6 +46,8 @@ import { HistorialTab } from "@/components/collaborators/panel/HistorialTab";
 import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
 import { DEFAULT_DEVELOPER_ID } from "@/lib/developerNavigation";
 import { DeveloperDatosTab } from "@/components/collaborators/panel/DeveloperDatosTab";
+import { useEmpresaCategories } from "@/lib/empresaCategories";
+import { EmpresaCategoryBadges } from "@/components/empresa/EmpresaCategoryBadges";
 
 function initials(name: string): string {
   return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
@@ -143,6 +145,16 @@ export default function PromotorPanel() {
     );
   }
   const promoterName = empresa.nombreComercial?.trim() || empresa.razonSocial?.trim() || "Promotor";
+  /* Categorías del promotor mostrado.
+   *  - `developer-default` → derivamos de las promociones del workspace.
+   *  - `prom-*` (promotor externo) → mock single-tenant solo conoce
+   *    "Promotor" como categoría · hardcoded para no leakear las
+   *    categorías de Luxinmo a un perfil ajeno. */
+  const isExternalPromotor = !!tenantId && tenantId.startsWith("prom-");
+  const baseCategories = useEmpresaCategories({ accountType: "developer" });
+  const panelCategories = isExternalPromotor
+    ? (["promotor"] as typeof baseCategories)
+    : baseCategories;
   const promoterEmail = empresa.email;
   const promoterLocation = [empresa.direccionFiscal?.ciudad, empresa.direccionFiscal?.provincia]
     .filter(Boolean).join(", ");
@@ -198,7 +210,15 @@ export default function PromotorPanel() {
                 </h1>
                 {empresa.verificada && <VerifiedBadge size="sm" />}
               </div>
-              <p className="text-[12.5px] text-muted-foreground mt-0.5">
+              {/* Categorías del promotor (Promotor / Comercializador) ·
+                  derivadas de sus promociones activas. */}
+              <div className="mt-1">
+                <EmpresaCategoryBadges
+                  categories={panelCategories}
+                  size="xs"
+                />
+              </div>
+              <p className="text-[12.5px] text-muted-foreground mt-1">
                 {promoterLocation || "Promotor inmobiliario"}
               </p>
               <div className="flex items-center gap-1.5 mt-2 flex-wrap">

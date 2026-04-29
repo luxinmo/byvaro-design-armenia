@@ -44,7 +44,10 @@ export function agencyToEmpresa(a: Agency): Empresa {
     colorCorporativo: defaultEmpresa.colorCorporativo,
     fundadaEn: a.fundadaEn ?? "",
     subtitle: `${a.location}${a.type ? ` · ${a.type}` : ""}${a.collaboratingSince ? ` · Colabora desde ${a.collaboratingSince}` : ""}`,
-    tagline: a.description ?? "",
+    /* Tagline retirado del diseño · dejamos vacío para no
+     *  contaminar surfaces legacy que aún lean este campo. La
+     *  descripción del seed va a `overview` / `aboutOverview`. */
+    tagline: "",
     overview: a.description ?? "",
     aboutOverview: a.description ?? "",
     quote: "",

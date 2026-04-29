@@ -1,15 +1,21 @@
 /**
- * /ajustes/empresa/suscripcion — Plan actual + comparativa de planes.
+ * /ajustes/empresa/suscripcion — Plan actual + comparativa de planes
+ * + (lado agencia) activación del pack de promotor/comercializador.
  */
 
 import { useEffect, useState } from "react";
-import { Check, Sparkles, ArrowUpRight } from "lucide-react";
+import { Check, Sparkles, ArrowUpRight, Building2 } from "lucide-react";
 import { SettingsScreen, SettingsCard } from "@/components/settings/SettingsScreen";
 import { Button } from "@/components/ui/button";
 import { useDirty } from "@/components/settings/SettingsDirtyContext";
-import { isAdmin, useCurrentUser } from "@/lib/currentUser";
+import { isAdmin, useCurrentUser, currentWorkspaceKey } from "@/lib/currentUser";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {
+  useDeveloperPack,
+  setDeveloperPackEnabled,
+} from "@/lib/empresaCategories";
+import { EmpresaCategoryBadges } from "@/components/empresa/EmpresaCategoryBadges";
 
 const KEY = "byvaro.organization.plan.v1";
 
@@ -116,6 +122,13 @@ export default function AjustesEmpresaSuscripcion() {
         </div>
       </SettingsCard>
 
+      {/* Pack de promotor/comercializador · solo lado AGENCIA. Una
+          vez activado, la agencia puede crear sus propias promociones
+          y elegir en cada wizard si actúa como Promotor o
+          Comercializador. La categoría se añade automáticamente
+          cuando hay al menos una promo activa con ese rol. */}
+      {user.accountType === "agency" && <DeveloperPackCard canEdit={canEdit} />}
+
       <SettingsCard>
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">¿Necesitas algo más grande?</p>
@@ -126,5 +139,84 @@ export default function AjustesEmpresaSuscripcion() {
         </div>
       </SettingsCard>
     </SettingsScreen>
+  );
+}
+
+/* ─── Pack de promotor / comercializador ───
+ *  Activación del paquete para agencias. Al activarlo la inmobiliaria
+ *  puede crear sus propias promociones y elegir el rol (promotor o
+ *  comercializador) en el wizard. Las categorías se asignan
+ *  automáticamente al publicar una promo con ese rol.
+ *
+ *  TODO(backend): la activación pasa por billing real (no solo flag).
+ *  Por ahora persistimos un flag por workspace en localStorage. */
+function DeveloperPackCard({ canEdit }: { canEdit: boolean }) {
+  const user = useCurrentUser();
+  const workspaceKey = currentWorkspaceKey(user);
+  const pack = useDeveloperPack(workspaceKey);
+
+  const toggle = () => {
+    if (!canEdit) return;
+    const next = !pack.enabled;
+    setDeveloperPackEnabled(workspaceKey, next);
+    toast.success(
+      next
+        ? "Pack activado · ya puedes crear promociones desde tu workspace"
+        : "Pack desactivado · perderás acceso al wizard de creación",
+    );
+  };
+
+  return (
+    <SettingsCard>
+      <div className="flex items-start gap-4">
+        <div className="h-12 w-12 rounded-2xl bg-success/10 grid place-items-center text-success shrink-0">
+          <Building2 className="h-5 w-5" strokeWidth={1.75} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-[15px] font-semibold text-foreground">
+              Pack de promotor / comercializador
+            </h3>
+            {pack.enabled && (
+              <EmpresaCategoryBadges
+                categories={["promotor", "comercializador"]}
+                size="xs"
+              />
+            )}
+          </div>
+          <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
+            Tu inmobiliaria podrá crear sus propias promociones · al
+            publicar cada una decides si actúas como{" "}
+            <span className="font-semibold text-foreground">Promotor</span>{" "}
+            (eres el dueño de la obra) o como{" "}
+            <span className="font-semibold text-foreground">Comercializador</span>{" "}
+            (vendes en exclusiva por encargo). Las categorías
+            correspondientes aparecen automáticamente en tu ficha cuando
+            tengas al menos una promo activa con ese rol.
+          </p>
+          {pack.enabled && pack.activatedAt && (
+            <p className="text-[11.5px] text-muted-foreground/80 mt-2">
+              Activado el {new Date(pack.activatedAt).toLocaleDateString("es-ES")}.
+            </p>
+          )}
+          <div className="mt-4 flex items-center gap-2">
+            <Button
+              onClick={toggle}
+              disabled={!canEdit}
+              variant={pack.enabled ? "outline" : "default"}
+              className="rounded-full"
+              size="sm"
+            >
+              {pack.enabled ? "Desactivar pack" : "Activar pack"}
+            </Button>
+            {!pack.enabled && (
+              <span className="text-[11px] text-muted-foreground">
+                Activación inmediata · facturación próxima · sin permanencia
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </SettingsCard>
   );
 }

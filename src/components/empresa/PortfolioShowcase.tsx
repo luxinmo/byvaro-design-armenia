@@ -12,18 +12,30 @@
  *   - Mini progress bar si es plurifamiliar con unidades vendidas
  */
 
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { MapPin, ArrowRight, Building2, Sparkles } from "lucide-react";
-import { promotions } from "@/data/promotions";
+import {
+  getActivePromotionsByOwner,
+  tenantIdToOwnerOrgId,
+  type PortfolioItem,
+} from "@/lib/promotionsByOwner";
 import { EditableSection } from "./EditableSection";
 import { cn } from "@/lib/utils";
 
-/* 3 destacadas · grid 1/2/3 (mobile/tablet/desktop). Antes eran 4 ·
- * el aire del card grande de la izquierda + 3 a la derecha sobraba
- * en desktop y rompía el ritmo en tablets. */
-const destacadas = promotions
-  .filter(p => p.status === "active" || p.status === "incomplete")
-  .slice(0, 3);
+/** Helper · selecciona las 3 promociones destacadas del tenant.
+ *
+ *  Toda la resolución per-tenant pasa por
+ *  `getActivePromotionsByOwner()` · single source of truth para el
+ *  filtrado por `ownerOrganizationId`. Nunca leer `promotions`
+ *  directamente desde un componente que renderiza data per-tenant.
+ *
+ *  TODO(backend): `GET /api/promotor/:id/portfolio?status=active`
+ *  reemplaza el helper · misma signature `(orgId) → PortfolioItem[]`. */
+function selectDestacadas(tenantId?: string): PortfolioItem[] {
+  const orgId = tenantIdToOwnerOrgId(tenantId);
+  return getActivePromotionsByOwner(orgId).slice(0, 3);
+}
 
 function formatMoney(v: number): string {
   if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M €`;
@@ -60,7 +72,7 @@ function PortfolioCard({
   promotion,
   onClick,
 }: {
-  promotion: typeof promotions[number];
+  promotion: PortfolioItem;
   onClick: () => void;
 }) {
   const sold = promotion.totalUnits - promotion.availableUnits;
@@ -145,6 +157,17 @@ export function PortfolioShowcase({
   tenantId?: string;
 }) {
   const navigate = useNavigate();
+  const destacadas = useMemo(() => selectDestacadas(tenantId), [tenantId]);
+
+  /* Si la entidad es una agencia (id no es developer-* ni prom-*),
+   *  no hay portfolio que mostrar · escondemos la sección entera.
+   *  Para developers (Luxinmo o promotores externos prom-*) sí
+   *  renderiza · cada uno con sus propias promociones. */
+  const isPromotorEntity = !tenantId
+    || tenantId === "developer-default"
+    || tenantId.startsWith("prom-");
+  if (!isPromotorEntity) return null;
+
   /* Si la ficha la mira un visitor (agencia o promotor mirando una
    * agencia), añadimos el filtro `?developer=<id>` al "Ver todas"
    * para que aterrice en `/promociones` ya filtrado por ese tenant. */

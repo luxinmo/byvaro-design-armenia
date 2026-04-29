@@ -36,6 +36,23 @@ import { HeroSocialIcons } from "@/components/empresa/HeroSocialIcons";
 import { HeroGoogleRating } from "@/components/empresa/HeroGoogleRating";
 import { DefaultCoverPattern } from "@/components/empresa/DefaultCoverPattern";
 import { VerifiedBadge } from "@/components/ui/VerifiedBadge"; // Toaster global en App.tsx
+import {
+  useEmpresaCategories,
+  EMPRESA_CATEGORY_LABELS,
+  type EmpresaCategory,
+} from "@/lib/empresaCategories";
+import {
+  getMyOwnEmpresa,
+  hasMinimumIdentityData,
+  currentOrgIdentity,
+  crearOrgCollabRequest,
+  useHasPendingRequestTo,
+  type OrgKind,
+} from "@/lib/orgCollabRequests";
+import { AlertTriangle, Lock, Send } from "lucide-react";
+import { toast } from "sonner";
+import type { Empresa as EmpresaType } from "@/lib/empresa";
+import type { CurrentUser } from "@/lib/currentUser";
 
 const TAB_KEYS = ["home", "about", "agents"] as const;
 type Tab = typeof TAB_KEYS[number];
@@ -85,9 +102,21 @@ export default function Empresa({
       navigate("/colaboradores");
     }
   };
-  const effectiveTenantId = tenantId ?? (isAgencyUser ? currentUser.agencyId : undefined);
+  /* `effectiveTenantId` · si el caller pasa `tenantId` (rutas
+   *  `/colaboradores/:id`, `/promotor/:id`), ése manda. Si no, no
+   *  forzamos un tenantId · `useEmpresa` lo resolverá al orgId del
+   *  workspace logueado · garantiza que el dueño edite su propia
+   *  ficha (developer o agency) sin pasar por el modo visitor.
+   *
+   *  REGLA · `isVisitor` lo decide `useEmpresa` comparando el orgId
+   *  del tenantId contra el del usuario · NO lo decidamos aquí en
+   *  función de accountType. */
+  const effectiveTenantId = tenantId;
   const { empresa, update, isVisitor } = useEmpresa(effectiveTenantId);
-  const { oficinas } = useOficinas();
+  /* Oficinas scoped al tenant que se está mostrando · evita fuga
+   *  de las oficinas del workspace logueado (Luxinmo) en la ficha
+   *  de otra empresa. */
+  const { oficinas } = useOficinas(effectiveTenantId);
   const stats = useEmpresaStats(empresa, oficinas.length, effectiveTenantId);
 
   /* Tipo de entidad para los KPIs del HeroStatsStrip. Es ortogonal a
@@ -100,12 +129,27 @@ export default function Empresa({
    *   · tenantId con prefijo "developer-" → developer profile.
    *   · cualquier otro tenantId → agency profile.
    */
+  /* `prom-*` IDs son promotores externos (seed `promotores.ts`) ·
+   *  para la ficha pública se tratan como entidad developer. */
+  const isExternalPromotor = !!effectiveTenantId
+    && effectiveTenantId.startsWith("prom-");
   const entityType: "developer" | "agency" =
     !effectiveTenantId
       ? (isAgencyUser ? "agency" : "developer")
-      : effectiveTenantId.startsWith("developer-")
+      : effectiveTenantId.startsWith("developer-") || isExternalPromotor
         ? "developer"
         : "agency";
+
+  /* Categorías canónicas (Inmobiliaria · Promotor · Comercializador).
+   *  Para el workspace developer (Luxinmo) y promotores externos
+   *  derivamos por entityType=developer. Para promotores externos en
+   *  el mock single-tenant solo tenemos categoría "Promotor"
+   *  hardcoded · cuando aterrice backend, vendrá del endpoint
+   *  /categorias scoped al organization_id. */
+  const baseCategories = useEmpresaCategories({ accountType: entityType });
+  const heroCategories = isExternalPromotor
+    ? (["promotor"] as typeof baseCategories)
+    : baseCategories;
 
   /* ─── Teaser de "ficha avanzada" · solo se muestra en modo visitor.
    *
@@ -129,12 +173,22 @@ export default function Empresa({
       : `/colaboradores/${effectiveTenantId}/panel`)
     : undefined;
 
+  /* `hasActiveCollab` · ¿hay UN VÍNCULO VIVO entre yo y la entidad
+   *  visitada? Se usa para decidir si tiene sentido mostrar el panel
+   *  operativo, hide del CTA "Enviar solicitud", etc.
+   *
+   *  IMPORTANTE: ESTA función NO decide visibilidad de datos
+   *  sensibles · esa decisión vive aparte (`canViewSensitiveDetails`)
+   *  con regla más estricta. "Vivo" aquí incluye paused/contrato-
+   *  pendiente porque la UI quiere ofrecer continuidad operativa
+   *  (ver el historial, el panel) aunque la colaboración esté en
+   *  stand-by. */
   const hasActiveCollab = (() => {
     if (!isVisitor) return false;
     if (entityType === "developer") {
       return hasActiveDeveloperCollab(currentUser);
     }
-    // entityType === "agency" → developer viendo la ficha de una agencia.
+    if (isAgencyUser) return false;
     const ag = agencies.find((x) => x.id === effectiveTenantId);
     if (!ag) return false;
     if (ag.status === "active") return true;
@@ -143,6 +197,59 @@ export default function Empresa({
     if (ag.estadoColaboracion === "pausada") return true;
     return false;
   })();
+
+  /* `hasFullActiveOrgCollab` · vínculo TOTALMENTE activo a nivel de
+   *  ORGANIZACIÓN. Más estricto que `hasActiveCollab` · solo cubre
+   *  `estadoColaboracion === "activa"` (mock) · backend equivalente:
+   *  `organization_collaborations.status = 'active'`.
+   *
+   *  Estados que NO cuentan como "fully active":
+   *    · `pausada` · stand-by · no acceso a datos sensibles.
+   *    · `contrato-pendiente` (org-level) · sin contrato firmado · no.
+   *
+   *  Backend doc reference · §6.2 sensitive access requires either:
+   *    a) `organization_collaborations.status = 'active'`, OR
+   *    b) ≥1 `promotion_collaborations` in
+   *       `status IN ('active','pending_contract')`.
+   *
+   *  En el mock single-tenant solo modelamos (a) — promotion-level
+   *  pending_contract es TODO(backend) cuando aterrice la tabla. */
+  const hasFullActiveOrgCollab = (() => {
+    if (!isVisitor) return false;
+    if (entityType === "developer") {
+      return hasActiveDeveloperCollab(currentUser);
+    }
+    if (isAgencyUser) return false;
+    const ag = agencies.find((x) => x.id === effectiveTenantId);
+    if (!ag) return false;
+    return ag.status === "active" && ag.estadoColaboracion === "activa";
+  })();
+
+  /* Visibilidad de datos sensibles · regla canónica per §6.2 del
+   *  backend doc (docs/backend-dual-role-architecture.md):
+   *    · Owner del workspace → siempre ve.
+   *    · Visitor + admin + ORG_COLLAB ACTIVA → ve.
+   *    · Visitor + admin + ≥1 PROMO_COLLAB activo/pending_contract → ve
+   *      (TODO backend: tabla `promotion_collaborations` no existe en mock).
+   *    · `pausada` → NO acceso (privacy gap C1 corregido).
+   *    · `contrato-pendiente` org-level → NO acceso (privacy gap C2 corregido).
+   *    · Member (no admin) → NO acceso aunque colabore.
+   *
+   *  TODO(backend): GET /organizations/:id/sensitive responde 403 si
+   *  el caller no cumple alguna de las dos condiciones · el cliente
+   *  no debería renderizar la sección, pero el endpoint lo enforce. */
+  const canViewSensitiveDetails = !isVisitor
+    || (hasFullActiveOrgCollab && currentUser.role === "admin");
+
+  /* Datos del propio workspace · usados para validar si se puede
+   *  enviar solicitud de colaboración (regla Byvaro: razón social
+   *  + CIF + dirección + contacto). Si faltan, banner en own
+   *  ficha · button gateado en visitor. */
+  const myOwnEmpresa = useMemo(() => getMyOwnEmpresa(currentUser), [currentUser]);
+  const myIdentityCheck = useMemo(
+    () => hasMinimumIdentityData(myOwnEmpresa),
+    [myOwnEmpresa],
+  );
 
   const [tab, setTab] = useTabParam<Tab>(TAB_KEYS, "home");
   const [viewMode, setViewMode] = useState<"edit" | "preview">(isVisitor ? "preview" : "edit");
@@ -298,7 +405,12 @@ export default function Empresa({
             )}
           </div>
           {isVisitor && visitorHeaderRight}
-          {!isVisitor && !isAgencyUser && (
+          {/* Toggle "Previsualizar" · disponible para CUALQUIER dueño
+           *  (developer + agency). Antes estaba capado a developer
+           *  porque la agencia no tenía perfil editable · con storage
+           *  scoped por orgId, agencia también edita su /empresa y
+           *  necesita el toggle para ver cómo lo ve un visitante. */}
+          {!isVisitor && (
             <button
               type="button"
               onClick={() => setViewMode(viewMode === "edit" ? "preview" : "edit")}
@@ -314,6 +426,38 @@ export default function Empresa({
             </button>
           )}
         </div>
+
+        {/* ═════ Banner · datos mínimos faltantes en mi empresa
+            (impide enviar solicitudes y deja el workspace invisible
+            en la red de Byvaro). NO aplica a invitaciones de
+            promotores · esas siempre se pueden aceptar. ═════ */}
+        {!isVisitor && !myIdentityCheck.ok && (
+          <CompanyVisibilityBanner missing={myIdentityCheck.missing} />
+        )}
+
+        {/* ═════ CTA · enviar solicitud de colaboración ═════
+            REGLA · NUNCA mostrar este CTA en la ficha propia (un
+            usuario no puede solicitarse colaboración a sí mismo).
+            Tres condiciones · todas necesarias:
+              · `isVisitor` → estoy viendo OTRA org.
+              · `!hasActiveCollab` → no colaboramos ya.
+              · `effectiveTenantId !== myOrgId` (defensivo · `isVisitor`
+                ya lo garantiza, pero dejamos check explícito ante
+                regresiones futuras).
+              · `effectiveTenantId` rellenado · sin tenantId no hay
+                target. */}
+        {isVisitor
+          && !hasActiveCollab
+          && effectiveTenantId
+          && currentOrgIdentity(currentUser).orgId !== effectiveTenantId && (
+          <SendCollabRequestCard
+            targetOrgId={effectiveTenantId}
+            targetOrgName={empresa.nombreComercial || empresa.razonSocial || "Empresa"}
+            targetOrgKind={entityType}
+            currentUser={currentUser}
+            myEmpresa={myOwnEmpresa}
+          />
+        )}
 
         {/* ═════ Slot del visitante (overlay promotor: contrato + acciones) ═════ */}
         {isVisitor && visitorSlot}
@@ -392,33 +536,26 @@ export default function Empresa({
                   </h1>
                   {empresa.verificada && <VerifiedBadge size="md" />}
                 </div>
-                {/* En el slot bajo el nombre va la licencia
-                    inmobiliaria principal (AICAT, RAICV, EKAIA…) ·
-                    sustituye al antiguo eslogan/tagline. Si no hay
-                    licencia, caemos al tagline para no dejar el
-                    espacio vacío en perfiles legacy. En edit mode el
-                    promotor sigue pudiendo editar el tagline · al
-                    declarar una licencia, ésta tiene prioridad de
-                    render sobre el tagline. */}
-                {primaryLicencia ? (
-                  <p className="mt-1 text-[12.5px] font-semibold text-primary leading-snug tracking-wide">
-                    {licenciaTxt}
+                {/* Categorías + licencia inmobiliaria · una línea
+                    inline en color neutro. Sin colores semánticos por
+                    categoría (decisión producto · diseño minimalista).
+                    Las palabras se separan por · en muted. */}
+                {(heroCategories.length > 0 || primaryLicencia) && (
+                  <p className="mt-1.5 text-[12.5px] font-medium text-muted-foreground leading-snug">
+                    {heroCategories.map((c, i) => (
+                      <span key={c}>
+                        {i > 0 && <span className="mx-1">·</span>}
+                        {EMPRESA_CATEGORY_LABELS[c]}
+                      </span>
+                    ))}
+                    {primaryLicencia && heroCategories.length > 0 && (
+                      <span className="mx-1">·</span>
+                    )}
+                    {primaryLicencia && (
+                      <span className="tracking-wide">{licenciaTxt}</span>
+                    )}
                   </p>
-                ) : viewMode === "edit" ? (
-                  <input
-                    type="text"
-                    value={empresa.tagline}
-                    onChange={(e) => update("tagline", e.target.value)}
-                    placeholder="Añade un slogan · Ej. Inversión segura en la Costa del Sol"
-                    className="mt-1 w-full max-w-lg text-[14px] font-medium text-primary bg-transparent outline-none border-b border-dashed border-border focus:border-primary placeholder:text-muted-foreground/50 placeholder:font-normal transition-colors pb-0.5"
-                    style={{ color: empresa.colorCorporativo || undefined }}
-                    maxLength={120}
-                  />
-                ) : empresa.tagline ? (
-                  <p className="text-[14px] font-medium text-primary mt-1 leading-snug" style={{ color: empresa.colorCorporativo || undefined }}>
-                    {empresa.tagline}
-                  </p>
-                ) : null}
+                )}
                 <p className="text-[12.5px] text-muted-foreground mt-1.5 truncate">
                   {subtitleDisplay || "Completa la ubicación y año de fundación para personalizar tu perfil"}
                 </p>
@@ -477,6 +614,8 @@ export default function Empresa({
                 update={update}
                 isVisitor={isVisitor}
                 isAdmin={currentUser.role === "admin"}
+                tenantId={effectiveTenantId}
+                canViewSensitiveDetails={canViewSensitiveDetails}
               />
             )}
             {tab === "agents" && (
@@ -535,5 +674,136 @@ export default function Empresa({
       {/* ═════ Footer sticky del visitante (acciones promotor) ═════ */}
       {isVisitor && visitorFooter}
     </div>
+  );
+}
+
+/** Color de texto por categoría · usado en el hero para renderizar
+ *  la categoría inline (sin pill) · mismo patrón que la card del
+ *  listado de Inmobiliarias / Promotores. */
+function categoryHeroColor(c: EmpresaCategory): string {
+  switch (c) {
+    case "inmobiliaria":    return "text-primary";
+    case "promotor":        return "text-success";
+    case "comercializador": return "text-warning";
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Banner · datos mínimos faltantes en mi empresa (own ficha)
+   ═══════════════════════════════════════════════════════════════════ */
+function CompanyVisibilityBanner({ missing }: { missing: string[] }) {
+  return (
+    <section className="mb-4 rounded-2xl border border-warning/30 bg-warning/10 p-4 sm:p-5">
+      <div className="flex items-start gap-3">
+        <div className="h-9 w-9 rounded-xl bg-warning/20 grid place-items-center text-warning shrink-0">
+          <AlertTriangle className="h-4 w-4" strokeWidth={1.75} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[14px] font-semibold text-foreground">
+            Tu empresa no es visible en la red de Byvaro
+          </h3>
+          <p className="text-[12.5px] text-muted-foreground mt-1 leading-relaxed">
+            Otras empresas no podrán encontrarte ni colaborar contigo
+            hasta que completes tus datos mínimos. Las invitaciones
+            recibidas de promotores siguen llegando.
+          </p>
+          <p className="text-[12px] text-foreground/80 mt-2">
+            Falta: <span className="font-semibold">{missing.join(" · ")}</span>
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Card · enviar solicitud de colaboración (visitor sin colaboración)
+   ═══════════════════════════════════════════════════════════════════ */
+function SendCollabRequestCard({
+  targetOrgId, targetOrgName, targetOrgKind, currentUser, myEmpresa,
+}: {
+  targetOrgId: string;
+  targetOrgName: string;
+  targetOrgKind: OrgKind;
+  currentUser: CurrentUser;
+  myEmpresa: EmpresaType;
+}) {
+  const hasPending = useHasPendingRequestTo(currentUser, targetOrgId);
+  const myCheck = hasMinimumIdentityData(myEmpresa);
+
+  const handleSend = () => {
+    if (!myCheck.ok) {
+      toast.warning(
+        "Faltan datos para poder enviar solicitudes",
+        {
+          description:
+            `Pídele a tu admin que rellene: ${myCheck.missing.join(" · ")}.`,
+        },
+      );
+      return;
+    }
+    const me = currentOrgIdentity(currentUser);
+    crearOrgCollabRequest({
+      fromOrgId: me.orgId,
+      fromOrgName: myEmpresa.nombreComercial?.trim()
+        || myEmpresa.razonSocial?.trim()
+        || me.orgName,
+      fromOrgKind: me.orgKind,
+      toOrgId: targetOrgId,
+      toOrgName: targetOrgName,
+      toOrgKind: targetOrgKind,
+      requestedBy: { name: currentUser.name, email: currentUser.email },
+    });
+    toast.success(`Solicitud enviada a ${targetOrgName}`);
+  };
+
+  if (hasPending) {
+    return (
+      <section className="mb-4 rounded-2xl border border-border bg-muted/30 p-4 sm:p-5">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-xl bg-muted text-muted-foreground grid place-items-center shrink-0">
+            <Lock className="h-4 w-4" strokeWidth={1.75} />
+          </div>
+          <p className="text-[12.5px] text-muted-foreground leading-relaxed">
+            Solicitud de colaboración pendiente · esperando respuesta de
+            <span className="text-foreground font-semibold"> {targetOrgName}</span>.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mb-4 rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-soft">
+      <div className="flex items-start gap-3 flex-wrap sm:flex-nowrap">
+        <div className="h-10 w-10 rounded-xl bg-primary/10 grid place-items-center text-primary shrink-0">
+          <Send className="h-4 w-4" strokeWidth={1.75} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[14px] font-semibold text-foreground">
+            Aún no colaboras con {targetOrgName}
+          </h3>
+          <p className="text-[12.5px] text-muted-foreground mt-1 leading-relaxed">
+            Envía una solicitud · cuando la acepten quedaréis colaborando
+            y podrás operar con su catálogo o cartera.
+          </p>
+          {!myCheck.ok && (
+            <p className="text-[11.5px] text-warning mt-2">
+              <AlertTriangle className="inline h-3 w-3 mr-1" strokeWidth={2} />
+              Tu admin debe rellenar antes:{" "}
+              <span className="font-semibold">{myCheck.missing.join(" · ")}</span>
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={handleSend}
+          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-foreground text-background text-[12.5px] font-semibold hover:bg-foreground/90 transition-colors shrink-0"
+        >
+          <Send className="h-3.5 w-3.5" strokeWidth={2} />
+          Enviar solicitud
+        </button>
+      </div>
+    </section>
   );
 }

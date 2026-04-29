@@ -782,6 +782,75 @@ TODOs: `src/components/empresa/GoogleRatingCard.tsx:16`.
 
 **Tipo**: `src/data/promotions.ts` (`Promotion`) + `src/data/developerPromotions.ts` (`DevPromotion` extiende `Promotion`).
 
+### 3.0 · Aislamiento multi-tenant · `ownerOrganizationId`
+
+**REGLA BACKEND** (consensuada con producto · 2026-04-29):
+
+Toda promoción tiene un único dueño identificado por
+`Promotion.ownerOrganizationId` (FK a `organizations.id`). Es la
+columna de aislamiento multi-tenant. **TODA query de promociones
+DEBE filtrar por este campo** · sin él hay fuga de datos
+cross-tenant.
+
+```sql
+ALTER TABLE promotions
+  ADD COLUMN owner_organization_id uuid NOT NULL
+  REFERENCES organizations(id);
+
+CREATE INDEX idx_promotions_owner ON promotions(owner_organization_id);
+
+-- Política RLS de aislamiento
+CREATE POLICY promotions_isolation ON promotions
+  USING (owner_organization_id = current_setting('app.current_org')::uuid);
+```
+
+**Endpoint público para portfolios cross-tenant** (cuando una
+agencia visita la ficha de un promotor):
+
+```
+GET /api/promotor/:id/portfolio?status=active
+
+200 OK
+{
+  promociones: Promotion[]   -- todas con owner_organization_id = :id
+}
+```
+
+El endpoint NO requiere ser dueño · es público dentro de Byvaro
+porque el portfolio es información comercial. Pero el filtro por
+`owner_organization_id = :id` es obligatorio para garantizar que
+no se devuelvan promociones de otros workspaces.
+
+**Frontend mock single-tenant**:
+
+- Helper canónico `getPromotionsByOwner(orgId)` en
+  `src/lib/promotionsByOwner.ts` · única forma legítima de
+  resolver promociones per-tenant en componentes que renderizan
+  fichas o listados scoped.
+- Mock data:
+  - `"developer-default"` → `[...promotions, ...developerOnlyPromotions]`
+    (ambos arrays tienen `ownerOrganizationId: "developer-default"`
+    explícito en cada entry).
+  - `"prom-1"`, `"prom-2"`, `"prom-3"`, `"prom-4"` →
+    `EXTERNAL_PROMOTOR_PORTFOLIO` con su `ownerOrganizationId`
+    correspondiente.
+- Consumers que YA usan el helper:
+  - `src/components/empresa/PortfolioShowcase.tsx` · ficha pública.
+- Consumers legacy que aún leen `promotions` directamente (válido
+  porque su scope es el workspace logueado, NO per-tenant):
+  - `src/pages/Promociones.tsx` · listado del workspace propio.
+  - `src/components/AppSidebar.tsx` · contador de promos.
+  - calendar / registros / ResumenTab · entidades del workspace.
+
+**Migración a backend**:
+  1. Reemplazar `getPromotionsByOwner(orgId)` por fetch a
+     `/api/promotor/:id/portfolio`.
+  2. Retirar el fallback `?? "developer-default"` en lecturas del
+     campo · backend escribe en TODAS las filas.
+  3. Borrar `EXTERNAL_PROMOTOR_PORTFOLIO` mock.
+  4. Auditar consumers legacy y cambiar a fetch scoped al JWT
+     organization_id.
+
 ### Endpoints
 
 | Endpoint | Propósito | TODO |
@@ -1180,6 +1249,265 @@ Las tres se derivan con reglas deterministas en
 `ColaboradoresEstadisticas.tsx` (`deriveInsights` y `deriveOportunidades`).
 Cuando el dataset crezca y las reglas se compliquen, mover al servidor
 con endpoint dedicado `GET .../estadisticas/insights`.
+
+### 4.2.1 · Métricas de la card de agencia (Inmobiliarias)
+
+Las cards del listado `/colaboradores` (lado promotor) y `/promotores`
+(lado agencia · simétrico) muestran 5 métricas operativas con
+**semántica fija** consensuada con producto (2026-04-29). El backend
+debe devolver estos contadores ya computados para evitar N consultas
+desde el cliente.
+
+**Endpoint propuesto:**
+
+```
+GET /api/agencias/:id/card-metrics
+
+200 OK
+{
+  visitasRealizadas:    number,   // ver §a
+  registrosAprobados:   number,   // ver §b
+  ventasIniciadas:      number,   // ver §c
+  conversion:           number,   // ver §d  (0-100, entero)
+  unidadesCompartidas:  number,   // ver §e
+}
+```
+
+Versión bulk para listados:
+
+```
+POST /api/agencias/card-metrics
+Body: { agencyIds: string[] }
+
+200 OK
+{ [agencyId]: AgencyCardMetrics }
+```
+
+**Definiciones (§a-§e):**
+
+§a · **Visitas realizadas** · `count` de visitas (`calendar_events.type =
+'visit'`) atribuibles a la agencia donde:
+  - `status = 'done'` AND
+  - `evaluation.outcome = 'completed'`
+  - Atribución vía `registroId → registro.agency_id`. Si más adelante
+    `lead.agency_id` se persiste, también vía `leadId → lead.agency_id`.
+
+§b · **Registros aprobados** · `count(*) FROM registros WHERE agency_id
+= :id AND estado = 'aprobado'`. Solo aprobados · pendientes /
+rechazados / caducados / duplicados NO cuentan.
+
+§c · **Ventas iniciadas** · `count(*) FROM sales WHERE agency_id = :id
+AND estado <> 'caida'`. Incluye `reservada`, `contratada` y
+`escriturada`. NO solo cerradas (regla "venta cerrada" requiere
+contrato firmado y eso se mide en otra parte).
+
+§d · **Conversión** · `(ventasIniciadas / registrosAprobados) * 100`,
+redondeado a entero. Si `registrosAprobados = 0`, devolver `0` (no
+NaN, no null). El cliente pinta este valor en verde si `>= 15`.
+
+§e · **Unidades compartidas** · suma de `availableUnits` de las
+promociones donde la agencia colabora:
+```sql
+SELECT COALESCE(SUM(p.available_units), 0)
+FROM promotion_collaborations pc
+JOIN promotions p ON p.id = pc.promotion_id
+WHERE pc.agency_id = :id
+  AND pc.status = 'active'  -- pausada/anulada NO cuentan
+```
+Importante: suma `availableUnits` (lo disponible HOY), NO `totalUnits`.
+Si el promotor pausa la colaboración por promoción
+(`promotion_collab_status.status = 'pausada'`), las unidades de esa
+promo siguen contando · solo se excluyen las ANULADAS (regla "datos
+históricos NUNCA se borran" pero "compartido" se entiende como
+relación viva con capacidad de operar).
+
+**Frontend mock actual** · `src/lib/agencyMetrics.ts` deriva las 5
+métricas de los seeds globales (`registros`, `sales`, `calendarEvents`,
+`promotions`, `developerOnlyPromotions`). Cuando se conecte el backend,
+sustituir el helper por un fetch al endpoint `/card-metrics`. El
+shape `AgencyCardMetrics` ya es el contrato.
+
+**Caching** · razonable cachear ~30s por agency. Las métricas cambian
+con cada nueva visita evaluada / registro aprobado / venta iniciada,
+pero el listado las consume en bulk · no hace falta tiempo real.
+
+### 4.2.2 · Invitaciones · regla de visibilidad en el listado
+
+**REGLA BYVARO** (consensuada con producto · 2026-04-29):
+
+1. Cuando se invita a una agencia que **NO está en el sistema** (no
+   tiene workspace en Byvaro · solo conocemos su email), la invitación
+   **NO** aparece en el listado `/colaboradores`. La invitación vive
+   en su propia tabla pero el listado de agencias solo muestra
+   workspaces reales · ese email no es un colaborador todavía.
+
+2. Cuando se invita a una agencia que **SÍ está en el sistema**
+   (existe `agency` con `agencyId` referenciable), la card de esa
+   agencia aparece en el listado y, si la invitación está en estado
+   `pendiente`, **se decora con el chip "Invitada DD/MM/YYYY"** en
+   lugar del chip de contrato. Significa: la agencia ha recibido la
+   invitación pero todavía no ha añadido la promoción a su cartera.
+
+**Modelo backend:**
+
+```sql
+CREATE TABLE invitations (
+  id              uuid PRIMARY KEY,
+  organization_id uuid NOT NULL,                       -- promotor que invita
+  agency_id       uuid REFERENCES organizations(id),   -- NULL si email externo
+  email           text NOT NULL,                       -- email destino
+  status          text NOT NULL CHECK (status IN
+                  ('pendiente','aceptada','rechazada','caducada')),
+  invited_at      timestamptz NOT NULL DEFAULT now(),
+  expires_at      timestamptz NOT NULL,
+  promotion_id    uuid REFERENCES promotions(id),
+  ...
+);
+```
+
+**Endpoint que sirve el listado:**
+
+```
+GET /api/agencias
+
+200 OK
+{
+  agencies: Agency[],
+  invitedAtByAgency: { [agency_id]: ISO_DATE },  -- regla §2
+}
+```
+
+`invitedAtByAgency` SOLO incluye entradas para invitaciones donde
+`agency_id IS NOT NULL` y `status = 'pendiente'`. Si hay varias
+invitaciones pendientes para la misma agencia, devuelve la **más
+reciente** (`MAX(invited_at)`).
+
+Las invitaciones a emails externos (sin `agency_id`) NO contaminan el
+listado, pero siguen siendo accesibles via:
+
+```
+GET /api/invitations?status=pendiente
+```
+
+para que el promotor pueda gestionarlas (reenviar, cancelar) desde
+una sección dedicada (típicamente `/ajustes/invitaciones` o un drawer
+en `/colaboradores`).
+
+**Frontend mock actual** · `src/pages/Colaboradores.tsx` construye
+`invitedAtByAgency` filtrando `useInvitaciones().pendientes` por
+`inv.agencyId !== undefined && inv.estado === "pendiente"`. Pasa el
+timestamp a `AgencyGridCard` via prop `invitedAt`. El componente
+prioriza ese chip sobre cualquier estado de contrato.
+
+**Por qué esta regla** · "Sin contrato" como chip por defecto a
+agencias recién invitadas era engañoso · suena a problema. "Invitada
+DD/MM/YYYY" es informativo · indica al admin promotor que la pelota
+está en el tejado de la agencia. Si han pasado >7 días, el promotor
+puede reenviar desde la card.
+
+### 4.2.3 · Categorías de empresa (Inmobiliaria · Promotor · Comercializador)
+
+**REGLA BYVARO** (consensuada con producto · 2026-04-29):
+
+El sistema clasifica cada workspace con 0..N categorías canónicas:
+
+| Categoría | Significa | Cómo se asigna |
+|---|---|---|
+| `inmobiliaria` | Es una agencia · vende viviendas en nombre de promotores | Automático cuando `org.kind = 'agency'`. |
+| `promotor` | Construye/desarrolla y es dueño de la obra | Tiene ≥1 promoción activa con `ownerRole = 'promotor'`. |
+| `comercializador` | Vende en exclusiva por encargo de un tercero | Tiene ≥1 promoción activa con `ownerRole = 'comercializador'`. |
+
+**Una empresa puede tener varias categorías a la vez.** Ejemplo: una
+agencia que activa el pack y publica una promoción como promotor +
+otra como comercializador → categorías `[inmobiliaria, promotor,
+comercializador]`.
+
+**Pack de promotor/comercializador (lado agencia):**
+
+Para que una agencia pueda CREAR promociones (y por tanto ganar las
+categorías Promotor/Comercializador), debe activar un pack opcional.
+El pack es solo CAPACIDAD · no añade categoría por sí mismo. La
+categoría aparece cuando hay actividad real (≥1 promo publicada con
+ese rol).
+
+```sql
+CREATE TABLE workspace_features (
+  organization_id   uuid PRIMARY KEY REFERENCES organizations(id),
+  developer_pack    boolean NOT NULL DEFAULT false,
+  pack_activated_at timestamptz,
+  ...
+);
+```
+
+Activación · `POST /api/empresas/:id/features/developer-pack`
+con `{ enabled: true }` · billing real va aparte (Stripe). Mock actual
+persiste en localStorage `byvaro.workspace.developerPack.v1:<wsKey>`
+(eliminar al conectar backend).
+
+**Endpoint canónico:**
+
+```
+GET /api/empresas/:id/categorias
+
+200 OK
+{
+  categories: ("inmobiliaria"|"promotor"|"comercializador")[],
+}
+```
+
+Vista SQL recomendada:
+
+```sql
+CREATE VIEW v_empresa_categorias AS
+SELECT
+  o.id AS organization_id,
+  ARRAY_REMOVE(ARRAY[
+    CASE WHEN o.kind = 'agency' THEN 'inmobiliaria' END,
+    CASE WHEN EXISTS (
+      SELECT 1 FROM promotions p
+      WHERE p.organization_id = o.id
+        AND p.status = 'active'
+        AND COALESCE(p.owner_role, 'promotor') = 'promotor'
+    ) THEN 'promotor' END,
+    CASE WHEN EXISTS (
+      SELECT 1 FROM promotions p
+      WHERE p.organization_id = o.id
+        AND p.status = 'active'
+        AND p.owner_role = 'comercializador'
+    ) THEN 'comercializador' END
+  ], NULL) AS categories
+FROM organizations o;
+```
+
+Nota: `owner_role` se setea per-promotion en el wizard de creación
+(ver `WizardState.role` en `src/components/crear-promocion/types.ts`
+y la regla CLAUDE.md "Promotor vs Comercializador · label dinámico").
+Default `'promotor'` por compatibilidad.
+
+**Dónde se renderizan las categorías** (consumidores actuales):
+
+| Sitio | Componente | Tamaño |
+|---|---|---|
+| `/empresa` hero (own + visitor) | `Empresa.tsx` | sm |
+| `/colaboradores/:id/panel` header | `ColaboracionPanel.tsx` | xs |
+| `/promotor/:id/panel` header | `PromotorPanel.tsx` | xs |
+| `/colaboradores` listing card | `AgencyGridCard.tsx` | xs |
+| `/promotores` listing card | `Promotores.tsx` | xs |
+
+Componente canónico para pintarlos: `<EmpresaCategoryBadges
+categories={...} size="xs|sm|md" />` en
+`src/components/empresa/EmpresaCategoryBadges.tsx`.
+
+**Frontend mock actual** · helper `getEmpresaCategories()` y hook
+reactivo `useEmpresaCategories()` en `src/lib/empresaCategories.ts`
+derivan las categorías:
+- accountType="agency" → `["inmobiliaria"]` (siempre).
+- accountType="developer" → deriva de `[...promotions,
+  ...developerOnlyPromotions]` filtrando por `status="active"` y
+  agrupando por `ownerRole`.
+
+Cuando aterrice el backend, sustituir el branch developer por un
+fetch a `/categorias`. El shape `EmpresaCategory[]` ya es el contrato.
 
 ### 4.3 · Reglas de marketing por promoción
 

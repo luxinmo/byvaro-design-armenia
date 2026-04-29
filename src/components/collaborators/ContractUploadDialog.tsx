@@ -154,9 +154,13 @@ interface Props {
    *  el Resumen cuando se dispara el upload desde una promoción
    *  concreta que no tiene contrato. */
   defaultScopePromotionIds?: string[];
+  /** Si se indica, este upload sustituye a los contratos listados
+   *  (renovación). Al subir, los antiguos se archivan automáticamente
+   *  con cross-ref. */
+  defaultReplacesContractIds?: string[];
 }
 
-export function ContractUploadDialog({ open, onOpenChange, agency, actor, defaultScopePromotionIds }: Props) {
+export function ContractUploadDialog({ open, onOpenChange, agency, actor, defaultScopePromotionIds, defaultReplacesContractIds }: Props) {
   const [step, setStep] = useState<Step>("documento");
 
   /* Paso 1 · Documento(s) · permitimos subir varios PDFs · cada
@@ -323,6 +327,7 @@ export function ContractUploadDialog({ open, onOpenChange, agency, actor, defaul
         language,
         signerPriority,
         expiresAt: expiresAtMs ?? undefined,
+        replacesContractIds: defaultReplacesContractIds,
         actor,
       });
       sendContractToSign(ct.id, actor);

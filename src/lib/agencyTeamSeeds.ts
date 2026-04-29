@@ -57,19 +57,72 @@ function jobTitleFor(role: "admin" | "member"): string {
 
 /* ─── Builder ─────────────────────────────────────────────────────── */
 
-/** Devuelve el equipo seed para una agencia · derivado de mockUsers. */
+/* Pool determinista de nombres por mercado · usado para padding
+ * sintético cuando `teamSize` del seed > nº de mockUsers reales (los
+ * mockUsers son los que pueden hacer login; los sintéticos solo
+ * aparecen como miembros del equipo en `/equipo` y `/empresa` para
+ * que la cuenta visible coincida con el "12 agentes" pintado en la
+ * card). El pool se elige por country code de los mercados de la
+ * agencia · si no matchea, cae en pool ES/EN. */
+const NAME_POOLS: Record<string, string[]> = {
+  ES: ["Carlos Ruiz","Marta López","Diego Pérez","Lucía García","Pablo Martín","Sara Fernández","Andrés Romero","Beatriz Castro","Javier Ortega","Elena Navarro"],
+  GB: ["Oliver Bennett","Charlotte Hayes","George Mitchell","Sophie Turner","Henry Walsh","Amelia Reed","Jack Howard","Isabella Knight","William Owen","Florence Page"],
+  IE: ["Aisling Murphy","Cillian O'Brien","Niamh Doyle","Finn Kelly"],
+  NL: ["Lars Visser","Anouk de Boer","Daan van Dijk","Sanne Bakker","Bram Mulder","Eva Smit"],
+  BE: ["Lucas Janssens","Camille Dubois","Maxime Peeters","Léa Vermeulen"],
+  DE: ["Maximilian Weber","Hannah Becker","Leon Schäfer","Mia Hoffmann"],
+  FR: ["Antoine Moreau","Camille Rousseau","Théo Lefebvre","Léna Dupont"],
+  IT: ["Matteo Russo","Giulia Conti","Lorenzo Bianchi","Sofia Ricci"],
+  PT: ["Ricardo Silva","Mariana Santos","Tiago Pereira","Beatriz Costa","Gonçalo Ferreira","Inês Rodrigues"],
+  SE: ["Linnea Andersson","Oscar Karlsson","Astrid Nilsson","Hugo Eriksson","Wilma Larsson","Axel Olsson","Ebba Persson","Liam Svensson"],
+  NO: ["Henrik Hansen","Ingrid Olsen","Magnus Berg","Sofie Jensen"],
+  DK: ["Mads Christensen","Frida Jørgensen","Emil Madsen","Saga Pedersen"],
+  FI: ["Aino Korhonen","Onni Virtanen","Lumi Mäkelä","Eetu Niemi"],
+  RU: ["Anastasia Volkova","Mikhail Sokolov","Ekaterina Petrova","Dmitry Ivanov"],
+  CH: ["Jonas Müller","Lara Keller","Noah Schmid","Mia Steiner"],
+  US: ["Ethan Brooks","Madison Cole","Tyler Reed","Avery Bennett"],
+};
+
+const JOB_TITLES_MEMBER = [
+  "Property Consultant",
+  "Senior Sales Agent",
+  "International Liaison",
+  "Lead Generation Specialist",
+  "Closing Specialist",
+  "Buyer's Agent",
+  "Listing Agent",
+  "Investor Relations",
+  "Marketing Coordinator",
+  "Client Success Manager",
+];
+
+function namePoolFor(agencyId: string): string[] {
+  const a = agencies.find((x) => x.id === agencyId);
+  const markets = a?.mercados ?? [];
+  const pool: string[] = [];
+  /* Mezclamos nombres del mercado primario + complementos ES/GB para
+   * tener variedad sin repetir. Mantenemos orden estable per-agencia. */
+  for (const m of markets) {
+    const list = NAME_POOLS[m];
+    if (list) pool.push(...list);
+  }
+  if (pool.length === 0) pool.push(...NAME_POOLS.ES, ...NAME_POOLS.GB);
+  return pool;
+}
+
+/** Devuelve el equipo seed para una agencia · derivado de mockUsers
+ *  + padding sintético hasta `teamSize` para que el counter público
+ *  ("12 agentes") coincida con lo que se ve en `/equipo` y en el
+ *  tab Equipo de `/empresa`. Sin esto hay disonancia visible cross
+ *  -screen. Los sintéticos NO pueden hacer login (no están en
+ *  `mockUsers`) · solo existen como filas de la tabla equipo del
+ *  workspace mock. */
 export function buildAgencyTeam(agencyId: string): TeamMember[] {
   const users = mockUsers.filter(
     (u) => u.accountType === "agency" && u.agencyId === agencyId,
   );
-  if (users.length === 0) {
-    /* Sin mockUsers para esta agencia (p.ej. ag-6+ que solo existen
-     * como solicitudes pendientes). Devolvemos lista vacía · la
-     * pantalla muestra el empty-state estándar. */
-    return [];
-  }
   const langs = inferLanguages(agencyId);
-  return users.map((u, idx) => ({
+  const realMembers: TeamMember[] = users.map((u, idx) => ({
     id: u.teamMemberId ?? `${agencyId}-m${idx + 1}`,
     name: u.name,
     email: u.email,
@@ -90,6 +143,46 @@ export function buildAgencyTeam(agencyId: string): TeamMember[] {
     twoFactorEnabled: u.role === "admin",
     recordsDecidedLast30d: 5 + idx * 3,
   }));
+
+  /* Padding sintético · si la agency tiene `teamSize` declarado y es
+   *  mayor que el nº real de mockUsers, generamos miembros
+   *  determinísticos hasta llegar a ese número. Si no hay teamSize o
+   *  los mockUsers ya cubren la cifra, devolvemos solo los reales. */
+  const a = agencies.find((x) => x.id === agencyId);
+  const targetSize = a?.teamSize ?? realMembers.length;
+  if (targetSize <= realMembers.length) return realMembers;
+
+  const pool = namePoolFor(agencyId);
+  const padCount = targetSize - realMembers.length;
+  const synthetic: TeamMember[] = [];
+  for (let i = 0; i < padCount; i++) {
+    const name = pool[i % pool.length];
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, ".");
+    const emailDomain = users[0]?.email.split("@")[1] ?? `${agencyId}.byvaro.demo`;
+    const synthEmail = `${slug}@${emailDomain}`;
+    synthetic.push({
+      id: `${agencyId}-syn-${i + 1}`,
+      name,
+      email: synthEmail,
+      role: "member",
+      jobTitle: JOB_TITLES_MEMBER[i % JOB_TITLES_MEMBER.length],
+      department: i % 3 === 0 ? "Marketing" : "Comercial",
+      languages: langs,
+      avatarUrl: avatarFor(synthEmail),
+      status: "active",
+      visibleOnProfile: true,
+      canSign: false,
+      canAcceptRegistrations: true,
+      joinedAt: new Date(Date.parse("2025-06-01") + i * 14 * 24 * 60 * 60 * 1000).toISOString(),
+      lastActiveAt: new Date(Date.parse("2026-04-23") - i * 2 * 24 * 60 * 60 * 1000).toISOString(),
+      emailAccountsCount: 1,
+      emailsSentLast30d: 12 + (i * 5) % 40,
+      whatsappLinked: i % 2 === 0,
+      twoFactorEnabled: false,
+      recordsDecidedLast30d: 2 + (i * 3) % 12,
+    });
+  }
+  return [...realMembers, ...synthetic];
 }
 
 /* Auto-registramos el builder en team.ts al cargar este módulo. Se

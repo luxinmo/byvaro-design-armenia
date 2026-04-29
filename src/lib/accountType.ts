@@ -124,11 +124,10 @@ export function loginAs(
 }
 
 /** Limpia la sesión · equivale a logout.
- *  Borra también el perfil editable del usuario (ver profileStorage.ts) y
- *  los teléfonos, para que al entrar como otro usuario no se hereden datos.
- *  TODO(backend): sustituir por `fetch('/api/auth/logout', { method: 'POST' })`
- *  + borrado de cookies httpOnly. */
-export function logout() {
+ *  Borra el perfil editable del usuario, los teléfonos, y cierra
+ *  sesión en Supabase Auth. Para que al entrar como otro usuario no
+ *  se hereden datos. */
+export async function logout() {
   sessionStorage.removeItem(STORAGE_KEY);
   sessionStorage.removeItem(AGENCY_KEY);
   sessionStorage.removeItem(DEVELOPER_EMAIL_KEY);
@@ -137,6 +136,13 @@ export function logout() {
     localStorage.removeItem("byvaro.user.profile.v1");
     localStorage.removeItem("byvaro.user.phones.v1");
     window.dispatchEvent(new Event("byvaro:profile-change"));
+    /* Lazy-import para evitar ciclo · supabaseClient depende de env.
+     * `signOut()` invalida la sesión + limpia su storage propio
+     * (`byvaro.supabase.auth.v1`). */
+    try {
+      const { supabase } = await import("./supabaseClient");
+      await supabase.auth.signOut();
+    } catch { /* Sin Supabase configurado · skip. */ }
   }
   emit();
 }

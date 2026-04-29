@@ -176,8 +176,89 @@ export type Agency = {
  *    · Sin ningún contrato firmado vivo → `sin-contrato`.
  *    · Con contratos firmados · tomamos el que más lejos expira
  *      (si alguno no expira nunca, vence infinito).
- *    · `por-expirar` si quedan ≤30 días.
+ *    · `por-expirar` si quedan ≤ `CONTRACT_NEAR_EXPIRY_DAYS` (60d ·
+ *      fuente única de verdad en `collaborationContracts.ts`).
  */
+import { CONTRACT_NEAR_EXPIRY_DAYS } from "@/lib/collaborationContracts";
+
+/* ═══════════════════════════════════════════════════════════════════
+   Agency.status SPLIT · helper anticipatorio para backend
+
+   PROBLEMA · `Agency.status` (active|pending|inactive|expired) y
+   `Agency.estadoColaboracion` (activa|contrato-pendiente|pausada)
+   mezclan dos cosas que en backend van en tablas distintas:
+
+     · `organizations.status` (active|inactive|suspended)        → el
+       ESTADO DE LA EMPRESA (KYC, suspendida por billing, etc.).
+     · `organization_collaborations.status` (active|paused|ended) → el
+       ESTADO DEL VÍNCULO entre dos orgs.
+
+   Doc canónico · `docs/backend-dual-role-architecture.md §3.1, §3.7
+   y §9 Phase 2`.
+
+   Este helper EXPONE el split sin romper el seed actual ·
+   los consumers del frontend pueden empezar a leer estos campos
+   ahora mismo. La migración Phase 2 reescribe el seed para
+   eliminar `Agency.status` y `Agency.estadoColaboracion` reemplazándolos
+   por las dos columnas separadas.
+
+   TODO(backend) · split `Agency.status` y `Agency.estadoColaboracion`
+   en:
+     · `organizations.status` (default 'active' para mock).
+     · `organization_collaborations.status` (active|paused|ended) +
+       fila en `collab_requests` para el estado pre-aceptación
+       (pending invitation / pending request).
+   ═══════════════════════════════════════════════════════════════════ */
+
+export type OrganizationStatus = "active" | "inactive" | "suspended";
+export type OrganizationCollabStatus =
+  | "active"           // colaboración firmada y operativa
+  | "paused"           // pausada · datos preservados
+  | "ended"            // terminada · histórica
+  | "pending_contract" // invitación/solicitud aceptada · contrato pendiente
+  | "pending_request"  // solicitud o invitación SIN responder
+  | "none";            // sin vínculo
+
+export interface AgencyStatusSplit {
+  organizationStatus: OrganizationStatus;
+  collabStatus: OrganizationCollabStatus;
+}
+
+/** Mapea los campos legacy de `Agency` (status + estadoColaboracion)
+ *  al split canónico backend (`organizations.status` +
+ *  `organization_collaborations.status`).
+ *
+ *  Reglas (decidir en producto si alguna varía antes de Phase 2):
+ *    · `Agency.status === 'inactive'` → org inactive (raro · seed
+ *      casi siempre lo deja active).
+ *    · resto → org active.
+ *
+ *    · `estadoColaboracion === 'activa'`  → collab `active`.
+ *    · `estadoColaboracion === 'pausada'` → collab `paused`.
+ *    · `estadoColaboracion === 'contrato-pendiente'` → collab `pending_contract`.
+ *    · `Agency.status === 'pending'` (sin estadoColaboracion) o
+ *      `solicitudPendiente`/`isNewRequest` → collab `pending_request`.
+ *    · sin nada → collab `none`. */
+export function mapAgencyToCollabStatus(a: Agency): AgencyStatusSplit {
+  const organizationStatus: OrganizationStatus =
+    a.status === "inactive" ? "inactive" : "active";
+
+  let collabStatus: OrganizationCollabStatus;
+  if (a.estadoColaboracion === "activa") {
+    collabStatus = "active";
+  } else if (a.estadoColaboracion === "pausada") {
+    collabStatus = "paused";
+  } else if (a.estadoColaboracion === "contrato-pendiente") {
+    collabStatus = "pending_contract";
+  } else if (a.solicitudPendiente || a.isNewRequest || a.status === "pending") {
+    collabStatus = "pending_request";
+  } else {
+    collabStatus = "none";
+  }
+
+  return { organizationStatus, collabStatus };
+}
+
 export function getContractStatus(
   a: Agency,
   refDate: Date = new Date(),
@@ -193,7 +274,7 @@ export function getContractStatus(
   const maxExpires = Math.max(...signed.map((c) => c.expiresAt!));
   const daysLeft = Math.ceil((maxExpires - refDate.getTime()) / (24 * 60 * 60 * 1000));
   if (daysLeft < 0) return { state: "expirado", daysLeft };
-  if (daysLeft <= 30) return { state: "por-expirar", daysLeft };
+  if (daysLeft <= CONTRACT_NEAR_EXPIRY_DAYS) return { state: "por-expirar", daysLeft };
   return { state: "vigente", daysLeft };
 }
 
@@ -247,6 +328,28 @@ export const agencies: Agency[] = [
       { tipo: "COAPI", numero: "COAPI-MA-01234", desde: "2017-03-02", verificada: true, publicUrl: "https://www.coapi.org" },
       { tipo: "GIPE",  numero: "GIPE-3456",      desde: "2019-11-20" },
     ],
+    /* ─── Ficha Empresa · datos editables del workspace agencia ───
+     *  Sin estos campos, `hasMinimumIdentityData()` falla y la
+     *  agencia ve el banner "Tu empresa no es visible" + no puede
+     *  enviar `org_request`. */
+    razonSocial: "Prime Properties Costa del Sol S.L.",
+    cif: "B92345678",
+    fundadaEn: "2014",
+    sitioWeb: "primeproperties.com",
+    horario: "L-V 9:00-19:00 · S 10:00-14:00",
+    idiomasAtencion: ["ES", "EN", "DE", "SV"],
+    redes: {
+      linkedin:  "https://www.linkedin.com/company/prime-properties-costadelsol",
+      instagram: "https://www.instagram.com/primeproperties.es",
+      facebook:  "https://www.facebook.com/primeproperties.es",
+    },
+    direccionFiscal: {
+      direccion: "Av. Ricardo Soriano 72, 3º",
+      codigoPostal: "29601",
+      ciudad: "Marbella",
+      provincia: "Málaga",
+      pais: "España",
+    },
   },
   {
     id: "ag-2",
@@ -363,6 +466,25 @@ export const agencies: Agency[] = [
     googleRatingsTotal: 92,
     googleFetchedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
     googleMapsUrl: "https://maps.app.goo.gl/DEMO_Dutch",
+    /* ─── Ficha Empresa · datos editables del workspace agencia ─── */
+    razonSocial: "Dutch & Belgian Realty B.V.",
+    cif: "NL854321987B01",
+    fundadaEn: "2013",
+    sitioWeb: "dutchbelgianrealty.com",
+    horario: "L-V 9:00-18:00 (CET)",
+    idiomasAtencion: ["NL", "FR", "EN", "DE", "ES"],
+    redes: {
+      linkedin:  "https://www.linkedin.com/company/dutch-belgian-realty",
+      instagram: "https://www.instagram.com/dutchbelgianrealty",
+      facebook:  "https://www.facebook.com/dutchbelgianrealty",
+    },
+    direccionFiscal: {
+      direccion: "Herengracht 180",
+      codigoPostal: "1016 BR",
+      ciudad: "Amsterdam",
+      provincia: "Noord-Holland",
+      pais: "Países Bajos",
+    },
   },
   {
     id: "ag-4",
@@ -407,6 +529,24 @@ export const agencies: Agency[] = [
     googleRatingsTotal: 56,
     googleFetchedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
     googleMapsUrl: "https://maps.app.goo.gl/DEMO_Meridian",
+    /* ─── Ficha Empresa · datos editables del workspace agencia ─── */
+    razonSocial: "Meridian Real Estate Group Ltd",
+    cif: "GB938472615",
+    fundadaEn: "2009",
+    sitioWeb: "meridianrealestate.co.uk",
+    horario: "Mon-Fri 9:00-18:00 (GMT)",
+    idiomasAtencion: ["EN", "ES", "FR"],
+    redes: {
+      linkedin:  "https://www.linkedin.com/company/meridian-real-estate-group",
+      instagram: "https://www.instagram.com/meridian.realestate",
+    },
+    direccionFiscal: {
+      direccion: "32 Mayfair Place",
+      codigoPostal: "W1J 8JR",
+      ciudad: "London",
+      provincia: "Greater London",
+      pais: "Reino Unido",
+    },
   },
   {
     id: "ag-5",
@@ -436,6 +576,36 @@ export const agencies: Agency[] = [
     mensajeSolicitud:
       "Nos especializamos en compradores portugueses y brasileños con presupuesto premium. Nos encantaría colaborar en las promociones de la Costa del Sol.",
     requestedPromotionIds: ["dev-1", "dev-2"],
+    teamSize: 7,
+    especialidad: "luxury",
+    mercados: ["PT", "ES", "BR"],
+    contactoPrincipal: {
+      nombre: "João Almeida", rol: "Managing Director",
+      email: "joao@iberialuxuryhomes.pt", telefono: "+351 21 350 7000",
+      idiomas: ["PT", "EN", "ES"],
+    },
+    googleRating: 4.5,
+    googleRatingsTotal: 78,
+    googleFetchedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+    googleMapsUrl: "https://maps.app.goo.gl/DEMO_Iberia",
+    /* ─── Ficha Empresa · datos editables del workspace agencia ─── */
+    razonSocial: "Iberia Luxury Homes Lda",
+    cif: "PT512345678",
+    fundadaEn: "2017",
+    sitioWeb: "iberialuxuryhomes.pt",
+    horario: "Seg-Sex 9:30-18:30 (WET)",
+    idiomasAtencion: ["PT", "EN", "ES", "FR"],
+    redes: {
+      linkedin:  "https://www.linkedin.com/company/iberia-luxury-homes",
+      instagram: "https://www.instagram.com/iberialuxuryhomes",
+    },
+    direccionFiscal: {
+      direccion: "Av. da Liberdade 110, 4º",
+      codigoPostal: "1250-146",
+      ciudad: "Lisboa",
+      provincia: "Lisboa",
+      pais: "Portugal",
+    },
   },
   {
     id: "ag-6",

@@ -17,6 +17,7 @@ import {
   Home, Building, FileText, CircleDollarSign, CalendarDays,
   Handshake, Contact, Globe, Mail, Settings, ChevronsUpDown, FileSignature,
   Building2, Inbox, User as UserIcon, LogOut, Users, Activity, Sparkles,
+  KeyRound, LayoutGrid,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEmpresa } from "@/lib/empresa";
@@ -54,6 +55,8 @@ const groups: NavGroup[] = [
       /* Sin badges hardcoded · cada uno se rellena dinámicamente abajo
        * en `visibleGroups` con el conteo real (promotor vs agencia). */
       { title: "Promociones", url: "/promociones", icon: Building },
+      { title: "Inmuebles", url: "/inmuebles", icon: KeyRound },
+      { title: "Inmuebles · cuadrícula", url: "/inmuebles/cuadricula", icon: LayoutGrid },
       { title: "Oportunidades", url: "/oportunidades", icon: Inbox },
       { title: "Registros", url: "/registros", icon: FileText },
       { title: "Ventas", url: "/ventas", icon: CircleDollarSign },
@@ -63,7 +66,15 @@ const groups: NavGroup[] = [
   {
     label: "Red",
     items: [
-      { title: "Colaboradores", url: "/colaboradores", icon: Handshake },
+      /* Promotores & comercializadores · workspaces externos con los que
+       *  colaboramos como comercializador (lado developer). El label se
+       *  muestra completo en sidebar ancho · si la columna se estrecha,
+       *  Tailwind `truncate` recorta con elipsis · NUNCA salta de línea. */
+      { title: "Promotores & comercializadores", url: "/promotores", icon: Building },
+      { title: "Inmobiliarias", url: "/colaboradores", icon: Handshake },
+      /* A/B · ruta temporal con la card antigua del listado
+       *  (`FeatureCardV3`) · borrar cuando se elija una variante. */
+      { title: "Inmobiliarias test", url: "/colaboradores-test", icon: Handshake },
       { title: "Contratos", url: "/contratos", icon: FileSignature },
       { title: "Contactos", url: "/contactos", icon: Contact },
     ],
@@ -131,11 +142,10 @@ export function AppSidebar() {
    *
    * El miembro / responsable de agencia SÍ ve:
    *   Inicio · Contactos · Emails · Calendario · Oportunidades · Ventas
-   *   · Registros · Promociones (las que colabora) · Promotores (futura).
-   * No ve: Colaboradores (es vista del promotor) · Microsites · Actividad
-   * (admin del promotor) · Sugerencias. */
+   *   · Registros · Promociones (las que colabora) · Colaboradores
+   *   (mirror · lista de promotores con los que colabora).
+   * No ve: Microsites · Actividad (admin del promotor) · Sugerencias. */
   const agencyHiddenRoutes = new Set([
-    "/colaboradores",
     "/microsites",
     "/actividad",
     "/sugerencias",
@@ -144,6 +154,12 @@ export function AppSidebar() {
      * Registros, Promotores). Si más adelante hace falta, se mete una
      * versión filtrada por agencyId. */
     "/contratos",
+    /* Inmobiliarias (`/colaboradores`) · visible también para
+     *  agencias · `ColaboradoresAgencyView` muestra al promotor
+     *  con el que colabora + otras inmobiliarias en la red. */
+    /* Test variant queda oculta del lado agencia (es PromotorOnly
+     *  a nivel de ruta · sin sentido en el sidebar). */
+    "/colaboradores-test",
   ]);
   const permissionHiddenRoutes = new Set<string>();
   if (!canSeeActivity) permissionHiddenRoutes.add("/actividad");
@@ -321,7 +337,7 @@ export function AppSidebar() {
                   )}
                 >
                   <Icon className="h-[18px] w-[18px] shrink-0" />
-                  {!collapsed && <span>{item.title}</span>}
+                  {!collapsed && <span className="truncate min-w-0">{item.title}</span>}
                   {!collapsed && item.badge !== undefined && (
                     <span
                       className={cn(

@@ -110,8 +110,15 @@ export default function AgenciaDetalle() {
     navigate("/colaboradores");
   };
 
+  /* Las acciones del footer (Aprobar, Pausar, Eliminar, Compartir)
+   *  son del lado developer mirando una agencia colaboradora. Si
+   *  quien mira es una agency (otra inmobiliaria), solo ve la ficha
+   *  pública sin acciones · NUNCA puede aprobar/eliminar a otra
+   *  agencia · son acciones del workspace dueño. */
+  const showVisitorFooter = currentUser.accountType !== "agency";
+
   /* ─── Footer sticky con acciones ─── */
-  const visitorFooter = (
+  const visitorFooter = !showVisitorFooter ? null : (
     <footer className="sticky bottom-0 border-t border-border bg-card/95 backdrop-blur-sm z-20">
       <div className="max-w-reading mx-auto px-4 sm:px-6 lg:px-10 py-3 flex items-center gap-2 flex-wrap">
         <p className="text-xs text-muted-foreground mr-auto">

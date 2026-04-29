@@ -42,6 +42,8 @@ import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { ResumenTab } from "@/components/collaborators/panel/ResumenTab";
 import { DatosTab } from "@/components/collaborators/panel/DatosTab";
 import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
+import { useEmpresaCategories } from "@/lib/empresaCategories";
+import { EmpresaCategoryBadges } from "@/components/empresa/EmpresaCategoryBadges";
 import { isAgencyVerified } from "@/lib/licenses";
 import { getAgencyLicenses } from "@/lib/agencyLicenses";
 import { VisitasTab } from "@/components/collaborators/panel/VisitasTab";
@@ -111,6 +113,10 @@ export default function ColaboracionPanel() {
 
   const a = agency;
   const agreement = getAgreementStatus(a);
+  /* Categorías de la agencia mostrada · siempre incluye Inmobiliaria.
+   *  Si la agencia activó el pack y publicó promos con ownerRole, el
+   *  helper añade Promotor / Comercializador. */
+  const panelCategories = useEmpresaCategories({ accountType: "agency" });
 
   const tabDefs: Array<{ id: PanelTab; label: string; icon: typeof LayoutGrid }> = [
     { id: "resumen",       label: "Resumen",       icon: LayoutGrid },
@@ -158,7 +164,16 @@ export default function ColaboracionPanel() {
                 </h1>
                 {isAgencyVerified(getAgencyLicenses(a)) && <VerifiedBadge size="sm" />}
               </div>
-              <p className="text-[12.5px] text-muted-foreground mt-0.5">
+              {/* Categorías canónicas (Inmobiliaria + posibles Promotor /
+                  Comercializador si la agencia activó el pack y publicó
+                  promos con ese rol). */}
+              <div className="mt-1">
+                <EmpresaCategoryBadges
+                  categories={panelCategories}
+                  size="xs"
+                />
+              </div>
+              <p className="text-[12.5px] text-muted-foreground mt-1">
                 {a.location}
                 {a.contactoPrincipal?.nombre
                   ? ` · ${a.contactoPrincipal.nombre} (${a.contactoPrincipal.rol ?? "contacto"})`

@@ -62,6 +62,7 @@ export type DevPromotion = Promotion & {
 export const developerOnlyPromotions: DevPromotion[] = [
   {
     id: "dev-1",
+    ownerOrganizationId: "developer-default",
     code: "PRM-0050",
     name: "Villa Serena",
     location: "Marbella, Costa del Sol",
@@ -105,6 +106,7 @@ export const developerOnlyPromotions: DevPromotion[] = [
   },
   {
     id: "dev-2",
+    ownerOrganizationId: "developer-default",
     code: "PRM-0051",
     name: "Villas del Pinar",
     location: "Jávea, Alicante",
@@ -146,6 +148,7 @@ export const developerOnlyPromotions: DevPromotion[] = [
   },
   {
     id: "dev-3",
+    ownerOrganizationId: "developer-default",
     code: "PRM-0052",
     name: "Residencial Aurora",
     location: "Benalmádena, Málaga",
@@ -169,6 +172,7 @@ export const developerOnlyPromotions: DevPromotion[] = [
   },
   {
     id: "dev-4",
+    ownerOrganizationId: "developer-default",
     code: "PRM-0053",
     name: "Terrazas del Golf",
     location: "Mijas, Costa del Sol",
@@ -194,6 +198,7 @@ export const developerOnlyPromotions: DevPromotion[] = [
   },
   {
     id: "dev-5",
+    ownerOrganizationId: "developer-default",
     code: "PRM-0054",
     name: "Mar Azul Residences",
     location: "Torrevieja, Alicante",

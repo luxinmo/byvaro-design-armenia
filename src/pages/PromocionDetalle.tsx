@@ -42,6 +42,7 @@ import { unitsByPromotion } from "@/data/units";
 import { ClientRegistrationDialog } from "@/components/promotions/detail/ClientRegistrationDialog";
 import { RegistrosEmbedded } from "@/components/registros/RegistrosEmbedded";
 import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
+import { AgencyNoCollabInPromoBanner } from "@/components/promotions/AgencyNoCollabInPromoBanner";
 import { MarketingRulesDialog } from "@/components/promotions/MarketingRulesDialog";
 import { MarketingRulesCard } from "@/components/promotions/MarketingRulesCard";
 import { MarketingRulesSidebarCard } from "@/components/promotions/MarketingRulesSidebarCard";
@@ -684,6 +685,20 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
            agencia y tiene una invitación sin aceptar para esta promo. */}
       {isAgencyUser && currentUser.agencyId && (
         <AgencyInvitationBanner agencyId={currentUser.agencyId} promotionId={p.id} />
+      )}
+
+      {/* ── Banner "no colaboras en esta promo" · solo cuando la agencia
+           ya colabora con el promotor pero esta promo concreta NO está en
+           su cartera (`!inCartera`). Muestra "Solicitar colaboración" o
+           "Solicitud enviada" según el estado. Hidden cuando no hay
+           agencyId, hay invitación pendiente (gestiona el banner de
+           arriba), o la promo ya está en cartera. */}
+      {isAgencyUser && currentUser.agencyId && !inCartera && (
+        <AgencyNoCollabInPromoBanner
+          agencyId={currentUser.agencyId}
+          promotionId={p.id}
+          promotionName={p.name}
+        />
       )}
 
       {/* ── Collaborator preview banner — solo cuando es el PROMOTOR quien

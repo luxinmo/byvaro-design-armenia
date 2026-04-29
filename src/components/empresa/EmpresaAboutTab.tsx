@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Globe, Phone, Mail, Clock, Linkedin, Instagram, Facebook,
   Youtube, Music2, ShieldCheck, Upload, Trash2, ChevronDown, CheckCircle2,
-  Search, Plus, FileText, Image as ImageIcon, X,
+  Search, Plus, FileText, Image as ImageIcon, X, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspaceMembers } from "@/lib/useWorkspaceMembers";
@@ -41,6 +41,8 @@ export function EmpresaAboutTab({
   update,
   isVisitor = false,
   isAdmin = true,
+  tenantId,
+  canViewSensitiveDetails = true,
 }: {
   viewMode: "edit" | "preview";
   empresa: Empresa;
@@ -54,6 +56,14 @@ export function EmpresaAboutTab({
    *  server-side: el endpoint `/api/empresa` strippea el CIF si el
    *  caller no tiene permiso. */
   isAdmin?: boolean;
+  /** Tenant scope · necesario para que `OfficesSection` pinte las
+   *  oficinas del tenant correcto y no las del workspace logueado. */
+  tenantId?: string;
+  /** Si false, la sección "Detalles" (razón social, CIF, dirección
+   *  fiscal, teléfono, email, horario) se sustituye por un cartel
+   *  "Sección restringida". Solo admin de un workspace colaborador
+   *  o el owner ven los datos completos. */
+  canViewSensitiveDetails?: boolean;
 }) {
   /** El CIF se trata como dato fiscal sensible · solo el admin del
    *  workspace lo ve. Member lo NO ve aunque sea de su propia empresa. */
@@ -82,7 +92,13 @@ export function EmpresaAboutTab({
           permanece en el modelo Empresa por retro-compat pero ya no
           se renderiza · simplifica la ficha pública. */}
 
-      {/* ═════ Detalles ═════ */}
+      {/* ═════ Detalles ═════
+          Datos sensibles · razón social, CIF, dirección fiscal,
+          contacto, horario. Visibles SOLO para owner del workspace
+          o admin de un colaborador activo. Members + visitors sin
+          colaboración ven el cartel restringido (definido al final
+          de este return). */}
+      {canViewSensitiveDetails ? (
       <EditableSection
         title="Detalles"
         viewMode={viewMode}
@@ -189,6 +205,9 @@ export function EmpresaAboutTab({
           </div>
         </div>
       </EditableSection>
+      ) : (
+        <RestrictedDetailsCard />
+      )}
 
       {/* ═════ Webs ═════ */}
       {/* ═════ Reseñas de Google · admin only en edit mode ═════
@@ -287,7 +306,7 @@ export function EmpresaAboutTab({
           última pieza institucional (junto al resto de Detalles).
           Sigue usando `byvaro-oficinas` como única fuente de verdad
           (ver REGLA DE ORO en CLAUDE.md). */}
-      <OfficesSection viewMode={viewMode} />
+      <OfficesSection viewMode={viewMode} tenantId={tenantId} />
 
       {/* La sección de Verificación que vivía aquí abajo se ha
           movido al TOP del tab y desaparece para siempre una vez
@@ -2050,5 +2069,32 @@ function DocUploader({
         </div>
       )}
     </div>
+  );
+}
+
+/** Cartel "Sección restringida" · sustituye al bloque "Detalles"
+ *  cuando el visitor no es admin de un colaborador activo (o no
+ *  colabora en absoluto). Mismo padding/borde que un
+ *  `<EditableSection>` para no romper el ritmo visual. */
+function RestrictedDetailsCard() {
+  return (
+    <section className="rounded-2xl border border-border bg-card shadow-soft p-5 sm:p-6">
+      <div className="flex items-start gap-4">
+        <div className="h-10 w-10 rounded-xl bg-muted text-muted-foreground grid place-items-center shrink-0">
+          <Lock className="h-4 w-4" strokeWidth={1.75} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[14px] font-semibold text-foreground">Detalles</h3>
+          <p className="text-[12.5px] text-muted-foreground mt-1 leading-relaxed">
+            Sección restringida · datos fiscales y de contacto solo
+            visibles para colaboradores activos con rol admin.
+          </p>
+          <p className="text-[11.5px] text-muted-foreground/70 mt-2 leading-relaxed">
+            Si necesitas estos datos para una gestión legal o de
+            facturación, pídeselos al admin de tu workspace.
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }

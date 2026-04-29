@@ -46,6 +46,28 @@ export type Promotion = {
    *  por el promotor"…) DEBE leer este campo · usar el helper
    *  `getOwnerRoleLabel()` de `src/lib/promotionRole.ts`. */
   ownerRole?: RoleOption;
+
+  /** ID del workspace (organization) dueño de la promoción.
+   *
+   *  **Backend**: mapea a `promotions.owner_organization_id`
+   *  (FK NOT NULL a `organizations.id`). TODA query de promociones
+   *  DEBE filtrar por este campo · es la columna de aislamiento
+   *  multi-tenant. Sin este filtro hay fuga de datos cross-tenant.
+   *
+   *  **Mock single-tenant**:
+   *    · `"developer-default"` → promociones de Luxinmo (workspace
+   *      logueado) en `promotions.ts` + `developerOnlyPromotions.ts`.
+   *    · `"prom-1"`, `"prom-2"`… → portfolios mock de promotores
+   *      externos en `EXTERNAL_PROMOTOR_PORTFOLIO`.
+   *
+   *  Helper canónico para resolver portfolio per-tenant:
+   *  `getPromotionsByOwner(orgId)` en `src/lib/promotionsByOwner.ts`.
+   *  NUNCA leer `promotions` o `developerOnlyPromotions` directamente
+   *  desde un componente que renderiza data per-tenant · usa el
+   *  helper para que el filtro sea explícito y trazable.
+   *
+   *  Si falta (seeds legacy), tratar como `"developer-default"`. */
+  ownerOrganizationId?: string;
 };
 
 export function getBuildingTypeLabel(type?: BuildingType): string | null {
@@ -61,6 +83,7 @@ export function getBuildingTypeLabel(type?: BuildingType): string | null {
 export const promotions: Promotion[] = [
   {
     id: "1",
+    ownerOrganizationId: "developer-default",
     code: "PRM-0042",
     name: "Altea Hills Residences",
     location: "Altea, Alicante",
@@ -87,6 +110,7 @@ export const promotions: Promotion[] = [
   },
   {
     id: "2",
+    ownerOrganizationId: "developer-default",
     code: "PRM-0041",
     name: "Marina Bay Towers",
     location: "Málaga, Costa del Sol",
@@ -113,6 +137,7 @@ export const promotions: Promotion[] = [
   },
   {
     id: "3",
+    ownerOrganizationId: "developer-default",
     code: "PRM-0040",
     name: "Serena Golf Villas",
     location: "Estepona, Costa del Sol",
@@ -139,6 +164,7 @@ export const promotions: Promotion[] = [
   },
   {
     id: "4",
+    ownerOrganizationId: "developer-default",
     code: "PRM-0039",
     name: "Skyline Residences",
     location: "Valencia, Ciudad de las Artes",
@@ -164,6 +190,7 @@ export const promotions: Promotion[] = [
   },
   {
     id: "5",
+    ownerOrganizationId: "developer-default",
     code: "PRM-0038",
     name: "Puerta del Mar",
     location: "Alicante, Playa de San Juan",
@@ -190,6 +217,7 @@ export const promotions: Promotion[] = [
   },
   {
     id: "6",
+    ownerOrganizationId: "developer-default",
     code: "PRM-0037",
     name: "Bosque Real",
     location: "Madrid, Las Rozas",
@@ -215,6 +243,7 @@ export const promotions: Promotion[] = [
   },
   {
     id: "7",
+    ownerOrganizationId: "developer-default",
     code: "PRM-0036",
     name: "Incomplete Project",
     location: "",
@@ -235,6 +264,7 @@ export const promotions: Promotion[] = [
   },
   {
     id: "8",
+    ownerOrganizationId: "developer-default",
     code: "PRM-0035",
     name: "Terramar Beach",
     location: "Sitges, Barcelona Coast",

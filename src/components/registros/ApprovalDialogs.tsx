@@ -119,7 +119,7 @@ export function MatchConfirmDialog({
           <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/5 p-3">
             <Info className="h-4 w-4 text-warning shrink-0 mt-0.5" strokeWidth={1.75} />
             <p className="text-[12px] text-foreground leading-relaxed">
-              Aprobar este registro puede crear un conflicto de comisión si
+              Aprobar este registro puede generar una comisión duplicada si
               el cliente ya está activo con otra agencia. Confirma que es
               una persona distinta antes de continuar.
             </p>

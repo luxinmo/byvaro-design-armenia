@@ -468,7 +468,13 @@ export default function Promociones() {
         .filter((p) => {
           if (!collaboratingIds.has(p.id)) return false;
           if (p.status !== "active") return false;
-          if (!canPublishPromotion(p as unknown as Promotion)) return false;
+          /* `canPublishPromotion` valida si EL DUEÑO de la promo
+             (promotor / comercializador) puede publicarla · no aplica
+             al lado agencia · las que llegan a `promotionsCollaborating`
+             ya pasaron ese gate del owner. Si re-validáramos aquí,
+             leeríamos `byvaro-empresa` del localStorage de la agencia
+             (que NO es el workspace del owner) y filtraríamos en falso.
+             Bug encontrado · ver REGLA DE ORO en CLAUDE.md. */
           if ((p as DevPromotion).canShareWithAgencies === false) return false;
           return true;
         })
@@ -623,10 +629,12 @@ export default function Promociones() {
     const q = search.toLowerCase().trim();
     return allPromotions.filter(p => {
       // Estado (tabs) · "published" es derivado (status=active + requisitos
-      // de publicación OK + canShareWithAgencies !== false).
+      // de publicación OK + canShareWithAgencies !== false). Solo aplica
+      // al lado promotor · agencia no debe re-validar `canPublishPromotion`
+      // (lee `byvaro-empresa` del workspace propio, que NO es el del owner).
       if (statusFilter === "published") {
         if (p.status !== "active") return false;
-        if (!canPublishPromotion(p as unknown as Promotion)) return false;
+        if (!isAgencyUser && !canPublishPromotion(p as unknown as Promotion)) return false;
         if ((p as DevPromotion).canShareWithAgencies === false) return false;
       } else if (statusFilter !== "all" && p.status !== statusFilter) {
         return false;

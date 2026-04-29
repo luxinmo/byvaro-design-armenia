@@ -11,12 +11,17 @@
 
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+// `ColaboradoresAgencyView` deprecated · `/colaboradores` es ahora
+// listado unificado para todos los roles · ver `Colaboradores()` abajo.
+import { AgencyGridCard } from "@/components/agencies/AgencyGridCard";
 import {
   Search, X, Plus, Users, Star, ArrowUpRight, Sparkles, Mail, Phone,
   MoreHorizontal, Pause, Play, Trash2, Building2, FileSignature,
   AlertTriangle, TrendingUp, Activity, Calendar,
-  Tag, SlidersHorizontal, Check,
+  Tag, SlidersHorizontal, Check, LayoutGrid, Map as MapIcon,
 } from "lucide-react";
+import { ViewToggle } from "@/components/ui/ViewToggle";
+import { ColaboradoresMap } from "@/components/agencies/ColaboradoresMap";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner"; // Toaster global en App.tsx
 import { agencies as baseAgencies, getContractStatus, getAgencyShareStats, type Agency } from "@/data/agencies";
@@ -31,6 +36,14 @@ import {
   type SolicitudColaboracionStatus,
 } from "@/lib/solicitudesColaboracion";
 import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
+import { SendEmailDialog } from "@/components/email/SendEmailDialog";
+import { OrgCollabRequestsDrawer } from "@/components/collaborators/OrgCollabRequestsDrawer";
+import { useReceivedOrgCollabRequests } from "@/lib/orgCollabRequests";
+import {
+  useInboundPendingByOrgId,
+  useOutboundPendingByOrgId,
+  usePendingCollabRequestsForWorkspace,
+} from "@/lib/collabRequests";
 import { useHasPermission } from "@/lib/permissions";
 import { useCurrentUser } from "@/lib/currentUser";
 import { Lock, Undo2 } from "lucide-react";
@@ -39,7 +52,7 @@ import { getAgencyLicenses } from "@/lib/agencyLicenses";
 import { agencyHref } from "@/lib/agencyNavigation";
 import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
 import { InvitarAgenciaModal } from "@/components/empresa/InvitarAgenciaModal";
-import { useInvitaciones, invitacionToSyntheticAgency } from "@/lib/invitaciones";
+import { useInvitaciones } from "@/lib/invitaciones";
 import { useFavoriteAgencies } from "@/lib/favoriteAgencies";
 import { MinimalSort } from "@/components/ui/MinimalSort";
 import { cn } from "@/lib/utils";
@@ -120,6 +133,24 @@ function Highlight({ text, query }: { text: string; query: string }) {
 /* ═══════════════════════════════════════════════════════════════════ */
 
 export default function Colaboradores() {
+  /* Listado UNIFICADO de inmobiliarias para todos los roles
+   *  (developer + agency, admin + member) · misma vista canónica.
+   *  Para agency: ve la red completa de inmobiliarias en Byvaro.
+   *  Los PROMOTORES con los que la agencia colabora viven en
+   *  `/promotores` (otra entrada del sidebar). */
+  return <ColaboradoresDeveloperView />;
+}
+
+/** Variante "test" del listado · misma maquinaria pero usa la card
+ *  rica `FeatureCardV3` (la versión anterior) en lugar de la tarjeta
+ *  compacta `AgencyGridCard`. Sirve para A/B comparar mientras se
+ *  decide qué card es la canónica. Cuando se elija una, borrar la
+ *  otra y este export. */
+export function ColaboradoresTestPage() {
+  return <ColaboradoresDeveloperView useTestCard />;
+}
+
+function ColaboradoresDeveloperView({ useTestCard = false }: { useTestCard?: boolean }) {
   const navigate = useNavigate();
   const user = useCurrentUser();
   const [searchParams] = useSearchParams();
@@ -159,12 +190,44 @@ export default function Colaboradores() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   /* ─── Solicitudes pendientes (drawer) ─── */
   const [requestsOpen, setRequestsOpen] = useState(false);
+  const [orgRequestsOpen, setOrgRequestsOpen] = useState(false);
+  const orgReceived = useReceivedOrgCollabRequests(user, "pendiente");
+  /* Maps orgId → timestamp · derivados del adapter unificado
+   * `collabRequests.ts` que cruza los TRES stores (invitaciones,
+   * solicitudes-promo, solicitudes-org). Usados para pintar los
+   * markers de la card:
+   *   · `inboundPendingByOrgId` → "Colaboración solicitada DD/MM"
+   *     (la otra org me pidió, mi tejado).
+   *   · `outboundPendingByOrgId` → "Solicitado DD/MM" (yo le pedí,
+   *     esperando su respuesta).
+   *
+   * REGLA · usamos `createdAt` REAL · NUNCA `lastActivityAt` como
+   * proxy · ese campo es metadata de la agencia y no representa
+   * cuándo se envió la solicitud. */
+  const inboundPendingByOrgId = useInboundPendingByOrgId(user);
+  const outboundPendingByOrgId = useOutboundPendingByOrgId(user);
+  /* Pendientes que afectan al workspace actual · usado por el filtro
+   * de la pestaña "Pendientes" para no mostrar globales ajenos. */
+  const pendingForMyWorkspace = usePendingCollabRequestsForWorkspace(user);
+  const pendingOrgIdsForMe = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of pendingForMyWorkspace) {
+      // El "otro lado" del par desde mi punto de vista
+      const other = r.direction === "inbound" ? r.fromOrgId : r.toOrgId;
+      set.add(other);
+    }
+    return set;
+  }, [pendingForMyWorkspace]);
   const [origenFilter, setOrigenFilter] = useState<string[]>([]);
   const [tipoFilter, setTipoFilter] = useState<string[]>([]);
   const [contratoFilter, setContratoFilter] = useState<string[]>([]);
   const [mercadosFilter, setMercadosFilter] = useState<string[]>([]);
   const [soloFavoritos, setSoloFavoritos] = useState(false);
   const [minRating, setMinRating] = useState<number | null>(null);
+
+  /* Vista del listado · cuadrícula (default) o mapa. Reusa el mismo
+   *  patrón que `/promociones` (ViewToggle + branch en el render). */
+  const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
 
   /* Ordenación (MinimalSort) */
   const [sort, setSort] = useState<string>("volumen-desc");
@@ -179,7 +242,17 @@ export default function Colaboradores() {
     { value: "name-desc", label: "Nombre (Z-A)" },
   ];
 
-  const { isFavorite: isFavoriteGlobal } = useFavoriteAgencies();
+  const { isFavorite: isFavoriteGlobal, toggleFavorite } = useFavoriteAgencies();
+
+  /* Selección múltiple · IDs de las agencias seleccionadas en el
+   *  listado. Acciones bulk (envío de email, etc.) leen de aquí. */
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const toggleSelectId = (id: string) =>
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  const clearSelection = () => setSelectedIds([]);
 
   const activeFilterCount =
     (estadoFilter !== "todas" ? 1 : 0) +
@@ -201,17 +274,36 @@ export default function Colaboradores() {
   };
 
   const { pendientes: invitaciones } = useInvitaciones();
-  const invitacionesAgencies = useMemo<Agency[]>(() => invitaciones.map(invitacionToSyntheticAgency), [invitaciones]);
+
+  /* REGLA BYVARO · invitaciones a agencias que NO están en el sistema
+   *  (sin `agencyId` matcheado · solo email externo) NO aparecen en el
+   *  listado · son emails sueltos sin workspace, no son colaboradores
+   *  todavía. Las invitaciones a agencias que SÍ están en el sistema
+   *  se quedan ocultas del listado pero aportan la fecha `invitedAt`
+   *  para decorar la card de la agencia real con el chip
+   *  "Invitado DD/MM/YYYY" en vez de "Sin contrato".
+   *  Doc: docs/backend-integration.md §4.0.x · invitaciones-decoración. */
+  const invitedAtByAgency = useMemo<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    for (const inv of invitaciones) {
+      if (inv.estado !== "pendiente") continue;
+      if (!inv.agencyId) continue; // skip externos · regla Byvaro
+      if (!map[inv.agencyId] || inv.createdAt > map[inv.agencyId]) {
+        map[inv.agencyId] = inv.createdAt;
+      }
+    }
+    return map;
+  }, [invitaciones]);
 
   const agencies = useMemo<Agency[]>(() => {
-    return [...baseAgencies, ...invitacionesAgencies]
+    return baseAgencies
       .map((a) => {
         const ov = overrides[a.id];
         if (ov === "deleted") return null;
         return ov ? { ...a, ...ov } : a;
       })
       .filter(Boolean) as Agency[];
-  }, [overrides, invitacionesAgencies]);
+  }, [overrides]);
 
   const pendientes = useMemo(
     () => agencies.filter((a) => a.solicitudPendiente || a.isNewRequest),
@@ -319,12 +411,29 @@ export default function Colaboradores() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return agencies.filter((a) => {
-      /* Pendientes: el pill las muestra; el resto de vistas las excluye
-       * para que vivan en su drawer y no se mezclen con la red activa. */
+      /* Excluir la propia agencia · una inmobiliaria no aparece a
+       *  sí misma en el listado de inmobiliarias (regla Byvaro). */
+      if (user.accountType === "agency" && a.id === user.agencyId) return false;
+      /* "Todos" = todas las que están dadas de alta en el sistema
+       *  (regla Byvaro). Las pendientes de alta se muestran con
+       *  marker "Colaboración solicitada · DD/MM" en la card.
+       *  La tab "Pendientes" las aísla para revisión rápida.
+       *
+       *  REGLA · "Pendientes" muestra SOLO solicitudes que afectan al
+       *  workspace actual · NO pendientes globales del marketplace
+       *  (ej. una agencia externa NO debe ver pendientes que Luxinmo
+       *  recibió de otras agencias).
+       *
+       *  Combinamos:
+       *    · `pendingOrgIdsForMe` · pares donde MI org participa
+       *      (collabRequests adapter unificado).
+       *    · `isPendiente(a)` · flags legacy del seed para developer
+       *      (preservados por compat hasta migración completa). */
       if (quickFilter === "pendientes") {
-        if (!isPendiente(a)) return false;
+        const isInMyPendings = pendingOrgIdsForMe.has(a.id);
+        const isLegacyDeveloperPending = user.accountType === "developer" && isPendiente(a);
+        if (!isInMyPendings && !isLegacyDeveloperPending) return false;
       } else {
-        if (isPendiente(a)) return false;
         if (quickFilter === "colaboran" && getEstado(a) !== "activa") return false;
         if (quickFilter === "no-colaboran" && getEstado(a) !== "pausada") return false;
       }
@@ -347,7 +456,7 @@ export default function Colaboradores() {
     });
   }, [
     agencies, search, estadoFilter, quickFilter, origenFilter, tipoFilter, contratoFilter,
-    mercadosFilter, soloFavoritos, minRating, isFavoriteGlobal,
+    mercadosFilter, soloFavoritos, minRating, isFavoriteGlobal, user, pendingOrgIdsForMe,
   ]);
 
   /* Ordenación aplicada a la lista filtrada. */
@@ -417,7 +526,7 @@ export default function Colaboradores() {
                 Red comercial
               </p>
               <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight text-foreground mt-1 leading-tight">
-                Tus colaboradores
+                Inmobiliarias
               </h1>
               <p className="text-sm text-muted-foreground mt-1.5 max-w-[560px] leading-relaxed">
                 Señales comerciales, mercados cubiertos y actividad reciente de
@@ -426,11 +535,11 @@ export default function Colaboradores() {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <button
-                onClick={() => navigate("/colaboradores/estadisticas")}
-                className="group inline-flex items-center gap-1.5 h-10 px-4 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                onClick={() => setEmailOpen(true)}
+                className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:bg-muted transition-colors"
               >
-                Estadísticas
-                <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" strokeWidth={1.75} />
+                <Mail className="h-3.5 w-3.5" strokeWidth={1.75} />
+                Enviar
               </button>
               <button
                 onClick={() => setInvitarOpen(true)}
@@ -467,6 +576,11 @@ export default function Colaboradores() {
              *  En viewport <400px no cabe en una línea: damos scroll horizontal
              *  al propio segmented sin que rompa el layout de la toolbar. */}
             <div className="inline-flex max-w-full items-center bg-muted rounded-full p-1 gap-0.5 shrink-0 overflow-x-auto no-scrollbar">
+              {/* Mismo segmented para developer y agency · evita la
+                  fragmentación de UX. Para agency, "Pendientes"
+                  agrupa lo que del lado developer son requests del
+                  marketplace · semántica equivalente: empresas
+                  con relación abierta-pero-no-cerrada. */}
               {([
                 { key: "todos", label: "Todos" },
                 { key: "colaboran", label: "Colaboradores" },
@@ -515,20 +629,55 @@ export default function Colaboradores() {
       {/* Solicitudes pendientes · banner minimal · cuenta tanto las
           agency-level (alta de marketplace) como las por promoción
           que envían las agencias colaboradoras desde su panel. */}
-      {totalPending > 0 && (
+      {/* Solicitudes recibidas · org-level (agencia ↔ agencia /
+          agencia ↔ promotor / promotor ↔ promotor). Cada workspace
+          ve solo las suyas (filtradas por to_organization_id).
+          Click → abre drawer con accept/reject. */}
+      {orgReceived.length > 0 && (
+        <section className="px-4 sm:px-6 lg:px-8 mt-4">
+          <div className="max-w-content mx-auto">
+            <button
+              onClick={() => setOrgRequestsOpen(true)}
+              className="w-full group flex items-center gap-3 rounded-full border border-warning/40 bg-warning/10 px-4 py-2.5 text-left hover:bg-warning/15 transition-colors animate-attention-pulse-loop hover:[animation-play-state:paused]"
+            >
+              <span className="relative inline-flex shrink-0">
+                <span className="absolute inset-0 h-2 w-2 rounded-full bg-warning animate-ping-slow" />
+                <span className="relative h-2 w-2 rounded-full bg-warning" />
+              </span>
+              <span className="text-xs text-foreground min-w-0 flex-1 truncate">
+                <span className="font-semibold">{orgReceived.length}</span>
+                {orgReceived.length === 1 ? " solicitud recibida" : " solicitudes recibidas"}
+                <span className="text-muted-foreground"> · esperando tu respuesta</span>
+              </span>
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-warning group-hover:text-warning/80 transition-colors shrink-0">
+                Ver solicitudes
+                <ArrowUpRight className="h-3 w-3" strokeWidth={2} />
+              </span>
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* Solicitudes per-promotion (developer-side · marketplace
+          + por promoción). Solo visible al developer · una agencia
+          no ve solicitudes de otras agencias en este listado. */}
+      {user.accountType === "developer" && totalPending > 0 && (
         <section className="px-4 sm:px-6 lg:px-8 mt-4">
           <div className="max-w-content mx-auto">
             <button
               onClick={() => setRequestsOpen(true)}
-              className="w-full group flex items-center gap-3 rounded-full border border-border bg-card px-4 py-2.5 text-left hover:bg-muted transition-colors"
+              className="w-full group flex items-center gap-3 rounded-full border border-warning/40 bg-warning/10 px-4 py-2.5 text-left hover:bg-warning/15 transition-colors animate-attention-pulse-loop hover:[animation-play-state:paused]"
             >
-              <span className="h-2 w-2 rounded-full bg-warning shrink-0" />
+              <span className="relative inline-flex shrink-0">
+                <span className="absolute inset-0 h-2 w-2 rounded-full bg-warning animate-ping-slow" />
+                <span className="relative h-2 w-2 rounded-full bg-warning" />
+              </span>
               <span className="text-xs text-foreground min-w-0 flex-1 truncate">
                 <span className="font-semibold">{totalPending}</span>
-                {totalPending === 1 ? " solicitud pendiente" : " solicitudes pendientes"}
+                {totalPending === 1 ? " solicitud por promoción pendiente" : " solicitudes por promoción pendientes"}
                 <span className="text-muted-foreground"> · esperando tu respuesta</span>
               </span>
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-primary group-hover:text-primary/80 transition-colors shrink-0">
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-warning group-hover:text-warning/80 transition-colors shrink-0">
                 Ver solicitudes
                 <ArrowUpRight className="h-3 w-3" strokeWidth={2} />
               </span>
@@ -547,10 +696,25 @@ export default function Colaboradores() {
                 Tu red
               </p>
               <h2 className="text-base font-semibold text-foreground leading-tight mt-0.5">
-                {filtered.length} {filtered.length === 1 ? "agencia" : "agencias"}
+                {filtered.length} {filtered.length === 1 ? "empresa" : "empresas"}
               </h2>
             </div>
-            <MinimalSort value={sort} options={sortOptions} onChange={setSort} label="Ordenar por" />
+            <div className="flex items-center gap-2">
+              <MinimalSort value={sort} options={sortOptions} onChange={setSort} label="Ordenar por" />
+              {/* Toggle Cuadrícula / Mapa · paridad con `/promociones`.
+                  En móvil se oculta · siempre cuadrícula (la vista mapa
+                  exige el sidebar lateral, no encaja bajo lg). */}
+              <ViewToggle
+                value={viewMode}
+                onChange={setViewMode}
+                iconOnly
+                hiddenOnMobile
+                options={[
+                  { value: "grid", icon: LayoutGrid, label: "Cuadrícula" },
+                  { value: "map",  icon: MapIcon,    label: "Mapa" },
+                ]}
+              />
+            </div>
           </header>
 
           {filtered.length === 0 ? (
@@ -561,21 +725,115 @@ export default function Colaboradores() {
                 Prueba con otro filtro o invita a una agencia nueva.
               </p>
             </div>
+          ) : viewMode === "map" ? (
+            <ColaboradoresMap agencies={sortedFiltered} />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {sortedFiltered.map((a) => (
-                <FeatureCardV3
-                  key={a.id}
-                  agency={a}
-                  highlight={search}
-                  onPause={() => handlePausar(a.id)}
-                  onDelete={() => handleRechazar(a.id)}
-                />
+                useTestCard ? (
+                  <FeatureCardV3
+                    key={a.id}
+                    agency={a}
+                    highlight={search}
+                    onPause={() => handlePausar(a.id)}
+                    onDelete={() => handleRechazar(a.id)}
+                  />
+                ) : (
+                  <AgencyGridCard
+                    key={a.id}
+                    agency={a}
+                    onClick={() => navigate(agencyHref(a))}
+                    selected={selectedIds.includes(a.id)}
+                    onToggleSelect={() => toggleSelectId(a.id)}
+                    isFavorite={isFavoriteGlobal(a.id)}
+                    onToggleFavorite={() => toggleFavorite(a.id)}
+                    topBadge={(a.ventasCerradas ?? 0) >= 8 || (a.salesVolume ?? 0) >= 3_000_000}
+                    invitedAt={invitedAtByAgency[a.id]}
+                    /* Regla Byvaro · solo se interactúa con
+                     *  empresas con las que ya colaboras (invitación
+                     *  enviada y aceptada). */
+                    canInteract={a.status === "active" && a.estadoColaboracion === "activa"}
+                    /* Si ya envié solicitud y aún espera respuesta
+                     *  → marker "Solicitado DD/MM" en la card. Lee
+                     *  el `createdAt` REAL del store unificado
+                     *  (`collabRequests.ts`), no `lastActivityAt`. */
+                    requestedAt={outboundPendingByOrgId[a.id]}
+                    /* Solicitud entrante (la otra org me pidió
+                     *  colaborar) · misma fuente real. Si no hay
+                     *  solicitud unificada y la agencia es legacy-
+                     *  pending del seed (developer-side marketplace),
+                     *  caemos a `lastActivityAt` solo como último
+                     *  recurso · TODO(backend): el seed migra a
+                     *  `collab_requests` table y este fallback
+                     *  desaparece. */
+                    inboundRequestAt={
+                      inboundPendingByOrgId[a.id]
+                        ?? (user.accountType === "developer" && isPendiente(a)
+                          ? a.lastActivityAt
+                          : undefined)
+                    }
+                  />
+                )
               ))}
             </div>
           )}
         </div>
       </section>
+
+      {/* Barra flotante · selección múltiple. Aparece sticky abajo
+          cuando hay al menos una agencia marcada. Mismo patrón que
+          AgenciasTabStats (ver CLAUDE.md "Selección múltiple"). */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 rounded-full bg-foreground text-background shadow-soft-lg border border-foreground/20 px-2 py-1.5 flex items-center gap-1.5 max-w-[calc(100vw-32px)]">
+          <span className="h-7 px-3 inline-flex items-center rounded-full bg-background/15 text-[11.5px] font-semibold tabular-nums">
+            {selectedIds.length} seleccionada{selectedIds.length !== 1 ? "s" : ""}
+          </span>
+          {sortedFiltered.length > selectedIds.length && (
+            <button
+              type="button"
+              onClick={() => setSelectedIds(sortedFiltered.map((a) => a.id))}
+              className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-background/85 hover:text-background hover:bg-background/10 text-[11.5px] font-medium transition-colors"
+              title={`Seleccionar las ${sortedFiltered.length} agencias visibles`}
+            >
+              <Check className="h-3.5 w-3.5" strokeWidth={2.25} />
+              Seleccionar todo ({sortedFiltered.length})
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-background/85 hover:text-background hover:bg-background/10 text-[11.5px] font-medium transition-colors"
+          >
+            <X className="h-3.5 w-3.5" strokeWidth={2} />
+            Limpiar
+          </button>
+          <span className="w-px h-5 bg-background/20 mx-1" aria-hidden />
+          <button
+            type="button"
+            onClick={() => setEmailOpen(true)}
+            className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full bg-background text-foreground text-[11.5px] font-semibold hover:bg-background/90 transition-colors"
+          >
+            <Mail className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Enviar
+          </button>
+        </div>
+      )}
+
+      <SendEmailDialog
+        open={emailOpen}
+        onOpenChange={(v) => {
+          setEmailOpen(v);
+          if (!v) clearSelection();
+        }}
+        defaultAudience="collaborator"
+        mode="free"
+        preselectedAgencyIds={selectedIds}
+      />
+
+      <OrgCollabRequestsDrawer
+        open={orgRequestsOpen}
+        onClose={() => setOrgRequestsOpen(false)}
+      />
 
       {invitarOpen && <InvitarAgenciaModal onClose={() => setInvitarOpen(false)} />}
 

@@ -1267,7 +1267,7 @@ export function ClientRegistrationDialog({
                         )}
                       >
                         {isHigh
-                          ? "Revisa si es el mismo cliente antes de continuar — la IA marcará conflicto."
+                          ? "Revisa si es el mismo cliente antes de continuar — la IA marcará el duplicado."
                           : `Puedes continuar — ${ownerArticle} validará por su parte.`}
                       </p>
                     </div>

@@ -42,6 +42,7 @@ import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/BrandLogo"; // isotipo + wordmark oficial (SVG inline)
 import { findMockUser, mockUsers, DEMO_PASSWORD, type MockUser } from "@/data/mockUsers";
 import { loginAs } from "@/lib/accountType";
+import { supabase, isSupabaseConfigured } from "@/lib/supabaseClient";
 
 /* ═════════════════════════════════════════════════════════════════════
    Validaciones puras (sin zod para evitar acoplamiento pesado aquí).
@@ -93,35 +94,83 @@ export default function Login() {
     }
 
     setSubmitting(true);
-    // TODO(backend): reemplazar este setTimeout + findMockUser por:
-    //   await fetch("/api/v1/auth/login", { method: "POST", body: JSON.stringify({ email, password, remember }) })
-    await new Promise((r) => setTimeout(r, 500));
 
-    const user = findMockUser(email, password);
-    if (!user) {
+    /* Auth real · Supabase. La cuenta debe existir en `auth.users` Y
+     * tener al menos una membership en `organization_members` para
+     * resolver accountType+orgId. Si Supabase no está configurado
+     * (dev local sin .env.local), caemos al mock por compat · solo
+     * para que la app arranque, no se debe llegar aquí en producción. */
+    if (!isSupabaseConfigured) {
+      const user = findMockUser(email, password);
+      if (!user) {
+        setSubmitting(false);
+        setError("Email o contraseña incorrectos.");
+        return;
+      }
+      loginAs(
+        user.accountType,
+        user.accountType === "agency" ? user.agencyId : user.email,
+        user.accountType === "agency" ? user.email : undefined,
+      );
+      setSubmitting(false);
+      toast.success(`Bienvenido, ${user.name.split(" ")[0]}`, { description: user.label });
+      navigate(nextUrl ?? "/inicio", { replace: true });
+      return;
+    }
+
+    /* ─── Supabase auth ─── */
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+
+    if (authError || !authData.user) {
       setSubmitting(false);
       setError("Email o contraseña incorrectos.");
       return;
     }
 
-    /* Login exitoso — escribimos el accountType en sessionStorage antes de
-     * navegar para que la primera renderización de /inicio vea el contexto
-     * correcto (vista promotor vs vista agencia). */
-    // Para developer pasamos el email (resuelve rol admin/member en el mock
-    // de currentUser). Para agency pasamos el agencyId como antes.
+    /* Resolver accountType desde la primera membership activa. Un user
+     * con varias memberships ve la primera por created_at · futura
+     * mejora: que el user elija desde un selector. */
+    const { data: members, error: memError } = await supabase
+      .from("organization_members")
+      .select("organization_id, role, organizations(kind)")
+      .eq("user_id", authData.user.id)
+      .eq("status", "active")
+      .order("created_at", { ascending: true })
+      .limit(1);
+
+    if (memError || !members || members.length === 0) {
+      setSubmitting(false);
+      setError("Tu cuenta no tiene workspace asignado. Contacta con un admin.");
+      await supabase.auth.signOut();
+      return;
+    }
+
+    const m = members[0] as {
+      organization_id: string;
+      role: "admin" | "member";
+      organizations: { kind: "developer" | "agency" } | { kind: "developer" | "agency" }[];
+    };
+    const orgKind = Array.isArray(m.organizations) ? m.organizations[0]?.kind : m.organizations?.kind;
+    const accountType: "developer" | "agency" = orgKind === "agency" ? "agency" : "developer";
+
+    /* Reusamos `loginAs` para mantener el resto de la app intacta · el
+     * sessionStorage se llena con accountType + agencyId/developerEmail
+     * como siempre. La sesión Supabase queda en localStorage del cliente
+     * (storageKey `byvaro.supabase.auth.v1`) gestionada por el SDK. */
     loginAs(
-      user.accountType,
-      user.accountType === "agency" ? user.agencyId : user.email,
-      /* Para agency · pasamos el email del usuario para que useCurrentUser
-         resuelva admin/member dentro de la agencia (ej. laura@primeproperties
-         vs tom@primeproperties). */
-      user.accountType === "agency" ? user.email : undefined,
+      accountType,
+      accountType === "agency" ? m.organization_id : authData.user.email!,
+      accountType === "agency" ? authData.user.email! : undefined,
     );
     setSubmitting(false);
 
-    toast.success(`Bienvenido, ${user.name.split(" ")[0]}`, {
-      description: user.label,
-    });
+    const displayName = (authData.user.user_metadata?.name as string | undefined)
+      ?? authData.user.email?.split("@")[0]
+      ?? "Usuario";
+    toast.success(`Bienvenido, ${displayName.split(" ")[0]}`);
     navigate(nextUrl ?? "/inicio", { replace: true });
   }
 
