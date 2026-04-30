@@ -52,6 +52,27 @@
 - [ ] ¿`npx tsc --noEmit && npx vite build` pasa?
 - [ ] ¿Test E2E que verifica persistencia cross-device?
 
+### Patrón canónico · merge en JSONB metadata
+
+Sub-documentos del frontend que extienden una entidad sin justificar
+columnas dedicadas (avatar, idiomas, tags, relations, documentos no
+binarios, ajustes workspace-scoped) se mergean en el campo `metadata`
+JSONB de la tabla padre. **Nunca tocar la columna directamente desde
+componentes** · usar siempre los helpers canónicos:
+
+- **`mergeContactMetadata(contactId, patch)`** · `src/lib/contactMetadataSync.ts`
+  · Merge atómico en `contacts.metadata` (RLS por org). Pre-auth skip.
+- **`mergeOrgMetadata(patch)`** · `src/lib/orgMetadataSync.ts` · Merge
+  atómico en `organization_profiles.metadata` via RPC SECURITY DEFINER
+  `merge_org_metadata(p_org_id, p_patch)`. La RPC permite a cualquier
+  miembro mergear `metadata` SIN tocar columnas admin-only (license,
+  founded_year, etc.) que siguen protegidas por la policy
+  `profiles_update_admin`.
+
+Cuándo NO usar este patrón · datos relacionales con queries propias
+(JOIN, WHERE), payloads >1MB, cualquier cosa que requiera índices.
+Esos van a tabla dedicada con FK.
+
 ### Doc canónico completo
 
 **`docs/backend-development-rules.md`** — patrones, plantillas de

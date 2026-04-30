@@ -307,6 +307,70 @@ Y al `SupabaseHydrator` se le añade una llamada a `hydrateEntitiesFromSupabase(
 
 ---
 
+## 5.1 · Patrón JSONB metadata · sub-documentos sin tabla dedicada
+
+Cuando una sub-entidad del frontend extiende a una entidad principal
+sin justificar una tabla propia (avatar de contacto, idiomas, tags,
+relations, configuración del workspace), se mergea en el campo
+`metadata` JSONB de la tabla padre.
+
+**Cuándo SÍ aplica:**
+- Datos pequeños (<10KB) por entidad.
+- Sin queries WHERE sobre el contenido.
+- Sin necesidad de índices.
+- Lectura/escritura siempre via `id` de la entidad padre.
+
+**Cuándo NO aplica → tabla dedicada con FK:**
+- Necesitas filtrar/buscar por contenido.
+- Volumen grande (>100 filas por padre).
+- Necesitas borrado/auditoría granular.
+- Relación m:n con otra entidad.
+
+### Helpers canónicos · NO reinventar
+
+```ts
+// Para extender una contact (RLS por org_id de contacts).
+import { mergeContactMetadata } from "@/lib/contactMetadataSync";
+await mergeContactMetadata(contactId, { avatarUrl: "...", languages: [...] });
+
+// Para extender el workspace (cualquier miembro · sin tocar columnas
+// admin-only protegidas por la policy `profiles_update_admin`).
+import { mergeOrgMetadata } from "@/lib/orgMetadataSync";
+await mergeOrgMetadata({ contactTags: [...], whatsappSetup: {...} });
+```
+
+`mergeOrgMetadata` usa la RPC `merge_org_metadata(p_org_id, p_patch)`
+con `SECURITY DEFINER` que valida `is_org_member` antes de mergear ·
+permite a members editar catálogos workspace sin elevarlos a admin.
+
+### Plantilla RPC · cuando necesitas un patrón similar
+
+```sql
+create or replace function public.merge_<entidad>_metadata(
+  p_id <tipo>, p_patch jsonb
+) returns void
+language plpgsql security definer
+set search_path = public, pg_catalog
+as $$
+begin
+  if not <check_permiso>(p_id) then
+    raise exception 'forbidden';
+  end if;
+  update public.<tabla>
+    set metadata = coalesce(metadata, '{}'::jsonb) || p_patch
+    where id = p_id;
+end;
+$$;
+grant execute on function public.merge_<entidad>_metadata(<tipo>, jsonb)
+  to authenticated;
+```
+
+**Anti-pattern prohibido:** `UPDATE table SET metadata = '{...}'` desde
+componente · pisas todo el JSON existente. Usa siempre el helper o
+la RPC, que hacen merge atómico (`||` JSONB operator).
+
+---
+
 ## 6 · Naming conventions
 
 | Capa | Convención | Ejemplo |
