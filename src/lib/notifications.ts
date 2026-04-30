@@ -96,16 +96,61 @@ export function recordNotification(input: Omit<Notification, "id" | "createdAt">
      storage no crezca sin límite. */
   const trimmed = [notif, ...list].slice(0, 200);
   write(trimmed);
+  /* Write-through · async insert a notifications table. RLS valida que
+   *  el caller es member del organization_id del recipient. Skip si
+   *  no hay user (pre-auth seed). */
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return; // pre-auth seed · skip
+      /* Resolver org del recipient · si se pasa explícito, lo usamos.
+       *  Si no, asumimos que el recipient es del mismo workspace que
+       *  el caller (caso típico: notificación interna). */
+      const { data: members } = await supabase.from("organization_members")
+        .select("organization_id")
+        .eq("user_id", input.recipientUserId ?? user.id)
+        .eq("status", "active")
+        .order("created_at", { ascending: true })
+        .limit(1);
+      const orgId = members?.[0]?.organization_id;
+      if (!orgId) return;
+      const { error } = await supabase.from("notifications").insert({
+        id: notif.id,
+        organization_id: orgId,
+        recipient_user_id: input.recipientUserId ?? null,
+        type: input.type,
+        title: input.title,
+        body: input.body ?? null,
+        link: input.link ?? null,
+        priority: input.priority ?? "normal",
+        metadata: input.metadata ?? null,
+      });
+      if (error) console.warn("[notifications:insert]", error.message);
+    } catch (e) { console.warn("[notifications:insert] skipped:", e); }
+  })();
   return notif;
 }
 
-/** Marca como leída una notificación · idempotente. */
+/** Marca como leída una notificación · idempotente.
+ *  Write-through async a Supabase. */
 export function markRead(id: string) {
   const list = read();
   const idx = list.findIndex((n) => n.id === id);
   if (idx < 0 || list[idx].readAt) return;
-  list[idx] = { ...list[idx], readAt: new Date().toISOString() };
+  const readAt = new Date().toISOString();
+  list[idx] = { ...list[idx], readAt };
   write(list);
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { error } = await supabase.from("notifications")
+        .update({ read_at: readAt }).eq("id", id);
+      if (error) console.warn("[notifications:markRead]", error.message);
+    } catch (e) { console.warn("[notifications:markRead] skipped:", e); }
+  })();
 }
 
 /** Marca todas como leídas para un usuario · útil en bulk. */

@@ -45,8 +45,47 @@ function loadAll(): Set<string> {
 }
 
 function saveAll(ids: Set<string>) {
+  /* Optimistic local · write-through a Supabase async. */
   localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(ids)));
   window.dispatchEvent(new CustomEvent(EVENT));
+  void syncFavoritesToSupabase(ids);
+}
+
+async function syncFavoritesToSupabase(ids: Set<string>) {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    /* Diff · borramos los que ya no están + insertamos los nuevos.
+     *  Para Phase 2 simple: borrar todos los del user kind=agency y
+     *  re-insertar. Volumen es bajo (<50 favoritos por user). */
+    await supabase.from("user_favorites")
+      .delete().eq("user_id", user.id).eq("kind", "agency");
+
+    if (ids.size > 0) {
+      const rows = Array.from(ids).map((target_id) => {
+        /* organization_id en user_favorites debe ser el WORKSPACE del
+         *  user que marca · resolvemos con primera membership activa.
+         *  Phase 2 simplificado · si user en varias orgs, usa la primera. */
+        return { user_id: user.id, kind: "agency", target_id };
+      });
+      /* Necesitamos organization_id · derivamos de la primera membership. */
+      const { data: members } = await supabase
+        .from("organization_members")
+        .select("organization_id").eq("user_id", user.id).eq("status", "active")
+        .order("created_at", { ascending: true }).limit(1);
+      const orgId = members?.[0]?.organization_id;
+      if (!orgId) return;
+      const { error } = await supabase.from("user_favorites").insert(
+        rows.map((r) => ({ ...r, organization_id: orgId }))
+      );
+      if (error) console.warn("[favoriteAgencies] insert failed:", error.message);
+    }
+  } catch (e) {
+    console.warn("[favoriteAgencies] supabase sync skipped:", e);
+  }
 }
 
 export function useFavoriteAgencies() {

@@ -28,14 +28,85 @@ export function saveCreatedContact(contact: Contact): void {
   const all = loadCreatedContacts();
   if (typeof window !== "undefined") {
     window.localStorage.setItem(KEY, JSON.stringify([contact, ...all]));
+    window.dispatchEvent(new CustomEvent("byvaro:contacts-changed"));
   }
+  void syncContactToSupabase(contact);
 }
 
 export function removeCreatedContact(id: string): void {
   const all = loadCreatedContacts();
   if (typeof window !== "undefined") {
     window.localStorage.setItem(KEY, JSON.stringify(all.filter((c) => c.id !== id)));
+    window.dispatchEvent(new CustomEvent("byvaro:contacts-changed"));
   }
+  void deleteContactFromSupabase(id);
+}
+
+/** Bulk insert · usado por el flow de importación. Idempotente: si el
+ *  contacto ya existe (mismo id) lo upsertea. */
+export function bulkSaveContacts(contacts: Contact[]): void {
+  const all = loadCreatedContacts();
+  const existingIds = new Set(all.map((c) => c.id));
+  const newOnes = contacts.filter((c) => !existingIds.has(c.id));
+  const merged = [...newOnes, ...all];
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(KEY, JSON.stringify(merged));
+    window.dispatchEvent(new CustomEvent("byvaro:contacts-changed"));
+  }
+  /* Async write-through · uno a uno para evitar payload > 1MB. */
+  void (async () => {
+    for (const c of contacts) {
+      await syncContactToSupabase(c);
+    }
+  })();
+}
+
+/* ─── Supabase write-through ───────────────────────────────────────── */
+
+async function syncContactToSupabase(c: Contact) {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    /* Resolver organization_id de la primera membership activa del user. */
+    const { data: members } = await supabase.from("organization_members")
+      .select("organization_id").eq("user_id", user.id).eq("status", "active")
+      .order("created_at", { ascending: true }).limit(1);
+    const orgId = members?.[0]?.organization_id;
+    if (!orgId) return;
+
+    const ce = c as unknown as Record<string, unknown>;
+    const { error } = await supabase.from("contacts").upsert({
+      id: c.id,
+      organization_id: orgId,
+      full_name: (ce.fullName as string) ?? (ce.name as string) ?? "Sin nombre",
+      email: (ce.email as string) ?? null,
+      phone: (ce.phone as string) ?? null,
+      phone_prefix: (ce.phonePrefix as string) ?? null,
+      nationality: (ce.nationality as string) ?? null,
+      nationality_iso: (ce.nationalityIso as string) ?? null,
+      dni: (ce.dni as string) ?? null,
+      language: (ce.language as string) ?? null,
+      status: (ce.status as string) ?? "lead",
+      primary_source: (ce.primarySource as string) ?? null,
+      latest_source: (ce.latestSource as string) ?? null,
+      origins: (ce.origins as unknown) ?? null,
+      public_ref: (ce.publicRef as string) ?? null,
+      last_activity_at: (ce.lastActivityAt as string) ?? null,
+      notes: (ce.notes as string) ?? null,
+    });
+    if (error) console.warn("[contacts:sync] upsert failed:", error.message);
+  } catch (e) { console.warn("[contacts:sync] skipped:", e); }
+}
+
+async function deleteContactFromSupabase(id: string) {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { error } = await supabase.from("contacts").delete().eq("id", id);
+    if (error) console.warn("[contacts:delete] failed:", error.message);
+  } catch (e) { console.warn("[contacts:delete] skipped:", e); }
 }
 
 /**

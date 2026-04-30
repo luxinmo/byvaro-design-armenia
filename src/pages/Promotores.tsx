@@ -23,6 +23,7 @@ import { promotores } from "@/data/promotores";
 import { AgencyGridCard } from "@/components/agencies/AgencyGridCard";
 import { useCurrentUser } from "@/lib/currentUser";
 import { agencies, type Agency } from "@/data/agencies";
+import { useResolvedPromotores } from "@/lib/useResolvedAgencies";
 import {
   DEFAULT_DEVELOPER_ID,
   hasActiveDeveloperCollab,
@@ -109,6 +110,8 @@ function PromotoresAgencyView() {
      refleja lo que el promotor edita en `/empresa`). Métricas
      operativas (visitas/registros/ventas) vienen de `myAgency` ·
      son los KPIs de la relación de ESTA agencia con el promotor. */
+  /* Promotores externos resueltos · merge seed + cache hidratado. */
+  const resolvedPromotores = useResolvedPromotores();
   const promotoresList = useMemo<Agency[]>(() => {
     if (!myAgency || !hasActiveDeveloperCollab(user)) return [];
     /* Nombre · logo · ubicación derivados de la empresa del promotor.
@@ -167,8 +170,8 @@ function PromotoresAgencyView() {
      *  descubrir/explorar TODOS los promotores de la red, no sólo
      *  con los que ya colabora. Cuando aterrice backend, el endpoint
      *  GET /api/agency/promoters devolverá la lista completa. */
-    return [synthetic, ...promotores];
-  }, [myAgency, user, developerEmpresa, listingSeed]);
+    return [synthetic, ...resolvedPromotores];
+  }, [myAgency, user, developerEmpresa, listingSeed, resolvedPromotores]);
 
   /* Catálogos derivados de la lista actual de promotores */
   const allMarkets = useMemo(() => {

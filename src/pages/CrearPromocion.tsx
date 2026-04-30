@@ -28,6 +28,9 @@ import type {
 import { defaultWizardState } from "@/components/crear-promocion/types";
 import { canPublishWizard } from "@/lib/publicationRequirements"; // valida requisitos (fotos, unidades, plan pagos, ubicación, entrega, estado, comisiones)
 import { saveDraft as persistDraft, getDraft, deleteDraft } from "@/lib/promotionDrafts";
+import { createPromotionFromWizard } from "@/lib/promotionsStorage";
+import { currentOrgIdentity } from "@/lib/orgCollabRequests";
+import { useCurrentUser } from "@/lib/currentUser";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useUsageGuard } from "@/lib/usageGuard";
 import {
@@ -141,6 +144,7 @@ function hasPublishMinimums(s: WizardState): boolean {
    ═══════════════════════════════════════════════════════════════════ */
 export default function CrearPromocion() {
   const navigate = useNavigate();
+  const currentUser = useCurrentUser();
   const confirm = useConfirm();
   /* Paywall · Fase 1 · Bloquea la publicación si el plan trial ya
      tiene 2 promociones activas. Borrador y guardado siguen libres
@@ -411,10 +415,15 @@ export default function CrearPromocion() {
       //   `canPublishWizard` (publicationRequirements.ts §WizardState);
       //   si falla, devuelve 422 con `missing[]` y el cliente re-abre
       //   el wizard en modo `onlyMissing`.
-      // TODO(backend): borrar el borrador server-side al confirmar
-      //   (ver drafts.ts). Hoy solo se borra el localStorage local.
+      // Persistir promoción a Supabase + localStorage scoped.
+      const me = currentOrgIdentity(currentUser);
+      const role = (state as unknown as { role?: "promotor" | "comercializador" }).role
+        ?? "promotor";
+      const created = createPromotionFromWizard(state, me.orgId, role, "active");
       if (draftId) deleteDraft(draftId);
-      toast.success("Promoción creada correctamente");
+      toast.success("Promoción creada correctamente", {
+        description: `${created.name} · publicada en /promociones`,
+      });
       navigate("/promociones");
     }
   };

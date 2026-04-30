@@ -1,6 +1,5 @@
 import { Home, Search } from "lucide-react";
 import { useLocation } from "react-router-dom";
-import { AccountSwitcher } from "./AccountSwitcher";
 import { UsagePill } from "./paywall/UsagePill";
 import { NotificationsBell } from "./notifications/NotificationsBell";
 
@@ -40,11 +39,13 @@ export function AppHeader() {
         <span className="font-medium text-foreground">{title}</span>
       </div>
 
-      {/* Utilidades · selector de vista (mock) + ⌘K global + notificaciones */}
+      {/* Utilidades · ⌘K global + notificaciones.
+       *  El AccountSwitcher mock se eliminó al cablear auth real con
+       *  Supabase · cambiar de cuenta requiere logout + login con
+       *  credenciales reales. */}
       <div className="flex items-center gap-1.5">
         {/* Paywall · pill ámbar cuando trial llega ≥80% de algún tope. */}
         <UsagePill />
-        <AccountSwitcher />
         <button
           className="inline-flex items-center gap-2 h-7 pl-2.5 pr-1.5 rounded-full border border-border bg-card text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors text-xs"
           aria-label="Buscar (⌘K)"

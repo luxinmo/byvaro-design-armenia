@@ -85,6 +85,87 @@ function saveDeleted(ids: Set<string>): void {
 }
 
 /** Crea un evento nuevo. Autogen id `ev-${uuid}`. */
+/** Write-through async a Supabase para un calendar_event. */
+async function syncCalendarToSupabase(ev: CalendarEvent, ownerOrgId: string) {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    /* Map seed-style fields → DB columns. Mismo mapping que en
+     * generate-crm-seed.ts · status/type. */
+    const statusMap: Record<string, string> = {
+      "scheduled": "scheduled", "confirmed": "confirmed", "done": "done",
+      "cancelled": "cancelled", "rescheduled": "rescheduled",
+      "noshow": "cancelled", "pending-confirmation": "scheduled",
+    };
+    const typeMap: Record<string, string> = {
+      "visit": "visit", "call": "call", "meeting": "meeting",
+      "task": "task", "block": "block", "followup": "followup",
+      "reminder": "task",
+    };
+    const startsAt = (ev as { startsAt?: string; start?: string }).startsAt
+      ?? (ev as { start?: string }).start;
+    const endsAt = (ev as { endsAt?: string; end?: string }).endsAt
+      ?? (ev as { end?: string }).end ?? startsAt;
+    if (!startsAt || !endsAt) return;
+    const evRegId = (ev as { registroId?: string }).registroId;
+    /* Solo mantener registro_id si el FK existe. Sino null. */
+    const registroId = evRegId ? evRegId : null;
+    const { error } = await supabase.from("calendar_events").upsert({
+      id: ev.id,
+      organization_id: ownerOrgId,
+      type: typeMap[(ev as { type?: string }).type ?? "task"] ?? "task",
+      status: statusMap[(ev as { status?: string }).status ?? "scheduled"] ?? "scheduled",
+      title: (ev as { title?: string }).title ?? "",
+      description: (ev as { description?: string }).description ?? null,
+      starts_at: startsAt,
+      ends_at: endsAt,
+      contact_id: (ev as { contactId?: string }).contactId ?? null,
+      registro_id: registroId,
+      promotion_id: (ev as { promotionId?: string }).promotionId ?? null,
+      lead_id: null,
+      location: (ev as { location?: string }).location ?? null,
+      assignee_user_id: null,
+    });
+    if (error) console.warn("[calendar:sync] upsert failed:", error.message);
+  } catch (e) { console.warn("[calendar:sync] skipped:", e); }
+}
+
+async function deleteCalendarFromSupabase(id: string) {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    /* Borrar evaluations primero · FK constraint. */
+    await supabase.from("visit_evaluations").delete().eq("calendar_event_id", id);
+    const { error } = await supabase.from("calendar_events").delete().eq("id", id);
+    if (error) console.warn("[calendar:delete] failed:", error.message);
+  } catch (e) { console.warn("[calendar:delete] skipped:", e); }
+}
+
+/** Persiste la evaluación de una visita a `visit_evaluations` table.
+ *  Llamar tras `updateCalendarEvent({ status: "done", evaluation: {...} })`.
+ *  El frontend ya actualiza el evento con la evaluación inline ·
+ *  esto solo añade la fila en la tabla dedicada (auditoría/queries). */
+export async function persistVisitEvaluation(
+  calendarEventId: string,
+  outcome: string,
+  rating?: number,
+  notes?: string,
+): Promise<void> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from("visit_evaluations").insert({
+      calendar_event_id: calendarEventId,
+      outcome,
+      rating: rating ?? null,
+      notes: notes ?? null,
+      by_user_id: user?.id ?? null,
+    });
+    if (error) console.warn("[visit_evaluations:insert]", error.message);
+  } catch (e) { console.warn("[visit_evaluations:insert] skipped:", e); }
+}
+
 export function createCalendarEvent(
   input: Omit<CalendarEvent, "id" | "createdAt"> & Partial<Pick<CalendarEvent, "id" | "createdAt">>,
 ): CalendarEvent {
@@ -96,6 +177,8 @@ export function createCalendarEvent(
   const overrides = loadOverrides();
   overrides[ev.id] = ev;
   saveOverrides(overrides);
+  /* Write-through · org dueño es developer-default en mock. */
+  void syncCalendarToSupabase(ev, "developer-default");
   return ev;
 }
 
@@ -106,8 +189,10 @@ export function updateCalendarEvent(id: string, patch: Partial<CalendarEvent>): 
   const existing = list.find((e) => e.id === id);
   if (!existing) return;
   const overrides = loadOverrides();
-  overrides[id] = { ...existing, ...patch } as CalendarEvent;
+  const updated = { ...existing, ...patch } as CalendarEvent;
+  overrides[id] = updated;
   saveOverrides(overrides);
+  void syncCalendarToSupabase(updated, "developer-default");
 }
 
 /** Borrar un evento. Si era del seed, se guarda en deleted-ids. Si
@@ -124,6 +209,7 @@ export function deleteCalendarEvent(id: string): void {
     deleted.add(id);
     saveDeleted(deleted);
   }
+  void deleteCalendarFromSupabase(id);
 }
 
 /** Detecta conflicto para el agente indicado en el intervalo

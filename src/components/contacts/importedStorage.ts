@@ -95,7 +95,8 @@ export function rowsToContacts(rows: ImportedRow[]): Contact[] {
   });
 }
 
-/** Adjunta un nuevo lote de filas a los importados existentes. */
+/** Adjunta un nuevo lote de filas a los importados existentes.
+ *  Optimistic local + write-through bulk a Supabase. */
 export function appendImported(rows: ImportedRow[]): { added: number; total: number } {
   const existing = loadImportedContacts();
   const existingEmails = new Set(existing.map((c) => c.email).filter(Boolean));
@@ -104,5 +105,50 @@ export function appendImported(rows: ImportedRow[]): { added: number; total: num
   );
   const merged = [...existing, ...newContacts];
   saveImportedContacts(merged);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("byvaro:contacts-changed"));
+  }
+  /* Async bulk write-through. */
+  void syncImportedContactsToSupabase(newContacts);
   return { added: newContacts.length, total: merged.length };
+}
+
+async function syncImportedContactsToSupabase(contacts: Contact[]) {
+  if (contacts.length === 0) return;
+  try {
+    const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data: members } = await supabase.from("organization_members")
+      .select("organization_id").eq("user_id", user.id).eq("status", "active")
+      .order("created_at", { ascending: true }).limit(1);
+    const orgId = members?.[0]?.organization_id;
+    if (!orgId) return;
+
+    const rows = contacts.map((c) => {
+      const ce = c as unknown as Record<string, unknown>;
+      return {
+        id: c.id,
+        organization_id: orgId,
+        full_name: (ce.name as string) ?? (ce.fullName as string) ?? "Sin nombre",
+        email: (ce.email as string) ?? null,
+        phone: (ce.phone as string) ?? null,
+        nationality: (ce.nationality as string) ?? null,
+        status: "lead",
+        primary_source: "import",
+        latest_source: "import",
+        origins: ce.origins ?? null,
+        public_ref: (ce.publicRef as string) ?? null,
+        last_activity_at: (ce.lastActivityAt as string) ?? null,
+        notes: (ce.notes as string) ?? null,
+      };
+    });
+    /* Insert en chunks de 500 para no superar límites de payload. */
+    for (let i = 0; i < rows.length; i += 500) {
+      const chunk = rows.slice(i, i + 500);
+      const { error } = await supabase.from("contacts").upsert(chunk, { onConflict: "id" });
+      if (error) console.warn("[importContacts] chunk failed:", error.message);
+    }
+  } catch (e) { console.warn("[importContacts] skipped:", e); }
 }

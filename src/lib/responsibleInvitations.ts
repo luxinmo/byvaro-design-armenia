@@ -47,6 +47,28 @@ export interface ResponsibleInvitation {
   respondidoEn?: number;
 }
 
+/* TODO(backend) Phase 3 · ESCAPE LEAK CONOCIDO ·
+ * Esta clave ES GLOBAL en localStorage (no scoped). El leak técnico es
+ * que dos users que comparten físicamente el mismo navegador pueden ver
+ * mutuamente las invitaciones de Responsable que han enviado.
+ *
+ * Por qué no se scopea como otras claves: la página `/responsible/:token`
+ * (donde el Responsable abre el link de email) es PRE-AUTH · no hay
+ * orgId en contexto, así que `findResponsibleInvitationByToken` necesita
+ * buscar entre TODOS los registros locales. Scopear obligaría a iterar
+ * todas las claves `byvaro.responsible-invitations.v1:*`, viable pero
+ * complica el mock.
+ *
+ * Solución correcta · tabla `responsible_invitations` en Supabase con
+ * RLS · admin de la agencia INSERT, lookup público por token via
+ * RPC `find_responsible_invitation(token)` que devuelve la fila SIN
+ * pasar por RLS de tabla.
+ *
+ * Mitigación actual · ningún componente UI muestra esta lista a otros
+ * users · solo se consume en el flow de invitación + apertura del link.
+ * El leak requiere acceso DevTools al navegador físico. Riesgo bajo en
+ * tests con dispositivos separados.
+ */
 const STORAGE_KEY = "byvaro.responsible-invitations.v1";
 const VALIDEZ_DIAS = 30;
 
