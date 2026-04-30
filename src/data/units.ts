@@ -1,3 +1,5 @@
+import { seedRef } from "@/lib/publicRef";
+
 export type UnitStatus = "available" | "reserved" | "sold" | "withdrawn";
 
 export type Unit = {
@@ -108,10 +110,11 @@ function generateUnits(promotionId: string, totalUnits: number, availableUnits: 
           status = "withdrawn";
         }
 
-        const unitRef = `REF-${promotionId.toUpperCase()}-${String(unitIndex + 1).padStart(4, "0")}`;
+        const unitId = `${promotionId}-${block}-${floor}${doorLabels[d]}`;
+        const unitRef = seedRef("unit", unitId);
 
         units.push({
-          id: `${promotionId}-${block}-${floor}${doorLabels[d]}`,
+          id: unitId,
           ref: unitRef,
           promotionId,
           block,

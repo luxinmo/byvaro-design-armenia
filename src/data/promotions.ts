@@ -80,7 +80,10 @@ export function getBuildingTypeLabel(type?: BuildingType): string | null {
   return map[type] ?? null;
 }
 
-export const promotions: Promotion[] = [
+/* RAW seeds · el campo `code` legacy queda como breadcrumb · el real
+ * lo derivamos abajo con `seedRef("promotion", id)` siguiendo el
+ * scheme canónico (PR + 5 dígitos · CLAUDE.md). */
+const RAW_PROMOTIONS: Promotion[] = [
   {
     id: "1",
     ownerOrganizationId: "developer-default",
@@ -288,3 +291,12 @@ export const promotions: Promotion[] = [
     buildingType: "plurifamiliar",
   },
 ];
+
+import { seedRef } from "@/lib/publicRef";
+
+/** Export final · `code` se sobrescribe con el formato canónico
+ *  `PR + 5 dígitos` derivado del id via hash determinista. */
+export const promotions: Promotion[] = RAW_PROMOTIONS.map((p) => ({
+  ...p,
+  code: seedRef("promotion", p.id),
+}));
