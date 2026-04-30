@@ -407,7 +407,7 @@ export default function Contactos() {
                 contact={c}
                 query={search}
                 tags={tags}
-                onClick={() => navigate(`/contactos/${c.id}`)}
+                onClick={() => navigate(`/contactos/${c.publicRef || c.id}`)}
               />
             ))
           )}
@@ -681,7 +681,7 @@ export default function Contactos() {
         onCreated={(contact) => {
           setCreateVersion((v) => v + 1);
           /* Lleva al usuario directo a la ficha del contacto creado. */
-          navigate(`/contactos/${contact.id}`);
+          navigate(`/contactos/${contact.publicRef || contact.id}`);
         }}
       />
     </div>

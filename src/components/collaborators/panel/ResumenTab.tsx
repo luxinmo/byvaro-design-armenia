@@ -597,7 +597,7 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
                       </span>
                     </div>
                     <div className="p-4">
-                      <Link to={`/promociones/${p.id}`} className="block group">
+                      <Link to={`/promociones/${p.code || p.id}`} className="block group">
                         <p className="text-sm font-semibold text-foreground truncate group-hover:underline">
                           {p.name}
                         </p>
@@ -808,7 +808,7 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
 
                         <div className="p-4">
                           <Link
-                            to={`/promociones/${p.id}?tab=Agencies`}
+                            to={`/promociones/${p.code || p.id}?tab=Agencies`}
                             className="block group"
                           >
                             <p className="text-sm font-semibold text-foreground truncate group-hover:underline">
@@ -902,7 +902,7 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
                           )}
                           <div className="mt-3 flex items-center justify-end">
                             <Link
-                              to={`/promociones/${p.id}?tab=Agencies`}
+                              to={`/promociones/${p.code || p.id}?tab=Agencies`}
                               className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                             >
                               Ver en promoción
@@ -1340,7 +1340,7 @@ function ClosedPromosRow({
           {promos.map((p) => (
             <li key={p.id} className="px-4 py-2">
               <Link
-                to={`/promociones/${p.id}`}
+                to={`/promociones/${p.code || p.id}`}
                 className="flex items-center justify-between gap-2 group"
               >
                 <span className="text-[12.5px] text-foreground truncate group-hover:underline">{p.name}</span>

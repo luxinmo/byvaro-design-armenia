@@ -45,6 +45,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { promotionHrefById } from "@/lib/urls";
 import { useCurrentUser } from "@/lib/currentUser";
 import { useHasPermission } from "@/lib/permissions";
 import { Flag } from "@/components/ui/Flag";
@@ -1366,7 +1367,7 @@ function TopPromotions({ events }: { events: BusinessActivityEvent[] }) {
         <ul className="divide-y divide-border/40">
           {ranking.map((r, i) => (
             <li key={r.id}>
-              <Link to={`/promociones/${r.id}`} className="flex items-center gap-3 px-4 sm:px-5 py-2.5 hover:bg-muted/30 transition-colors">
+              <Link to={promotionHrefById(r.id)} className="flex items-center gap-3 px-4 sm:px-5 py-2.5 hover:bg-muted/30 transition-colors">
                 <span className="text-[10px] font-semibold text-muted-foreground tabular-nums w-4">{i + 1}</span>
                 <div className="min-w-0 flex-1">
                   <p className="text-[12.5px] font-medium text-foreground truncate">{r.promo.name}</p>

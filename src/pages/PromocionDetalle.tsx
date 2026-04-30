@@ -9,6 +9,7 @@ import { unitDataToUnit, mergeUnitIntoUnitData } from "@/lib/unitDataAdapter";
 import type { Unit } from "@/data/units";
 import { promotions, getBuildingTypeLabel } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion, type Comercial, type ComercialPermissions } from "@/data/developerPromotions";
+import { findPromotionByParam, promotionHref, contactHref, registroHref, leadHref } from "@/lib/urls";
 import { agencies, countAgenciesForPromotion, getAgencyShareStats, type Agency } from "@/data/agencies";
 import { AgenciasTabStats } from "@/components/promotions/detail/AgenciasTabStats";
 import { FeatureCardV3 } from "@/pages/Colaboradores";
@@ -419,7 +420,9 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     ...developerOnlyPromotions,
     ...promotions.map(p => ({ ...p } as DevPromotion)),
   ];
-  const p = allPromotions.find((promo) => promo.id === id);
+  /* Resuelve el param a la promoción · acepta `code` canónico (PR + 5
+   *  dígitos) o `id` interno legacy. */
+  const p = findPromotionByParam(id, allPromotions);
 
   if (p && !initialized) {
     setComercialesList(p.comerciales || []);

@@ -14,6 +14,7 @@
 
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { promotionHrefById } from "@/lib/urls";
 import {
   Calendar, CheckCircle2, XCircle, UserX, Star,
   CalendarPlus, MapPin, ArrowRight, Clock, AlertCircle,
@@ -248,7 +249,7 @@ function VisitItem({
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <Link
-                to={`/promociones/${visit.promotionId}`}
+                to={promotionHrefById(visit.promotionId)}
                 className="text-sm font-semibold text-foreground hover:underline inline-flex items-center gap-1.5"
               >
                 <MapPin className="h-3 w-3 text-muted-foreground" />

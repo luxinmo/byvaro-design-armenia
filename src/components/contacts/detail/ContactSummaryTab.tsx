@@ -20,6 +20,7 @@ import {
 import { EvaluateVisitDialog } from "./EvaluateVisitDialog";
 import { AssignMembersDialog } from "./AssignMembersDialog";
 import { LinkContactDialog } from "./LinkContactDialog";
+import { contactHrefById } from "@/lib/urls";
 import { findTeamMember, memberInitials, getMemberAvatarUrl } from "@/lib/team";
 import { useMe } from "@/lib/meStorage";
 import { Flag } from "@/components/ui/Flag";
@@ -310,7 +311,7 @@ export function ContactSummaryTab({ detail, onRefresh, onOpenWhatsApp }: Props) 
             <ul className="space-y-2">
               {detail.relatedContacts.map((r) => (
                 <li key={r.contactId}>
-                  <Link to={`/contactos/${r.contactId}`}
+                  <Link to={contactHrefById(r.contactId)}
                     className="flex items-center gap-3 px-2 py-1.5 -mx-2 rounded-xl hover:bg-muted/40 transition-colors">
                     <div className="h-8 w-8 rounded-full bg-foreground/5 grid place-items-center text-foreground font-semibold text-xs shrink-0">
                       {r.contactName.split(" ").map((w) => w[0]).slice(0, 2).join("")}

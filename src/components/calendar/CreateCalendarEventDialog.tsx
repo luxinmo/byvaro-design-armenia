@@ -27,6 +27,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { leadHrefById } from "@/lib/urls";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   DialogFooter,
@@ -395,7 +396,7 @@ export function CreateCalendarEventDialog({
                     type="button"
                     onClick={() => {
                       onOpenChange(false);
-                      if (conflict.leadId) navigate(`/oportunidades/${conflict.leadId}`);
+                      if (conflict.leadId) navigate(leadHrefById(conflict.leadId));
                       else navigate("/calendario");
                       toast.info("Abre el evento solapado para modificarlo");
                     }}

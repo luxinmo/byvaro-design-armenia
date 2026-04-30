@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { promotionHrefById } from "@/lib/urls";
 import { BrandLogo } from "@/components/BrandLogo";
 
 import { useInvitaciones, type Invitacion } from "@/lib/invitaciones";
@@ -354,7 +355,7 @@ export default function InviteAccept() {
       invitacionId: invitation.id,
     });
     toast.success("Cuenta creada · ¡bienvenido a Byvaro!");
-    navigate(invitation.promocionId ? `/promociones/${invitation.promocionId}` : "/inicio");
+    navigate(invitation.promocionId ? promotionHrefById(invitation.promocionId) : "/inicio");
   }, [
     invitation, aceptar, navigate,
     promotorEmpresa.nombreComercial, promotorEmpresa.razonSocial,
@@ -430,7 +431,7 @@ export default function InviteAccept() {
           <button
             type="button"
             onClick={() =>
-              navigate(invitation?.promocionId ? `/promociones/${invitation.promocionId}` : "/inicio")
+              navigate(invitation?.promocionId ? promotionHrefById(invitation.promocionId) : "/inicio")
             }
             className="inline-flex items-center gap-1.5 h-10 px-5 rounded-full bg-foreground text-background text-sm font-semibold hover:bg-foreground/90 transition-colors"
           >

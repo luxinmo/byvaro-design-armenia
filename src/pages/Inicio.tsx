@@ -25,6 +25,7 @@ import {
   Building2, UserPlus, AlertCircle, Users, BarChart3, Activity,
 } from "lucide-react";
 import { UserContextSwitcher } from "@/components/ui/UserContextSwitcher";
+import { leadHrefById } from "@/lib/urls";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/currentUser";
@@ -382,7 +383,7 @@ function Novedades() {
                 {lastUnitPromos.map((p) => (
                   <li key={p.id} className="text-[11px] text-muted-foreground truncate">
                     <Link
-                      to={`/promociones/${p.id}`}
+                      to={`/promociones/${p.code || p.id}`}
                       className="hover:text-foreground"
                     >
                       <strong className="text-foreground">{p.name}</strong> · {p.location}
@@ -477,7 +478,7 @@ function TodayAgendaWidget({ selectedUserId }: { selectedUserId: string | null }
             return (
               <li key={ev.id}>
                 <Link
-                  to={ev.leadId ? `/oportunidades/${ev.leadId}` : "/calendario"}
+                  to={ev.leadId ? leadHrefById(ev.leadId) : "/calendario"}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2 rounded-xl transition-colors hover:bg-muted/40",
                     isActive && "bg-primary/5",
