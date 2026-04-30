@@ -126,13 +126,17 @@ function buildDeveloperUser(developerEmail?: string): CurrentUser {
         && u.email.toLowerCase() === developerEmail.toLowerCase(),
   );
   if (!mock) return DEVELOPER_USER;
+  /* `mock.agencyId` para developers no-Luxinmo lleva su workspace
+   *  (`prom-1` AEDAS, `prom-2` Neinor, etc.). Para Luxinmo no se setea
+   *  · `currentOrgIdentity` cae a `"developer-default"`. */
   return {
     id: mock.teamMemberId ?? "u1",
     name: mock.name,
     email: mock.email,
     role: mock.role ?? "admin",
-    organizationId: "org1",
+    organizationId: mock.agencyId ?? "developer-default",
     accountType: "developer",
+    agencyId: mock.agencyId,
   };
 }
 
@@ -145,6 +149,18 @@ export function useCurrentUser(): CurrentUser {
   return useMemo(() => {
     if (type === "agency") return buildAgencyUser(agencyId, agencyEmail);
     const base = buildDeveloperUser(developerEmail);
+    /* `usePersistedProfile()` lee la entrada `MY_ID="u1"` de meStorage ·
+     *  hardcoded a Arman/Luxinmo. SOLO debemos aplicar el override cuando
+     *  el usuario logueado realmente sea Arman (mismo email). Para
+     *  developers no-Luxinmo (Carlos AEDAS, Marta Neinor, etc.) se
+     *  mantienen los datos del mock para que sidebar/hero/headers
+     *  reflejen la identidad correcta.
+     *  TODO(backend): cuando llegue `GET /api/me` real, este guard se
+     *  elimina · cada usuario tendrá su propio profile en backend. */
+    const profileBelongsToUser = profile?.email
+      && base.email
+      && profile.email.toLowerCase() === base.email.toLowerCase();
+    if (!profileBelongsToUser) return base;
     return {
       ...base,
       name:       profile?.fullName  ?? base.name,
@@ -181,6 +197,11 @@ export function isAdmin(user: CurrentUser): boolean {
 export function currentWorkspaceKey(user: CurrentUser): string {
   if (user.accountType === "agency" && user.agencyId) {
     return `agency-${user.agencyId}`;
+  }
+  /* Developer · si lleva `agencyId` (workspace externo prom-X), úsalo;
+   *  Luxinmo legacy (sin agencyId) cae a `developer-default`. */
+  if (user.accountType === "developer" && user.agencyId) {
+    return user.agencyId;
   }
   return "developer-default";
 }

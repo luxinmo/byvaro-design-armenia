@@ -15,6 +15,7 @@ import {
   List, Map as MapIcon, LayoutGrid, Mail, ArrowRight, type LucideIcon,
 } from "lucide-react";
 import { promotions, getBuildingTypeLabel, type Promotion } from "@/data/promotions";
+import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import { developerOnlyPromotions, type DevPromotion } from "@/data/developerPromotions";
 import { unitsByPromotion } from "@/data/units";
 import { agencies, countAgenciesForPromotion, type Agency } from "@/data/agencies";
@@ -485,8 +486,18 @@ export default function Promociones() {
           return aPending - bPending;
         });
     }
-    return [...draftPromotions, ...developerOnlyPromotions, ...promotions.map((p) => ({ ...p } as DevPromotion))];
-  }, [draftPromotions, isAgencyUser, activeAgency, pendingInvitationPromoIds]);
+    /* Lado DEVELOPER · solo promociones del workspace logueado ·
+     *  evita mezclar Luxinmo con AEDAS / Neinor / Habitat /
+     *  Metrovacesa cuando entran sus admins (cross-developer leak). */
+    const myOrgId = currentOrgIdentity(currentUser).orgId;
+    const ownPromotions = developerOnlyPromotions.filter(
+      (p) => (p.ownerOrganizationId ?? "developer-default") === myOrgId,
+    );
+    const ownLegacy = promotions.filter(
+      (p) => (p.ownerOrganizationId ?? "developer-default") === myOrgId,
+    );
+    return [...draftPromotions, ...ownPromotions, ...ownLegacy.map((p) => ({ ...p } as DevPromotion))];
+  }, [draftPromotions, isAgencyUser, activeAgency, pendingInvitationPromoIds, currentUser]);
 
   /* ─── Opciones de filtros de GESTIÓN (fijas) ─── */
   const activityOptions = [

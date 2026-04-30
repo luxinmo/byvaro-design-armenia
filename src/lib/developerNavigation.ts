@@ -102,6 +102,23 @@ export function agencyCollabsWithDeveloper(
   return getCollaboratingDeveloperIds(agency).has(developerInternalId);
 }
 
+/** Devuelve las agencias que colaboran con un developer concreto ·
+ *  filtra el array global por las que tienen alguna promoción del
+ *  developer en su `promotionsCollaborating`.
+ *
+ *  Usado en pages del lado DEVELOPER (`/colaboradores`, `/ventas`,
+ *  `/registros`, etc.) para evitar mostrar el roster completo de
+ *  agencias globales · solo las que realmente colaboran con MI
+ *  workspace. */
+export function getAgenciesForDeveloper(
+  developerInternalId: string,
+  allAgencies: ReadonlyArray<Agency>,
+): Agency[] {
+  return allAgencies.filter((a) =>
+    getCollaboratingDeveloperIds(a).has(developerInternalId),
+  );
+}
+
 /** Devuelve el href correcto para llegar al promotor desde la agencia ·
  *  siempre al panel avanzado (regla revisada 2026-04-30). Si pasas
  *  `developerId`, se usa; si no, se asume `DEFAULT_DEVELOPER_ID`

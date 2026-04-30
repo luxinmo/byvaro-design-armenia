@@ -39,7 +39,10 @@ import {
 import { eventsInDay, formatTime, isToday as isTodayDate } from "@/lib/calendarHelpers";
 import { registros } from "@/data/records";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
-import { getAllTeamMembers, memberInitials, getMemberAvatarUrl, findTeamMember } from "@/lib/team";
+import { promotions as marketplacePromotions } from "@/data/promotions";
+import { currentOrgIdentity } from "@/lib/orgCollabRequests";
+import { getAllTeamMembers, getMembersForWorkspace, memberInitials, getMemberAvatarUrl, findTeamMember } from "@/lib/team";
+import { currentWorkspaceKey } from "@/lib/currentUser";
 import { useBusinessActivity } from "@/lib/businessActivity";
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -134,11 +137,26 @@ type ActivitySummary = {
 };
 
 function ActividadesPendientes({ selectedUserId }: { selectedUserId: string | null }) {
+  const user = useCurrentUser();
   const allEvents = useCalendarEvents();
   const teamMembers = useMemo(
     () => getAllTeamMembers().filter((m) => !m.status || m.status === "active"),
     [],
   );
+
+  /* Set de promo IDs del workspace logueado · scope para evitar leak
+   *  cross-developer. Si Carlos (AEDAS) entra al dashboard, solo ve
+   *  registros/visitas de promociones de AEDAS, no de Luxinmo. */
+  const myOrgId = currentOrgIdentity(user).orgId;
+  const isLuxinmo = myOrgId === "developer-default";
+  const myPromoIds = useMemo(() => {
+    const all = [...developerOnlyPromotions, ...marketplacePromotions];
+    return new Set(
+      all
+        .filter((p) => (p.ownerOrganizationId ?? "developer-default") === myOrgId)
+        .map((p) => p.id),
+    );
+  }, [myOrgId]);
 
   const summaries = useMemo<ActivitySummary[]>(() => {
     const today = new Date();
@@ -148,36 +166,50 @@ function ActividadesPendientes({ selectedUserId }: { selectedUserId: string | nu
     /* Registros pendientes · son cola compartida del promotor · no
        tienen assigneeUserId natural hasta que se decide. Si filtro
        por usuario, muestro sólo los que YA están siendo trabajados
-       por ese usuario (decidedByUserId) · si no hay filtro, todos. */
+       por ese usuario (decidedByUserId) · si no hay filtro, todos.
+       SCOPED · solo registros cuyo promo pertenece al workspace
+       del developer logueado · evita leak cross-developer. */
     const regs = registros.filter((r) => {
       if (r.estado !== "pendiente") return false;
+      if (r.promotionId && !myPromoIds.has(r.promotionId)) return false;
       if (!selectedUserId) return true;
       return r.decidedByUserId === selectedUserId;
     });
     const regsDup = regs.filter((r) => r.matchPercentage >= 70).length;
 
+    /* SCOPE de eventos del calendario · solo eventos cuya promo
+     *  pertenece al workspace logueado. Eventos sin `promotionId` (ej.
+     *  comida con equipo) se excluyen para no-Luxinmo · son seeds
+     *  hardcoded de Luxinmo y leakean a Carlos/Marta. */
+    const inMyOrg = (ev: CalendarEvent): boolean => {
+      if (ev.promotionId) return myPromoIds.has(ev.promotionId);
+      return isLuxinmo;
+    };
+
     /* Visitas pending + sin evaluar (filtradas por usuario). */
     const vPending = allEvents.filter(
-      (ev) => ev.type === "visit" && ev.status === "pending-confirmation" && byUser(ev),
+      (ev) => ev.type === "visit" && ev.status === "pending-confirmation" && byUser(ev) && inMyOrg(ev),
     );
     const vNoEval = allEvents.filter(
-      (ev) => ev.type === "visit" && ev.status === "done" && !(ev as any).evaluation && byUser(ev),
+      (ev) => ev.type === "visit" && ev.status === "done" && !(ev as any).evaluation && byUser(ev) && inMyOrg(ev),
     );
     const visitasTotal = vPending.length + vNoEval.length;
 
     /* Llamadas de hoy pendientes (filtradas por usuario). */
     const calls = eventsInDay(allEvents, today).filter(
-      (ev) => ev.type === "call" && ev.status !== "cancelled" && ev.status !== "done" && byUser(ev),
+      (ev) => ev.type === "call" && ev.status !== "cancelled" && ev.status !== "done" && byUser(ev) && inMyOrg(ev),
     );
 
-    /* Mock counts · cuando llegue el backend, estos vendrán filtrados
-       por ownership real (assignedTo = selectedUserId || currentUser.id).
-       Hoy no dividimos por miembros porque era matemática falsa — ver
-       discusión de incoherencias Inicio↔Actividad (abril 2026). */
-    const emails = 4;
-    const whatsapps = 2;
-    const tareasTotal = 3;
-    const tareasVencidas = 1;
+    /* Mock counts · solo Luxinmo · son hardcoded con nombres reales
+       ("Ahmed Al Rashid", "Marie Dubois", etc.) que pertenecen a su
+       cartera. Para developers no-Luxinmo (AEDAS, Neinor, etc.) los
+       counters se muestran a 0 hasta que el backend agregue por org.
+       TODO(backend): GET /api/workspace/inbox-counters scoped por
+       organization_id del JWT · entonces se elimina este branch. */
+    const emails       = isLuxinmo ? 4 : 0;
+    const whatsapps    = isLuxinmo ? 2 : 0;
+    const tareasTotal  = isLuxinmo ? 3 : 0;
+    const tareasVencidas = isLuxinmo ? 1 : 0;
 
     return [
       {
@@ -213,26 +245,30 @@ function ActividadesPendientes({ selectedUserId }: { selectedUserId: string | nu
       {
         kind: "email", icon: Mail, label: "Emails",
         count: emails,
-        preview: "Ahmed Al Rashid · Marie Dubois · +2 más",
+        preview: emails > 0 ? "Ahmed Al Rashid · Marie Dubois · +2 más" : "Sin emails",
         href: "/emails",
         tone: emails > 0 ? "primary" : "default",
       },
       {
         kind: "whatsapp", icon: MessageSquare, label: "WhatsApps",
         count: whatsapps,
-        preview: "Marie Dubois · Emma Johnson",
+        preview: whatsapps > 0 ? "Marie Dubois · Emma Johnson" : "Sin mensajes",
         href: "/contactos",
         tone: whatsapps > 0 ? "success" : "default",
       },
       {
         kind: "tarea", icon: CheckSquare, label: "Tareas",
         count: tareasTotal, urgent: tareasVencidas,
-        preview: tareasVencidas > 0 ? `${tareasVencidas} vencida · ${tareasTotal - tareasVencidas} hoy` : `${tareasTotal} para hoy`,
+        preview: tareasTotal === 0
+          ? "Sin tareas"
+          : tareasVencidas > 0
+            ? `${tareasVencidas} vencida · ${tareasTotal - tareasVencidas} hoy`
+            : `${tareasTotal} para hoy`,
         href: "/calendario",
-        tone: tareasVencidas > 0 ? "destructive" : "primary",
+        tone: tareasVencidas > 0 ? "destructive" : tareasTotal > 0 ? "primary" : "default",
       },
     ];
-  }, [allEvents, selectedUserId]);
+  }, [allEvents, selectedUserId, isLuxinmo, myPromoIds]);
 
   const totalAll = summaries.reduce((s, x) => s + x.count, 0);
   const selectedMember = selectedUserId
@@ -305,13 +341,21 @@ function ActividadesPendientes({ selectedUserId }: { selectedUserId: string | nu
    unidad en venta por promoción.
    ═══════════════════════════════════════════════════════════════════ */
 function Novedades() {
+  const user = useCurrentUser();
+  const myOrgId = currentOrgIdentity(user).orgId;
+  /* Items mock como "Nuevos comercializadores · Laura Sánchez", "Prime
+   *  Properties + Nordic Real Estate" y "Villa Serena supera 80%" son
+   *  específicos de Luxinmo. Solo se muestran si el workspace logueado
+   *  ES Luxinmo. Otros developers verán solo data derivada (lastUnit). */
+  const isLuxinmo = myOrgId === "developer-default";
   /* Detección "última unidad en venta" por promoción: cuando
-     availableUnits === 1 · lista las ≤3 primeras. */
+     availableUnits === 1 · lista las ≤3 primeras del workspace logueado. */
   const lastUnitPromos = useMemo(() => {
     return developerOnlyPromotions
       .filter((p) => p.availableUnits === 1)
+      .filter((p) => (p.ownerOrganizationId ?? "developer-default") === myOrgId)
       .slice(0, 3);
-  }, []);
+  }, [myOrgId]);
 
   return (
     <section className="bg-card border border-border rounded-2xl shadow-[0_2px_16px_-6px_rgba(0,0,0,0.06)] overflow-hidden">
@@ -327,7 +371,8 @@ function Novedades() {
         </div>
       </header>
       <ul className="divide-y divide-border/40">
-        {/* Mock: nuevos comercializadores */}
+        {/* Mock: nuevos comercializadores · solo Luxinmo */}
+        {isLuxinmo && (
         <li className="flex items-start gap-3 px-4 sm:px-5 py-3">
           <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary grid place-items-center shrink-0">
             <UserPlus className="h-4 w-4" strokeWidth={1.75} />
@@ -347,8 +392,10 @@ function Novedades() {
             Ver <ArrowUpRight className="h-3 w-3" />
           </Link>
         </li>
+        )}
 
-        {/* Mock: nuevas agencias */}
+        {/* Mock: nuevas agencias · solo Luxinmo */}
+        {isLuxinmo && (
         <li className="flex items-start gap-3 px-4 sm:px-5 py-3">
           <div className="h-9 w-9 rounded-xl bg-emerald-50 text-emerald-700 grid place-items-center shrink-0">
             <Handshake className="h-4 w-4" strokeWidth={1.75} />
@@ -368,6 +415,7 @@ function Novedades() {
             Ver <ArrowUpRight className="h-3 w-3" />
           </Link>
         </li>
+        )}
 
         {/* Últimas unidades en venta por promoción */}
         {lastUnitPromos.length > 0 && (
@@ -395,7 +443,8 @@ function Novedades() {
           </li>
         )}
 
-        {/* Mock de otro item */}
+        {/* Mock de otro item · solo Luxinmo */}
+        {isLuxinmo && (
         <li className="flex items-start gap-3 px-4 sm:px-5 py-3">
           <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary grid place-items-center shrink-0">
             <TrendingUp className="h-4 w-4" strokeWidth={1.75} />
@@ -409,6 +458,17 @@ function Novedades() {
             </p>
           </div>
         </li>
+        )}
+
+        {/* Empty state · sin novedades del workspace */}
+        {!isLuxinmo && lastUnitPromos.length === 0 && (
+          <li className="px-4 sm:px-5 py-6 text-center">
+            <p className="text-[12px] text-muted-foreground">
+              Sin novedades. Cuando crees promociones o invites colaboradores
+              aparecerán aquí.
+            </p>
+          </li>
+        )}
       </ul>
     </section>
   );
@@ -419,15 +479,42 @@ function Novedades() {
    ═══════════════════════════════════════════════════════════════════ */
 
 function TodayAgendaWidget({ selectedUserId }: { selectedUserId: string | null }) {
+  const user = useCurrentUser();
   const allEvents = useCalendarEvents();
   const today = new Date();
+
+  /* SCOPE · doble eje · promo + miembro del equipo del workspace.
+   *  Eventos seed sin `promotionId` (ej. "Comida con equipo 14:00") son
+   *  de Luxinmo · si no son de mi org, se descartan. Para Luxinmo todo
+   *  pasa porque su workspace coincide con los seeds. */
+  const myOrgId = currentOrgIdentity(user).orgId;
+  const isLuxinmoT = myOrgId === "developer-default";
+  const myWorkspaceKey = currentWorkspaceKey(user);
+  const myPromoIds = useMemo(() => {
+    const all = [...developerOnlyPromotions, ...marketplacePromotions];
+    return new Set(
+      all
+        .filter((p) => (p.ownerOrganizationId ?? "developer-default") === myOrgId)
+        .map((p) => p.id),
+    );
+  }, [myOrgId]);
+  const myUserIds = useMemo(
+    () => new Set(getMembersForWorkspace(myWorkspaceKey).map((m) => m.id)),
+    [myWorkspaceKey],
+  );
+
   const todayEvents = useMemo(() => {
     return eventsInDay(allEvents, today)
       .filter((ev) => ev.status !== "cancelled")
       .filter((ev) => !selectedUserId || ev.assigneeUserId === selectedUserId)
+      .filter((ev) => {
+        if (ev.promotionId) return myPromoIds.has(ev.promotionId);
+        if (ev.assigneeUserId) return myUserIds.has(ev.assigneeUserId);
+        return isLuxinmoT;
+      })
       .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allEvents, selectedUserId]);
+  }, [allEvents, selectedUserId, myPromoIds, myUserIds, isLuxinmoT]);
 
   const totalToday = todayEvents.length;
   const visible = todayEvents.slice(0, 5);
@@ -531,7 +618,31 @@ function RecentActivityWidget({ selectedUserId }: { selectedUserId: string | nul
     ? (selectedUserId ?? undefined)
     : currentUser.id;
 
-  const feed = useBusinessActivity({ userId: effectiveUserId });
+  /* SCOPE · solo eventos de promociones de mi workspace + miembros de
+   *  mi equipo. Sin esto, Carlos (AEDAS) ve "Registro aprobado · Sophie
+   *  Laurent · Villa Serena" (Luxinmo promo) y "Nuevo miembro · Thomas
+   *  Weber" (Luxinmo team). Member events no llevan `promotionId` ·
+   *  por eso necesitamos también filtrar por `userId`. */
+  const myOrgId = currentOrgIdentity(currentUser).orgId;
+  const myWorkspaceKey = currentWorkspaceKey(currentUser);
+  const myPromoIds = useMemo(() => {
+    const all = [...developerOnlyPromotions, ...marketplacePromotions];
+    return new Set(
+      all
+        .filter((p) => (p.ownerOrganizationId ?? "developer-default") === myOrgId)
+        .map((p) => p.id),
+    );
+  }, [myOrgId]);
+  const myUserIds = useMemo(
+    () => new Set(getMembersForWorkspace(myWorkspaceKey).map((m) => m.id)),
+    [myWorkspaceKey],
+  );
+
+  const feed = useBusinessActivity({
+    userId: effectiveUserId,
+    restrictPromotionIds: myPromoIds,
+    restrictUserIds: myUserIds,
+  });
   const items = feed.slice(0, 5);
 
   return (

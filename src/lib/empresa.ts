@@ -861,6 +861,9 @@ export function getDeveloperProfile(tenantId: string): Empresa | undefined {
  *  `currentUser.ts` para evitar ciclos · usa solo accountType+agencyId. */
 function userOrgId(user: { accountType: string; agencyId?: string } | null | undefined): string {
   if (user?.accountType === "agency" && user.agencyId) return user.agencyId;
+  /* Developer no-Luxinmo · `agencyId` lleva el workspace externo
+   *  (`prom-1` AEDAS, `prom-2` Neinor, etc.). Sin él, fallback Luxinmo. */
+  if (user?.accountType === "developer" && user.agencyId) return user.agencyId;
   return DEFAULT_DEVELOPER_TENANT_ID;
 }
 

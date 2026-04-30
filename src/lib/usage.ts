@@ -38,30 +38,56 @@ import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { agencies as ALL_AGENCIES } from "@/data/agencies";
 import { useCreatedRegistros } from "@/lib/registrosStorage";
 import { registros as SEED_REGISTROS } from "@/data/records";
+import { useCurrentUser } from "@/lib/currentUser";
+import { currentOrgIdentity } from "@/lib/orgCollabRequests";
+import { getCollaboratingDeveloperIds } from "@/lib/developerNavigation";
 
 /* ══════ Counters puros ═══════════════════════════════════════════ */
 
-/** Promociones activas del developer (no incluye borradores). */
-export function countActivePromotions(): number {
-  return developerOnlyPromotions.filter((p) => p.status === "active").length;
+const DEFAULT_ORG = "developer-default";
+
+/** Promociones activas del developer (no incluye borradores). Filtradas
+ *  por `ownerOrganizationId === orgId` para multi-tenant correcto. */
+export function countActivePromotions(orgId: string = DEFAULT_ORG): number {
+  return developerOnlyPromotions
+    .filter((p) => p.status === "active")
+    .filter((p) => (p.ownerOrganizationId ?? DEFAULT_ORG) === orgId)
+    .length;
 }
 
 /** Agencias que el promotor ha invitado o que están en su red.
  *  Cualquier `estadoColaboracion` definido cuenta · `pendiente`
  *  también, porque el promotor ya consumió una "ranura" al invitarla
- *  aunque la agencia todavía no haya respondido. */
-export function countInvitedAgencies(): number {
-  return ALL_AGENCIES.filter((a) => !!a.estadoColaboracion).length;
+ *  aunque la agencia todavía no haya respondido. Filtradas por
+ *  colaboración con el `orgId` actual. */
+export function countInvitedAgencies(orgId: string = DEFAULT_ORG): number {
+  return ALL_AGENCIES
+    .filter((a) => !!a.estadoColaboracion)
+    .filter((a) => getCollaboratingDeveloperIds(a).has(orgId))
+    .length;
 }
 
 /** Registros recibidos de AGENCIAS COLABORADORAS (acumulado · cualquier
  *  estado). Solo cuentan al paywall los `origen === "collaborator"`:
  *  walk-ins del promotor, portales (Idealista, Fotocasa…) y registros
  *  directos NO entran al cómputo · son leads del propio promotor.
+ *  Filtrados por promoción del workspace actual.
  *  Ver `docs/portal-leads-integration.md`. */
-export function countRegistros(createdRegistros: ReadonlyArray<{ origen: string }>): number {
+export function countRegistros(
+  createdRegistros: ReadonlyArray<{ origen: string; promotionId?: string }>,
+  orgId: string = DEFAULT_ORG,
+): number {
   const all = [...createdRegistros, ...SEED_REGISTROS];
-  return all.filter((r) => r.origen === "collaborator").length;
+  /* Set de promo ids del workspace para no recalcular por iteración. */
+  const myPromoIds = new Set(
+    developerOnlyPromotions
+      .filter((p) => (p.ownerOrganizationId ?? DEFAULT_ORG) === orgId)
+      .map((p) => p.id),
+  );
+  return all
+    .filter((r) => r.origen === "collaborator")
+    .filter((r) => !r.promotionId || myPromoIds.has(r.promotionId))
+    .length;
 }
 
 /* ══════ Hook reactivo ════════════════════════════════════════════ */
@@ -82,21 +108,22 @@ export type UsageCounters = {
  */
 export function useUsageCounters(): UsageCounters {
   const created = useCreatedRegistros();
+  const user = useCurrentUser();
+  const orgId = currentOrgIdentity(user).orgId;
   const [counters, setCounters] = useState<UsageCounters>(() => ({
-    activePromotions: countActivePromotions(),
-    invitedAgencies: countInvitedAgencies(),
-    registros: countRegistros(created),
+    activePromotions: countActivePromotions(orgId),
+    invitedAgencies: countInvitedAgencies(orgId),
+    registros: countRegistros(created, orgId),
   }));
 
-  /* Re-derivar si la lista de registros creados cambia · es la única
-   *  fuente reactiva en Fase 1 mock. */
+  /* Re-derivar si la lista de registros creados o el orgId cambian. */
   useEffect(() => {
     setCounters({
-      activePromotions: countActivePromotions(),
-      invitedAgencies: countInvitedAgencies(),
-      registros: countRegistros(created),
+      activePromotions: countActivePromotions(orgId),
+      invitedAgencies: countInvitedAgencies(orgId),
+      registros: countRegistros(created, orgId),
     });
-  }, [created]);
+  }, [created, orgId]);
 
   return counters;
 }

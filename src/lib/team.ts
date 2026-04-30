@@ -176,7 +176,12 @@ export function seedMembersForWorkspace(workspaceKey: string): TeamMember[] {
      * de manera estática desde el helper interno (ver buildAgencyTeam). */
     return buildAgencyTeamSafe(agencyId);
   }
-  return TEAM_MEMBERS;
+  /* Workspaces developer no-Luxinmo (`prom-1` AEDAS, `prom-2` Neinor,
+   *  etc.) arrancan SIN equipo seeded · no fallback a TEAM_MEMBERS de
+   *  Luxinmo · si no, los miembros u1...u8 de Luxinmo aparecen como
+   *  equipo de Carlos/Marta/Sara y leakean en /inicio, /equipo y
+   *  selectores de miembros. */
+  return [];
 }
 
 /* Wrapper que importa `buildAgencyTeam` perezosamente para no crear

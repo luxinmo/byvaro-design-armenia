@@ -121,6 +121,16 @@ export type BusinessActivityFilter = {
   from?: string;
   /** ISO · límite superior (exclusive). */
   to?: string;
+  /** Si se pasa, descarta eventos cuyo `meta.promotionId` esté definido
+   *  y NO pertenezca al set · útil para scope multi-tenant en /inicio
+   *  y /actividad. Eventos sin `promotionId` pasan (member events,
+   *  agency events sin promo asociada). */
+  restrictPromotionIds?: ReadonlySet<string>;
+  /** Si se pasa, descarta eventos cuyo `userId` esté definido y NO
+   *  pertenezca al set. Útil para excluir member/calendar events de
+   *  miembros de OTROS workspaces · combinado con `restrictPromotionIds`
+   *  cubre los dos vectores de leak en multi-tenant. */
+  restrictUserIds?: ReadonlySet<string>;
 };
 
 /* ══════════════════════════════════════════════════════════════════
@@ -411,13 +421,18 @@ function applyFilters(
   list: BusinessActivityEvent[],
   filter: BusinessActivityFilter = {},
 ): BusinessActivityEvent[] {
-  const { userId, kinds, from, to } = filter;
+  const { userId, kinds, from, to, restrictPromotionIds, restrictUserIds } = filter;
   const fromMs = from ? new Date(from).getTime() : -Infinity;
   const toMs = to ? new Date(to).getTime() : Infinity;
   return list
     .filter((e) => {
       if (userId !== undefined && userId !== null && e.userId !== userId) return false;
       if (kinds && kinds.length > 0 && !kinds.includes(e.kind)) return false;
+      if (restrictPromotionIds) {
+        const pid = (e.meta as { promotionId?: string } | undefined)?.promotionId;
+        if (pid && !restrictPromotionIds.has(pid)) return false;
+      }
+      if (restrictUserIds && e.userId && !restrictUserIds.has(e.userId)) return false;
       const ts = new Date(e.at).getTime();
       if (Number.isNaN(ts)) return false;
       if (ts < fromMs || ts >= toMs) return false;
@@ -455,7 +470,18 @@ export function useBusinessActivity(
 ): BusinessActivityEvent[] {
   const createdRegs = useCreatedRegistros();
   const calendarEvents = useCalendarEvents();
-  const filterKey = JSON.stringify(filter);
+  const filterKey = JSON.stringify({
+    ...filter,
+    /* Set no es serializable · convertir a array ordenado · si no, dos
+     *  Sets distintos producirían el mismo `filterKey` y la cache de
+     *  useMemo no se invalidaría al cambiar de workspace. */
+    restrictPromotionIds: filter.restrictPromotionIds
+      ? Array.from(filter.restrictPromotionIds).sort()
+      : undefined,
+    restrictUserIds: filter.restrictUserIds
+      ? Array.from(filter.restrictUserIds).sort()
+      : undefined,
+  });
 
   return useMemo(() => {
     const allRegs = [...createdRegs, ...SEED_REGISTROS];

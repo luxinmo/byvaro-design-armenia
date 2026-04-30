@@ -67,7 +67,7 @@ import {
 import { RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner"; // feedback tras publicar · Toaster global en App.tsx
 import { useCurrentUser } from "@/lib/currentUser";
-import { developerHref } from "@/lib/developerNavigation";
+import { developerHref, getAgenciesForDeveloper } from "@/lib/developerNavigation";
 import { useInvitaciones } from "@/lib/invitaciones";
 import { ensureAgencyContactForPromoter } from "@/lib/invitationContacts";
 import {
@@ -2621,9 +2621,35 @@ function AgenciesTab({ promotionId, navigate, onInvite, canShare = true, onActiv
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const newRequests = agencies.filter(a => a.isNewRequest);
+  /* SCOPED · resolver el workspace dueño de esta promoción y filtrar
+   *  todo lo que aparece aquí a agencias relacionadas con MI
+   *  workspace · evita que el panel de agencias de una promo de AEDAS
+   *  exponga el roster de Luxinmo. */
+  const promoOwnerOrgId = useMemo(() => {
+    const all = [...promotions, ...developerOnlyPromotions];
+    const p = all.find((x) => x.id === promotionId);
+    return p?.ownerOrganizationId ?? "developer-default";
+  }, [promotionId]);
+  const myCollabAgencies = useMemo(
+    () => getAgenciesForDeveloper(promoOwnerOrgId, agencies),
+    [promoOwnerOrgId],
+  );
+  const myCollabAgencyIds = useMemo(
+    () => new Set(myCollabAgencies.map((a) => a.id)),
+    [myCollabAgencies],
+  );
+
+  const newRequests = agencies.filter(a => a.isNewRequest && a.requestedPromotionIds?.includes(promotionId));
   const collaboratingHere = agencies.filter(a => !a.isNewRequest && a.promotionsCollaborating.includes(promotionId));
-  const otherPromoAgencies = agencies.filter(a => !a.isNewRequest && a.promotionsCollaborating.length > 0 && !a.promotionsCollaborating.includes(promotionId));
+  /* Solo "otras agencias del mismo workspace" · no expone agencias
+   *  de otros developers · clasifica las que YA colaboran con MI
+   *  workspace pero no aún con esta promo concreta. */
+  const otherPromoAgencies = agencies.filter(a =>
+    !a.isNewRequest
+    && a.promotionsCollaborating.length > 0
+    && !a.promotionsCollaborating.includes(promotionId)
+    && myCollabAgencyIds.has(a.id),
+  );
 
   const allRelevant = [...newRequests, ...collaboratingHere];
 
