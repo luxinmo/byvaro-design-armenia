@@ -1,3 +1,5 @@
+import { seedRef } from "@/lib/publicRef";
+
 /**
  * records.ts · Mock de registros (leads entrantes de agencias o directos)
  *
@@ -389,20 +391,13 @@ function buildSeedAudit(
 }
 
 function enrichLegacyRegistroSeeds(seeds: LegacyRegistroSeed[]): Registro[] {
-  /* Asignamos publicRef por orden cronológico ASC (el más antiguo es
-     re000001) · así futuros registros nuevos siempre tienen ref mayor.
-     Y atribuimos audit.actor determinísticamente para que viewOwn
-     funcione (member solo ve los suyos). */
-  const sorted = [...seeds].sort(
-    (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
-  );
-  const refMap = new Map<string, string>();
-  sorted.forEach((s, i) => {
-    refMap.set(s.id, `re${String(i + 1).padStart(6, "0")}`);
-  });
+  /* publicRef · scheme canónico RG + 9 dígitos · derivado del id
+   *  via hash determinista (estable entre reloads). Antes asignaba
+   *  re000001 secuencial · cambio decisión 2026-04-30 a refs random.
+   *  Audit.actor sigue determinístico para que viewOwn funcione. */
   return seeds.map((s) => ({
     ...s,
-    publicRef: refMap.get(s.id)!,
+    publicRef: seedRef("registro", s.id),
     audit: s.audit ?? buildSeedAudit(s),
   }));
 }

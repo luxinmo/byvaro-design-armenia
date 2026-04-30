@@ -105,6 +105,34 @@ export function isValidPublicRef(s: string | undefined | null, entity: PublicRef
   return DIGIT_RE.test(s.slice(prefix.length));
 }
 
+/** Genera una publicRef DETERMINISTA a partir de un seedId estable
+ *  (ej. el `id` del seed). El output parece aleatorio pero es estable
+ *  entre reloads · imprescindible para seed data, donde la ref debe
+ *  ser la misma cada vez que la app arranca (de lo contrario las
+ *  URLs `/registros/RGXXXXXXXXX` no funcionarían).
+ *
+ *  Para entidades creadas en runtime (no seeds), usa `generatePublicRef`
+ *  que SÍ es aleatorio puro · cada llamada un id distinto.
+ *
+ *  Algoritmo · FNV-1a hash del seedId truncado al espacio de la
+ *  entidad. Distribución uniforme · sin patrón visible. NO se debe
+ *  usar como handle de seguridad (es predecible si conoces el seedId
+ *  · pero el seedId es interno y no público).
+ */
+export function seedRef(entity: PublicRefEntity, seedId: string): string {
+  const { prefix, digits } = SCHEME[entity];
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seedId.length; i++) {
+    h ^= seedId.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  /* Convertir hash a entero positivo, modular al espacio, padding a
+   *  N dígitos. Math.imul puede dar negativos, normalizamos con >>>0. */
+  const max = 10 ** digits;
+  const num = (h >>> 0) % max;
+  return prefix + String(num).padStart(digits, "0");
+}
+
 /* ══════ Helpers de migración legacy ════════════════════════════════
  *
  * Datos seed antiguos llevan formatos:

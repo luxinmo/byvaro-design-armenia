@@ -18,7 +18,7 @@
  */
 
 import type { Contact, ContactOrigin, ContactSourceType } from "./types";
-import { migrateLegacyRef } from "@/lib/publicRef";
+import { seedRef } from "@/lib/publicRef";
 
 type LegacyContactSeed = Omit<Contact, "publicRef" | "primarySource" | "latestSource" | "origins" | "lastActivityAt">;
 
@@ -56,7 +56,7 @@ function parseFirstSeen(s: string | undefined): string {
   return new Date(2026, 0, 1).toISOString();
 }
 
-function enrichLegacySeed(seed: LegacyContactSeed, idx: number): Contact {
+function enrichLegacySeed(seed: LegacyContactSeed, _idx: number): Contact {
   const occurredAt = parseFirstSeen(seed.firstSeen);
   const origin: ContactOrigin = {
     source: inferOriginSource(seed),
@@ -66,9 +66,10 @@ function enrichLegacySeed(seed: LegacyContactSeed, idx: number): Contact {
   };
   return {
     ...seed,
-    /* publicRef · usa migrateLegacyRef si trae `CON-NNNN`, si no genera
-       `co${idx+1}` zero-padded como fallback determinista. */
-    publicRef: migrateLegacyRef(seed.reference) ?? `co${String(idx + 1).padStart(6, "0")}`,
+    /* publicRef · scheme canónico CO + 7 dígitos · derivado del id
+     *  via hash determinista (estable entre reloads). El campo
+     *  legacy `reference: "CON-NNNN"` queda solo como breadcrumb. */
+    publicRef: seedRef("contact", seed.id),
     primarySource: origin,
     latestSource: origin,
     origins: [origin],
