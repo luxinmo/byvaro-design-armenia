@@ -133,17 +133,18 @@ export const leadStatusConfig: Record<LeadStatus, { label: string; order: number
 /** Helper: resta N días/horas al momento actual en ISO. */
 const hoursAgo = (h: number) => new Date(Date.now() - h * 60 * 60 * 1000).toISOString();
 
-import { migrateLegacyRef } from "@/lib/publicRef";
+import { seedRef } from "@/lib/publicRef";
 
-/* Backfill · cada Lead seed se escribe con `reference: "OPP-NNNN"`
- * (legacy) y se enriquece con `publicRef: "opNNNNNN"` mediante el
- * wrapper · evita reescribir 12 entries a mano. */
+/* Backfill · cada Lead se enriquece con `publicRef` derivado del
+ * id via hash determinista. Scheme canónico: lead/oportunidad =
+ * registro · prefijo `RG` + 9 dígitos. El campo legacy
+ * `reference: "OPP-NNNN"` queda como breadcrumb. */
 type LegacyLeadSeed = Omit<Lead, "publicRef">;
 
-function enrichLegacyLeadSeed(seed: LegacyLeadSeed, idx: number): Lead {
+function enrichLegacyLeadSeed(seed: LegacyLeadSeed, _idx: number): Lead {
   return {
     ...seed,
-    publicRef: migrateLegacyRef(seed.reference) ?? `op${String(idx + 1).padStart(6, "0")}`,
+    publicRef: seedRef("registro", seed.id),
   };
 }
 

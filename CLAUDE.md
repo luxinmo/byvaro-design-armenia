@@ -73,54 +73,74 @@ Cuándo NO usar este patrón · datos relacionales con queries propias
 (JOIN, WHERE), payloads >1MB, cualquier cosa que requiera índices.
 Esos van a tabla dedicada con FK.
 
-### Referencia pública del tenant · `IDXXXXXX` inmutable
+### Referencias públicas · scheme canónico de Byvaro
 
-**Toda organización en Byvaro lleva un `public_ref` aleatorio de la
-forma `ID` + 6 chars del alfabeto sin ambigüedades** (sin 0/O/1/I/L) ·
-32^6 ≈ 1.07 mil millones de combinaciones. Generado **server-side**
-por el trigger `gen_tenant_public_ref()` al INSERT en `organizations`.
-Inmutable después del primer set (trigger `protect_public_ref` lanza
-exception en cualquier UPDATE).
+**Toda entidad pública lleva un `public_ref` con prefijo de 2 letras
+mayúsculas + N dígitos aleatorios.** Solo dígitos `0-9`. Aleatorio ·
+NUNCA secuencial · inmutable durante la vida de la entidad.
+
+| Entidad      | Prefijo | Dígitos | Total | Espacio    |
+|--------------|---------|--------:|------:|-----------:|
+| Tenant (org) | `ID`    | 6       | 8     | 1.000.000  |
+| Usuario      | `US`    | 7       | 9     | 10.000.000 |
+| Promoción    | `PR`    | 5       | 7     | 100.000    |
+| Unidad       | `UN`    | 8       | 10    | 100.000.000 |
+| Registro     | `RG`    | 9       | 11    | 1.000.000.000 |
+| Contacto     | `CO`    | 7       | 9     | 10.000.000 |
 
 **Por qué aleatoria y no secuencial.** Si fuera 000001, 000002…
-cualquier observador podría inferir cuándo se registró un tenant
-respecto a otro · señal competitiva no deseada. Aleatoriedad
-uniforme rompe esa correlación.
+cualquier observador podría inferir cuándo se creó una entidad
+respecto a otra (orden de registro, volumen del producto). Señal
+competitiva no deseada. Aleatoriedad uniforme rompe esa correlación.
 
-**Dónde se usa.**
+**Por qué solo dígitos.** Lectura unívoca · sin ambigüedad humana
+(0/O, 1/I/L, 2/Z, etc.). Más fácil de dictar por teléfono y de
+introducir desde teclado numérico móvil.
 
-- **Display** · `/empresa` "Sobre nosotros" muestra la ref read-only
-  (input bloqueado en edit + tile mono en preview/visitor) con botón
-  de copia. Formato visual `ID·ABC·DEF` (separadores cosméticos · el
-  valor canónico es de 8 chars sin separador).
-- **Discovery cross-tenant** · RPC pública `find_org_by_ref(p_ref)`
-  (SECURITY DEFINER) resuelve la org por su ref sin exponer el id
-  interno. Solo devuelve campos públicos (display_name, kind, logo,
-  verified).
-- **Tabla `tenant_links`** · cada vínculo cross-tenant se identifica
-  por `(from_ref, to_ref)` en vez de exponer ids internos en URLs,
-  emails o webhooks. RLS valida membership en CUALQUIERA de las dos
-  orgs (from o to).
+**Generación** · helpers en `src/lib/`:
 
-**Helpers TS** · `src/lib/tenantRef.ts`:
+- `tenantRef.ts` · `generateTenantRef()` · solo para tenant.
+- `publicRef.ts` · `generatePublicRef(entity, existing?)` · cubre los
+  otros 5 tipos. Retry-on-collision contra el array `existing` (mock).
+  Validación per-entity con `isValidPublicRef(s, entity)`.
 
-- `generateTenantRef()` · solo para mocks/tests · backend genera por trigger.
-- `isValidTenantRef(s)` · valida formato.
-- `formatTenantRef(s)` · agrupa para display (`ID·ABC·DEF`).
+**Inmutabilidad.** Una vez asignada, JAMÁS se modifica:
+- Backend (tenant) · trigger `protect_public_ref` rechaza UPDATE.
+- Frontend · NO se ofrece input editable en ninguna UI.
+- Si el usuario quiere "cambiar la ref" hay que crear una nueva entidad.
 
-**Regla dura · NUNCA editable.** El input de "Detalles" en
-`EmpresaAboutTab` lo expone como `readOnly` con tooltip + icono Lock.
-Si añades una nueva pantalla que renderice empresa, NO ofrezcas
-input editable de `publicRef`. Si necesitas un nuevo handle, la única
-forma legítima es crear una nueva organización (evento legal, no
-rebrand).
+**Display** · `/empresa` "Sobre nosotros" muestra la ref tenant en
+read-only con botón Copiar. Formato visual cosmético `ID·123·456`
+(separadores · valor canónico sin separador). Cualquier nueva pantalla
+que muestre publicRef debe usar `formatTenantRef()` para tenant o el
+valor crudo para los otros entities.
 
-**Backend.** Spec en `supabase/migrations/20260430120000_tenant_public_ref.sql`:
-- Columna `organizations.public_ref text unique not null`.
-- Función + trigger generadores.
-- Trigger inmutabilidad (UPDATE proibido).
-- Tabla `tenant_links` foundation con `from_ref`/`to_ref` + RLS.
-- RPC pública `find_org_by_ref(text)`.
+**Discovery cross-tenant** · RPC pública `find_org_by_ref(p_ref)`
+(SECURITY DEFINER) resuelve la org por su ref sin exponer el id
+interno. Solo devuelve campos públicos. Mismo patrón se aplicará a
+otras entidades cuando hagan falta lookups públicos.
+
+**Tabla `tenant_links`** · vínculos cross-tenant se identifican por
+`(from_ref, to_ref)` en vez de exponer ids internos en URLs, emails o
+webhooks. RLS valida membership en CUALQUIERA de las dos orgs.
+
+**Backend** · spec en migraciones:
+- `supabase/migrations/20260430120000_tenant_public_ref.sql` · columna,
+  trigger generador, trigger inmutabilidad, tabla tenant_links, RPC.
+- `supabase/migrations/20260430140000_tenant_ref_digits.sql` ·
+  cambia alfabeto del generador a dígitos · UPDATE explícito de los
+  15 orgs existentes a refs nuevas (matchean los seeds frontend).
+
+**Para entidades nuevas** (al añadir una al modelo):
+1. Decide prefijo + longitud que encaje con el scheme · si no encaja
+   en la tabla de arriba, AMPLIA la tabla aquí mismo en CLAUDE.md.
+2. Añade columna `public_ref text unique not null` a la tabla.
+3. Crea generador SQL `gen_<entity>_public_ref()` (mismo patrón que
+   `gen_tenant_public_ref()`).
+4. Trigger BEFORE INSERT auto-rellena · trigger BEFORE UPDATE protege
+   inmutabilidad.
+5. Añade entrada al SCHEME en `src/lib/publicRef.ts`.
+6. NO ofrezcas input editable en UI.
 
 ### Doc canónico completo
 

@@ -283,7 +283,7 @@ export function getContractStatus(
 export const agencies: Agency[] = [
   {
     id: "ag-1",
-    publicRef: "IDB4WM3K",
+    publicRef: "ID284615",
     name: "Prime Properties Costa del Sol",
     logo: "https://api.dicebear.com/9.x/shapes/svg?seed=prime-properties&backgroundColor=3b82f6&size=120",
     cover: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=600&h=200&fit=crop",
@@ -356,7 +356,7 @@ export const agencies: Agency[] = [
   },
   {
     id: "ag-2",
-    publicRef: "IDHE7TBV",
+    publicRef: "ID718342",
     name: "Nordic Home Finders",
     logo: "https://api.dicebear.com/9.x/shapes/svg?seed=nordic-home&backgroundColor=10b981&size=120",
     cover: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&h=200&fit=crop",
@@ -427,7 +427,7 @@ export const agencies: Agency[] = [
   },
   {
     id: "ag-3",
-    publicRef: "ID2WEUSZ",
+    publicRef: "ID503918",
     name: "Dutch & Belgian Realty",
     logo: "https://api.dicebear.com/9.x/shapes/svg?seed=dutch-belgian&backgroundColor=f59e0b&size=120",
     cover: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600&h=200&fit=crop",
@@ -493,7 +493,7 @@ export const agencies: Agency[] = [
   },
   {
     id: "ag-4",
-    publicRef: "IDMQSTD7",
+    publicRef: "ID846207",
     name: "Meridian Real Estate Group",
     logo: "https://api.dicebear.com/9.x/shapes/svg?seed=meridian-group&backgroundColor=ef4444&size=120",
     cover: "https://images.unsplash.com/photo-1464938050520-ef2571e0d6d2?w=600&h=200&fit=crop",
@@ -556,7 +556,7 @@ export const agencies: Agency[] = [
   },
   {
     id: "ag-5",
-    publicRef: "ID4RMQ3M",
+    publicRef: "ID129573",
     name: "Iberia Luxury Homes",
     logo: "https://api.dicebear.com/9.x/shapes/svg?seed=iberia-luxury&backgroundColor=8b5cf6&size=120",
     cover: "https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?w=600&h=200&fit=crop",
@@ -616,7 +616,7 @@ export const agencies: Agency[] = [
   },
   {
     id: "ag-6",
-    publicRef: "IDVX3TE9",
+    publicRef: "ID634891",
     name: "Baltic Property Partners",
     logo: "https://ui-avatars.com/api/?name=BP&background=06b6d4&color=fff&size=120&font-size=0.4&bold=true",
     cover: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=600&h=200&fit=crop",
@@ -647,7 +647,7 @@ export const agencies: Agency[] = [
    *  entrantes en esa promoción para ver cómo escala el dialog. */
   {
     id: "ag-7",
-    publicRef: "IDJ22C7G",
+    publicRef: "ID275148",
     name: "Mediterranean Lux Homes",
     logo: "https://api.dicebear.com/9.x/shapes/svg?seed=med-lux&backgroundColor=a855f7&size=120",
     cover: "https://images.unsplash.com/photo-1600566753376-12c8ab7fb75b?w=600&h=200&fit=crop",
@@ -686,7 +686,7 @@ export const agencies: Agency[] = [
   },
   {
     id: "ag-8",
-    publicRef: "IDNQW4JN",
+    publicRef: "ID968452",
     name: "Moscow Estates",
     logo: "https://api.dicebear.com/9.x/shapes/svg?seed=moscow-estates&backgroundColor=dc2626&size=120",
     cover: "https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=600&h=200&fit=crop",
@@ -724,7 +724,7 @@ export const agencies: Agency[] = [
   },
   {
     id: "ag-9",
-    publicRef: "IDYA87BX",
+    publicRef: "ID416307",
     name: "Alpine Living",
     logo: "https://api.dicebear.com/9.x/shapes/svg?seed=alpine-living&backgroundColor=0ea5e9&size=120",
     cover: "https://images.unsplash.com/photo-1519741497674-611481863552?w=600&h=200&fit=crop",
@@ -764,7 +764,7 @@ export const agencies: Agency[] = [
   },
   {
     id: "ag-10",
-    publicRef: "IDM6HZZX",
+    publicRef: "ID739526",
     name: "Gulf Premium Realty",
     logo: "https://api.dicebear.com/9.x/shapes/svg?seed=gulf-premium&backgroundColor=eab308&size=120",
     cover: "https://images.unsplash.com/photo-1583422409516-2895a77efded?w=600&h=200&fit=crop",
