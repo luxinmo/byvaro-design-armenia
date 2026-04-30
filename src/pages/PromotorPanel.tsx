@@ -46,7 +46,7 @@ import { PagosTab } from "@/components/collaborators/panel/PagosTab";
 import { FacturasTab } from "@/components/collaborators/panel/FacturasTab";
 import { HistorialTab } from "@/components/collaborators/panel/HistorialTab";
 import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
-import { DEFAULT_DEVELOPER_ID } from "@/lib/developerNavigation";
+import { DEFAULT_DEVELOPER_ID, hasDeveloperCollab } from "@/lib/developerNavigation";
 import { DeveloperDatosTab } from "@/components/collaborators/panel/DeveloperDatosTab";
 import { useEmpresaCategories } from "@/lib/empresaCategories";
 import { EmpresaCategoryBadges } from "@/components/empresa/EmpresaCategoryBadges";
@@ -127,6 +127,12 @@ export default function PromotorPanel() {
    * datos de su relación con el único promotor. */
   const agencyId = user.accountType === "agency" ? user.agencyId : undefined;
   const agency = useMemo(() => agencies.find((a) => a.id === agencyId), [agencyId]);
+
+  /* ¿La agencia logueada colabora con ESTE developer concreto? Se
+   *  evalúa cruzando `agency.promotionsCollaborating` contra los
+   *  owners reales de cada promo. Sin colab real, los chips de
+   *  estado se ajustan ("Sin colaboración con este promotor"). */
+  const hasCollabWithThisDeveloper = !!tenantId && hasDeveloperCollab(user, tenantId);
 
   /* Rol del usuario en la agencia · admin ve todo, member ve los
    * mismos tabs pero los admin-only le aparecen con empty state
@@ -243,12 +249,20 @@ export default function PromotorPanel() {
                 {promoterLocation || "Promotor inmobiliario"}
               </p>
               <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full border border-success/25 bg-success/10 text-[10.5px] font-medium text-success">
-                  <span className="h-1.5 w-1.5 rounded-full bg-success" /> Colaboración activa
-                </span>
-                {agency?.collaboratingSince && (
-                  <span className="inline-flex items-center h-5 px-2 rounded-full border border-border bg-muted/40 text-[10.5px] font-medium text-muted-foreground">
-                    Desde {agency.collaboratingSince}
+                {hasCollabWithThisDeveloper ? (
+                  <>
+                    <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full border border-success/25 bg-success/10 text-[10.5px] font-medium text-success">
+                      <span className="h-1.5 w-1.5 rounded-full bg-success" /> Colaboración activa
+                    </span>
+                    {agency?.collaboratingSince && (
+                      <span className="inline-flex items-center h-5 px-2 rounded-full border border-border bg-muted/40 text-[10.5px] font-medium text-muted-foreground">
+                        Desde {agency.collaboratingSince}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full border border-border bg-muted/40 text-[10.5px] font-medium text-muted-foreground">
+                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" /> Sin colaboración con este promotor todavía
                   </span>
                 )}
               </div>
@@ -324,7 +338,7 @@ export default function PromotorPanel() {
             a Resumen (guard arriba). */}
         {agency && (
           <>
-            {tab === "resumen"       && <ResumenTab agency={agency} fromPromoId={fromPromoId} onGoTo={(t) => setTab(t as PanelTab)} readOnly />}
+            {tab === "resumen"       && <ResumenTab agency={agency} developerOrgId={tenantId} fromPromoId={fromPromoId} onGoTo={(t) => setTab(t as PanelTab)} readOnly />}
             {tab === "estadisticas"  && (
               <EstadisticasTab
                 agency={agency}

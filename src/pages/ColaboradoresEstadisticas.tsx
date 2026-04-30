@@ -31,6 +31,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Flag } from "@/components/ui/Flag";
 import { cn } from "@/lib/utils";
+import { useCurrentUser } from "@/lib/currentUser";
+import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import { AgencyRankingTop5 } from "@/components/colaboradores/AgencyRankingTop5";
 
 /* ─── helpers ─── */
@@ -195,6 +197,33 @@ export default function ColaboradoresEstadisticas({
 } = {}) {
   const navigate = useNavigate();
   const [tab, setTab] = useTabParam<Tab>(TAB_KEYS, "registros");
+
+  /* SCOPE GUARD · las matrices REG_NAT / VIS_NAT / EFF_NAT y agencies
+   *  EV/CB/HM... son fixtures hardcodeadas SOLO con datos del workspace
+   *  de Luxinmo. Para developers no-Luxinmo (Carlos AEDAS, Marta Neinor,
+   *  etc.) no tienen sentido · mostramos empty state hasta que el
+   *  backend aporte datos reales del workspace logueado.
+   *  TODO(backend): reemplazar matrices estáticas por agregaciones SQL
+   *  scoped al `organization_id` del JWT. */
+  const currentUser = useCurrentUser();
+  const myOrgIdStats = currentOrgIdentity(currentUser).orgId;
+  const isLuxinmo = myOrgIdStats === "developer-default";
+  if (!isLuxinmo) {
+    return (
+      <div className={cn("h-full overflow-auto bg-background", embedded ? "" : "")}>
+        <div className="px-4 sm:px-6 lg:px-8 pt-6 pb-10 max-w-content mx-auto w-full">
+          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
+            <h1 className="text-base font-semibold text-foreground mb-2">Estadísticas no disponibles</h1>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
+              Esta sección agrega datos de tu red comercial · cuando tengas
+              actividad real (registros, visitas, ventas con tus agencias
+              colaboradoras) las estadísticas se calcularán automáticamente.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   /* ─── Filtros ─── */
   const [fNations, setFNations] = useState<NationId[]>([]);

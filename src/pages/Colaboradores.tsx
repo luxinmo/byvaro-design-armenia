@@ -47,6 +47,8 @@ import {
 } from "@/lib/collabRequests";
 import { useHasPermission } from "@/lib/permissions";
 import { useCurrentUser } from "@/lib/currentUser";
+import { currentOrgIdentity } from "@/lib/orgCollabRequests";
+import { getAgenciesForDeveloper } from "@/lib/developerNavigation";
 import { Lock, Undo2 } from "lucide-react";
 import { isAgencyVerified } from "@/lib/licenses";
 import { getAgencyLicenses } from "@/lib/agencyLicenses";
@@ -301,15 +303,27 @@ function ColaboradoresDeveloperView({ useTestCard = false }: { useTestCard?: boo
    *  inmediatamente en el listado. */
   const baseAgencies = useResolvedAgencies();
 
+  /* SCOPED · solo agencias que colaboran con el workspace logueado.
+   *  Carlos (AEDAS) NO ve el roster completo de Luxinmo · solo ve
+   *  las agencias que tienen alguna promoción de AEDAS en su
+   *  `promotionsCollaborating`. Mock single-developer funcionaba sin
+   *  esto porque solo había un developer · ahora multi-dev exige
+   *  filtro estricto. */
+  const myOrgIdColab = currentOrgIdentity(user).orgId;
+  const scopedBaseAgencies = useMemo(
+    () => getAgenciesForDeveloper(myOrgIdColab, baseAgencies),
+    [myOrgIdColab, baseAgencies],
+  );
+
   const agencies = useMemo<Agency[]>(() => {
-    return baseAgencies
+    return scopedBaseAgencies
       .map((a) => {
         const ov = overrides[a.id];
         if (ov === "deleted") return null;
         return ov ? { ...a, ...ov } : a;
       })
       .filter(Boolean) as Agency[];
-  }, [overrides, baseAgencies]);
+  }, [overrides, scopedBaseAgencies]);
 
   const pendientes = useMemo(
     () => agencies.filter((a) => a.solicitudPendiente || a.isNewRequest),

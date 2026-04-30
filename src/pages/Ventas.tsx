@@ -35,6 +35,7 @@ import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { agencies } from "@/data/agencies";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/currentUser";
+import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -122,18 +123,28 @@ export default function Ventas() {
   const isAgencyUser = currentUser.accountType === "agency";
 
   // Estado "vivo" sobre el mock — permite simular transiciones desde el diálogo.
-  // Para agencia: filtramos al dataset base por `agencyId` para que todos los
-  // cálculos de abajo (KPIs, filtros, kanban) ya partan de sus propias ventas.
+  // SCOPED por workspace · agencia ve solo sus propias ventas, developer
+  // ve solo las ventas cuyo `promotionId` pertenece a SU workspace
+  // (evita leak cross-developer · Carlos AEDAS no ve ventas de Luxinmo).
   // Member · además filtra por `audit.actor.email` (CLAUDE.md viewOwn).
+  const myOrgId = currentOrgIdentity(currentUser).orgId;
+  const myPromoIds = useMemo(() => new Set(
+    allPromos
+      .filter((p) => (p.ownerOrganizationId ?? "developer-default") === myOrgId)
+      .map((p) => p.id),
+  ), [myOrgId]);
   const baseSales = useMemo(() => {
-    if (!isAgencyUser) return salesMock;
-    const byAgency = salesMock.filter((v) => v.agencyId === currentUser.agencyId);
-    if (currentUser.role === "member") {
-      const myEmail = currentUser.email.toLowerCase();
-      return byAgency.filter((v) => v.audit?.actor.email?.toLowerCase() === myEmail);
+    if (isAgencyUser) {
+      const byAgency = salesMock.filter((v) => v.agencyId === currentUser.agencyId);
+      if (currentUser.role === "member") {
+        const myEmail = currentUser.email.toLowerCase();
+        return byAgency.filter((v) => v.audit?.actor.email?.toLowerCase() === myEmail);
+      }
+      return byAgency;
     }
-    return byAgency;
-  }, [isAgencyUser, currentUser.agencyId, currentUser.role, currentUser.email]);
+    /* Developer · solo ventas de mis promociones (workspace owner). */
+    return salesMock.filter((v) => v.promotionId && myPromoIds.has(v.promotionId));
+  }, [isAgencyUser, currentUser.agencyId, currentUser.role, currentUser.email, myPromoIds]);
   const [sales, setSales] = useState<Venta[]>(baseSales);
   useEffect(() => { setSales(baseSales); }, [baseSales]);
   const [viewMode, setViewMode] = useState<"kanban" | "tabla">("kanban");

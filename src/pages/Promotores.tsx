@@ -27,6 +27,7 @@ import { useResolvedPromotores } from "@/lib/useResolvedAgencies";
 import {
   DEFAULT_DEVELOPER_ID,
   hasActiveDeveloperCollab,
+  getCollaboratingDeveloperIds,
 } from "@/lib/developerNavigation";
 import { getPublicRef } from "@/lib/tenantRefResolver";
 import { LUXINMO_SEED } from "@/data/developerSeed";
@@ -115,63 +116,61 @@ function PromotoresAgencyView() {
   const resolvedPromotores = useResolvedPromotores();
   const promotoresList = useMemo<Agency[]>(() => {
     if (!myAgency || !hasActiveDeveloperCollab(user)) return [];
-    /* Nombre · logo · ubicación derivados de la empresa del promotor.
-     * Fallback al fixture si por algún motivo developerEmpresa viene
-     * sin identidad (no debería pasar tras el fix de `useEmpresa`). */
-    const name = developerEmpresa.nombreComercial?.trim()
-      || developerEmpresa.razonSocial?.trim()
-      || listingSeed.nombreComercial;
-    const logo = developerEmpresa.logoUrl?.trim() || listingSeed.logoUrl;
-    const location = (() => {
-      const ciudad = developerEmpresa.direccionFiscal?.ciudad?.trim();
-      const pais = developerEmpresa.direccionFiscal?.pais?.trim();
-      if (ciudad && pais) return `${ciudad}, ${pais}`;
-      if (ciudad) return ciudad;
-      return listingSeed.location;
-    })();
-    /* Idiomas de la empresa están en lowercase en `Empresa` ·
-     * `AgencyGridCard` espera ISO uppercase para los chips. */
-    const idiomasUpper = (developerEmpresa.idiomasAtencion ?? []).map((s) => s.toUpperCase());
-    const synthetic: Agency = {
-      id: DEFAULT_DEVELOPER_ID,
-      name,
-      logo,
-      location,
-      type: "Network",
-      description: developerEmpresa.overview?.trim() || listingSeed.description || "",
-      visitsCount: myAgency.visitsCount ?? 0,
-      registrations: myAgency.registrations ?? 0,
-      salesVolume: myAgency.salesVolume ?? 0,
-      collaboratingSince: myAgency.collaboratingSince,
-      status: "active",
-      offices: [],
-      promotionsCollaborating: myAgency.promotionsCollaborating ?? [],
-      totalPromotionsAvailable: myAgency.promotionsCollaborating?.length ?? 0,
-      origen: "invited",
-      estadoColaboracion: "activa",
-      registrosAportados: myAgency.registrosAportados ?? 0,
-      ventasCerradas: myAgency.ventasCerradas ?? 0,
-      comisionMedia: myAgency.comisionMedia,
-      /* Mercados · campo de listing-only (no existe en `Empresa`).
-       * Se mantiene del seed hasta que aterrice backend con
-       * `marketingTopNacionalidades` derivado. */
-      mercados: listingSeed.mercados ?? ["ES"],
-      idiomasAtencion: idiomasUpper.length > 0 ? idiomasUpper : (listingSeed.idiomasAtencion ?? []),
-      teamSize: undefined,
-      ratingPromotor: 0,
-      googleRating: developerEmpresa.googleRating || listingSeed.googleRating,
-      googleRatingsTotal: developerEmpresa.googleRatingsTotal || listingSeed.googleRatingsTotal,
-      lastActivityAt: myAgency.lastActivityAt,
-      verificada: !!developerEmpresa.verificada,
-    } as Agency;
-    /* Listado para la agencia · empieza con el promotor "principal"
-     *  (Luxinmo · workspace developer del mock) con datos en vivo, y
-     *  añade los promotores externos de `promotores` seed (AEDAS,
-     *  Neinor, Habitat, Metrovacesa). Una agencia debe poder
-     *  descubrir/explorar TODOS los promotores de la red, no sólo
-     *  con los que ya colabora. Cuando aterrice backend, el endpoint
-     *  GET /api/agency/promoters devolverá la lista completa. */
-    return [synthetic, ...resolvedPromotores];
+    /* SCOPED · solo los developers con los que MI agencia realmente
+     *  colabora · cruza `myAgency.promotionsCollaborating` contra
+     *  los owners reales de cada promo. Si Anna solo colabora con
+     *  Luxinmo, NO ve AEDAS/Neinor/Habitat/Metrovacesa en su listado.
+     *  Antes hardcodeaba Luxinmo como synthetic + añadía TODOS los
+     *  externos · leak. */
+    const collabDevs = getCollaboratingDeveloperIds(myAgency);
+    /* Synthetic Luxinmo · solo si Anna colabora con developer-default. */
+    const cards: Agency[] = [];
+    if (collabDevs.has(DEFAULT_DEVELOPER_ID)) {
+      const name = developerEmpresa.nombreComercial?.trim()
+        || developerEmpresa.razonSocial?.trim()
+        || listingSeed.nombreComercial;
+      const logo = developerEmpresa.logoUrl?.trim() || listingSeed.logoUrl;
+      const location = (() => {
+        const ciudad = developerEmpresa.direccionFiscal?.ciudad?.trim();
+        const pais = developerEmpresa.direccionFiscal?.pais?.trim();
+        if (ciudad && pais) return `${ciudad}, ${pais}`;
+        if (ciudad) return ciudad;
+        return listingSeed.location;
+      })();
+      const idiomasUpper = (developerEmpresa.idiomasAtencion ?? []).map((s) => s.toUpperCase());
+      cards.push({
+        id: DEFAULT_DEVELOPER_ID,
+        name, logo, location,
+        type: "Network",
+        description: developerEmpresa.overview?.trim() || listingSeed.description || "",
+        visitsCount: myAgency.visitsCount ?? 0,
+        registrations: myAgency.registrations ?? 0,
+        salesVolume: myAgency.salesVolume ?? 0,
+        collaboratingSince: myAgency.collaboratingSince,
+        status: "active",
+        offices: [],
+        promotionsCollaborating: myAgency.promotionsCollaborating ?? [],
+        totalPromotionsAvailable: myAgency.promotionsCollaborating?.length ?? 0,
+        origen: "invited",
+        estadoColaboracion: "activa",
+        registrosAportados: myAgency.registrosAportados ?? 0,
+        ventasCerradas: myAgency.ventasCerradas ?? 0,
+        comisionMedia: myAgency.comisionMedia,
+        mercados: listingSeed.mercados ?? ["ES"],
+        idiomasAtencion: idiomasUpper.length > 0 ? idiomasUpper : (listingSeed.idiomasAtencion ?? []),
+        teamSize: undefined,
+        ratingPromotor: 0,
+        googleRating: developerEmpresa.googleRating || listingSeed.googleRating,
+        googleRatingsTotal: developerEmpresa.googleRatingsTotal || listingSeed.googleRatingsTotal,
+        lastActivityAt: myAgency.lastActivityAt,
+        verificada: !!developerEmpresa.verificada,
+      } as Agency);
+    }
+    /* Externos · solo los que también están en collabDevs. */
+    for (const promo of resolvedPromotores) {
+      if (collabDevs.has(promo.id)) cards.push(promo);
+    }
+    return cards;
   }, [myAgency, user, developerEmpresa, listingSeed, resolvedPromotores]);
 
   /* Catálogos derivados de la lista actual de promotores */

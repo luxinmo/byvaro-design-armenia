@@ -14,6 +14,18 @@
 
 import { useEffect, useState } from "react";
 import { sales as SEED_SALES, type Venta } from "@/data/sales";
+import { promotions } from "@/data/promotions";
+import { developerOnlyPromotions } from "@/data/developerPromotions";
+
+/** Resuelve el `ownerOrganizationId` de la venta desde su promoción.
+ *  Antes el sync usaba hardcode "developer-default" · ahora deriva
+ *  el workspace del promotor real para que las ventas multi-developer
+ *  se persistan al workspace correcto en Supabase. */
+function resolveSaleOwnerOrgId(s: Venta): string {
+  const all = [...promotions, ...developerOnlyPromotions];
+  const p = all.find((x) => x.id === s.promotionId);
+  return p?.ownerOrganizationId ?? "developer-default";
+}
 
 const KEY_OVERRIDES = "byvaro.sales.overrides.v1";
 const KEY_CREATED   = "byvaro.sales.created.v1";
@@ -147,7 +159,7 @@ async function deleteSaleFromSupabase(id: string) {
 
 export function createSale(s: Venta): void {
   saveCreated([s, ...loadCreated()]);
-  void syncSaleToSupabase(s, "developer-default");
+  void syncSaleToSupabase(s, resolveSaleOwnerOrgId(s));
 }
 
 export function updateSale(id: string, patch: Partial<Venta>): void {
@@ -167,7 +179,7 @@ export function updateSale(id: string, patch: Partial<Venta>): void {
     const created = loadCreated();
     saveCreated(created.map((c) => c.id === id ? updated : c));
   }
-  void syncSaleToSupabase(updated, "developer-default");
+  void syncSaleToSupabase(updated, resolveSaleOwnerOrgId(updated));
 }
 
 export function deleteSale(id: string): void {

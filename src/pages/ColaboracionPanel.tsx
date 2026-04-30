@@ -270,6 +270,7 @@ export default function ColaboracionPanel() {
         {tab === "resumen" && (
           <ResumenTab
             agency={a}
+            developerOrgId={currentOrgIdentity(user).orgId}
             fromPromoId={fromPromoId}
             onGoTo={(t) => setTab(t)}
           />

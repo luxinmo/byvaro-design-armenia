@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import type { Agency } from "@/data/agencies";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { promotions } from "@/data/promotions";
+import { EXTERNAL_PROMOTOR_PORTFOLIO } from "@/data/promotores";
 import {
   CONTRACT_NEAR_EXPIRY_DAYS,
   daysUntilContractExpiry,
@@ -69,6 +70,12 @@ function formatInvitedAt(ms: number): string {
 type PromoStatus = "active" | "incomplete" | "inactive" | "sold-out";
 type PromoEntry = {
   id: string;
+  /** Workspace owner de la promo · scope multi-developer. Si falta,
+   *  asumir `developer-default` (Luxinmo) por compat backward. */
+  ownerOrganizationId?: string;
+  /** Si false, el promotor desactivó la compartición con agencias ·
+   *  no debería aparecer en el listado "compartibles". */
+  canShareWithAgencies?: boolean;
   name: string;
   active: boolean;
   status: PromoStatus;
@@ -96,6 +103,8 @@ function usePromoCatalog() {
     for (const p of developerOnlyPromotions) {
       m.set(p.id, {
         id: p.id,
+        ownerOrganizationId: p.ownerOrganizationId,
+        canShareWithAgencies: p.canShareWithAgencies,
         name: p.name,
         active: p.status === "active",
         status: p.status as PromoStatus,
@@ -114,7 +123,10 @@ function usePromoCatalog() {
     for (const p of promotions) {
       if (m.has(p.id)) continue;
       m.set(p.id, {
-        id: p.id, name: p.name, active: true, status: "active",
+        id: p.id,
+        ownerOrganizationId: p.ownerOrganizationId,
+        canShareWithAgencies: true, // promotions.ts (legacy public marketplace) son shareable por default
+        name: p.name, active: true, status: "active",
         location: p.location,
         commission: typeof p.commission === "number" && p.commission > 0 ? p.commission : undefined,
         image: p.image,
@@ -126,6 +138,31 @@ function usePromoCatalog() {
         delivery: p.delivery,
         constructionProgress: p.constructionProgress,
       });
+    }
+    /* Portfolio externo · `EXTERNAL_PROMOTOR_PORTFOLIO` cubre las
+     *  promociones de AEDAS, Neinor, Habitat, Metrovacesa con shape
+     *  ligero. Las añadimos aquí para que el panel de un developer
+     *  externo muestre su portfolio real (no solo el `dev-2-aedas-copy`
+     *  de developerOnlyPromotions). */
+    for (const [orgId, entries] of Object.entries(EXTERNAL_PROMOTOR_PORTFOLIO)) {
+      for (const e of entries) {
+        if (m.has(e.id)) continue;
+        m.set(e.id, {
+          id: e.id,
+          ownerOrganizationId: e.ownerOrganizationId ?? orgId,
+          canShareWithAgencies: true, // lite seed · siempre shareable por default
+          name: e.name,
+          active: e.status === "active" || !e.status,
+          status: (e.status as PromoStatus) ?? "active",
+          location: e.location,
+          image: e.image,
+          availableUnits: e.availableUnits,
+          totalUnits: e.totalUnits,
+          priceMin: e.priceMin,
+          priceMax: e.priceMax,
+          delivery: e.delivery,
+        });
+      }
     }
     return m;
   }, []);
@@ -199,9 +236,19 @@ interface Props {
    *  promotor o comercializador y la agencia firma desde el email
    *  de Firmafy. */
   readOnly?: boolean;
+  /** ID interno del developer/comercializador mostrado · scope para
+   *  filtrar las promociones a las suyas. Si no se pasa, el tab
+   *  asume que se trata del workspace logueado (legacy mock).
+   *
+   *  Sin este filtro, una agencia que abre el panel de un developer
+   *  con el que NO colabora vería las promociones de OTRO developer
+   *  (las que sí están en su `promotionsCollaborating`). Con scope,
+   *  solo se muestran las del developer correcto · empty state si
+   *  no hay colab. */
+  developerOrgId?: string;
 }
 
-export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
+export function ResumenTab({ agency: a, onGoTo, readOnly = false, developerOrgId }: Props) {
   const user = useCurrentUser();
   const actor = { name: user.name, email: user.email };
   const contracts = useContractsForAgency(a.id);
@@ -329,18 +376,38 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false }: Props) {
   /* Solo contamos como "compartibles" las promos publicadas Y donde
      el promotor no desactivó la compartición. Alineado con
      `ShareMultiPromosDialog` y la regla "no invitar a algo que no
-     está listo". */
-  const activePromos = useMemo(
-    () => developerOnlyPromotions.filter(
-      (p) => p.status === "active" && p.canShareWithAgencies !== false,
-    ),
-    [],
+     está listo".
+     Derivamos del `promoCatalog` (incluye developerOnlyPromotions +
+     promotions + EXTERNAL_PROMOTOR_PORTFOLIO) para que las promos
+     de developers externos (AEDAS, Neinor, Habitat, Metrovacesa)
+     aparezcan también en su panel.
+     Si `developerOrgId` está scoped, filtramos a las promos owned
+     por ese developer concreto · evita mezclar promos de Luxinmo
+     en el panel de AEDAS (cross-developer leak). */
+  const activePromos = useMemo<PromoEntry[]>(
+    () => {
+      const all = Array.from(promoCatalog.values()).filter(
+        (p) => p.active && p.canShareWithAgencies !== false,
+      );
+      if (!developerOrgId) return all;
+      return all.filter(
+        (p) => (p.ownerOrganizationId ?? "developer-default") === developerOrgId,
+      );
+    },
+    [developerOrgId, promoCatalog],
   );
   const sharedPromos = useMemo(() => {
-    return (a.promotionsCollaborating ?? [])
+    const list = (a.promotionsCollaborating ?? [])
       .map((id) => promoCatalog.get(id))
       .filter(Boolean) as PromoEntry[];
-  }, [a.promotionsCollaborating, promoCatalog]);
+    if (!developerOrgId) return list;
+    /* Scope al developer mostrado · solo las promos cuyo owner es
+     *  el developer del panel. Evita que Prime↔Luxinmo aparezca en
+     *  el panel de AEDAS. */
+    return list.filter(
+      (p) => (p.ownerOrganizationId ?? "developer-default") === developerOrgId,
+    );
+  }, [a.promotionsCollaborating, promoCatalog, developerOrgId]);
   /* Solo contamos las compartidas que además siguen activas · así el
      hero "N de M activas" no queda descuadrado si hay colaboraciones
      heredadas de promociones cerradas. */

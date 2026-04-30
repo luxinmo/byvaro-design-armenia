@@ -59,6 +59,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { motion, AnimatePresence } from "framer-motion";
 import { agencies as ALL_AGENCIES } from "@/data/agencies";
 import { useCurrentUser } from "@/lib/currentUser";
+import { currentOrgIdentity } from "@/lib/orgCollabRequests";
+import { getAgenciesForDeveloper } from "@/lib/developerNavigation";
 import { useCreatedRegistros } from "@/lib/registrosStorage";
 import { useUsageGuard } from "@/lib/usageGuard";
 import { recordNotification } from "@/lib/notifications";
@@ -164,9 +166,36 @@ export default function Registros() {
      siempre devuelve `blocked: false`. */
   const acceptGuard = useUsageGuard("acceptRegistro");
 
+  /* Agencias disponibles en el filtro · solo las que colaboran con
+   *  el workspace logueado. Evita exponer roster cross-developer. */
+  const agenciesForFilter = useMemo(() => {
+    const myOrgId = currentOrgIdentity(currentUser).orgId;
+    if (currentUser.accountType === "agency") {
+      const own = ALL_AGENCIES.find((a) => a.id === currentUser.agencyId);
+      return own ? [own] : [];
+    }
+    return getAgenciesForDeveloper(myOrgId, ALL_AGENCIES);
+  }, [currentUser.accountType, currentUser.agencyId, currentUser]);
+
+  /* Set de promo IDs del workspace logueado · scope para el lado
+   *  developer · evita que un developer no-Luxinmo vea registros de
+   *  promociones de otro workspace. */
+  const myOrgIdReg = currentOrgIdentity(currentUser).orgId;
+  const myPromoIdsReg = useMemo(() => {
+    const all = [...promotions, ...developerOnlyPromotions];
+    return new Set(
+      all
+        .filter((p) => (p.ownerOrganizationId ?? "developer-default") === myOrgIdReg)
+        .map((p) => p.id),
+    );
+  }, [myOrgIdReg]);
+
   const scopedList = useMemo(() => {
     const combined = [...createdRegistros, ...registrosMock];
-    if (!isAgencyUser) return combined;
+    if (!isAgencyUser) {
+      /* Lado DEVELOPER · solo registros de promociones de mi workspace. */
+      return combined.filter((r) => !r.promotionId || myPromoIdsReg.has(r.promotionId));
+    }
     /* Filtro tenant · solo registros de la agencia del usuario. */
     const byAgency = combined.filter((r) => r.agencyId === currentUser.agencyId);
     /* CLAUDE.md `permissions.md` · viewOwn vs viewAll.
@@ -183,7 +212,7 @@ export default function Registros() {
       );
     }
     return byAgency;
-  }, [createdRegistros, isAgencyUser, currentUser.agencyId, currentUser.role, currentUser.email]);
+  }, [createdRegistros, isAgencyUser, currentUser.agencyId, currentUser.role, currentUser.email, myPromoIdsReg]);
 
   // Estado de datos (mutable para aprobar/rechazar en memoria).
   const [records, setRecords] = useState<Registro[]>(scopedList);
@@ -1222,6 +1251,7 @@ export default function Registros() {
         setPromotionFilter={setPromotionFilter}
         agencyFilter={agencyFilter}
         setAgencyFilter={setAgencyFilter}
+        agenciesForFilter={agenciesForFilter}
         origenOptions={origenOptions}
         origenFilter={origenFilter}
         setOrigenFilter={(vs) => setOrigenFilter(vs as RegistroOrigen[])}
@@ -2237,7 +2267,7 @@ function FiltersTriggerButton({
 function RegistrosFilterDrawer({
   open, onClose, filterCount, resultCount,
   promotionOptions, promotionFilter, setPromotionFilter,
-  agencyFilter, setAgencyFilter,
+  agencyFilter, setAgencyFilter, agenciesForFilter,
   origenOptions, origenFilter, setOrigenFilter,
   nacionalidadOptions, nacionalidadFilter, setNacionalidadFilter,
   dateRangeOptions, dateRange, setDateRange,
@@ -2253,6 +2283,7 @@ function RegistrosFilterDrawer({
   setPromotionFilter: (v: string[]) => void;
   agencyFilter: string[];
   setAgencyFilter: (v: string[]) => void;
+  agenciesForFilter: typeof ALL_AGENCIES;
   origenOptions: { value: string; label: string }[];
   origenFilter: string[];
   setOrigenFilter: (v: string[]) => void;
@@ -2322,7 +2353,7 @@ function RegistrosFilterDrawer({
                   onChange={setOrigenFilter}
                 />
                 <AgencyPickerMulti
-                  agencies={ALL_AGENCIES}
+                  agencies={agenciesForFilter}
                   values={agencyFilter}
                   onChange={setAgencyFilter}
                 />
