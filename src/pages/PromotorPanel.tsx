@@ -20,7 +20,7 @@
  */
 
 import { useMemo } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, ArrowUpRight, Eye, Mail, Lock,
   LayoutGrid, FileSignature, CreditCard, History, Building2, Receipt,
@@ -45,7 +45,7 @@ import { PagosTab } from "@/components/collaborators/panel/PagosTab";
 import { FacturasTab } from "@/components/collaborators/panel/FacturasTab";
 import { HistorialTab } from "@/components/collaborators/panel/HistorialTab";
 import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
-import { DEFAULT_DEVELOPER_ID } from "@/lib/developerNavigation";
+import { DEFAULT_DEVELOPER_ID, hasDeveloperCollab } from "@/lib/developerNavigation";
 import { DeveloperDatosTab } from "@/components/collaborators/panel/DeveloperDatosTab";
 import { useEmpresaCategories } from "@/lib/empresaCategories";
 import { EmpresaCategoryBadges } from "@/components/empresa/EmpresaCategoryBadges";
@@ -135,6 +135,23 @@ export default function PromotorPanel() {
   /* Para los tabs visibles a member con datos, restringimos al
    * propio user.id · backend traducirá a `agent_id`. */
   const restrictToUserId = isAgencyAdmin ? undefined : user.id;
+
+  /* Guard · sin colaboración real con este developer.
+   *  Antes el panel se renderizaba sin discriminar qué developer
+   *  hay en la URL · todos los tabs mostraban los datos de la
+   *  agencia logueada con su único developer (Luxinmo) sin filtrar
+   *  por tenant. Resultado: Anna abriendo `/promotor/<AEDAS>/panel`
+   *  veía las mismas operaciones que en el de Luxinmo (leak
+   *  cross-developer).
+   *
+   *  Fix · si la agencia logueada NO tiene ninguna promoción del
+   *  developer mostrado en `promotionsCollaborating`, redirigimos
+   *  a la ficha pública (`/promotor/:id`). El panel solo aparece
+   *  cuando hay colaboración real. Mismo principio que aplica a
+   *  `/colaboradores/:id/panel` (REGLA DE ORO Ficha vs Panel). */
+  if (tenantId && user.accountType === "agency" && !hasDeveloperCollab(user, tenantId)) {
+    return <Navigate to={`/promotor/${id}`} replace />;
+  }
 
   /* Guards · ref inválida o sin promotor/permiso */
   const promoterHasIdentity = !!(empresa.nombreComercial?.trim() || empresa.razonSocial?.trim());
