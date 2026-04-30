@@ -28,7 +28,7 @@
  * -----------------------------------------
  *   1. `byvaro-empresa:<orgId>` cache (hidratada desde Supabase al login).
  *   2. Seed de `agencies.ts` / `promotores.ts` (campo `publicRef`).
- *   3. Hardcode estático de Luxinmo (`developer-default` → `ID9P4HGF`)
+ *   3. Hardcode estático de Luxinmo (`developer-default` → `ID384729`)
  *      mientras la cache no se ha hidratado todavía.
  *
  * TODO(backend) cuando aterrice multi-tenant real · sustituir el
@@ -76,7 +76,7 @@ function buildRefToIdMap(): Map<string, string> {
     if (p.publicRef) inv.set(p.publicRef, p.id);
   }
   /* Fallback Luxinmo · ver `getPublicRef` abajo. */
-  inv.set("ID9P4HGF", "developer-default");
+  inv.set("ID384729", "developer-default");
   return inv;
 }
 
@@ -105,7 +105,7 @@ export function getPublicRef(internalId: string): string | undefined {
    *  refleja el `public_ref` real generado por backfill de la
    *  migración 20260430120000_tenant_public_ref.sql · debe coincidir
    *  con `LUXINMO_PROFILE.publicRef` en empresa.ts. */
-  if (internalId === "developer-default") return "ID9P4HGF";
+  if (internalId === "developer-default") return "ID384729";
   const a = agencies.find((x) => x.id === internalId);
   if (a?.publicRef) return a.publicRef;
   const p = promotores.find((x) => x.id === internalId);

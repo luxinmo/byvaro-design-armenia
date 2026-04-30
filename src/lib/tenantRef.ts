@@ -3,59 +3,45 @@
  *
  * QUÉ
  * ----
- * Cada `organization` (developer, agency, comercializador) lleva una
- * referencia inmutable de la forma `IDXXXXXX` con 6 caracteres
- * aleatorios del alfabeto sin ambigüedades (sin 0/O/1/I/L). Espacio
- * de 32^6 ≈ 1.07 mil millones · imposible deducir orden de registro.
+ * Cada `organization` lleva una referencia inmutable de la forma
+ * `IDXXXXXX` con 6 dígitos aleatorios (alfabeto `0-9`). Espacio de
+ * 10^6 = 1.000.000 posibilidades por dígitos. La aleatoriedad es
+ * obligatoria · NUNCA se generan secuenciales (`ID000001`, `ID000002`)
+ * porque eso filtraría el orden de registro.
  *
- * POR QUÉ NO ES SECUENCIAL
- * -------------------------
- * Si fuera 000001, 000002… cualquier observador podría inferir cuándo
- * se registró un tenant respecto a otro · señal competitiva no deseada.
- * Aleatoriedad uniforme rompe esa correlación.
- *
- * USO
- * ----
- * · Discovery cross-tenant · invitaciones llevan la ref del invitador,
- *   el invitado puede verificar contra `find_org_by_ref()`.
- * · Display público · /empresa "Sobre nosotros" lo muestra read-only
- *   junto al CIF / razón social como handle externo.
- * · Base de la tabla `tenant_links` · cada vínculo cross-tenant se
- *   identifica por (from_ref, to_ref) en vez de exponer ids internos.
+ * Ver `src/lib/publicRef.ts` para el scheme completo de referencias
+ * de las demás entidades (usuarios, promociones, registros, etc.) y
+ * la regla de oro en `CLAUDE.md`.
  *
  * REGLA DE INMUTABILIDAD
  * -----------------------
  * Una vez asignada (al INSERT en `organizations`), JAMÁS se modifica.
- * Backend lo enforça vía trigger · frontend nunca debe ofrecer un input
- * editable. Si el usuario quiere "cambiar la ref", hay que crear una
- * nueva organización (que es un evento legal, no un rebrand).
+ * Backend lo enforça vía trigger. Si el usuario quiere "cambiar la
+ * ref", la única vía legítima es crear una nueva organización.
  */
 
-const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const DIGITS = "0123456789";
+const TENANT_REF_LENGTH = 6;
+const TENANT_REF_RE = /^ID\d{6}$/;
 
 /** Genera una ref aleatoria · solo para uso en mocks/tests · el
  *  backend siempre la genera vía trigger `gen_tenant_public_ref()`. */
 export function generateTenantRef(): string {
   let out = "ID";
-  for (let i = 0; i < 6; i++) {
-    out += ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+  for (let i = 0; i < TENANT_REF_LENGTH; i++) {
+    out += DIGITS[Math.floor(Math.random() * 10)];
   }
   return out;
 }
 
-/** Valida formato · `ID` + 6 chars del alfabeto canónico. */
+/** Valida formato · `ID` + 6 dígitos. */
 export function isValidTenantRef(s: string | undefined | null): s is string {
   if (typeof s !== "string") return false;
-  if (s.length !== 8) return false;
-  if (!s.startsWith("ID")) return false;
-  for (let i = 2; i < 8; i++) {
-    if (!ALPHABET.includes(s[i])) return false;
-  }
-  return true;
+  return TENANT_REF_RE.test(s);
 }
 
 /** Formatea para display · agrupa en bloques de 3 para legibilidad
- *  humana sin afectar al valor canónico. `IDA1B2C3` → `ID·A1B·2C3`. */
+ *  humana sin afectar al valor canónico. `ID123456` → `ID·123·456`. */
 export function formatTenantRef(ref: string): string {
   if (!isValidTenantRef(ref)) return ref;
   return `${ref.slice(0, 2)}·${ref.slice(2, 5)}·${ref.slice(5, 8)}`;
