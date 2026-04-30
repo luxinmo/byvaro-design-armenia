@@ -28,6 +28,7 @@ import {
   DEFAULT_DEVELOPER_ID,
   hasActiveDeveloperCollab,
 } from "@/lib/developerNavigation";
+import { getPublicRef } from "@/lib/tenantRefResolver";
 import { LUXINMO_SEED } from "@/data/developerSeed";
 import { useEmpresa } from "@/lib/empresa";
 import { getEmpresaCategories } from "@/lib/empresaCategories";
@@ -345,7 +346,7 @@ function PromotoresAgencyView() {
                 <AgencyGridCard
                   key={p.id}
                   agency={p}
-                  onClick={() => navigate(`/promotor/${p.id}/panel`)}
+                  onClick={() => navigate(`/promotor/${p.publicRef || getPublicRef(p.id) || p.id}/panel`)}
                   /* Lado agencia mirando al promotor · categorías
                    *  derivadas del developer real (Promotor /
                    *  Comercializador según promociones activas). */
@@ -628,7 +629,7 @@ function PromotoresDeveloperView() {
                 <AgencyGridCard
                   key={p.id}
                   agency={p}
-                  onClick={() => navigate(`/promotor/${p.id}`)}
+                  onClick={() => navigate(`/promotor/${p.publicRef || getPublicRef(p.id) || p.id}`)}
                   /* Categorías del promotor mostrado · derivadas
                    *  como entidad developer. */
                   categories={getEmpresaCategories({ accountType: "developer" })}

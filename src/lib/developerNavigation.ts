@@ -18,6 +18,7 @@
 
 import { agencies, type Agency } from "@/data/agencies";
 import type { CurrentUser } from "./currentUser";
+import { getPublicRef } from "./tenantRefResolver";
 
 /** Id reservado del único promotor en mock single-tenant. */
 export const DEFAULT_DEVELOPER_ID = "developer-default";
@@ -52,10 +53,11 @@ export function developerHref(
   user: CurrentUser | null | undefined,
   opts?: { developerId?: string; fromPromoId?: string },
 ): string {
-  const id = opts?.developerId ?? DEFAULT_DEVELOPER_ID;
+  const internalId = opts?.developerId ?? DEFAULT_DEVELOPER_ID;
+  const ref = getPublicRef(internalId) || internalId;
   if (hasActiveDeveloperCollab(user)) {
-    const base = `/promotor/${id}/panel`;
+    const base = `/promotor/${ref}/panel`;
     return opts?.fromPromoId ? `${base}?from=${opts.fromPromoId}` : base;
   }
-  return `/promotor/${id}`;
+  return `/promotor/${ref}`;
 }

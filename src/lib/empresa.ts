@@ -768,6 +768,7 @@ const DEVELOPER_TENANT_PREFIX = "developer-";
    ═══════════════════════════════════════════════════════════════════ */
 export const LUXINMO_PROFILE: Empresa = {
   ...defaultEmpresa,
+  publicRef: "ID9P4HGF",
   nombreComercial: "Luxinmo",
   razonSocial: "Luxinmo Inversiones SL",
   cif: "B98765432",

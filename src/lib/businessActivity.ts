@@ -50,6 +50,7 @@ import {
 import { registros as SEED_REGISTROS } from "@/data/records";
 import { useCreatedRegistros } from "@/lib/registrosStorage";
 import { useCalendarEvents } from "@/lib/calendarStorage";
+import { getPublicRef } from "@/lib/tenantRefResolver";
 import { sales as SEED_SALES } from "@/data/sales";
 import { agencies as SEED_AGENCIES } from "@/data/agencies";
 import { getAllTeamMembers, findTeamMember } from "@/lib/team";
@@ -393,7 +394,7 @@ function buildAgencyEvents(agencies: typeof SEED_AGENCIES): BusinessActivityEven
       description: [a.location, a.origen === "marketplace" ? "Marketplace" : "Invitación"].filter(Boolean).join(" · "),
       agencyId: a.id,
       agencyName: a.name,
-      href: `/colaboradores/${a.id}`,
+      href: `/colaboradores/${a.publicRef || getPublicRef(a.id) || a.id}`,
       icon: Handshake,
       tone: "primary",
     });

@@ -19,9 +19,11 @@
 import { useParams } from "react-router-dom";
 import Empresa from "./Empresa";
 import { DEFAULT_DEVELOPER_ID } from "@/lib/developerNavigation";
+import { resolveTenantId } from "@/lib/tenantRefResolver";
 
 export default function Promotor() {
   const { id } = useParams<{ id: string }>();
-  const tenantId = id ?? DEFAULT_DEVELOPER_ID;
+  /* Acepta tanto IDXXXXXX (canónico) como id interno legacy. */
+  const tenantId = resolveTenantId(id ?? DEFAULT_DEVELOPER_ID);
   return <Empresa tenantId={tenantId} />;
 }
