@@ -37,7 +37,13 @@ export interface MockUser {
    *  el id real (ej. `u2` para Laura) y que la ownership / filtros
    *  por usuario funcionen. */
   teamMemberId?: string;
-  /** Solo presente cuando accountType === "agency". */
+  /** ID del workspace (organization) al que pertenece este usuario.
+   *  - Para `accountType: "agency"` · id de la agencia (`ag-X`).
+   *  - Para `accountType: "developer"` · id del workspace developer
+   *    (omitir o `developer-default` para Luxinmo · `prom-X` para
+   *    promotores externos como AEDAS, Neinor, Habitat, Metrovacesa).
+   *  El nombre `agencyId` se conserva por compat backward · semánticamente
+   *  es `organizationId`. */
   agencyId?: string;
   /** Label humano para mostrar en la UI (ej. "Prime Properties · Agencia"). */
   label: string;
@@ -168,6 +174,194 @@ export const mockUsers: MockUser[] = [
     role: "member",
     agencyId: "ag-5",
     label: "Iberia Luxury Homes · Agente (member)",
+  },
+
+  /* ───── Promotores externos · admin + member cada uno ─────
+   *  Workspaces independientes de Luxinmo · `agencyId` actúa como
+   *  organizationId. Cuando un user logea con uno de estos emails,
+   *  `useCurrentUser` devuelve `accountType: "developer"` con su
+   *  `agencyId` apuntando al workspace propio (prom-X). */
+
+  /* prom-1 · AEDAS Homes */
+  {
+    email: "carlos.mendieta@aedashomes.es",
+    password: DEMO_PASSWORD,
+    name: "Carlos Mendieta",
+    accountType: "developer",
+    role: "admin",
+    agencyId: "prom-1",
+    label: "AEDAS Homes · Promotor (admin)",
+  },
+  {
+    email: "ana@aedashomes.es",
+    password: DEMO_PASSWORD,
+    name: "Ana López",
+    accountType: "developer",
+    role: "member",
+    agencyId: "prom-1",
+    label: "AEDAS Homes · Comercial (member)",
+  },
+
+  /* prom-2 · Neinor Homes */
+  {
+    email: "marta.ribera@neinor.com",
+    password: DEMO_PASSWORD,
+    name: "Marta Ribera",
+    accountType: "developer",
+    role: "admin",
+    agencyId: "prom-2",
+    label: "Neinor Homes · Promotor (admin)",
+  },
+  {
+    email: "pablo@neinor.com",
+    password: DEMO_PASSWORD,
+    name: "Pablo Ortega",
+    accountType: "developer",
+    role: "member",
+    agencyId: "prom-2",
+    label: "Neinor Homes · Comercial (member)",
+  },
+
+  /* prom-3 · Habitat Inmobiliaria */
+  {
+    email: "jordi.puig@habitatinmobiliaria.com",
+    password: DEMO_PASSWORD,
+    name: "Jordi Puig",
+    accountType: "developer",
+    role: "admin",
+    agencyId: "prom-3",
+    label: "Habitat Inmobiliaria · Promotor (admin)",
+  },
+  {
+    email: "marta@habitatinmobiliaria.com",
+    password: DEMO_PASSWORD,
+    name: "Marta Vila",
+    accountType: "developer",
+    role: "member",
+    agencyId: "prom-3",
+    label: "Habitat Inmobiliaria · Comercial (member)",
+  },
+
+  /* prom-4 · Metrovacesa */
+  {
+    email: "sara.llorente@metrovacesa.com",
+    password: DEMO_PASSWORD,
+    name: "Sara Llorente",
+    accountType: "developer",
+    role: "admin",
+    agencyId: "prom-4",
+    label: "Metrovacesa · Promotor (admin)",
+  },
+  {
+    email: "javier@metrovacesa.com",
+    password: DEMO_PASSWORD,
+    name: "Javier Rodríguez",
+    accountType: "developer",
+    role: "member",
+    agencyId: "prom-4",
+    label: "Metrovacesa · Comercial (member)",
+  },
+
+  /* ───── Agencias 6-10 · admin + member cada una ───── */
+
+  /* ag-6 · Baltic Property Partners */
+  {
+    email: "aino@balticproperty.fi",
+    password: DEMO_PASSWORD,
+    name: "Aino Virtanen",
+    accountType: "agency",
+    role: "admin",
+    agencyId: "ag-6",
+    label: "Baltic Property Partners · Agencia (admin)",
+  },
+  {
+    email: "jukka@balticproperty.fi",
+    password: DEMO_PASSWORD,
+    name: "Jukka Korhonen",
+    accountType: "agency",
+    role: "member",
+    agencyId: "ag-6",
+    label: "Baltic Property Partners · Agente (member)",
+  },
+
+  /* ag-7 · Mediterranean Lux Homes */
+  {
+    email: "elodie@medluxhomes.fr",
+    password: DEMO_PASSWORD,
+    name: "Élodie Laurent",
+    accountType: "agency",
+    role: "admin",
+    agencyId: "ag-7",
+    label: "Mediterranean Lux Homes · Agencia (admin)",
+  },
+  {
+    email: "jean@medluxhomes.fr",
+    password: DEMO_PASSWORD,
+    name: "Jean Dubois",
+    accountType: "agency",
+    role: "member",
+    agencyId: "ag-7",
+    label: "Mediterranean Lux Homes · Agente (member)",
+  },
+
+  /* ag-8 · Moscow Estates */
+  {
+    email: "dmitri@moscowestates.ru",
+    password: DEMO_PASSWORD,
+    name: "Dmitri Volkov",
+    accountType: "agency",
+    role: "admin",
+    agencyId: "ag-8",
+    label: "Moscow Estates · Agencia (admin)",
+  },
+  {
+    email: "olga@moscowestates.ru",
+    password: DEMO_PASSWORD,
+    name: "Olga Petrova",
+    accountType: "agency",
+    role: "member",
+    agencyId: "ag-8",
+    label: "Moscow Estates · Agente (member)",
+  },
+
+  /* ag-9 · Alpine Living */
+  {
+    email: "markus@alpineliving.ch",
+    password: DEMO_PASSWORD,
+    name: "Markus Zimmermann",
+    accountType: "agency",
+    role: "admin",
+    agencyId: "ag-9",
+    label: "Alpine Living · Agencia (admin)",
+  },
+  {
+    email: "lara@alpineliving.ch",
+    password: DEMO_PASSWORD,
+    name: "Lara Müller",
+    accountType: "agency",
+    role: "member",
+    agencyId: "ag-9",
+    label: "Alpine Living · Agente (member)",
+  },
+
+  /* ag-10 · Gulf Premium Realty */
+  {
+    email: "khalid@gulfpremium.ae",
+    password: DEMO_PASSWORD,
+    name: "Khalid Al-Rashid",
+    accountType: "agency",
+    role: "admin",
+    agencyId: "ag-10",
+    label: "Gulf Premium Realty · Agencia (admin)",
+  },
+  {
+    email: "amira@gulfpremium.ae",
+    password: DEMO_PASSWORD,
+    name: "Amira Hassan",
+    accountType: "agency",
+    role: "member",
+    agencyId: "ag-10",
+    label: "Gulf Premium Realty · Agente (member)",
   },
 ];
 

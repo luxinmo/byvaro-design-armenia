@@ -109,8 +109,11 @@ export function currentOrgIdentity(user: CurrentUser): {
   orgName: string;
 } {
   if (user.accountType === "developer") {
+    /* `agencyId` actúa como organizationId también para developers
+     *  no-Luxinmo (workspaces externos `prom-X`). Si no lo lleva, cae
+     *  al default `developer-default` (Luxinmo). */
     return {
-      orgId: "developer-default",
+      orgId: user.agencyId || "developer-default",
       orgKind: "developer",
       /* El nombre se rellena en el caller con `useEmpresa()` ·
        *  mantener este helper sin acceso al storage de empresa. */

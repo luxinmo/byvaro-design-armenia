@@ -100,9 +100,14 @@ async function main() {
   console.log(`▸ ${mockUsers.length} demo users · password: "${DEMO_PASSWORD}"\n`);
 
   for (const u of mockUsers) {
-    const orgId = u.accountType === "developer"
-      ? "developer-default"
-      : u.agencyId!;
+    /* `agencyId` actúa como `organizationId` · presente para agencies
+     * (`ag-X`) y para developers que no son Luxinmo (`prom-X`). Si el
+     * developer no lo lleva, asume Luxinmo (`developer-default`). */
+    const orgId = u.agencyId ?? (u.accountType === "developer" ? "developer-default" : "");
+    if (!orgId) {
+      console.error(`  ✗ ${u.email}: sin agencyId resoluble`);
+      continue;
+    }
     const role = u.role ?? "admin";
     try {
       const userId = await findOrCreateUser(u.email, u.password, u.name);
