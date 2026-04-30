@@ -30,6 +30,7 @@
 
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { promotionHrefById } from "@/lib/urls";
 import {
   Briefcase, Plus, Building2, Home, MapPin, Tag, Eye, ImageOff,
   ArrowRight,
@@ -150,7 +151,7 @@ function LeadRow({ lead }: { lead: ContactRecordEntry }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 mb-1">
             <Link
-              to={`/promociones/${lead.promotionId}`}
+              to={promotionHrefById(lead.promotionId)}
               className="text-xs sm:text-sm font-semibold text-foreground leading-snug hover:underline truncate"
             >
               {lead.unit ? `${lead.unit} · ` : ""}{lead.promotionName}
@@ -204,7 +205,7 @@ function OpportunityRow({ opportunity }: { opportunity: ContactOpportunityEntry 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 mb-1">
             <Link
-              to={`/promociones/${opportunity.promotionId}`}
+              to={promotionHrefById(opportunity.promotionId)}
               className="text-xs sm:text-sm font-semibold text-foreground leading-snug hover:underline truncate"
             >
               {opportunity.unit ? `${opportunity.unit} · ` : ""}{opportunity.promotionName}

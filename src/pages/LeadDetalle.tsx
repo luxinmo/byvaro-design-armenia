@@ -21,6 +21,7 @@ import { useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useCurrentUser } from "@/lib/currentUser";
 import { useTabParam } from "@/lib/useTabParam";
+import { promotionHrefById } from "@/lib/urls";
 import { PublicRefBadge } from "@/components/ui/PublicRefBadge";
 import {
   ArrowLeft, Phone, Mail, MessageCircle, CheckCircle2, XCircle,
@@ -408,7 +409,7 @@ export default function LeadDetalle() {
                 {lead.interest.promotionName && (
                   <DtDd label="Promoción">
                     {lead.interest.promotionId ? (
-                      <Link to={`/promociones/${lead.interest.promotionId}`} className="text-foreground hover:text-primary truncate inline-flex items-center gap-1">
+                      <Link to={promotionHrefById(lead.interest.promotionId)} className="text-foreground hover:text-primary truncate inline-flex items-center gap-1">
                         {lead.interest.promotionName}
                         <ExternalLink className="h-3 w-3 text-muted-foreground" />
                       </Link>
@@ -881,7 +882,7 @@ function LeadEntryEvent({
         {/* Foto 125px */}
         {promo && (
           <Link
-            to={`/promociones/${promo.id}`}
+            to={`/promociones/${promo.code || promo.id}`}
             className="w-[125px] h-[85px] rounded-lg overflow-hidden bg-muted grid place-items-center shrink-0 border border-border shadow-soft hover:shadow-soft-lg transition-shadow"
             title={`Ir a la promoción · ${promo.name}`}
           >
@@ -897,7 +898,7 @@ function LeadEntryEvent({
         <div className="min-w-0 flex-1">
           {promo && (
             <p className="text-[11px] text-muted-foreground mb-1.5">
-              Promoción: <Link to={`/promociones/${promo.id}`} className="text-foreground font-medium hover:text-primary">
+              Promoción: <Link to={`/promociones/${promo.code || promo.id}`} className="text-foreground font-medium hover:text-primary">
                 {promo.name}
               </Link>
             </p>

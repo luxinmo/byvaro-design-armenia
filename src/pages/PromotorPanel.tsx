@@ -31,6 +31,7 @@ import { useCurrentUser } from "@/lib/currentUser";
 import { useTabParam } from "@/lib/useTabParam";
 import { useEmpresa } from "@/lib/empresa";
 import { resolveTenantId, getPublicRef } from "@/lib/tenantRefResolver";
+import { promotionHrefById } from "@/lib/urls";
 import { agencies } from "@/data/agencies";
 import { promotions } from "@/data/promotions";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
@@ -215,7 +216,7 @@ export default function PromotorPanel() {
         <div className="mb-4">
           <button
             onClick={() => {
-              if (fromPromoId) navigate(`/promociones/${fromPromoId}`);
+              if (fromPromoId) navigate(promotionHrefById(fromPromoId));
               else navigate("/promociones");
             }}
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"

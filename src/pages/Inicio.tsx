@@ -382,7 +382,7 @@ function Novedades() {
                 {lastUnitPromos.map((p) => (
                   <li key={p.id} className="text-[11px] text-muted-foreground truncate">
                     <Link
-                      to={`/promociones/${p.id}`}
+                      to={`/promociones/${p.code || p.id}`}
                       className="hover:text-foreground"
                     >
                       <strong className="text-foreground">{p.name}</strong> · {p.location}

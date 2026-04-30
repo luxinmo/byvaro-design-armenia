@@ -35,6 +35,7 @@ import { useCurrentUser } from "@/lib/currentUser";
 import { useHasPermission } from "@/lib/permissions";
 import { useTabParam } from "@/lib/useTabParam";
 import { resolveTenantId, getPublicRef } from "@/lib/tenantRefResolver";
+import { promotionHrefById } from "@/lib/urls";
 import { agencyCollabsWithDeveloper } from "@/lib/developerNavigation";
 import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import {
@@ -157,7 +158,7 @@ export default function ColaboracionPanel() {
         <div className="mb-4">
           <button
             onClick={() => {
-              if (fromPromoId) navigate(`/promociones/${fromPromoId}?tab=Agencies`);
+              if (fromPromoId) navigate(promotionHrefById(fromPromoId, { tab: "Agencies" }));
               else navigate("/colaboradores");
             }}
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"

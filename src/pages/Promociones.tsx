@@ -926,7 +926,7 @@ export default function Promociones() {
               // promoción. En incompletas los bloques se pintan con borde
               // rojo (status="incomplete" + missingSteps) · el usuario
               // puede completar cada campo desde ahí.
-              const navigateTarget = () => navigate(`/promociones/${encodeURIComponent(p.id)}`);
+              const navigateTarget = () => navigate(`/promociones/${encodeURIComponent(p.code || p.id)}`);
 
               return (
                 <article

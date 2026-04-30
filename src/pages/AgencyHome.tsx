@@ -210,7 +210,7 @@ export default function AgencyHome() {
                 {promocionesAsignadas.slice(0, 5).map((p) => (
                   <button
                     key={p.id}
-                    onClick={() => navigate(`/promociones/${p.id}`)}
+                    onClick={() => navigate(`/promociones/${p.code || p.id}`)}
                     className="w-full flex items-center gap-4 px-4 sm:px-5 py-3 hover:bg-muted/30 transition-colors text-left"
                   >
                     <div className="h-10 w-10 rounded-xl bg-muted grid place-items-center shrink-0">
