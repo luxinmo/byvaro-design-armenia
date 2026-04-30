@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/currentUser";
 import { useTabParam } from "@/lib/useTabParam";
 import { useEmpresa } from "@/lib/empresa";
+import { resolveTenantId, getPublicRef } from "@/lib/tenantRefResolver";
 import { agencies } from "@/data/agencies";
 import { promotions } from "@/data/promotions";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
@@ -99,7 +100,8 @@ const NO_ACCESS_COPY: Partial<Record<PanelTab, { title: string; description: str
 
 export default function PromotorPanel() {
   const { id } = useParams<{ id: string }>();
-  const tenantId = id ?? DEFAULT_DEVELOPER_ID;
+  /* Acepta IDXXXXXX (canónico) o id interno legacy. */
+  const tenantId = resolveTenantId(id ?? DEFAULT_DEVELOPER_ID);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const user = useCurrentUser();
@@ -238,7 +240,7 @@ export default function PromotorPanel() {
               promoción" que NO aplica desde el lado agencia. */}
           <div className="flex items-center gap-2 flex-wrap">
             <Link
-              to={`/promotor/${tenantId}`}
+              to={`/promotor/${getPublicRef(tenantId) || tenantId}`}
               className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
               <Eye className="h-3.5 w-3.5" strokeWidth={1.75} />

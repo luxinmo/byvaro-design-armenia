@@ -26,6 +26,7 @@ import { useEmpresaStats } from "@/lib/empresaStats";
 import { useCurrentUser } from "@/lib/currentUser";
 import { agencies } from "@/data/agencies";
 import { hasActiveDeveloperCollab, DEFAULT_DEVELOPER_ID } from "@/lib/developerNavigation";
+import { getPublicRef } from "@/lib/tenantRefResolver";
 import { cn } from "@/lib/utils";
 import { EmpresaHomeTab } from "@/components/empresa/EmpresaHomeTab";
 import { EmpresaAboutTab } from "@/components/empresa/EmpresaAboutTab";
@@ -167,10 +168,15 @@ export default function Empresa({
    *      mostrada (cualquier estado distinto de pending sin contrato
    *      cuenta).
    */
-  const panelHref = effectiveTenantId
+  /* URL canónica · usa `IDXXXXXX` (publicRef) en vez del id interno
+   *  cuando esté disponible. */
+  const tenantRef = effectiveTenantId
+    ? (getPublicRef(effectiveTenantId) || effectiveTenantId)
+    : undefined;
+  const panelHref = tenantRef
     ? (entityType === "developer"
-      ? `/promotor/${effectiveTenantId === DEFAULT_DEVELOPER_ID ? DEFAULT_DEVELOPER_ID : effectiveTenantId}/panel`
-      : `/colaboradores/${effectiveTenantId}/panel`)
+      ? `/promotor/${tenantRef}/panel`
+      : `/colaboradores/${tenantRef}/panel`)
     : undefined;
 
   /* `hasActiveCollab` · ¿hay UN VÍNCULO VIVO entre yo y la entidad

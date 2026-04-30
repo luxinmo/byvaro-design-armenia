@@ -31,6 +31,7 @@ import { useInvitaciones } from "@/lib/invitaciones";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { agencies } from "@/data/agencies";
 import { agencyHref } from "@/lib/agencyNavigation";
+import { getPublicRef } from "@/lib/tenantRefResolver";
 import { isAgencyVerified } from "@/lib/licenses";
 import { getAgencyLicenses } from "@/lib/agencyLicenses";
 import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
@@ -91,7 +92,7 @@ export function AgenciasPendientesDialog({ open, onOpenChange, mode, promotionId
   const openAgencyDetail = (agencyId: string) => {
     onOpenChange(false);
     const a = agencies.find((x) => x.id === agencyId);
-    navigate(a ? agencyHref(a) : `/colaboradores/${agencyId}`);
+    navigate(a ? agencyHref(a) : `/colaboradores/${getPublicRef(agencyId) || agencyId}`);
   };
 
   /** Invitación cuyo historial está expandido (acordeón en la lista). */

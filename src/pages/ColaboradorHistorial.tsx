@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { agencies } from "@/data/agencies";
+import { resolveTenantId, getPublicRef } from "@/lib/tenantRefResolver";
 import {
   useCompanyEvents, useCanViewCompanyHistory,
   type CompanyEvent, type CompanyEventType,
@@ -78,7 +79,9 @@ function timeOnly(iso: string): string {
 /* ══════ Página ══════ */
 
 export default function ColaboradorHistorial() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
+  /* Acepta IDXXXXXX (canónico) o id interno legacy. */
+  const id = params.id ? resolveTenantId(params.id) : undefined;
   const navigate = useNavigate();
   const agency = useMemo(() => agencies.find((a) => a.id === id), [id]);
   const canView = useCanViewCompanyHistory();
@@ -115,7 +118,7 @@ export default function ColaboradorHistorial() {
         {/* Header */}
         <div className="mb-5">
           <Link
-            to={`/colaboradores/${id}`}
+            to={`/colaboradores/${id ? (getPublicRef(id) || id) : ""}`}
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
