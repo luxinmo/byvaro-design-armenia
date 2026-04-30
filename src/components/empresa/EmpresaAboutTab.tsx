@@ -622,32 +622,70 @@ function MarketingSection({
   viewMode: "edit" | "preview";
   isVisitor?: boolean;
 }) {
+  const hasNacionalidades = (empresa.marketingTopNacionalidades ?? []).length > 0;
+  const hasTipos          = (empresa.marketingTiposProducto ?? []).length > 0;
+  const hasPortales       = (empresa.marketingPortales ?? []).length > 0;
+  const hasFuentes        = (empresa.marketingFuentesClientes ?? []).length > 0;
+  const hasAnyData = hasNacionalidades || hasTipos || hasPortales || hasFuentes;
+
+  /* Visitor + sin datos · empty state amigable a nivel sección.
+   *  No mostramos blocks con "Aún no has declarado..." (esa copy es
+   *  para el owner editando · al visitante no le aporta nada). */
+  if (isVisitor && !hasAnyData) {
+    const nombre = empresa.nombreComercial?.trim() || empresa.razonSocial?.trim() || "Esta empresa";
+    return (
+      <section className="rounded-2xl border border-border bg-card shadow-soft">
+        <header className="px-5 sm:px-6 py-5">
+          <h2 className="text-[13.5px] font-semibold text-foreground">Marketing y mercado</h2>
+          <p className="text-[12px] text-muted-foreground mt-2 leading-relaxed">
+            {nombre} aún no comparte sus datos de marketing y mercado.
+          </p>
+        </header>
+      </section>
+    );
+  }
+
+  /* Visitor + algún dato · solo se renderizan los blocks con
+   *  contenido · sin la descripción comercial dirigida al owner.
+   *  Owner (edit/preview) · todos los blocks + descripción completa. */
   return (
     <section className="rounded-2xl border border-border bg-card shadow-soft">
       <header className="px-5 sm:px-6 pt-4 pb-3">
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
           <h2 className="text-[13.5px] font-semibold text-foreground">Marketing y mercado</h2>
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-            Opcional · recomendado
-          </span>
+          {!isVisitor && (
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+              Opcional · recomendado
+            </span>
+          )}
         </div>
-        <p className="text-[12px] text-muted-foreground leading-relaxed mt-1.5 max-w-[680px]">
-          Esta sección es <b className="text-foreground">la presentación comercial de tu
-          empresa</b> ante quienes la miran desde fuera. Cuanto más completa esté,
-          más fácil les será a otras agencias y promotores decidir si encajáis.
-          Saber con qué <b className="text-foreground">nacionalidades</b> trabajas, qué{" "}
-          <b className="text-foreground">tipo de inmuebles</b> comercializas, en qué{" "}
-          <b className="text-foreground">portales</b> publicas y de dónde te llegan los{" "}
-          <b className="text-foreground">leads</b> es lo que diferencia una ficha
-          confiable de una vacía. Es <b className="text-foreground">opcional</b> ·
-          puedes rellenar lo que quieras y dejar el resto en blanco.
-        </p>
+        {!isVisitor && (
+          <p className="text-[12px] text-muted-foreground leading-relaxed mt-1.5 max-w-[680px]">
+            Esta sección es <b className="text-foreground">la presentación comercial de tu
+            empresa</b> ante quienes la miran desde fuera. Cuanto más completa esté,
+            más fácil les será a otras agencias y promotores decidir si encajáis.
+            Saber con qué <b className="text-foreground">nacionalidades</b> trabajas, qué{" "}
+            <b className="text-foreground">tipo de inmuebles</b> comercializas, en qué{" "}
+            <b className="text-foreground">portales</b> publicas y de dónde te llegan los{" "}
+            <b className="text-foreground">leads</b> es lo que diferencia una ficha
+            confiable de una vacía. Es <b className="text-foreground">opcional</b> ·
+            puedes rellenar lo que quieras y dejar el resto en blanco.
+          </p>
+        )}
       </header>
       <div className="px-5 sm:px-6 pb-5 pt-2 flex flex-col gap-4">
-        <NacionalidadesBlock empresa={empresa} update={update} viewMode={viewMode} isVisitor={isVisitor} />
-        <ProductoBlock      empresa={empresa} update={update} viewMode={viewMode} isVisitor={isVisitor} />
-        <PortalesBlock      empresa={empresa} update={update} viewMode={viewMode} isVisitor={isVisitor} />
-        <FuentesBlock       empresa={empresa} update={update} viewMode={viewMode} isVisitor={isVisitor} />
+        {(!isVisitor || hasNacionalidades) && (
+          <NacionalidadesBlock empresa={empresa} update={update} viewMode={viewMode} isVisitor={isVisitor} />
+        )}
+        {(!isVisitor || hasTipos) && (
+          <ProductoBlock empresa={empresa} update={update} viewMode={viewMode} isVisitor={isVisitor} />
+        )}
+        {(!isVisitor || hasPortales) && (
+          <PortalesBlock empresa={empresa} update={update} viewMode={viewMode} isVisitor={isVisitor} />
+        )}
+        {(!isVisitor || hasFuentes) && (
+          <FuentesBlock empresa={empresa} update={update} viewMode={viewMode} isVisitor={isVisitor} />
+        )}
       </div>
     </section>
   );
