@@ -1,19 +1,16 @@
 /**
  * Navegación unificada hacia el promotor desde la cuenta de agencia.
- * Mirror de `agencyNavigation.ts`: aplica la REGLA DE ORO ficha vs panel,
- * pero invertida (ahora es la AGENCIA quien clica al PROMOTOR):
+ * Mirror de `agencyNavigation.ts`.
  *
- *   · Agencia con colaboración activa → PANEL operativo
- *     `/promotor/:id/panel` (mirror del que el promotor ve de la agencia
- *     en `/colaboradores/:id/panel`).
+ * REGLA DE ORO (revisada 2026-04-30) · cualquier click desde
+ * `/promotores`, `/colaboradores` u otra surface interna a un promotor
+ * va SIEMPRE al PANEL operativo `/promotor/:id/panel`. Aunque NO
+ * exista colaboración formal todavía, el usuario quiere la vista
+ * avanzada · no el brochure público.
  *
- *   · Agencia SIN colaboración (pendiente, rechazada, marketplace, o
- *     cualquier otra promoción donde no es colaboradora) → FICHA PÚBLICA
- *     `/promotor/:id` (perfil público del promotor).
- *
- * En la maqueta single-tenant solo existe un promotor (Luxinmo). El
- * `id` es un sentinel `developer-default`. Cuando se modele la API
- * multi-tenant pasará a ser el `organization.id` del promotor real.
+ * La ficha pública `/promotor/:id` (Empresa.tsx visitor) sigue
+ * existiendo como ruta válida para enlaces externos / no
+ * autenticados, pero la app NUNCA navega allí desde dentro.
  */
 
 import { agencies, type Agency } from "@/data/agencies";
@@ -105,24 +102,20 @@ export function agencyCollabsWithDeveloper(
   return getCollaboratingDeveloperIds(agency).has(developerInternalId);
 }
 
-/** Devuelve el href correcto para llegar al promotor desde la agencia.
- *  Si pasas `developerId`, se usa; si no, se asume el único promotor del
- *  workspace (`DEFAULT_DEVELOPER_ID`).
- *  `fromPromoId` (opcional) preserva el contexto de promoción en el
- *  panel — equivalente al `?from=` que usa `agencyHref`. */
+/** Devuelve el href correcto para llegar al promotor desde la agencia ·
+ *  siempre al panel avanzado (regla revisada 2026-04-30). Si pasas
+ *  `developerId`, se usa; si no, se asume `DEFAULT_DEVELOPER_ID`
+ *  (Luxinmo en el mock single-tenant).
+ *
+ *  `user` y `hasDeveloperCollab` siguen exportados porque otros
+ *  componentes los usan para renderizar tabs/avisos según colab,
+ *  pero NO para decidir la URL. */
 export function developerHref(
-  user: CurrentUser | null | undefined,
+  _user: CurrentUser | null | undefined,
   opts?: { developerId?: string; fromPromoId?: string },
 ): string {
   const internalId = opts?.developerId ?? DEFAULT_DEVELOPER_ID;
   const ref = getPublicRef(internalId) || internalId;
-  /* Decisión PER-DEVELOPER · solo si la agencia colabora con ESE
-   *  developer concreto va al panel. Si no, ficha pública. Antes
-   *  usábamos `hasActiveDeveloperCollab` global y eso colaba el
-   *  panel para AEDAS/Neinor cuando Anna solo colabora con Luxinmo. */
-  if (hasDeveloperCollab(user, internalId)) {
-    const base = `/promotor/${ref}/panel`;
-    return opts?.fromPromoId ? `${base}?from=${opts.fromPromoId}` : base;
-  }
-  return `/promotor/${ref}`;
+  const base = `/promotor/${ref}/panel`;
+  return opts?.fromPromoId ? `${base}?from=${opts.fromPromoId}` : base;
 }
