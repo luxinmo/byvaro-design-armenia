@@ -17,6 +17,8 @@
  */
 
 import { agencies, type Agency } from "@/data/agencies";
+import { promotions } from "@/data/promotions";
+import { developerOnlyPromotions } from "@/data/developerPromotions";
 import type { CurrentUser } from "./currentUser";
 import { getPublicRef } from "./tenantRefResolver";
 
@@ -44,6 +46,45 @@ export function hasActiveDeveloperCollab(user: CurrentUser | null | undefined): 
   return false;
 }
 
+/** Devuelve el set de IDs de developers/comercializadores con los que
+ *  la agencia colabora · derivado de `Agency.promotionsCollaborating`
+ *  cruzado contra `promotion.ownerOrganizationId`.
+ *
+ *  Una agencia "colabora con un developer" si tiene al menos una
+ *  promoción de ese developer en su array `promotionsCollaborating`.
+ *
+ *  Caso típico mock: Anna (`ag-2`) tiene `["dev-1","dev-2","dev-3","dev-4"]`
+ *  todas owned por `developer-default` → set = `{"developer-default"}`.
+ *
+ *  TODO(backend): cuando `agency_collaborations` exista en DB, esta
+ *  función pasa a ser un `SELECT DISTINCT developer_organization_id
+ *  FROM agency_collaborations WHERE agency_id = :id`. La signature se
+ *  mantiene · solo cambia la implementación. */
+export function getCollaboratingDeveloperIds(agency: Agency | null | undefined): Set<string> {
+  const out = new Set<string>();
+  if (!agency) return out;
+  const allPromos = [...promotions, ...developerOnlyPromotions];
+  for (const promId of agency.promotionsCollaborating ?? []) {
+    const p = allPromos.find((x) => x.id === promId);
+    const ownerId = p?.ownerOrganizationId;
+    if (ownerId) out.add(ownerId);
+  }
+  return out;
+}
+
+/** ¿La agencia colabora específicamente con ESTE developer (por su id
+ *  interno, no su `IDXXXXXX`)? Usado por el panel `/promotor/:id/panel`
+ *  para decidir si mostrar la operativa o redirigir a la ficha pública. */
+export function hasDeveloperCollab(
+  user: CurrentUser | null | undefined,
+  developerInternalId: string,
+): boolean {
+  if (!user || user.accountType !== "agency" || !user.agencyId) return false;
+  const a = agencies.find((x) => x.id === user.agencyId);
+  if (!a) return false;
+  return getCollaboratingDeveloperIds(a).has(developerInternalId);
+}
+
 /** Devuelve el href correcto para llegar al promotor desde la agencia.
  *  Si pasas `developerId`, se usa; si no, se asume el único promotor del
  *  workspace (`DEFAULT_DEVELOPER_ID`).
@@ -55,7 +96,11 @@ export function developerHref(
 ): string {
   const internalId = opts?.developerId ?? DEFAULT_DEVELOPER_ID;
   const ref = getPublicRef(internalId) || internalId;
-  if (hasActiveDeveloperCollab(user)) {
+  /* Decisión PER-DEVELOPER · solo si la agencia colabora con ESE
+   *  developer concreto va al panel. Si no, ficha pública. Antes
+   *  usábamos `hasActiveDeveloperCollab` global y eso colaba el
+   *  panel para AEDAS/Neinor cuando Anna solo colabora con Luxinmo. */
+  if (hasDeveloperCollab(user, internalId)) {
     const base = `/promotor/${ref}/panel`;
     return opts?.fromPromoId ? `${base}?from=${opts.fromPromoId}` : base;
   }
