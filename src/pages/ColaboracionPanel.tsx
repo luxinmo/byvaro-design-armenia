@@ -22,7 +22,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  Navigate, useNavigate, useParams, useSearchParams, Link,
+  useNavigate, useParams, useSearchParams, Link,
 } from "react-router-dom";
 import {
   ArrowLeft, ArrowUpRight, Eye, Mail, Share2, Shield,
@@ -103,18 +103,11 @@ export default function ColaboracionPanel() {
     );
   }
 
-  /* Guard simétrico al de PromotorPanel · si el developer logueado
-   *  no colabora con esta agencia (ninguna de sus promociones está
-   *  en `agency.promotionsCollaborating`), redirige a la ficha
-   *  pública. Evita cross-developer leak donde un developer ve
-   *  operativa entre otra empresa y la misma agencia. */
-  if (user.accountType === "developer") {
-    const myOrgId = currentOrgIdentity(user).orgId;
-    if (!agencyCollabsWithDeveloper(agency, myOrgId)) {
-      const ref = agency.publicRef || getPublicRef(agency.id) || agency.id;
-      return <Navigate to={`/colaboradores/${ref}`} replace />;
-    }
-  }
+  /* REGLA DE ORO (revisada 2026-04-30) · `/colaboradores/:id/panel`
+   *  se renderiza SIEMPRE · aunque no haya colaboración. El usuario
+   *  quiere la vista avanzada desde cualquier listado interno.
+   *  Cada tab gestiona el caso "sin operativa" con un empty state
+   *  apropiado. El antiguo redirect a ficha pública queda eliminado. */
 
   if (!canView) {
     return (
