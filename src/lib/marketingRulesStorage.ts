@@ -67,6 +67,19 @@ export function saveMarketingProhibitions(promotionId: string, ids: string[]): v
     window.localStorage.setItem(keyFor(promotionId), JSON.stringify(clean));
   }
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { promotionId } }));
+  /* Write-through · escribir a `promotions.marketing_prohibitions text[]`. */
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { error } = await supabase.from("promotions")
+        .update({ marketing_prohibitions: clean.length > 0 ? clean : null })
+        .eq("id", promotionId);
+      if (error) console.warn("[marketingRules:sync]", error.message);
+    } catch (e) { console.warn("[marketingRules:sync] skipped:", e); }
+  })();
 }
 
 export function toggleMarketingProhibition(promotionId: string, channelId: string): boolean {

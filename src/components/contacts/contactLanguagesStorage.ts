@@ -33,6 +33,10 @@ export function saveContactLanguages(contactId: string, languages: string[]): vo
   if (typeof window === "undefined") return;
   window.localStorage.setItem(keyFor(contactId), JSON.stringify(languages));
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { contactId } }));
+  void (async () => {
+    const { mergeContactMetadata } = await import("@/lib/contactMetadataSync");
+    await mergeContactMetadata(contactId, { languages });
+  })();
 }
 
 /** Hook reactivo · devuelve `null` cuando no hay override (usa el

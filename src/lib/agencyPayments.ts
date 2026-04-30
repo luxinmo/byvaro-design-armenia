@@ -84,6 +84,33 @@ function writeStore(list: AgencyPayment[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   window.dispatchEvent(new CustomEvent(CHANGE_EVENT));
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || list.length === 0) return;
+      const rows = list.map((p) => {
+        const pay = p as unknown as Record<string, unknown>;
+        return {
+          id: p.id,
+          developer_organization_id: "developer-default",
+          agency_organization_id: p.agencyId,
+          invoice_id: (pay.invoiceId as string) ?? null,
+          amount: (pay.amount as number) ?? null,
+          currency: (pay.currency as string) ?? "EUR",
+          state: (pay.state as string) ?? "pending",
+          scheduled_at: (pay.scheduledAt as string) ?? null,
+          paid_at: (pay.paidAt as string) ?? null,
+          hold_reason: (pay.holdReason as string) ?? null,
+          proof_url: (pay.proofUrl as string) ?? null,
+          metadata: pay,
+        };
+      });
+      const { error } = await supabase.from("agency_payments").upsert(rows, { onConflict: "id" });
+      if (error) console.warn("[agencyPayments:sync]", error.message);
+    } catch (e) { console.warn("[agencyPayments:sync] skipped:", e); }
+  })();
 }
 
 function daysAhead(n: number) { return Date.now() + n * 24 * 60 * 60 * 1000; }

@@ -180,9 +180,17 @@ export function appendOutgoingMessage(
     read: true,
   };
   const existing = loadStoredMessages(contactId);
+  const next = [...existing, message];
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(STORAGE_KEY(contactId), JSON.stringify([...existing, message]));
+    window.localStorage.setItem(STORAGE_KEY(contactId), JSON.stringify(next));
   }
+  /* Write-through · contacts.metadata.whatsappMessages.
+   *  Cuando el backend conecte Twilio/WhatsApp Business API real, esto
+   *  cambia a INSERT en whatsapp_messages con conversation_id resuelto. */
+  void (async () => {
+    const { mergeContactMetadata } = await import("@/lib/contactMetadataSync");
+    await mergeContactMetadata(contactId, { whatsappMessages: next });
+  })();
   return message;
 }
 

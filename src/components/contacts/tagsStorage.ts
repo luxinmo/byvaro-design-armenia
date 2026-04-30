@@ -39,6 +39,10 @@ export function loadOrgTags(): ContactTag[] {
 export function saveOrgTags(tags: ContactTag[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(ORG_KEY, JSON.stringify(tags));
+  void (async () => {
+    const { mergeOrgMetadata } = await import("@/lib/orgMetadataSync");
+    await mergeOrgMetadata({ contactTags: tags });
+  })();
 }
 
 /* ── Personal (per user) ── */

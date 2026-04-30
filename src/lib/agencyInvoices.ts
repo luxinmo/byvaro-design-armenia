@@ -72,6 +72,38 @@ function writeStore(list: Invoice[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   window.dispatchEvent(new CustomEvent(CHANGE_EVENT));
+  /* Write-through · upsert masivo a `agency_invoices`. Mock single-tenant:
+   *  developer_organization_id = developer-default. Skip pre-auth. */
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || list.length === 0) return;
+      const rows = list.map((i) => {
+        const inv = i as unknown as Record<string, unknown>;
+        return {
+          id: i.id,
+          developer_organization_id: "developer-default",
+          agency_organization_id: i.agencyId,
+          promotion_id: (inv.promotionId as string) ?? null,
+          number: (inv.number as string) ?? null,
+          status: (inv.status as string) ?? "draft",
+          issued_at: (inv.issuedAt as string) ?? null,
+          due_at: (inv.dueAt as string) ?? null,
+          paid_at: (inv.paidAt as string) ?? null,
+          amount_subtotal: (inv.amountSubtotal as number) ?? null,
+          amount_tax: (inv.amountTax as number) ?? null,
+          amount_total: (inv.amountTotal as number) ?? null,
+          currency: (inv.currency as string) ?? "EUR",
+          pdf_url: (inv.pdfUrl as string) ?? null,
+          metadata: inv,
+        };
+      });
+      const { error } = await supabase.from("agency_invoices").upsert(rows, { onConflict: "id" });
+      if (error) console.warn("[agencyInvoices:sync]", error.message);
+    } catch (e) { console.warn("[agencyInvoices:sync] skipped:", e); }
+  })();
 }
 
 export function getAgencyInvoices(agencyId: string): Invoice[] {

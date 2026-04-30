@@ -53,6 +53,34 @@ export function recordSentEmail(input: Omit<SentEmail, "id" | "sentAt">): SentEm
     sentAt: new Date().toISOString(),
   };
   write([sent, ...read()]);
+  /* Write-through · log a `emails_sent` table. RLS valida member del org.
+   *  Skip si pre-auth seed. */
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: members } = await supabase.from("organization_members")
+        .select("organization_id").eq("user_id", user.id).eq("status", "active")
+        .order("created_at", { ascending: true }).limit(1);
+      const orgId = members?.[0]?.organization_id;
+      if (!orgId) return;
+      const { error } = await supabase.from("emails_sent").insert({
+        organization_id: orgId,
+        by_user_id: user.id,
+        audience: input.kind === "invitation" ? "collaborator" : "client",
+        template_id: input.kind,
+        language: "es",
+        subject: input.subject,
+        body_html: input.html,
+        recipients: [{ email: input.to }],
+        status: "sent",
+        metadata: { kind: input.kind, refId: input.refId },
+      });
+      if (error) console.warn("[emails_sent:insert]", error.message);
+    } catch (e) { console.warn("[emails_sent:insert] skipped:", e); }
+  })();
   return sent;
 }
 

@@ -30,6 +30,10 @@ export function loadSources(): ContactSource[] {
 export function saveSources(sources: ContactSource[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(KEY, JSON.stringify(sources));
+  void (async () => {
+    const { mergeOrgMetadata } = await import("@/lib/orgMetadataSync");
+    await mergeOrgMetadata({ contactSources: sources });
+  })();
 }
 
 export function nextSourceId(existing: ContactSource[]): string {

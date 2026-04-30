@@ -35,12 +35,28 @@ function saveAll(contactId: string, docs: StoredDocument[]) {
   window.localStorage.setItem(KEY(contactId), JSON.stringify(docs));
 }
 
+/* Sync metadata-only (sin dataUrl · el binario sigue en localStorage
+ *  hasta que migremos a Supabase Storage). Los IDs + nombres + tipo
+ *  cruzan así de un dispositivo a otro. TODO: subir binarios a bucket
+ *  `contact-documents` cuando esté provisionado. */
+function syncDocsMetadata(contactId: string, docs: StoredDocument[]) {
+  void (async () => {
+    const { mergeContactMetadata } = await import("@/lib/contactMetadataSync");
+    const meta = docs.map(({ dataUrl: _drop, ...rest }) => rest);
+    await mergeContactMetadata(contactId, { documents: meta });
+  })();
+}
+
 export function addDocument(contactId: string, doc: StoredDocument): void {
   const existing = loadAddedDocuments(contactId);
-  saveAll(contactId, [...existing, doc]);
+  const next = [...existing, doc];
+  saveAll(contactId, next);
+  syncDocsMetadata(contactId, next);
 }
 
 export function removeDocument(contactId: string, docId: string): void {
   const existing = loadAddedDocuments(contactId);
-  saveAll(contactId, existing.filter((d) => d.id !== docId));
+  const next = existing.filter((d) => d.id !== docId);
+  saveAll(contactId, next);
+  syncDocsMetadata(contactId, next);
 }

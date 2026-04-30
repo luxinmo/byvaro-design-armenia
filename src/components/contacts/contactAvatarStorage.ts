@@ -35,6 +35,11 @@ export function saveContactAvatar(contactId: string, dataUrl: string | null): vo
     window.localStorage.removeItem(key);
   }
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { contactId } }));
+  /* Write-through · contacts.metadata.avatarUrl */
+  void (async () => {
+    const { mergeContactMetadata } = await import("@/lib/contactMetadataSync");
+    await mergeContactMetadata(contactId, { avatarUrl: dataUrl });
+  })();
 }
 
 /** Hook reactivo · se re-renderiza cuando el avatar de este contacto cambia. */

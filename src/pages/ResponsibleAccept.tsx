@@ -34,14 +34,14 @@
  *     server crea user + downgrade en una transacción + cookie httpOnly.
  */
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Lock, Loader2, ArrowRight, Check, ShieldCheck, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/BrandLogo";
 import {
-  findResponsibleInvitationByToken, markResponsibleInvitationAccepted,
+  findResponsibleInvitationByTokenAsync, markResponsibleInvitationAccepted,
   type ResponsibleInvitation,
 } from "@/lib/responsibleInvitations";
 import {
@@ -56,21 +56,24 @@ export default function ResponsibleAccept() {
   const { token = "" } = useParams<{ token: string }>();
   const navigate = useNavigate();
 
-  const invitation: ResponsibleInvitation | undefined = useMemo(
-    () => findResponsibleInvitationByToken(token),
-    [token],
-  );
-
+  const [invitation, setInvitation] = useState<ResponsibleInvitation | undefined>();
   const [phase, setPhase] = useState<Phase>("loading");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!token) { setPhase("invalid"); return; }
-    if (!invitation) { setPhase("invalid"); return; }
-    if (invitation.estado !== "pendiente") { setPhase("invalid"); return; }
-    setPhase("form");
-  }, [token, invitation]);
+    let cancelled = false;
+    void (async () => {
+      const inv = await findResponsibleInvitationByTokenAsync(token);
+      if (cancelled) return;
+      if (!inv) { setPhase("invalid"); return; }
+      if (inv.estado !== "pendiente") { setPhase("invalid"); return; }
+      setInvitation(inv);
+      setPhase("form");
+    })();
+    return () => { cancelled = true; };
+  }, [token]);
 
   const canSubmit = password.length >= 6 && !submitting;
 

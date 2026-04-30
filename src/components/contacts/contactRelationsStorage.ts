@@ -31,6 +31,10 @@ export function loadAssignedOverride(contactId: string): ContactAssignedUser[] |
 export function saveAssignedOverride(contactId: string, users: ContactAssignedUser[]): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(ASSIGNED_KEY(contactId), JSON.stringify(users));
+  void (async () => {
+    const { mergeContactMetadata } = await import("@/lib/contactMetadataSync");
+    await mergeContactMetadata(contactId, { assignedUsers: users });
+  })();
 }
 
 /* ── Relacionados ── */
@@ -49,6 +53,10 @@ export function loadRelationsOverride(contactId: string): ContactRelation[] | nu
 export function saveRelationsOverride(contactId: string, rels: ContactRelation[]): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(REL_KEY(contactId), JSON.stringify(rels));
+  void (async () => {
+    const { mergeContactMetadata } = await import("@/lib/contactMetadataSync");
+    await mergeContactMetadata(contactId, { relations: rels });
+  })();
 }
 
 /* ── Eliminados (seed + cualquiera) ── */
@@ -70,6 +78,17 @@ export function markContactDeleted(id: string): void {
   const set = loadDeletedContactIds();
   set.add(id);
   window.localStorage.setItem(DELETED_KEY, JSON.stringify([...set]));
+  /* Hard delete · contacts table (RLS por org). */
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { error } = await supabase.from("contacts").delete().eq("id", id);
+      if (error) console.warn("[contacts:delete]", error.message);
+    } catch (e) { console.warn("[contacts:delete] skipped:", e); }
+  })();
 }
 
 export function unmarkContactDeleted(id: string): void {

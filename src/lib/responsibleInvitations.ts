@@ -47,27 +47,10 @@ export interface ResponsibleInvitation {
   respondidoEn?: number;
 }
 
-/* TODO(backend) Phase 3 · ESCAPE LEAK CONOCIDO ·
- * Esta clave ES GLOBAL en localStorage (no scoped). El leak técnico es
- * que dos users que comparten físicamente el mismo navegador pueden ver
- * mutuamente las invitaciones de Responsable que han enviado.
- *
- * Por qué no se scopea como otras claves: la página `/responsible/:token`
- * (donde el Responsable abre el link de email) es PRE-AUTH · no hay
- * orgId en contexto, así que `findResponsibleInvitationByToken` necesita
- * buscar entre TODOS los registros locales. Scopear obligaría a iterar
- * todas las claves `byvaro.responsible-invitations.v1:*`, viable pero
- * complica el mock.
- *
- * Solución correcta · tabla `responsible_invitations` en Supabase con
- * RLS · admin de la agencia INSERT, lookup público por token via
- * RPC `find_responsible_invitation(token)` que devuelve la fila SIN
- * pasar por RLS de tabla.
- *
- * Mitigación actual · ningún componente UI muestra esta lista a otros
- * users · solo se consume en el flow de invitación + apertura del link.
- * El leak requiere acceso DevTools al navegador físico. Riesgo bajo en
- * tests con dispositivos separados.
+/* Storage local · solo cache · la fuente de verdad es la tabla
+ * `responsible_invitations` en Supabase. Cross-device discovery
+ * por token usa la RPC `find_responsible_invitation(token)`
+ * (SECURITY DEFINER · pre-auth) — no depende de localStorage.
  */
 const STORAGE_KEY = "byvaro.responsible-invitations.v1";
 const VALIDEZ_DIAS = 30;
@@ -127,13 +110,72 @@ export function createResponsibleInvitation(input: {
     expiraEn: now + VALIDEZ_DIAS * 24 * 60 * 60 * 1000,
   };
   writeAll([inv, ...readAll()]);
+  /* Write-through Supabase · admin actual hace INSERT (RLS valida). */
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { error } = await supabase.from("responsible_invitations").insert({
+        id: inv.id,
+        token: inv.token,
+        agency_id: inv.agencyId,
+        agency_name: inv.agencyName,
+        responsible_email: inv.responsibleEmail,
+        responsible_name: inv.responsibleName,
+        responsible_telefono: inv.responsibleTelefono ?? null,
+        inviter_user_email: inv.inviterUserEmail,
+        inviter_user_name: inv.inviterUserName,
+        status: "pendiente",
+        expires_at: new Date(inv.expiraEn).toISOString(),
+      });
+      if (error) console.warn("[responsibleInvitations:insert]", error.message);
+    } catch (e) { console.warn("[responsibleInvitations:insert] skipped:", e); }
+  })();
   return inv;
 }
 
+/** Lookup local-first; cae a RPC pública (SECURITY DEFINER · pre-auth)
+ *  para descubrir invitaciones creadas en otro dispositivo. */
 export function findResponsibleInvitationByToken(
   token: string,
 ): ResponsibleInvitation | undefined {
   return readAll().find((i) => i.token === token);
+}
+
+/** Async · resuelve la invitación por token consultando Supabase si
+ *  no está en cache local. Usado por `/responsible/:token` para que
+ *  el Responsable pueda abrir el link en cualquier dispositivo. */
+export async function findResponsibleInvitationByTokenAsync(
+  token: string,
+): Promise<ResponsibleInvitation | undefined> {
+  const local = readAll().find((i) => i.token === token);
+  if (local) return local;
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return undefined;
+    const { data, error } = await supabase.rpc("find_responsible_invitation", { p_token: token });
+    if (error || !data || !Array.isArray(data) || data.length === 0) return undefined;
+    const row = data[0] as {
+      id: string; agency_id: string; agency_name: string;
+      responsible_email: string; responsible_name: string;
+      status: string; expires_at: string;
+    };
+    return {
+      id: row.id,
+      token,
+      agencyId: row.agency_id,
+      agencyName: row.agency_name,
+      responsibleEmail: row.responsible_email,
+      responsibleName: row.responsible_name,
+      inviterUserEmail: "",
+      inviterUserName: "",
+      estado: row.status as ResponsibleInvitationEstado,
+      createdAt: Date.now(),
+      expiraEn: new Date(row.expires_at).getTime(),
+    };
+  } catch { return undefined; }
 }
 
 export function markResponsibleInvitationAccepted(id: string): void {
@@ -142,6 +184,21 @@ export function markResponsibleInvitationAccepted(id: string): void {
   writeAll(list.map((i) =>
     i.id === id ? { ...i, estado: "aceptada" as const, respondidoEn: now } : i,
   ));
+  /* Write-through · update remoto (cualquier user autenticado · RLS
+   *  permite UPDATE solo si es admin de la agencia, pero el Responsable
+   *  recién creado YA es admin tras el signup, así que pasa). */
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { error } = await supabase.from("responsible_invitations")
+        .update({ status: "aceptada", responded_at: new Date(now).toISOString() })
+        .eq("id", id);
+      if (error) console.warn("[responsibleInvitations:accept]", error.message);
+    } catch (e) { console.warn("[responsibleInvitations:accept] skipped:", e); }
+  })();
 }
 
 export function buildResponsibleInviteUrl(token: string): string {

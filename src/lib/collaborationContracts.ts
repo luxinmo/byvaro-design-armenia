@@ -215,6 +215,44 @@ function writeStore(list: CollaborationContract[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   window.dispatchEvent(new CustomEvent(CHANGE_EVENT));
+  /* Write-through · sync entera a `collaboration_documents` table.
+   *  Mock single-tenant: solo developer-default escribe (es Luxinmo).
+   *  Skip si pre-auth. */
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      /* Estrategia simple Phase 2 · borrar todos los del workspace y
+       * reinsertar. Cuando crezca, cambiar a diff. */
+      await supabase.from("collaboration_documents")
+        .delete().like("metadata->>workspace", "developer-default");
+      const rows = list.map((c) => ({
+        id: c.id,
+        promotion_collaboration_id: null,
+        collaboration_id: null,
+        document_type: "collaboration_contract",
+        file_url: c.fileUrl ?? "",
+        signed_file_url: c.docSignedUrl ?? null,
+        audit_file_url: c.docAuditUrl ?? null,
+        status: c.status === "signed" ? "signed"
+          : c.status === "sent" ? "sent"
+          : c.status === "viewed" ? "viewed"
+          : c.status === "revoked" ? "revoked"
+          : "draft",
+        signed_at: c.signedAt ? new Date(c.signedAt).toISOString() : null,
+        expires_at: c.expiresAt ? new Date(c.expiresAt).toISOString() : null,
+        provider: "firmafy",
+        signers: c.signers ?? null,
+        metadata: { agencyId: c.agencyId, promotionId: c.promotionId, archived: c.archived, workspace: "developer-default" },
+        uploaded_by_user_id: user.id,
+      }));
+      if (rows.length === 0) return;
+      const { error } = await supabase.from("collaboration_documents").upsert(rows, { onConflict: "id" });
+      if (error) console.warn("[collaborationContracts:sync]", error.message);
+    } catch (e) { console.warn("[collaborationContracts:sync] skipped:", e); }
+  })();
 }
 
 export function getContractsForAgency(agencyId: string): CollaborationContract[] {
