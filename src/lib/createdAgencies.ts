@@ -16,6 +16,34 @@
 import type { Agency } from "@/data/agencies";
 import type { MockUser } from "@/data/mockUsers";
 
+/* TODO(backend) Phase 3 · LEAK CONOCIDO documentado ·
+ * Estas claves SON GLOBALES en localStorage (no scoped por org) y
+ * contienen emails + nombres de usuarios + agencias creadas via
+ * `/invite/:token`. Si dos users comparten físicamente el mismo
+ * navegador, pueden ver mutuamente las cuentas creadas (vía DevTools).
+ *
+ * Por qué no scoping: el LOGIN flow (`findMockUser`) necesita
+ * encontrar el user antes de saber a qué workspace pertenece · sin
+ * orgId no hay forma de elegir clave scoped. Iterar todas las claves
+ * sufijadas es feo y no resiste el test de "qué pasa si crece a 1000
+ * tenants".
+ *
+ * Solución correcta · `supabase.auth.signUp` desde el wizard
+ * `/invite/:token`:
+ *   1. signUp({ email, password, options: { data: { name } } }) ·
+ *      crea fila en `auth.users`.
+ *   2. Insertar `organizations` (la nueva agencia) con id generado.
+ *   3. Insertar `organization_members` linkeando user → org como admin.
+ *   4. La sesión queda activa (signUp devuelve session) · navegar a
+ *      /inicio.
+ *   5. Borrar estos helpers · el login real es Supabase auth,
+ *      `findMockUser` solo cubre el seed de demo.
+ *
+ * Mitigación actual · estos datos solo se consultan en flows de
+ * resolución (login + agencyDomainLookup), nunca se renderizan en
+ * UI a otros users. Leak requiere acceso DevTools al navegador
+ * físico. Riesgo bajo en tests con dispositivos separados.
+ */
 const AGENCIES_KEY = "byvaro.agencies.created.v1";
 const USERS_KEY    = "byvaro.users.created.v1";
 

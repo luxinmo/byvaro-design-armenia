@@ -326,10 +326,34 @@
 | **Tabla(s) DB** | (parte de `collab_requests` con kind especial · O tabla nueva) |
 | **Helper TS** | `src/lib/responsibleInvitations.ts` · `src/lib/responsibleInviteEmail.ts` · `src/lib/teamInvitationEmail.ts` |
 | **Tipo TS** | varios |
-| **localStorage key** | `byvaro.responsible-invitations.v1` |
-| **Write-through** | ❌ pendiente |
+| **localStorage key** | `byvaro.responsible-invitations.v1` (GLOBAL · leak documentado en el archivo) |
+| **Write-through** | ❌ pendiente Phase 3 |
 | **Endpoints futuros** | `POST /organizations/me/members/invitations` · `POST /invitations/:token/accept` |
-| **Notas** | Diferente de invitaciones DE colaboración (`invitaciones.ts` cubre ese flujo). Aquí es invitar a un MIEMBRO al workspace propio. |
+| **Notas** | Diferente de invitaciones DE colaboración (`invitaciones.ts` cubre ese flujo). Aquí es invitar a un MIEMBRO al workspace propio. **LEAK Phase 2 documentado** en `responsibleInvitations.ts:50` · necesita tabla `responsible_invitations` con RLS + RPC `find_responsible_invitation(token)`. Mitigación: solo accesible vía DevTools, no UI. |
+
+### 5.5 · Invitaciones descartadas (lado agencia)
+
+| Campo | Valor |
+|---|---|
+| **Tabla(s) DB** | (futuro: `agency_invitation_dismissals`) |
+| **Helper TS** | `src/lib/invitacionesDescartadas.ts` · `isInvitacionDescartada(id, orgId?)`, `descartarInvitacion(id, orgId?)`, `useInvitacionesDescartadas()` |
+| **Tipo TS** | `Set<string>` (ids de invitaciones descartadas) |
+| **localStorage key** | `byvaro.invitaciones.descartadas.v1:<orgId>` ✅ scoped post-2026-04-30 |
+| **Write-through** | ❌ pendiente Phase 3 (tabla nueva) |
+| **Endpoints futuros** | `POST /agency-invitation-dismissals` · `GET /agency-invitation-dismissals` |
+| **Notas** | Migración legacy automática · si existe la clave global pre-2026-04-30, se migra al primer read al `:<orgId>` del workspace logueado. |
+
+### 5.6 · Cuentas creadas vía `/invite/:token` (signup mock)
+
+| Campo | Valor |
+|---|---|
+| **Tabla(s) DB** | (Phase 3: `auth.users` + `organizations` + `organization_members`) |
+| **Helper TS** | `src/lib/createdAgencies.ts` · `saveCreatedAgency`, `saveCreatedUser`, `findCreatedUser`, `userExistsByEmail` |
+| **Tipo TS** | `Agency`, `MockUser` |
+| **localStorage key** | `byvaro.agencies.created.v1`, `byvaro.users.created.v1` (GLOBAL · leak documentado) |
+| **Write-through** | ❌ pendiente Phase 3 |
+| **Endpoints futuros** | `POST /auth/signup { email, password, name }` + atomic create org + membership |
+| **Notas** | **LEAK Phase 2 documentado** en `createdAgencies.ts:19` · solución correcta es `supabase.auth.signUp` desde el wizard. Mitigación: solo accesible vía DevTools, no se renderiza en UI a otros. Test cross-device: cada tester en su propio navegador → 0 leak. |
 
 ---
 

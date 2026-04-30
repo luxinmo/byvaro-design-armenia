@@ -12,41 +12,104 @@
  * "rechazo" a cada promotor que no le interese. Es más natural que
  * simplemente desaparezca de su vista.
  *
- * Storage · `byvaro.invitaciones.descartadas.v1` (ids de invitaciones
- * descartadas, sin scope por agencia · single-tenant mock). En backend
- * real, mover a tabla `agency_invitation_dismissals(agency_id,
- * invitation_id, dismissed_at)`.
+ * Storage · `byvaro.invitaciones.descartadas.v1:<orgId>` (scoped por
+ * agencia · evita que en navegador compartido un user vea las
+ * descartadas de otro). Las funciones aceptan `orgId` opcional · si no
+ * se pasa, leen de `currentOrgIdentity(useCurrentUser())`.
+ *
+ * Compatibilidad · si la clave legacy global existe (instalaciones
+ * pre-2026-04-30), se migra al `:<orgId>` del workspace logueado al
+ * primer read.
+ *
+ * TODO(backend): tabla `agency_invitation_dismissals(agency_id,
+ * invitation_id, dismissed_at)` con RLS por agency_id.
  */
 
-const STORAGE_KEY = "byvaro.invitaciones.descartadas.v1";
+import { currentOrgIdentity } from "./orgCollabRequests";
+import { useCurrentUser } from "./currentUser";
+import type { CurrentUser } from "./currentUser";
 
-function read(): string[] {
-  if (typeof window === "undefined") return [];
+const KEY_PREFIX = "byvaro.invitaciones.descartadas.v1";
+const LEGACY_KEY = "byvaro.invitaciones.descartadas.v1";
+
+function keyFor(orgId: string): string {
+  return `${KEY_PREFIX}:${orgId}`;
+}
+
+/** Resuelve el orgId del user actual sin hooks · para callers no-React.
+ *  Si no hay sesión activa o no se puede resolver, devuelve `null`. */
+function readCurrentOrgIdSync(): string | null {
+  if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
+    const accountType = sessionStorage.getItem("byvaro.accountType.v1");
+    const agencyId = sessionStorage.getItem("byvaro.accountType.agencyId.v1");
+    if (accountType === "agency" && agencyId) return agencyId;
+    if (accountType === "developer") return "developer-default";
+  } catch { /* fallthrough */ }
+  return null;
+}
+
+function read(orgId?: string): string[] {
+  if (typeof window === "undefined") return [];
+  const effectiveOrgId = orgId ?? readCurrentOrgIdSync();
+  if (!effectiveOrgId) return [];
+  try {
+    /* Migración legacy · si existe la clave global y aún NO hay scoped,
+     *  copiamos al workspace actual y borramos legacy. Idempotente. */
+    const scopedRaw = localStorage.getItem(keyFor(effectiveOrgId));
+    if (!scopedRaw) {
+      const legacyRaw = localStorage.getItem(LEGACY_KEY);
+      if (legacyRaw) {
+        localStorage.setItem(keyFor(effectiveOrgId), legacyRaw);
+        localStorage.removeItem(LEGACY_KEY);
+        const legacyParsed = JSON.parse(legacyRaw);
+        return Array.isArray(legacyParsed) ? legacyParsed : [];
+      }
+      return [];
+    }
+    const parsed = JSON.parse(scopedRaw);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 }
 
-function write(ids: string[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
-  window.dispatchEvent(new CustomEvent("byvaro:invitaciones-descartadas-changed"));
+function write(orgId: string, ids: string[]) {
+  localStorage.setItem(keyFor(orgId), JSON.stringify(ids));
+  window.dispatchEvent(new CustomEvent("byvaro:invitaciones-descartadas-changed", {
+    detail: { orgId },
+  }));
 }
 
-/** ¿La agencia descartó esta invitación? */
-export function isInvitacionDescartada(invitationId: string): boolean {
-  return read().includes(invitationId);
+/** ¿La agencia descartó esta invitación? Si `orgId` no se pasa, lee
+ *  del workspace logueado · útil para callers que ya están en
+ *  contexto del current user. */
+export function isInvitacionDescartada(invitationId: string, orgId?: string): boolean {
+  return read(orgId).includes(invitationId);
 }
 
-/** Añade el id al set de descartadas. Idempotente. */
-export function descartarInvitacion(invitationId: string): void {
-  const current = read();
+/** Añade el id al set de descartadas. Idempotente. Scoped al
+ *  workspace logueado salvo que se pase `orgId` explícito. */
+export function descartarInvitacion(invitationId: string, orgId?: string): void {
+  const effectiveOrgId = orgId ?? readCurrentOrgIdSync();
+  if (!effectiveOrgId) return;
+  const current = read(effectiveOrgId);
   if (current.includes(invitationId)) return;
-  write([...current, invitationId]);
+  write(effectiveOrgId, [...current, invitationId]);
+}
+
+/** Hook reactivo · resuelve orgId del user actual y se re-renderiza
+ *  al cambiar el set descartado. Útil en componentes que muestran
+ *  lista filtrada (ej. PromocionDetalle agencias colaborando). */
+export function useInvitacionesDescartadas(): Set<string> {
+  const user = useCurrentUser();
+  return getDescartadasSet(user);
+}
+
+/** Helper non-hook · para flujos imperativos. */
+export function getDescartadasSet(user: CurrentUser): Set<string> {
+  const { orgId } = currentOrgIdentity(user);
+  return new Set(read(orgId));
 }
 
 /** Suscríbete a cambios · útil para que el banner se re-renderice. */
