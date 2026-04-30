@@ -496,32 +496,36 @@
 |---|:-:|:-:|:-:|:-:|
 | Empresa (org + profile) | ✅ | ✅ | ✅ | ✅ |
 | Oficinas | ✅ | ✅ | ✅ | ✅ |
-| Members | ✅ | ⚠️ seed | ❌ | ⚠️ derivado |
-| Auth | ✅ | ✅ | ✅ | ✅ |
+| Members | ✅ | ✅ | ✅ | ⚠️ derivado |
+| Auth | ✅ | ✅ signUp invite | ✅ | ✅ |
 | Promotions | ✅ | ⚠️ read-only | ❌ | ❌ |
-| Promo units/anejos/gallery | ✅ | ❌ | ❌ | ❌ |
+| Promo units/anejos/gallery | ✅ | ✅ anejos | ✅ anejos | ❌ |
 | Solicitudes (3 kinds) | ✅ | ✅ | ✅ | ✅ |
 | Org collaborations | ✅ | ⚠️ read | ⚠️ | ⚠️ |
 | Promo collaborations | ✅ | ⚠️ read | ❌ | ❌ |
-| Collaboration documents | ✅ | ⚠️ mock | ❌ | ❌ |
+| Collaboration documents | ✅ | ✅ | ✅ | ❌ |
 | User favorites | ✅ | ✅ | ✅ | ✅ |
 | Registros | ✅ | ✅ | ✅ create/update | ✅ |
-| Leads | ✅ | ❌ mock | ❌ | ❌ |
+| Leads | ✅ | ✅ | ✅ + assignee | ❌ |
 | Sales | ✅ | ❌ seed | ❌ | ✅ read-hydrate |
 | Sale payments | ✅ | ❌ seed | ❌ | ✅ via sales |
 | Calendar events | ✅ | ✅ | ✅ | ✅ |
-| Visit evaluations | ✅ | ⚠️ via calendar | ❌ | ❌ |
-| Contacts (todo) | ✅ | ❌ mock 14 archivos | ❌ | ❌ |
+| Visit evaluations | ✅ | ✅ | ✅ | ❌ |
+| Contacts (todo) | ✅ | ✅ vía metadata | ✅ | ❌ |
 | Notifications | ✅ | ✅ | ⚠️ markRead solo | ✅ |
-| Emails sent | ✅ | ❌ mock | ❌ | ❌ |
+| Emails sent | ✅ | ✅ | ✅ | ❌ |
 | Email templates | ✅ | ❌ | ❌ | ❌ |
-| WhatsApp | ✅ | ❌ mock | ❌ | ❌ |
+| WhatsApp | ✅ | ✅ vía metadata | ✅ | ❌ |
 | Workspace plans | ✅ | ❌ mock | ❌ (Stripe) | ❌ |
 | Subscriptions | ✅ | ❌ | ❌ | ❌ |
-| Paywall events | ✅ | ⚠️ tracking | ❌ | ❌ |
+| Paywall events | ✅ | ✅ | ✅ | ❌ |
 | Permission grants | ✅ | ⚠️ defaults | ❌ | ❌ |
-| Audit events | ✅ | ⚠️ | ❌ | ❌ |
-| Marketing rules | ✅ (column) | ⚠️ mock | ❌ | ❌ |
+| Audit events | ✅ | ⚠️ | ⚠️ pre-auth skip | ❌ |
+| Marketing rules | ✅ (column) | ✅ | ✅ | ❌ |
+| Responsible invitations | ✅ | ✅ + RPC | ✅ | ❌ |
+| Agency invoices | ✅ | ✅ | ✅ | ❌ |
+| Agency payments | ✅ | ✅ | ✅ | ❌ |
+| Doc requests | ✅ | ✅ | ✅ | ❌ |
 
 Leyenda · ✅ implementado · ⚠️ parcial · ❌ pendiente.
 

@@ -86,9 +86,6 @@ export function track(event: PaywallEvent, payload: AnalyticsPayload): void {
   console.info(`[analytics] ${event}`, enriched);
 
   // 2. PostHog · si el snippet está cargado.
-  //    TODO(backend/analytics): cuando se decida proveedor (PostHog/
-  //    Plausible/propio), conectar aquí. La firma `event + payload` es
-  //    compatible con PostHog y la mayoría.
   if (typeof window !== "undefined" && window.posthog) {
     try {
       window.posthog.capture(event, enriched);
@@ -96,6 +93,32 @@ export function track(event: PaywallEvent, payload: AnalyticsPayload): void {
       /* no propagar errores de tracking · jamás bloquean UX */
     }
   }
+
+  // 3. Paywall events · escribir a Supabase para validation analytics
+  //    (Phase 1B: medir conversion subscribe_clicked / shown).
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return; // pre-auth · skip
+      const orgId = payload.organizationId ?? null;
+      if (!orgId) return;
+      const { error } = await supabase.from("paywall_events").insert({
+        organization_id: orgId,
+        user_id: user.id,
+        event,
+        trigger: payload.trigger,
+        tier: payload.tier,
+        used: payload.used,
+        limit: payload.limit,
+        route: enriched.route,
+        user_role: payload.userRole ?? null,
+        metadata: enriched,
+      });
+      if (error) console.warn("[paywall_events:insert]", error.message);
+    } catch (e) { console.warn("[paywall_events:insert] skipped:", e); }
+  })();
 }
 
 /* ══════ Hook reactivo · azúcar para componentes ══════════════════ */

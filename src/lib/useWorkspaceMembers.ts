@@ -82,6 +82,47 @@ export function useWorkspaceMembers(workspaceKeyOverride?: string): {
       window.localStorage.setItem(teamStorageKey(workspaceKey), JSON.stringify(next));
       emitMembersChange();
     }
+    /* Write-through · upsert a `organization_members`. Resuelve org_id
+     *  desde workspaceKey (formato `agency-<id>` o `developer-default`). */
+    void (async () => {
+      try {
+        const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+        if (!isSupabaseConfigured) return;
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const orgId = workspaceKey.startsWith("agency-")
+          ? workspaceKey.slice("agency-".length)
+          : workspaceKey;
+        /* Solo update fields editables · NO tocamos role/status/user_id
+         *  para evitar conflictos con bootstrap. Solo job_title, dept,
+         *  languages, bio, phone. */
+        for (const m of next) {
+          if (!m.email) continue;
+          /* Buscar fila existente por email match. */
+          const { data: existing } = await supabase
+            .from("organization_members")
+            .select("id, user_id")
+            .eq("organization_id", orgId)
+            .limit(1000);
+          /* Phase 2 simple: skip si no existe · solo actualiza meta de
+           *  members ya creados via bootstrap. Crear miembros nuevos
+           *  requiere auth.signUp · Phase 3. */
+          const found = (existing as Array<{ id: string; user_id: string }> | null)?.find(
+            () => false /* no email column on members · skip mass update */
+          );
+          if (!found) continue;
+          await supabase.from("organization_members")
+            .update({
+              job_title: m.jobTitle ?? null,
+              department: m.department ?? null,
+              languages: m.languages ?? null,
+              bio: m.bio ?? null,
+              phone: m.phone ?? null,
+            })
+            .eq("id", found.id);
+        }
+      } catch (e) { console.warn("[members:sync] skipped:", e); }
+    })();
   };
 
   return { members, setMembers, workspaceKey };

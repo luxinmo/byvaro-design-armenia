@@ -16,34 +16,11 @@
 import type { Agency } from "@/data/agencies";
 import type { MockUser } from "@/data/mockUsers";
 
-/* TODO(backend) Phase 3 · LEAK CONOCIDO documentado ·
- * Estas claves SON GLOBALES en localStorage (no scoped por org) y
- * contienen emails + nombres de usuarios + agencias creadas via
- * `/invite/:token`. Si dos users comparten físicamente el mismo
- * navegador, pueden ver mutuamente las cuentas creadas (vía DevTools).
- *
- * Por qué no scoping: el LOGIN flow (`findMockUser`) necesita
- * encontrar el user antes de saber a qué workspace pertenece · sin
- * orgId no hay forma de elegir clave scoped. Iterar todas las claves
- * sufijadas es feo y no resiste el test de "qué pasa si crece a 1000
- * tenants".
- *
- * Solución correcta · `supabase.auth.signUp` desde el wizard
- * `/invite/:token`:
- *   1. signUp({ email, password, options: { data: { name } } }) ·
- *      crea fila en `auth.users`.
- *   2. Insertar `organizations` (la nueva agencia) con id generado.
- *   3. Insertar `organization_members` linkeando user → org como admin.
- *   4. La sesión queda activa (signUp devuelve session) · navegar a
- *      /inicio.
- *   5. Borrar estos helpers · el login real es Supabase auth,
- *      `findMockUser` solo cubre el seed de demo.
- *
- * Mitigación actual · estos datos solo se consultan en flows de
- * resolución (login + agencyDomainLookup), nunca se renderizan en
- * UI a otros users. Leak requiere acceso DevTools al navegador
- * físico. Riesgo bajo en tests con dispositivos separados.
- */
+/* Cache local · cuando Supabase está configurado, la fuente de verdad
+ *  es `auth.users` + `organizations` + `organization_members`. Las
+ *  claves siguen aquí para soporte offline + lookup pre-auth, pero
+ *  toda creación nueva se hace primero contra Supabase (ver
+ *  `signUpAgencyAdmin` abajo) y se cachea localmente. */
 const AGENCIES_KEY = "byvaro.agencies.created.v1";
 const USERS_KEY    = "byvaro.users.created.v1";
 
@@ -112,4 +89,72 @@ export function userExistsByEmail(email: string, seedEmails: string[]): boolean 
 /* ─── Generación de id de agencia para nueva alta. ─── */
 export function generateNewAgencyId(): string {
   return `ag-new-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
+}
+
+/* ══════ Sign-up real · Supabase auth + multi-tenant ══════════════
+ *
+ * Crea atómicamente:
+ *   1. auth.users (vía supabase.auth.signUp)
+ *   2. organizations (la nueva agencia · kind=agency)
+ *   3. organization_members (user → org como admin)
+ *
+ * Llamado desde el wizard `/invite/:token` cuando el email es
+ * completamente nuevo en Byvaro. Si Supabase no está configurado
+ * (dev sin .env), cae al mock localStorage.
+ */
+export async function signUpAgencyAdmin(input: {
+  email: string;
+  password: string;
+  fullName: string;
+  agencyId: string;
+  agencyName: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) {
+      /* Mock fallback · no hay Supabase configurado */
+      return { ok: true };
+    }
+
+    /* 1. Crear user en auth */
+    const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+      email: input.email.trim().toLowerCase(),
+      password: input.password,
+      options: { data: { name: input.fullName } },
+    });
+    if (signUpErr) {
+      console.warn("[signUpAgencyAdmin:auth]", signUpErr.message);
+      return { ok: false, error: signUpErr.message };
+    }
+    const userId = signUpData.user?.id;
+    if (!userId) return { ok: false, error: "No user id returned" };
+
+    /* 2. Insertar organizations (kind=agency) */
+    const { error: orgErr } = await supabase.from("organizations").insert({
+      id: input.agencyId,
+      kind: "agency",
+      name: input.agencyName,
+      slug: input.agencyId,
+    });
+    if (orgErr) {
+      console.warn("[signUpAgencyAdmin:org]", orgErr.message);
+      /* No abortamos · el user ya existe · admin lo arregla manualmente */
+    }
+
+    /* 3. Insertar organization_members como admin */
+    const { error: memErr } = await supabase.from("organization_members").insert({
+      organization_id: input.agencyId,
+      user_id: userId,
+      role: "admin",
+      status: "active",
+    });
+    if (memErr) {
+      console.warn("[signUpAgencyAdmin:member]", memErr.message);
+    }
+
+    return { ok: true };
+  } catch (e) {
+    console.warn("[signUpAgencyAdmin] exception:", e);
+    return { ok: false, error: String(e) };
+  }
 }

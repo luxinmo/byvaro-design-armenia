@@ -42,6 +42,41 @@ export function loadContactEdits(contactId: string): ContactEdits | null {
 export function saveContactEdits(contactId: string, edits: ContactEdits): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(KEY(contactId), JSON.stringify(edits));
+  /* Write-through · update columnas canónicas + merge metadata (resto). */
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const e = edits as Record<string, unknown>;
+      const update: Record<string, unknown> = {};
+      if (typeof e.name === "string") update.full_name = e.name;
+      if (typeof e.email === "string") update.email = e.email;
+      if (typeof e.phone === "string") update.phone = e.phone;
+      if (typeof e.nif === "string") update.dni = e.nif;
+      if (typeof e.birthDate === "string") update.birth_date = e.birthDate || null;
+      if (typeof e.nationality === "string") update.nationality = e.nationality;
+      if (typeof e.nationalityIso === "string") update.nationality_iso = e.nationalityIso;
+      if (typeof e.notes === "string") update.notes = e.notes;
+      if (typeof e.source === "string") update.latest_source = e.source;
+      if (Object.keys(update).length > 0) {
+        const { error } = await supabase.from("contacts")
+          .update(update).eq("id", contactId);
+        if (error) console.warn("[contacts:edit]", error.message);
+      }
+      /* Resto en metadata (kind, companyName, tradeName, etc.). */
+      const meta: Record<string, unknown> = {};
+      for (const k of ["kind", "companyName", "tradeName", "companyTaxId",
+        "address", "languages", "phones", "emailAddresses"] as const) {
+        if (k in e) meta[k] = e[k];
+      }
+      if (Object.keys(meta).length > 0) {
+        const { mergeContactMetadata } = await import("@/lib/contactMetadataSync");
+        await mergeContactMetadata(contactId, meta);
+      }
+    } catch (err) { console.warn("[contacts:edit] skipped:", err); }
+  })();
 }
 
 export function clearContactEdits(contactId: string): void {

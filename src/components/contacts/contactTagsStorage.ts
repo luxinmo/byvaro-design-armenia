@@ -25,9 +25,17 @@ export function loadContactTags(contactId: string): string[] | null {
 export function saveContactTags(contactId: string, tags: string[]): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(KEY(contactId), JSON.stringify(tags));
+  void (async () => {
+    const { mergeContactMetadata } = await import("@/lib/contactMetadataSync");
+    await mergeContactMetadata(contactId, { tags });
+  })();
 }
 
 export function clearContactTags(contactId: string): void {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(KEY(contactId));
+  void (async () => {
+    const { mergeContactMetadata } = await import("@/lib/contactMetadataSync");
+    await mergeContactMetadata(contactId, { tags: [] });
+  })();
 }

@@ -45,6 +45,10 @@ export function loadRelationTypes(): RelationType[] {
 export function saveRelationTypes(types: RelationType[]): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(KEY, JSON.stringify(types));
+  void (async () => {
+    const { mergeOrgMetadata } = await import("@/lib/orgMetadataSync");
+    await mergeOrgMetadata({ contactRelationTypes: types });
+  })();
 }
 
 /** Genera un id slug seguro a partir del label. Garantiza unicidad

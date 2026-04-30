@@ -72,6 +72,32 @@ function writeStore(list: AgencyDocRequest[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   window.dispatchEvent(new CustomEvent(CHANGE_EVENT));
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || list.length === 0) return;
+      const rows = list.map((d) => {
+        const dq = d as unknown as Record<string, unknown>;
+        return {
+          id: d.id,
+          developer_organization_id: "developer-default",
+          agency_organization_id: d.agencyId,
+          type: (dq.type as string) ?? "other",
+          status: (dq.status as string) ?? "pending",
+          due_at: (dq.dueAt as string) ?? null,
+          submitted_at: (dq.submittedAt as string) ?? null,
+          decided_at: (dq.decidedAt as string) ?? null,
+          file_url: (dq.fileUrl as string) ?? null,
+          notes: (dq.notes as string) ?? null,
+          metadata: dq,
+        };
+      });
+      const { error } = await supabase.from("doc_requests").upsert(rows, { onConflict: "id" });
+      if (error) console.warn("[docRequests:sync]", error.message);
+    } catch (e) { console.warn("[docRequests:sync] skipped:", e); }
+  })();
 }
 
 function daysAgo(n: number) { return Date.now() - n * 24 * 60 * 60 * 1000; }

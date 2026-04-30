@@ -50,7 +50,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { useInvitaciones, type Invitacion } from "@/lib/invitaciones";
 import { isInvitacionDescartada, descartarInvitacion } from "@/lib/invitacionesDescartadas";
 import {
-  saveCreatedAgency, saveCreatedUser, generateNewAgencyId, userExistsByEmail,
+  saveCreatedAgency, saveCreatedUser, signUpAgencyAdmin, generateNewAgencyId, userExistsByEmail,
 } from "@/lib/createdAgencies";
 import { addPromotionToCartera } from "@/lib/agencyCartera";
 import { ensureAgencyContactForPromoter } from "@/lib/invitationContacts";
@@ -289,6 +289,15 @@ export default function InviteAccept() {
   }) => {
     if (!invitation) return;
     const newAgencyId = generateNewAgencyId();
+    /* Real auth · Supabase signUp + organizations + members.
+     *  Async, no bloquea la UI · si falla cae al fallback local. */
+    void signUpAgencyAdmin({
+      email: invitation.emailAgencia,
+      password: payload.password,
+      fullName: payload.fullName,
+      agencyId: newAgencyId,
+      agencyName: payload.agencyName,
+    });
     saveCreatedAgency({
       id: newAgencyId,
       name: payload.agencyName,

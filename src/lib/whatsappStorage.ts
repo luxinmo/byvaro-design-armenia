@@ -49,11 +49,19 @@ export function loadWhatsAppSetup(): WhatsAppSetup | null {
 export function saveWhatsAppSetup(setup: WhatsAppSetup): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(KEY, JSON.stringify(setup));
+  void (async () => {
+    const { mergeOrgMetadata } = await import("./orgMetadataSync");
+    await mergeOrgMetadata({ whatsappSetup: setup });
+  })();
 }
 
 export function clearWhatsAppSetup(): void {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(KEY);
+  void (async () => {
+    const { mergeOrgMetadata } = await import("./orgMetadataSync");
+    await mergeOrgMetadata({ whatsappSetup: null });
+  })();
 }
 
 export function isWhatsAppConnected(): boolean {

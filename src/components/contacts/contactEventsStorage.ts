@@ -56,6 +56,32 @@ export function recordEvent(
   };
   const existing = loadEvents(contactId);
   saveAll(contactId, [full, ...existing]);
+  /* Write-through · contact_events table.
+   *  Pre-auth skip · si no hay user, queda solo local. */
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: members } = await supabase.from("organization_members")
+        .select("organization_id").eq("user_id", user.id).eq("status", "active")
+        .order("created_at", { ascending: true }).limit(1);
+      const orgId = members?.[0]?.organization_id;
+      if (!orgId) return;
+      const { error } = await supabase.from("contact_events").insert({
+        contact_id: contactId,
+        organization_id: orgId,
+        type: full.type,
+        title: full.title ?? full.type,
+        description: full.description ?? null,
+        by_name: full.actor ?? null,
+        by_email: full.actorEmail ?? null,
+        metadata: full as unknown as Record<string, unknown>,
+      });
+      if (error) console.warn("[contact_events:insert]", error.message);
+    } catch (e) { console.warn("[contact_events:insert] skipped:", e); }
+  })();
   return full;
 }
 

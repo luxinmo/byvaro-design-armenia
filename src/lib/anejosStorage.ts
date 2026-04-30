@@ -71,6 +71,31 @@ function commit(promotionId: string, next: Anejo[]) {
   const store = readStore();
   store[promotionId] = next;
   writeStore(store);
+  /* Write-through · sync diff con `promotion_anejos`.
+   *  Estrategia simple Phase 2 · borramos todos del promo y reinsert. */
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase.from("promotion_anejos").delete().eq("promotion_id", promotionId);
+      if (next.length > 0) {
+        const rows = next.map((a) => ({
+          id: a.id,
+          promotion_id: promotionId,
+          kind: a.tipo ?? "parking",
+          label: (a as { label?: string; ref?: string }).label
+            ?? (a as { ref?: string }).ref ?? null,
+          price: (a as { precio?: number }).precio ?? null,
+          status: a.status,
+          metadata: a as unknown as Record<string, unknown>,
+        }));
+        const { error } = await supabase.from("promotion_anejos").insert(rows);
+        if (error) console.warn("[anejos:sync]", error.message);
+      }
+    } catch (e) { console.warn("[anejos:sync] skipped:", e); }
+  })();
 }
 
 export function addAnejo(

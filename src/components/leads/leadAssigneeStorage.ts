@@ -37,6 +37,22 @@ export function setLeadAssignee(leadId: string, memberId: string | null): void {
     window.localStorage.removeItem(key);
   }
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { leadId } }));
+  /* Write-through · leads.metadata.assigneeMemberId. */
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: row } = await supabase.from("leads")
+        .select("metadata").eq("id", leadId).maybeSingle();
+      const meta = (row?.metadata as Record<string, unknown> | null) ?? {};
+      const next = { ...meta, assigneeMemberId: memberId };
+      const { error } = await supabase.from("leads")
+        .update({ metadata: next }).eq("id", leadId);
+      if (error) console.warn("[leads:assignee]", error.message);
+    } catch (e) { console.warn("[leads:assignee] skipped:", e); }
+  })();
 }
 
 /** Hook reactivo · se refresca cuando cambia el override de este lead. */
