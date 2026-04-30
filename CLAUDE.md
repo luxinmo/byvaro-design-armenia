@@ -73,6 +73,55 @@ Cuándo NO usar este patrón · datos relacionales con queries propias
 (JOIN, WHERE), payloads >1MB, cualquier cosa que requiera índices.
 Esos van a tabla dedicada con FK.
 
+### Referencia pública del tenant · `IDXXXXXX` inmutable
+
+**Toda organización en Byvaro lleva un `public_ref` aleatorio de la
+forma `ID` + 6 chars del alfabeto sin ambigüedades** (sin 0/O/1/I/L) ·
+32^6 ≈ 1.07 mil millones de combinaciones. Generado **server-side**
+por el trigger `gen_tenant_public_ref()` al INSERT en `organizations`.
+Inmutable después del primer set (trigger `protect_public_ref` lanza
+exception en cualquier UPDATE).
+
+**Por qué aleatoria y no secuencial.** Si fuera 000001, 000002…
+cualquier observador podría inferir cuándo se registró un tenant
+respecto a otro · señal competitiva no deseada. Aleatoriedad
+uniforme rompe esa correlación.
+
+**Dónde se usa.**
+
+- **Display** · `/empresa` "Sobre nosotros" muestra la ref read-only
+  (input bloqueado en edit + tile mono en preview/visitor) con botón
+  de copia. Formato visual `ID·ABC·DEF` (separadores cosméticos · el
+  valor canónico es de 8 chars sin separador).
+- **Discovery cross-tenant** · RPC pública `find_org_by_ref(p_ref)`
+  (SECURITY DEFINER) resuelve la org por su ref sin exponer el id
+  interno. Solo devuelve campos públicos (display_name, kind, logo,
+  verified).
+- **Tabla `tenant_links`** · cada vínculo cross-tenant se identifica
+  por `(from_ref, to_ref)` en vez de exponer ids internos en URLs,
+  emails o webhooks. RLS valida membership en CUALQUIERA de las dos
+  orgs (from o to).
+
+**Helpers TS** · `src/lib/tenantRef.ts`:
+
+- `generateTenantRef()` · solo para mocks/tests · backend genera por trigger.
+- `isValidTenantRef(s)` · valida formato.
+- `formatTenantRef(s)` · agrupa para display (`ID·ABC·DEF`).
+
+**Regla dura · NUNCA editable.** El input de "Detalles" en
+`EmpresaAboutTab` lo expone como `readOnly` con tooltip + icono Lock.
+Si añades una nueva pantalla que renderice empresa, NO ofrezcas
+input editable de `publicRef`. Si necesitas un nuevo handle, la única
+forma legítima es crear una nueva organización (evento legal, no
+rebrand).
+
+**Backend.** Spec en `supabase/migrations/20260430120000_tenant_public_ref.sql`:
+- Columna `organizations.public_ref text unique not null`.
+- Función + trigger generadores.
+- Trigger inmutabilidad (UPDATE proibido).
+- Tabla `tenant_links` foundation con `from_ref`/`to_ref` + RLS.
+- RPC pública `find_org_by_ref(text)`.
+
 ### Doc canónico completo
 
 **`docs/backend-development-rules.md`** — patrones, plantillas de

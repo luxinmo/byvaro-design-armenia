@@ -35,6 +35,7 @@ export function agencyToEmpresa(a: Agency): Empresa {
     : (a.mercados ?? []).map((c) => c.toLowerCase()).slice(0, 4);
   return {
     ...defaultEmpresa,
+    publicRef: a.publicRef,
     nombreComercial: a.name,
     razonSocial: a.razonSocial ?? a.name,
     cif: a.cif ?? "",

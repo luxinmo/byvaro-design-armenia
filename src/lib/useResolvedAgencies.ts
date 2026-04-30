@@ -42,6 +42,7 @@ function mergeAgencyWithCache(a: Agency): Agency {
    * valor real · no rompemos el seed con strings vacíos. */
   return {
     ...a,
+    publicRef: cached.publicRef?.trim() || a.publicRef,
     name: cached.nombreComercial?.trim() || a.name,
     logo: cached.logoUrl?.trim() || a.logo,
     cover: cached.coverUrl?.trim() || a.cover,

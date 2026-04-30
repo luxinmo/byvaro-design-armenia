@@ -2083,3 +2083,59 @@ obligatoriamente por `useUsageGuard()`.
 - `src/pages/ajustes/facturacion/plan.tsx` (refactor a usePlan real).
 - `docs/screens/ajustes-plan.md` · spec.
 - `docs/backend-integration.md §12` · contrato backend.
+
+
+## 2026-04-30 · ADR-059 · Tenant public_ref · referencia pública inmutable
+
+**Contexto**. Hasta ahora las URLs / emails / payloads cross-tenant
+exponían el id interno del workspace (`ag-2`, `developer-default`,
+`prom-1`). Eso (a) revela información de modelo (mock single-tenant
+con prefijos "ag-"/"prom-") y (b) facilita enumerar tenants vecinos
+secuencialmente. Además, no hay un handle externo estable: si en el
+futuro cambia el id interno (UUID, refactor de schema) las URLs
+quedarían rotas.
+
+**Decisión**. Cada `organization` lleva una columna `public_ref`
+con formato `IDXXXXXX` (`ID` + 6 chars del alfabeto sin
+ambigüedades `ABCDEFGHJKMNPQRSTUVWXYZ23456789`, 32 chars). Espacio
+32^6 ≈ 1.07 mil millones · imposible de enumerar secuencialmente,
+imposible de inferir orden de registro.
+
+Inmutable después del primer set: trigger `organizations_protect_public_ref`
+rechaza cualquier UPDATE que intente modificarla. Auto-generada
+server-side por trigger `gen_tenant_public_ref()` al INSERT.
+
+**Por qué aleatoria.** Si fuera secuencial (000001, 000002…) cualquier
+observador podría inferir tamaño del producto y orden de registro.
+Aleatoriedad uniforme rompe esa correlación. `IDXXXXXX` es público
+(no es secreto · sirve como handle externo) pero no informativo.
+
+**Display**. `/empresa` tab "Sobre nosotros" muestra la ref
+read-only con icono Lock + botón Copiar. Formato visual cosmético
+`ID·ABC·DEF` para legibilidad humana · valor canónico es de 8 chars
+sin separador. NUNCA editable desde UI.
+
+**Linking foundation**. Tabla `tenant_links` con `(from_ref, to_ref,
+kind, status)` registra cualquier vínculo cross-tenant identificado
+por public_ref. RLS valida membership en cualquiera de las dos orgs.
+NO sustituye a `organization_collaborations` (relación operativa) ·
+es un índice de discovery + auditoría que evita exponer ids internos
+en URLs/emails/webhooks. URLs futuras: `byvaro.app/i/IDABC123-IDDEF456-<token>`.
+
+**Discovery**. RPC pública `find_org_by_ref(p_ref)` (SECURITY DEFINER)
+resuelve la org por su ref devolviendo solo campos públicos
+(display_name, kind, logo, verified). Permite resolver QUIÉN te invita
+sin exponer su id interno antes de aceptar.
+
+**Backfill**. Migración rellena las 15 orgs existentes (Luxinmo + 4
+promotores externos + 10 agencias) con refs aleatorias en una sola
+transacción. NOT NULL constraint añadida después del backfill.
+
+**Archivos clave**:
+- `supabase/migrations/20260430120000_tenant_public_ref.sql` · schema + trigger + RPC + tenant_links.
+- `src/lib/tenantRef.ts` · helpers TS (`generateTenantRef`, `isValidTenantRef`, `formatTenantRef`).
+- `src/lib/empresa.ts` · campo `Empresa.publicRef`.
+- `src/lib/supabaseHydrate.ts` · `rowToEmpresa()` propaga `public_ref` desde DB.
+- `src/components/empresa/EmpresaAboutTab.tsx` · `TenantRefField` (edit) + `TenantRefDisplay` (preview/visitor).
+- `docs/contract-index.md §1.5 + §1.6` · contrato.
+- Regla de oro en `CLAUDE.md`.

@@ -46,6 +46,13 @@ export interface DireccionFiscal {
 }
 
 export interface Empresa {
+  /** Referencia pública INMUTABLE del tenant · `IDXXXXXX` aleatoria.
+   *  Generada server-side por el trigger `gen_tenant_public_ref()` al
+   *  crear la organización. NUNCA editable desde la UI · sirve como
+   *  handle externo (invitaciones, marketplace, links cross-tenant).
+   *  Ver `src/lib/tenantRef.ts` y la regla "Referencia pública del
+   *  tenant" en CLAUDE.md. */
+  publicRef?: string;
   // Identidad pública
   nombreComercial: string;
   razonSocial: string;
