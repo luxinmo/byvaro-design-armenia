@@ -37,6 +37,7 @@ import {
 } from "@/lib/developerNavigation";
 import { agencies } from "@/data/agencies";
 import { resolveDeveloperLogo, getDeveloperAvatar } from "@/lib/developerDirectory";
+import { getPublicRef } from "@/lib/tenantRefResolver";
 import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
 
 interface PromotorRow {
@@ -168,7 +169,7 @@ function OtrasInmobiliariasSection({ ownAgencyId }: { ownAgencyId: string | null
           <AgencyGridCard
             key={a.id}
             agency={a}
-            onClick={() => navigate(`/colaboradores/${a.id}`)}
+            onClick={() => navigate(`/colaboradores/${a.publicRef || getPublicRef(a.id) || a.id}`)}
             isFavorite={isFavorite(a.id)}
             onToggleFavorite={() => toggleFavorite(a.id)}
           />
@@ -219,14 +220,14 @@ function PromotorCard({ row }: { row: PromotorRow }) {
 
       <div className="border-t border-border px-5 py-3 flex items-center gap-2">
         <Link
-          to={`/promotor/${row.id}/panel`}
+          to={`/promotor/${getPublicRef(row.id) || row.id}/panel`}
           className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-foreground text-background text-[12px] font-semibold hover:bg-foreground/90 transition-colors"
         >
           Ver panel
           <ArrowUpRight className="h-3 w-3" strokeWidth={2} />
         </Link>
         <Link
-          to={`/promotor/${row.id}`}
+          to={`/promotor/${getPublicRef(row.id) || row.id}`}
           className="inline-flex items-center gap-1 text-[11.5px] text-muted-foreground hover:text-foreground transition-colors ml-auto"
         >
           Ficha pública

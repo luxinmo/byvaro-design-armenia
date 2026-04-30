@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/currentUser";
 import { useHasPermission } from "@/lib/permissions";
 import { useTabParam } from "@/lib/useTabParam";
+import { resolveTenantId, getPublicRef } from "@/lib/tenantRefResolver";
 import {
   agencies, getContractStatus as getAgreementStatus,
 } from "@/data/agencies";
@@ -66,7 +67,9 @@ const PANEL_TABS = [
 type PanelTab = typeof PANEL_TABS[number];
 
 export default function ColaboracionPanel() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
+  /* Acepta IDXXXXXX (canónico) o id interno legacy. */
+  const id = params.id ? resolveTenantId(params.id) : undefined;
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const user = useCurrentUser();
@@ -198,7 +201,7 @@ export default function ColaboracionPanel() {
           {/* Acciones primarias */}
           <div className="flex items-center gap-2 flex-wrap">
             <Link
-              to={`/colaboradores/${a.id}/ficha`}
+              to={`/colaboradores/${a.publicRef || getPublicRef(a.id) || a.id}/ficha`}
               className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
               <Eye className="h-3.5 w-3.5" strokeWidth={1.75} />

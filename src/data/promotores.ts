@@ -23,6 +23,7 @@ import type { Agency } from "./agencies";
 export const promotores: Agency[] = [
   {
     id: "prom-1",
+    publicRef: "ID8TAG9C",
     name: "AEDAS Homes",
     logo: "https://api.dicebear.com/9.x/shapes/svg?seed=aedas&backgroundColor=1d4ed8&size=120",
     cover: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=600&h=200&fit=crop",
@@ -69,6 +70,7 @@ export const promotores: Agency[] = [
   },
   {
     id: "prom-2",
+    publicRef: "IDUV83Y2",
     name: "Neinor Homes",
     logo: "https://api.dicebear.com/9.x/shapes/svg?seed=neinor&backgroundColor=ec4899&size=120",
     cover: "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=600&h=200&fit=crop",
@@ -116,6 +118,7 @@ export const promotores: Agency[] = [
   },
   {
     id: "prom-3",
+    publicRef: "IDBZPYXX",
     name: "Habitat Inmobiliaria",
     logo: "https://api.dicebear.com/9.x/shapes/svg?seed=habitat&backgroundColor=059669&size=120",
     cover: "https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?w=600&h=200&fit=crop",
@@ -161,6 +164,7 @@ export const promotores: Agency[] = [
   },
   {
     id: "prom-4",
+    publicRef: "ID2BQYHF",
     name: "Metrovacesa",
     logo: "https://api.dicebear.com/9.x/shapes/svg?seed=metrovacesa&backgroundColor=f59e0b&size=120",
     cover: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600&h=200&fit=crop",

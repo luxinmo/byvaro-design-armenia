@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/currentUser";
 import { useTabParam } from "@/lib/useTabParam";
 import { useEmpresa } from "@/lib/empresa";
+import { resolveTenantId, getPublicRef } from "@/lib/tenantRefResolver";
 import { agencies } from "@/data/agencies";
 import { promotions } from "@/data/promotions";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
@@ -99,11 +100,17 @@ const NO_ACCESS_COPY: Partial<Record<PanelTab, { title: string; description: str
 
 export default function PromotorPanel() {
   const { id } = useParams<{ id: string }>();
-  const tenantId = id ?? DEFAULT_DEVELOPER_ID;
+  /* Solo aceptamos IDXXXXXX. Las URLs legacy con id interno YA NO
+   *  funcionan · la guard 404 se renderiza al final si tenantId queda
+   *  undefined. */
+  const tenantId = id ? resolveTenantId(id) : undefined;
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const user = useCurrentUser();
-  const { empresa } = useEmpresa(tenantId);
+  /* `useEmpresa` necesita un string; pasamos un sentinel cuando no hay
+   *  ref válida · sirve solo para que los hooks no rompan, el render
+   *  cae al guard 404 abajo. */
+  const { empresa } = useEmpresa(tenantId ?? DEFAULT_DEVELOPER_ID);
 
   const fromPromoId = searchParams.get("from") ?? undefined;
   const fromPromo = useMemo(() => {
@@ -129,12 +136,18 @@ export default function PromotorPanel() {
    * propio user.id · backend traducirá a `agent_id`. */
   const restrictToUserId = isAgencyAdmin ? undefined : user.id;
 
-  /* Guards · sin promotor o sin permiso */
+  /* Guards · ref inválida o sin promotor/permiso */
   const promoterHasIdentity = !!(empresa.nombreComercial?.trim() || empresa.razonSocial?.trim());
-  if (!promoterHasIdentity) {
+  if (!tenantId || !promoterHasIdentity) {
     return (
       <div className="flex flex-col min-h-full bg-background items-center justify-center px-4 py-10 text-center">
         <h1 className="text-xl font-bold text-foreground mb-1">Promotor no encontrado</h1>
+        {!tenantId && (
+          <p className="text-sm text-muted-foreground mb-6 max-w-md">
+            La referencia <span className="font-mono">{id}</span> no corresponde a ningún
+            promotor. Las URLs llevan formato <span className="font-mono">IDXXXXXX</span>.
+          </p>
+        )}
         <button
           onClick={() => navigate("/inicio")}
           className="mt-4 inline-flex items-center gap-2 h-10 px-5 rounded-full bg-foreground text-background text-sm font-semibold hover:bg-foreground/90 transition-colors"
@@ -238,7 +251,7 @@ export default function PromotorPanel() {
               promoción" que NO aplica desde el lado agencia. */}
           <div className="flex items-center gap-2 flex-wrap">
             <Link
-              to={`/promotor/${tenantId}`}
+              to={`/promotor/${getPublicRef(tenantId) || tenantId}`}
               className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
               <Eye className="h-3.5 w-3.5" strokeWidth={1.75} />

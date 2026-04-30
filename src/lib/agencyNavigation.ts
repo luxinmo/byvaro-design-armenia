@@ -17,15 +17,20 @@
  */
 
 import type { Agency } from "@/data/agencies";
+import { getPublicRef } from "./tenantRefResolver";
 
 export function isActiveCollaborator(a: Agency): boolean {
   return a.status === "active" || a.estadoColaboracion === "activa";
 }
 
+/** Construye la URL pública hacia una agencia. Prefiere el
+ *  `IDXXXXXX` (Agency.publicRef) sobre el id interno · fallback al
+ *  id solo si la cache + seeds aún no tienen la ref hidratada. */
 export function agencyHref(a: Agency, opts?: { fromPromoId?: string }): string {
+  const ref = a.publicRef || getPublicRef(a.id) || a.id;
   if (isActiveCollaborator(a)) {
-    const base = `/colaboradores/${a.id}/panel`;
+    const base = `/colaboradores/${ref}/panel`;
     return opts?.fromPromoId ? `${base}?from=${opts.fromPromoId}` : base;
   }
-  return `/colaboradores/${a.id}`;
+  return `/colaboradores/${ref}`;
 }

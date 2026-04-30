@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner"; // Toaster global en App.tsx
 import Empresa from "./Empresa";
+import { resolveTenantId } from "@/lib/tenantRefResolver";
 import { agencies, type Agency } from "@/data/agencies";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import {
@@ -42,7 +43,9 @@ function getEstado(a: Agency): "activa" | "contrato-pendiente" | "pausada" {
 }
 
 export default function AgenciaDetalle() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
+  /* Acepta IDXXXXXX (canónico) o id interno legacy. */
+  const id = params.id ? resolveTenantId(params.id) : undefined;
   const navigate = useNavigate();
   const confirm = useConfirm();
 
