@@ -30,6 +30,7 @@ import { useMemo } from "react";
 import { agencies } from "@/data/agencies";
 import { promotores } from "@/data/promotores";
 import { getActivePromotionsByOwner } from "./promotionsByOwner";
+import { getCollaboratingDeveloperIds } from "./developerNavigation";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { sales } from "@/data/sales";
 import { unitsByPromotion } from "@/data/units";
@@ -137,17 +138,17 @@ export function useEmpresaStats(
         importeEnVenta += avg * available;
       }
       /* Unidades en colaboración · suma de availableUnits de las
-       *  promociones que la AGENCIA colabora con sus promotores
-       *  (Luxinmo + externals). Solo tiene sentido cuando es una
-       *  agencia · para promotores externos queda 0. */
+       *  promociones que la AGENCIA colabora · iteramos sobre TODOS
+       *  los developers con los que colabora (no solo Luxinmo) · ver
+       *  `getCollaboratingDeveloperIds`. Solo aplica si el tenant
+       *  mostrado es una agencia · promotores externos quedan a 0. */
       let unidadesEnColaboracion = 0;
       if (a && !tenantId.startsWith("prom-")) {
-        const allPromos = [
-          ...getActivePromotionsByOwner("developer-default"),
-        ];
         const collabIds = new Set(a.promotionsCollaborating ?? []);
-        for (const p of allPromos) {
-          if (collabIds.has(p.id)) unidadesEnColaboracion += p.availableUnits ?? 0;
+        for (const devId of getCollaboratingDeveloperIds(a)) {
+          for (const p of getActivePromotionsByOwner(devId)) {
+            if (collabIds.has(p.id)) unidadesEnColaboracion += p.availableUnits ?? 0;
+          }
         }
       }
       return {

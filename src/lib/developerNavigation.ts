@@ -85,6 +85,26 @@ export function hasDeveloperCollab(
   return getCollaboratingDeveloperIds(a).has(developerInternalId);
 }
 
+/** Mirror simétrico · ¿el developer logueado colabora con ESTA agencia?
+ *  Es decir: ¿alguna promoción del developer está en
+ *  `agency.promotionsCollaborating`?
+ *
+ *  Usado por el panel `/colaboradores/:id/panel` para que el lado
+ *  developer aplique el mismo guard que el lado agencia.
+ *
+ *  Mock single-developer: Arman (Luxinmo) es dueño de todas las
+ *  promociones de los seeds, así que cualquier agencia con
+ *  `promotionsCollaborating` no vacío matchea. AEDAS (`prom-1`,
+ *  hipotético login futuro) solo matchearía agencias que colaboren
+ *  en `aedas-1` / `aedas-2`. */
+export function agencyCollabsWithDeveloper(
+  agency: Agency | null | undefined,
+  developerInternalId: string,
+): boolean {
+  if (!agency) return false;
+  return getCollaboratingDeveloperIds(agency).has(developerInternalId);
+}
+
 /** Devuelve el href correcto para llegar al promotor desde la agencia.
  *  Si pasas `developerId`, se usa; si no, se asume el único promotor del
  *  workspace (`DEFAULT_DEVELOPER_ID`).

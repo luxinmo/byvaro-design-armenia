@@ -22,7 +22,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  useNavigate, useParams, useSearchParams, Link,
+  Navigate, useNavigate, useParams, useSearchParams, Link,
 } from "react-router-dom";
 import {
   ArrowLeft, ArrowUpRight, Eye, Mail, Share2, Shield,
@@ -35,6 +35,8 @@ import { useCurrentUser } from "@/lib/currentUser";
 import { useHasPermission } from "@/lib/permissions";
 import { useTabParam } from "@/lib/useTabParam";
 import { resolveTenantId, getPublicRef } from "@/lib/tenantRefResolver";
+import { agencyCollabsWithDeveloper } from "@/lib/developerNavigation";
+import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import {
   agencies, getContractStatus as getAgreementStatus,
 } from "@/data/agencies";
@@ -98,6 +100,19 @@ export default function ColaboracionPanel() {
         </button>
       </div>
     );
+  }
+
+  /* Guard simétrico al de PromotorPanel · si el developer logueado
+   *  no colabora con esta agencia (ninguna de sus promociones está
+   *  en `agency.promotionsCollaborating`), redirige a la ficha
+   *  pública. Evita cross-developer leak donde un developer ve
+   *  operativa entre otra empresa y la misma agencia. */
+  if (user.accountType === "developer") {
+    const myOrgId = currentOrgIdentity(user).orgId;
+    if (!agencyCollabsWithDeveloper(agency, myOrgId)) {
+      const ref = agency.publicRef || getPublicRef(agency.id) || agency.id;
+      return <Navigate to={`/colaboradores/${ref}`} replace />;
+    }
   }
 
   if (!canView) {
