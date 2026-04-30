@@ -28,6 +28,7 @@ import { defaultEmpresa, type Empresa, type Oficina } from "./empresa";
 
 interface OrgRow {
   id: string;
+  public_ref: string | null;
   kind: "developer" | "agency";
   legal_name: string | null;
   display_name: string | null;
@@ -107,6 +108,7 @@ interface OfficeRow {
 function rowToEmpresa(o: OrgRow, p: ProfileRow | null): Empresa {
   return {
     ...defaultEmpresa,
+    publicRef: o.public_ref ?? undefined,
     nombreComercial: o.display_name ?? "",
     razonSocial: o.legal_name ?? "",
     cif: o.tax_id ?? "",

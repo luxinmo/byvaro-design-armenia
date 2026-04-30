@@ -87,6 +87,30 @@
 | **Endpoints futuros** | Supabase Auth (`/auth/v1/token`, `/auth/v1/user`) · `GET /me` para resolver workspace |
 | **Notas** | Login en `src/pages/Login.tsx` es el ÚNICO lugar fuera de `src/lib/*` que llama a `supabase.auth.signInWithPassword`. Excepción documentada. |
 
+### 1.5 · Tenant public_ref · `IDXXXXXX`
+
+| | |
+|---|---|
+| **Propósito** | Referencia pública INMUTABLE de cada organización · 6 chars random del alfabeto sin ambigüedades (sin 0/O/1/I/L). Espacio 32^6 ≈ 1.07 mil millones · imposible deducir orden de registro. |
+| **Tabla(s) DB** | Columna `public.organizations.public_ref text unique not null` · auto-generada por trigger `gen_tenant_public_ref()` al INSERT · inmutable (trigger `protect_public_ref` rechaza UPDATE). |
+| **RPC pública** | `find_org_by_ref(p_ref text)` (SECURITY DEFINER) resuelve la org por ref sin pasar por RLS de tabla. Devuelve solo campos públicos (display_name, kind, logo, verified). |
+| **Tipo TS** | `Empresa.publicRef?: string` (`src/lib/empresa.ts`). Hidratado por `rowToEmpresa()` desde `organizations.public_ref`. |
+| **Helper TS** | `src/lib/tenantRef.ts` · `generateTenantRef()` (mocks/tests) · `isValidTenantRef()` · `formatTenantRef()` (display `ID·ABC·DEF`). |
+| **UI** | `/empresa` tab "Sobre nosotros" en `EmpresaAboutTab.tsx` · tile read-only con icono Lock + botón Copiar. Visible en modo edit, preview, visitor. |
+| **Endpoints futuros** | `GET /api/orgs/by-ref/:ref` proxy de la RPC. Usado en flows de invitación/discovery. |
+| **Notas** | NUNCA editable desde UI. La única forma de "cambiar la ref" es crear una nueva organización. Backend enforça inmutabilidad. |
+
+### 1.6 · Tenant links · vínculos cross-tenant
+
+| | |
+|---|---|
+| **Propósito** | Foundation table que registra vínculos entre dos organizaciones identificadas por su `public_ref` (no ids internos). Casos: invitaciones, colaboraciones, referidos, marketplace requests. |
+| **Tabla(s) DB** | `public.tenant_links` con `from_ref text`, `to_ref text`, `kind tenant_link_kind`, `status tenant_link_status`, metadata jsonb. Constraint `from_ref <> to_ref`. |
+| **RLS** | SELECT/UPDATE: miembro de cualquiera de las dos orgs (from o to) · INSERT: solo desde la org `from_ref` (la que crea el link saliente). |
+| **Tipo TS** | Pendiente · `TenantLink` cuando se cablee al frontend. |
+| **Helper TS** | Pendiente · `src/lib/tenantLinks.ts` con `createTenantLink()`, `getTenantLinksFor(orgId)`, etc. |
+| **Notas** | NO sustituye a `organization_collaborations` (que es la fuente de verdad de la relación operativa). Es un índice de discovery + auditoría cross-tenant que evita exponer ids internos en URLs/emails/webhooks. URLs de invitación tipo `byvaro.app/i/IDABC123-IDDEF456-<token>`. |
+
 ---
 
 ## §2 · Catálogo

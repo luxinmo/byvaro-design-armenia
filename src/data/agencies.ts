@@ -132,6 +132,8 @@ export type Agency = {
 
   /* ─── Ficha operativa (Empresa) · lo que la agencia mantiene en su
          workspace · backend: `GET /api/empresas/:id/public` ─── */
+  /** Referencia pública del tenant (`IDXXXXXX`). Inmutable. */
+  publicRef?: string;
   /** Razón social (nombre jurídico). */
   razonSocial?: string;
   /** CIF / número de identificación fiscal. */
