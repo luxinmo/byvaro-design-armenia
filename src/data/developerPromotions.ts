@@ -222,4 +222,58 @@ export const developerOnlyPromotions: DevPromotion[] = [
     buildingType: "plurifamiliar",
     canShareWithAgencies: true,
   },
+  /* Copia de PRM-0051 "Villas del Pinar" reasignada al workspace de
+   * AEDAS Homes (`prom-1`). Mismos datos comerciales y de
+   * configuración · cambian solo:
+   *   · id (único)
+   *   · code (referencia interna del workspace AEDAS)
+   *   · ownerOrganizationId → "prom-1"
+   *   · image (foto distinta · evita confusión visual con el original)
+   *   · puntosDeVentaIds: [] (las oficinas of-1...of-6 son del seed
+   *     de Luxinmo · AEDAS gestiona las suyas desde su propia ficha)
+   *   · comerciales: [] (los com-1/com-2 pertenecen a Luxinmo)
+   * Status "active" · publicada y visible en /promotor/ID8TAG9C. */
+  {
+    id: "dev-2-aedas-copy",
+    ownerOrganizationId: "prom-1",
+    code: "PRM-AED-0051",
+    name: "Villas del Pinar",
+    location: "Jávea, Alicante",
+    priceMin: 680000,
+    priceMax: 1100000,
+    availableUnits: 6,
+    totalUnits: 12,
+    status: "active",
+    reservationCost: 15000,
+    delivery: "Q2 2027",
+    commission: 4.5,
+    developer: "",
+    agencies: 2,
+    agencyAvatars: [],
+    propertyTypes: ["Villas", "Townhouses"],
+    image: "https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=600&h=400&fit=crop",
+    badge: "new",
+    collaborating: false,
+    updatedAt: "just now",
+    constructionProgress: 15,
+    hasShowFlat: false,
+    buildingType: "unifamiliar-multiple",
+    canShareWithAgencies: true,
+    activity: { inquiries: 22, reservations: 3, visits: 8, trend: 55 },
+    collaboration: {
+      comisionInternacional: 4.5,
+      comisionNacional: 4.5,
+      diferenciarNacionalInternacional: false,
+      diferenciarComisiones: false,
+      agenciasRefusarNacional: false,
+      clasificacionCliente: "residencia",
+      formaPagoComision: "proporcional",
+      hitosComision: [],
+      ivaIncluido: true,
+      condicionesRegistro: ["nombre_completo", "ultimas_4_cifras", "nacionalidad"],
+      validezRegistroDias: 0,
+    },
+    puntosDeVentaIds: [],
+    comerciales: [],
+  },
 ];
