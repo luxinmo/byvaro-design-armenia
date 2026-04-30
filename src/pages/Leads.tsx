@@ -297,7 +297,7 @@ function LeadRow({
 
   return (
     <tr
-      onClick={() => navigate(`/oportunidades/${l.id}`)}
+      onClick={() => navigate(`/oportunidades/${l.publicRef || l.id}`)}
       className="border-t border-border/60 hover:bg-muted/20 transition-colors cursor-pointer"
     >
       {/* Lead · nombre + email/teléfono */}

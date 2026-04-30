@@ -23,8 +23,11 @@ import { promotions } from "@/data/promotions";
 import type { DevPromotion } from "@/data/developerPromotions";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import type { Contact } from "@/components/contacts/types";
+import { MOCK_CONTACTS } from "@/components/contacts/data";
 import type { Registro } from "@/data/records";
+import { registros } from "@/data/records";
 import type { Lead } from "@/data/leads";
+import { leads } from "@/data/leads";
 
 type AnyPromotion = Promotion | DevPromotion;
 
@@ -72,6 +75,33 @@ export function contactHref(c: { id: string; publicRef?: string }, opts?: { tab?
   return opts?.tab ? `${base}?tab=${opts.tab}` : base;
 }
 
+/** Para call sites que solo tienen `contactId` (no el objeto Contact
+ *  completo). Hace lookup en seeds + storage local · si no encuentra,
+ *  devuelve el id tal cual (URL legacy · sigue funcionando por compat
+ *  backward del route handler). */
+export function contactHrefById(contactId: string | undefined, opts?: { tab?: string }): string {
+  if (!contactId) return "/contactos";
+  /* Import inline · contactos viven repartidos entre `data.ts`
+   *  (mock seed) y `createdContactsStorage` (runtime). Para mantener
+   *  el helper sin acoplar a runtime store, solo busco en el seed. */
+  const ref = contactRefLookup(contactId) || contactId;
+  const base = `/contactos/${ref}`;
+  return opts?.tab ? `${base}?tab=${opts.tab}` : base;
+}
+
+/** Lookup auxiliar · resuelve internalId → publicRef desde el seed
+ *  de contactos. Build una única vez (memoized). */
+let _contactRefMap: Map<string, string> | null = null;
+function contactRefLookup(internalId: string): string | undefined {
+  if (!_contactRefMap) {
+    _contactRefMap = new Map();
+    for (const c of MOCK_CONTACTS) {
+      if (c.publicRef) _contactRefMap.set(c.id, c.publicRef);
+    }
+  }
+  return _contactRefMap.get(internalId);
+}
+
 export function findContactByParam<T extends { id: string; publicRef?: string }>(
   param: string | undefined,
   list: ReadonlyArray<T>,
@@ -92,6 +122,35 @@ export function registroHref(r: { id: string; publicRef?: string }): string {
 export function leadHref(l: { id: string; publicRef?: string }): string {
   const ref = l.publicRef?.trim() || l.id;
   return `/oportunidades/${ref}`;
+}
+
+/** Para call sites que solo tienen `leadId`. Lookup en seed de leads
+ *  → publicRef. Si no encuentra, devuelve id (legacy compat). */
+let _leadRefMap: Map<string, string> | null = null;
+export function leadHrefById(leadId: string | undefined): string {
+  if (!leadId) return "/oportunidades";
+  if (!_leadRefMap) {
+    _leadRefMap = new Map();
+    for (const l of leads) {
+      if (l.publicRef) _leadRefMap.set(l.id, l.publicRef);
+    }
+  }
+  const ref = _leadRefMap.get(leadId) || leadId;
+  return `/oportunidades/${ref}`;
+}
+
+/** Para call sites que solo tienen `registroId`. */
+let _registroRefMap: Map<string, string> | null = null;
+export function registroHrefById(registroId: string | undefined): string {
+  if (!registroId) return "/registros";
+  if (!_registroRefMap) {
+    _registroRefMap = new Map();
+    for (const r of registros) {
+      if (r.publicRef) _registroRefMap.set(r.id, r.publicRef);
+    }
+  }
+  const ref = _registroRefMap.get(registroId) || registroId;
+  return `/registros/${ref}`;
 }
 
 export function findRegistroByParam<T extends { id: string; publicRef?: string }>(

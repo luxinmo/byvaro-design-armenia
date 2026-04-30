@@ -253,7 +253,7 @@ function OpportunityRow({ opportunity }: { opportunity: ContactOpportunityEntry 
           {/* CTA — abrir el detalle de la oportunidad (pantalla por crear). */}
           <div className="mt-3 pt-3 border-t border-border/30 flex justify-end">
             <Link
-              to={`/oportunidades/${opportunity.id}`}
+              to={`/oportunidades/${opportunity.publicRef || opportunity.id}`}
               className="inline-flex items-center gap-1 text-[11px] font-semibold text-foreground hover:underline"
             >
               Ver oportunidad <ArrowRight className="h-3 w-3" />

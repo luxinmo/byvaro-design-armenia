@@ -181,7 +181,7 @@ export function DuplicateContext({ record }: { record: Registro }) {
         )}
 
         <Link
-          to={`/contactos/${contact.id}`}
+          to={`/contactos/${contact.publicRef || contact.id}`}
           className="text-[11px] font-semibold text-foreground hover:underline mt-2 inline-flex items-center gap-1"
         >
           Ver ficha completa del contacto <ExternalLink className="h-3 w-3" />

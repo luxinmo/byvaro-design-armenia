@@ -23,6 +23,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Handshake, ArrowRight, Building2, ArrowLeft } from "lucide-react";
 import { agencies, getAgencyShareStats } from "@/data/agencies";
+import { getPublicRef, resolveTenantId } from "@/lib/tenantRefResolver";
 import { isAgencyVerified } from "@/lib/licenses";
 import { getAgencyLicenses } from "@/lib/agencyLicenses";
 import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
@@ -40,8 +41,10 @@ export default function AgenciaEntry() {
 
   /* Si viene con :id válido, configuramos sessionStorage *antes* del primer
    * render para que los componentes hijos (AppLayout, Sidebar, Inicio) lean
-   * el contexto correcto desde el inicio. */
-  const validId = id && agencies.some((a) => a.id === id) ? id : null;
+   * el contexto correcto desde el inicio. Acepta IDXXXXXX canónico o id
+   * interno legacy. */
+  const internalId = id ? resolveTenantId(id) ?? id : undefined;
+  const validId = internalId && agencies.some((a) => a.id === internalId) ? internalId : null;
   if (validId) {
     const current = readAccountType();
     if (current.type !== "agency" || current.agencyId !== validId) {
@@ -84,7 +87,7 @@ function AgencyPicker() {
   const pickAgency = (agencyId: string) => {
     setAccountAgencyId(agencyId);
     setAccountType("agency");
-    navigate(`/agencia/${agencyId}`, { replace: true });
+    navigate(`/agencia/${getPublicRef(agencyId) || agencyId}`, { replace: true });
   };
 
   const backToPromotor = () => {

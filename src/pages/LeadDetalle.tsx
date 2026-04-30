@@ -21,7 +21,7 @@ import { useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useCurrentUser } from "@/lib/currentUser";
 import { useTabParam } from "@/lib/useTabParam";
-import { promotionHrefById } from "@/lib/urls";
+import { promotionHrefById, findLeadByParam } from "@/lib/urls";
 import { PublicRefBadge } from "@/components/ui/PublicRefBadge";
 import {
   ArrowLeft, Phone, Mail, MessageCircle, CheckCircle2, XCircle,
@@ -82,7 +82,8 @@ export default function LeadDetalle() {
    * Hasta que `Lead` tenga `agencyId`, redirect agency-only. */
   const lead = useMemo(() => {
     if (currentUser.accountType === "agency") return undefined;
-    return leads.find((l) => l.id === id);
+    /* Acepta publicRef canónico (RG + 9 dígitos) o id interno legacy. */
+    return findLeadByParam(id, leads);
   }, [id, currentUser.accountType]);
 
   /* Tabs del cuerpo · deep-linkables vía ?tab= (ver `useTabParam`).

@@ -16,6 +16,7 @@
 import { useMemo } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { useTabParam } from "@/lib/useTabParam";
+import { findContactByParam } from "@/lib/urls";
 import {
   ArrowLeft, Pencil, Camera, Plus, X,
   Flame, Sparkles, Calendar as CalendarIcon, FileText,
@@ -81,8 +82,10 @@ export default function ContactoDetalle() {
       .filter((c) => !deleted.has(c.id));
   }, []);
 
+  /* Resuelve el param a contacto · acepta `publicRef` canónico
+   *  (CO + 7 dígitos) o `id` interno legacy · backward compat. */
   const baseContact = useMemo(
-    () => allContacts.find((c) => c.id === id),
+    () => findContactByParam(id, allContacts),
     [allContacts, id],
   );
 

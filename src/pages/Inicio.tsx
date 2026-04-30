@@ -25,6 +25,7 @@ import {
   Building2, UserPlus, AlertCircle, Users, BarChart3, Activity,
 } from "lucide-react";
 import { UserContextSwitcher } from "@/components/ui/UserContextSwitcher";
+import { leadHrefById } from "@/lib/urls";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/currentUser";
@@ -477,7 +478,7 @@ function TodayAgendaWidget({ selectedUserId }: { selectedUserId: string | null }
             return (
               <li key={ev.id}>
                 <Link
-                  to={ev.leadId ? `/oportunidades/${ev.leadId}` : "/calendario"}
+                  to={ev.leadId ? leadHrefById(ev.leadId) : "/calendario"}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2 rounded-xl transition-colors hover:bg-muted/40",
                     isActive && "bg-primary/5",
