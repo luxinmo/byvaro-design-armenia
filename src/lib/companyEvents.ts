@@ -154,12 +154,18 @@ export function recordCompanyEvent(
 
   /* Write-through · escribir UNA fila en audit_events para CADA org
    *  participante (developer + agency). Cada org ve solo sus filas
-   *  vía RLS. */
+   *  vía RLS.
+   *
+   *  REGLA · si NO hay usuario autenticado (e.g. seed inicial al boot
+   *  desde main.tsx, antes de login), saltamos el write-through ·
+   *  evita 401 cascade. El seed local sigue activo, RLS audit_events
+   *  requiere `is_org_member` y solo el JWT real lo cumple. */
   void (async () => {
     try {
       const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
       if (!isSupabaseConfigured) return;
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return; // pre-auth seed · no escritura DB
       const after = {
         title, description: opts.description, related: opts.related, by: opts.by,
       };

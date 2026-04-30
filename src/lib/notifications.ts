@@ -97,13 +97,14 @@ export function recordNotification(input: Omit<Notification, "id" | "createdAt">
   const trimmed = [notif, ...list].slice(0, 200);
   write(trimmed);
   /* Write-through · async insert a notifications table. RLS valida que
-   *  el caller es member del organization_id del recipient. */
+   *  el caller es member del organization_id del recipient. Skip si
+   *  no hay user (pre-auth seed). */
   void (async () => {
     try {
       const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
       if (!isSupabaseConfigured) return;
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) return; // pre-auth seed · skip
       /* Resolver org del recipient · si se pasa explícito, lo usamos.
        *  Si no, asumimos que el recipient es del mismo workspace que
        *  el caller (caso típico: notificación interna). */
