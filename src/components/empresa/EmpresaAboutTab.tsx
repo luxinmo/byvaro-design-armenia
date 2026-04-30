@@ -8,9 +8,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Globe, Phone, Mail, Clock, Linkedin, Instagram, Facebook,
   Youtube, Music2, ShieldCheck, Upload, Trash2, ChevronDown, CheckCircle2,
-  Search, Plus, FileText, Image as ImageIcon, X, Lock, Copy,
+  Search, Plus, FileText, Image as ImageIcon, X, Lock,
 } from "lucide-react";
-import { formatTenantRef } from "@/lib/tenantRef";
 import { toast } from "sonner";
 import { useWorkspaceMembers } from "@/lib/useWorkspaceMembers";
 import { memberInitials, type TeamMember } from "@/lib/team";
@@ -115,16 +114,6 @@ export function EmpresaAboutTab({
                 <input value={empresa.nombreComercial} onChange={(e) => update("nombreComercial", e.target.value)} className={inputClass} />
               </div>
             </div>
-            {empresa.publicRef && (
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] text-muted-foreground flex items-center gap-1">
-                  Referencia Byvaro
-                  <Lock className="h-2.5 w-2.5" strokeWidth={1.75} />
-                  <span className="text-muted-foreground/60 normal-case">· inmutable</span>
-                </label>
-                <TenantRefField value={empresa.publicRef} />
-              </div>
-            )}
             <div className="grid grid-cols-2 gap-3">
               {showCif && (
                 <div className="flex flex-col gap-1">
@@ -184,12 +173,6 @@ export function EmpresaAboutTab({
             <div className="flex flex-col gap-1">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider">CIF/NIF/VAT</p>
               <p className="text-[12.5px] text-foreground font-medium font-mono tracking-wider">{empresa.cif || "—"}</p>
-            </div>
-          )}
-          {empresa.publicRef && (
-            <div className="flex flex-col gap-1">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Referencia Byvaro</p>
-              <TenantRefDisplay value={empresa.publicRef} />
             </div>
           )}
           <div className="flex flex-col gap-1">
@@ -2113,61 +2096,5 @@ function RestrictedDetailsCard() {
         </div>
       </div>
     </section>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   TenantRefField · input read-only del modo edición · muestra la
-   referencia con un botón de copia. La ref es INMUTABLE · si el
-   usuario quiere cambiarla, hay que crear una nueva organización.
-   ═══════════════════════════════════════════════════════════════════ */
-function TenantRefField({ value }: { value: string }) {
-  const copy = () => {
-    navigator.clipboard.writeText(value).then(
-      () => toast.success("Referencia copiada"),
-      () => toast.error("No se pudo copiar"),
-    );
-  };
-  return (
-    <div className="flex items-center gap-2">
-      <input
-        readOnly
-        value={formatTenantRef(value)}
-        className={cn(inputClass, "font-mono tracking-wider bg-muted/40 cursor-default select-all")}
-        onClick={(e) => (e.target as HTMLInputElement).select()}
-      />
-      <button
-        type="button"
-        onClick={copy}
-        className="inline-flex items-center gap-1 h-9 px-3 rounded-xl border border-border text-[12px] hover:bg-muted transition-colors"
-        title="Copiar referencia"
-      >
-        <Copy className="h-3.5 w-3.5" /> Copiar
-      </button>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   TenantRefDisplay · render read-only del modo preview/visitor ·
-   se ve igual que cualquier otro tile de los detalles, con copia.
-   ═══════════════════════════════════════════════════════════════════ */
-function TenantRefDisplay({ value }: { value: string }) {
-  const copy = () => {
-    navigator.clipboard.writeText(value).then(
-      () => toast.success("Referencia copiada"),
-      () => toast.error("No se pudo copiar"),
-    );
-  };
-  return (
-    <button
-      type="button"
-      onClick={copy}
-      className="inline-flex items-center gap-1.5 text-[12.5px] text-foreground font-medium font-mono tracking-wider hover:text-primary transition-colors group w-fit"
-      title="Copiar referencia"
-    >
-      <span>{formatTenantRef(value)}</span>
-      <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" strokeWidth={1.75} />
-    </button>
   );
 }
