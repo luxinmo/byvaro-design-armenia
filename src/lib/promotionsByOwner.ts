@@ -52,18 +52,27 @@ export type PortfolioItem = Promotion | DevPromotion | ExternalPortfolioEntry;
 
 /** Devuelve todas las promociones cuyo `ownerOrganizationId === orgId`.
  *
- *  Nota: en el mock, los seeds antiguos pueden no tener el campo
- *  rellenado · se asume `developer-default` por compatibilidad.
- *  El backend escribirá el campo en TODAS las filas, eliminando este
- *  fallback.
+ *  Para `developer-default` (Luxinmo) une las dos fuentes legacy
+ *  (`promotions.ts` + `developerOnlyPromotions.ts`) filtradas por
+ *  owner explícito o el default de compatibilidad.
+ *
+ *  Para promotores externos (`prom-X`) une el seed lite
+ *  `EXTERNAL_PROMOTOR_PORTFOLIO[orgId]` con cualquier `DevPromotion`
+ *  o `Promotion` que tenga `ownerOrganizationId === orgId`. Esto
+ *  permite añadir copias completas (mismo shape DevPromotion) de
+ *  promociones de Luxinmo asignadas a un externo · ej. la copia
+ *  de PRM-0051 a AEDAS.
+ *
+ *  Nota: en el mock, los seeds antiguos sin `ownerOrganizationId`
+ *  asumen `developer-default` (compatibilidad). El backend escribirá
+ *  el campo en TODAS las filas, eliminando este fallback.
  */
 export function getPromotionsByOwner(orgId: string): PortfolioItem[] {
-  if (orgId === DEFAULT_DEVELOPER_ORG_ID) {
-    return [...promotions, ...developerOnlyPromotions].filter(
-      (p) => (p.ownerOrganizationId ?? DEFAULT_DEVELOPER_ORG_ID) === orgId,
-    );
-  }
-  return EXTERNAL_PROMOTOR_PORTFOLIO[orgId] ?? [];
+  const owned = [...promotions, ...developerOnlyPromotions].filter(
+    (p) => (p.ownerOrganizationId ?? DEFAULT_DEVELOPER_ORG_ID) === orgId,
+  );
+  if (orgId === DEFAULT_DEVELOPER_ORG_ID) return owned;
+  return [...(EXTERNAL_PROMOTOR_PORTFOLIO[orgId] ?? []), ...owned];
 }
 
 /** Conveniencia · solo activas / incompletas (no sold-out, no
