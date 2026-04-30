@@ -95,16 +95,54 @@ export function setPromoCollabStatus(
     reason,
   };
   if (status === "activa") {
-    /* Volver a "activa" es el default · no necesita persistirse. */
+    /* Volver a "activa" es el default · no necesita persistirse local. */
     if (idx >= 0) {
       list.splice(idx, 1);
       writeStore(list);
     }
-    return;
+  } else {
+    if (idx >= 0) list[idx] = record;
+    else list.push(record);
+    writeStore(list);
   }
-  if (idx >= 0) list[idx] = record;
-  else list.push(record);
-  writeStore(list);
+
+  /* Write-through · upsert a `promotion_collaborations.status`. Map
+   * mock status → DB enum:
+   *   activa  → active
+   *   pausada → paused
+   *   anulada → ended */
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const dbStatus = status === "activa" ? "active"
+        : status === "pausada" ? "paused" : "ended";
+      /* Buscar fila existente. Si no existe, crearla con
+       * developer_organization_id = developer-default (mock single-tenant). */
+      const { data: existing } = await supabase
+        .from("promotion_collaborations")
+        .select("id")
+        .eq("promotion_id", promotionId)
+        .eq("agency_organization_id", agencyId)
+        .limit(1);
+      const updateFields: Record<string, unknown> = {
+        status: dbStatus,
+        ...(status === "pausada" ? { paused_at: new Date().toISOString() } : {}),
+        ...(status === "anulada" ? { ended_at: new Date().toISOString() } : {}),
+      };
+      if (existing && existing.length > 0) {
+        await supabase.from("promotion_collaborations")
+          .update(updateFields).eq("id", existing[0].id);
+      } else {
+        await supabase.from("promotion_collaborations").insert({
+          promotion_id: promotionId,
+          agency_organization_id: agencyId,
+          developer_organization_id: "developer-default",
+          status: dbStatus,
+        });
+      }
+    } catch (e) { console.warn("[promoCollabStatus:sync] skipped:", e); }
+  })();
 }
 
 /** Hook reactivo · devuelve un Map(`agencyId__promoId` → status) para

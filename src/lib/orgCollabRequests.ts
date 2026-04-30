@@ -186,7 +186,8 @@ export function aceptarOrgCollabRequest(id: string, decidedBy?: { name: string; 
     : s,
   ));
 
-  /* Write-through · busca por localId en metadata y marca accepted. */
+  /* Write-through · marca request como accepted Y MATERIALIZA la
+   *  fila correspondiente en `organization_collaborations`. */
   void (async () => {
     try {
       const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
@@ -203,6 +204,21 @@ export function aceptarOrgCollabRequest(id: string, decidedBy?: { name: string; 
         .eq("to_organization_id", target.toOrgId)
         .eq("status", "pending");
       if (error) console.warn("[orgCollabRequest:accept] supabase update failed:", error.message);
+
+      /* Materializar collab. El trigger normalize_orgcollab_pair se
+       *  encarga de ordenar a < b. */
+      const { error: collabErr } = await supabase
+        .from("organization_collaborations").insert({
+          organization_a_id: target.fromOrgId,
+          organization_b_id: target.toOrgId,
+          status: "active",
+          started_at: new Date().toISOString(),
+        });
+      /* Idempotente · constraint unique pair la rechaza si ya existe.
+       *  Ignoramos código 23505 (unique_violation). */
+      if (collabErr && !collabErr.message.includes("duplicate")) {
+        console.warn("[org_collaboration:create]", collabErr.message);
+      }
     } catch (e) { console.warn("[orgCollabRequest:accept] skipped:", e); }
   })();
 }

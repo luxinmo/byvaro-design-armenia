@@ -134,9 +134,36 @@ async function deleteCalendarFromSupabase(id: string) {
   try {
     const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
     if (!isSupabaseConfigured) return;
+    /* Borrar evaluations primero · FK constraint. */
+    await supabase.from("visit_evaluations").delete().eq("calendar_event_id", id);
     const { error } = await supabase.from("calendar_events").delete().eq("id", id);
     if (error) console.warn("[calendar:delete] failed:", error.message);
   } catch (e) { console.warn("[calendar:delete] skipped:", e); }
+}
+
+/** Persiste la evaluación de una visita a `visit_evaluations` table.
+ *  Llamar tras `updateCalendarEvent({ status: "done", evaluation: {...} })`.
+ *  El frontend ya actualiza el evento con la evaluación inline ·
+ *  esto solo añade la fila en la tabla dedicada (auditoría/queries). */
+export async function persistVisitEvaluation(
+  calendarEventId: string,
+  outcome: string,
+  rating?: number,
+  notes?: string,
+): Promise<void> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from("visit_evaluations").insert({
+      calendar_event_id: calendarEventId,
+      outcome,
+      rating: rating ?? null,
+      notes: notes ?? null,
+      by_user_id: user?.id ?? null,
+    });
+    if (error) console.warn("[visit_evaluations:insert]", error.message);
+  } catch (e) { console.warn("[visit_evaluations:insert] skipped:", e); }
 }
 
 export function createCalendarEvent(

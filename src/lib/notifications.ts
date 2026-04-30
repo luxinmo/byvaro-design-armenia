@@ -96,6 +96,39 @@ export function recordNotification(input: Omit<Notification, "id" | "createdAt">
      storage no crezca sin límite. */
   const trimmed = [notif, ...list].slice(0, 200);
   write(trimmed);
+  /* Write-through · async insert a notifications table. RLS valida que
+   *  el caller es member del organization_id del recipient. */
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      /* Resolver org del recipient · si se pasa explícito, lo usamos.
+       *  Si no, asumimos que el recipient es del mismo workspace que
+       *  el caller (caso típico: notificación interna). */
+      const { data: members } = await supabase.from("organization_members")
+        .select("organization_id")
+        .eq("user_id", input.recipientUserId ?? user.id)
+        .eq("status", "active")
+        .order("created_at", { ascending: true })
+        .limit(1);
+      const orgId = members?.[0]?.organization_id;
+      if (!orgId) return;
+      const { error } = await supabase.from("notifications").insert({
+        id: notif.id,
+        organization_id: orgId,
+        recipient_user_id: input.recipientUserId ?? null,
+        type: input.type,
+        title: input.title,
+        body: input.body ?? null,
+        link: input.link ?? null,
+        priority: input.priority ?? "normal",
+        metadata: input.metadata ?? null,
+      });
+      if (error) console.warn("[notifications:insert]", error.message);
+    } catch (e) { console.warn("[notifications:insert] skipped:", e); }
+  })();
   return notif;
 }
 

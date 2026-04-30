@@ -128,7 +128,8 @@ function write(list: CompanyEvent[]) {
   window.dispatchEvent(new Event(CHANGE));
 }
 
-/** API genérica · el resto de helpers delegan aquí. */
+/** API genérica · el resto de helpers delegan aquí.
+ *  Optimistic local + write-through a `audit_events` (append-only). */
 export function recordCompanyEvent(
   agencyId: string,
   type: CompanyEventType,
@@ -150,6 +151,43 @@ export function recordCompanyEvent(
     happenedAt: new Date().toISOString(),
   };
   write([evt, ...read()]);
+
+  /* Write-through · escribir UNA fila en audit_events para CADA org
+   *  participante (developer + agency). Cada org ve solo sus filas
+   *  vía RLS. */
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      const after = {
+        title, description: opts.description, related: opts.related, by: opts.by,
+      };
+      const rows = [
+        {
+          organization_id: "developer-default",
+          actor_user_id: user?.id ?? null,
+          entity_type: "organization_collaboration",
+          entity_id: agencyId,
+          action: type,
+          before: null,
+          after,
+        },
+        {
+          organization_id: agencyId,
+          actor_user_id: user?.id ?? null,
+          entity_type: "organization_collaboration",
+          entity_id: "developer-default",
+          action: type,
+          before: null,
+          after,
+        },
+      ];
+      const { error } = await supabase.from("audit_events").insert(rows);
+      if (error) console.warn("[audit_events:insert]", error.message);
+    } catch (e) { console.warn("[audit_events:insert] skipped:", e); }
+  })();
+
   return evt;
 }
 
