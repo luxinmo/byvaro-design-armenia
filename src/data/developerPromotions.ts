@@ -59,7 +59,10 @@ export type DevPromotion = Promotion & {
   comerciales?: Comercial[];
 };
 
-export const developerOnlyPromotions: DevPromotion[] = [
+/* RAW seeds · el campo `code` legacy queda como breadcrumb · el real
+ * lo derivamos abajo con `seedRef("promotion", id)` siguiendo el
+ * scheme canónico (PR + 5 dígitos · CLAUDE.md). */
+const RAW_DEV_PROMOTIONS: DevPromotion[] = [
   {
     id: "dev-1",
     ownerOrganizationId: "developer-default",
@@ -277,3 +280,12 @@ export const developerOnlyPromotions: DevPromotion[] = [
     comerciales: [],
   },
 ];
+
+import { seedRef } from "@/lib/publicRef";
+
+/** Export final · `code` se sobrescribe con el formato canónico
+ *  `PR + 5 dígitos` derivado del id via hash determinista. */
+export const developerOnlyPromotions: DevPromotion[] = RAW_DEV_PROMOTIONS.map((p) => ({
+  ...p,
+  code: seedRef("promotion", p.id),
+}));
