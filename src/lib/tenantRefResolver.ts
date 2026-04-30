@@ -1,37 +1,40 @@
 /**
- * tenantRefResolver.ts · Capa de traducción id interno ↔ public_ref.
+ * tenantRefResolver.ts · Capa de traducción public_ref → id interno.
  *
  * QUÉ
  * ----
- * Las URLs externas de Byvaro usan el `IDXXXXXX` público (`Empresa.publicRef`)
- * en vez del id interno del workspace (`developer-default`, `ag-2`,
- * `prom-1`). Esto:
+ * Las URLs públicas de Byvaro usan EXCLUSIVAMENTE el formato
+ * `IDXXXXXX` (`Empresa.publicRef`). Los ids internos del modelo
+ * (`developer-default`, `ag-2`, `prom-1`) NUNCA aparecen en una URL.
  *
- *   1. Oculta la estructura del modelo (que existían prefijos `ag-`/`prom-`).
- *   2. Imposibilita enumerar tenants vecinos.
- *   3. Estabiliza handles externos · si el id interno cambia (UUID,
- *      refactor de schema), las URLs siguen funcionando.
+ *   · Oculta la estructura del modelo (prefijos `ag-`/`prom-`).
+ *   · Imposibilita enumerar tenants vecinos.
+ *   · Estabiliza handles externos · si el id interno cambia, las URLs
+ *     siguen funcionando porque viven contra `IDXXXXXX`.
  *
  * Este módulo expone:
- *   · `resolveTenantId(refOrId)`  → devuelve siempre el id INTERNO.
- *     Backward-compat · acepta tanto `ag-2` (legacy) como `IDHE7TBV`.
- *   · `getPublicRef(internalId)`  → devuelve el `IDXXXXXX` para un id
- *     interno · null si no está hidratado/seedado todavía.
+ *   · `resolveTenantId(ref)`     → id interno o `undefined` si la ref
+ *                                  no es un IDXXXXXX válido o no existe.
+ *                                  El page handler debe mostrar 404.
+ *   · `getPublicRef(internalId)` → `IDXXXXXX` para un id interno ·
+ *                                  `undefined` si no está hidratado.
+ *
+ * SIN BACKWARD-COMPAT (decisión 2026-04-30) · las URLs antiguas
+ * `/promotor/developer-default/...`, `/colaboradores/ag-2/...` ya NO
+ * funcionan. La razón: confunden visualmente el modelo interno con la
+ * URL pública y dejaban un alias permanente que nadie usaba ya.
  *
  * FUENTES DE VERDAD (en orden de prioridad)
  * -----------------------------------------
  *   1. `byvaro-empresa:<orgId>` cache (hidratada desde Supabase al login).
- *   2. Seed de `agencies.ts` / `promotores.ts` (campo `publicRef` opcional).
- *
- * Si la ref no está en ninguna fuente, `resolveTenantId` la devuelve
- * tal cual · en peor caso la página renderiza con el id que tenga
- * (que puede ser un IDXXXXXX que aún no resolvemos), y el visitor verá
- * la ficha vacía · es un fallback seguro · no rompe la app.
+ *   2. Seed de `agencies.ts` / `promotores.ts` (campo `publicRef`).
+ *   3. Hardcode estático de Luxinmo (`developer-default` → `ID9P4HGF`)
+ *      mientras la cache no se ha hidratado todavía.
  *
  * TODO(backend) cuando aterrice multi-tenant real · sustituir el
- * lookup local por una RPC `find_org_by_ref(p_ref)` que ya existe
- * (SECURITY DEFINER, devuelve campos públicos). El frontend mantiene
- * la signature.
+ * lookup local por la RPC pública `find_org_by_ref(p_ref)` que ya
+ * existe (SECURITY DEFINER · devuelve campos públicos). La signature
+ * de los helpers se mantiene.
  */
 
 import { isValidTenantRef } from "./tenantRef";
@@ -72,28 +75,28 @@ function buildRefToIdMap(): Map<string, string> {
   for (const p of promotores) {
     if (p.publicRef) inv.set(p.publicRef, p.id);
   }
-  /* Fallback Luxinmo · ver `getPublicRef` arriba. */
+  /* Fallback Luxinmo · ver `getPublicRef` abajo. */
   inv.set("ID9P4HGF", "developer-default");
   return inv;
 }
 
-/** Resuelve un parámetro de URL al id interno del workspace.
+/** Resuelve un parámetro de URL (que DEBE ser un `IDXXXXXX`) al id
+ *  interno del workspace para uso técnico (queries, lookups, RLS).
  *
- *  - Si es un IDXXXXXX válido → busca el id interno en cache + seeds.
- *    Si no lo encuentra, devuelve el ref tal cual (la página
- *    renderizará con un id desconocido · safe fallback).
- *  - Si no es ref válido → devuelve tal cual (legacy ids `ag-X`,
- *    `prom-X`, `developer-default` siguen funcionando para enlaces
- *    antiguos compartidos por email).
- */
-export function resolveTenantId(refOrId: string): string {
-  if (!isValidTenantRef(refOrId)) return refOrId;
-  return buildRefToIdMap().get(refOrId) ?? refOrId;
+ *  Devuelve `undefined` si:
+ *    · El input no es un IDXXXXXX válido (formato incorrecto).
+ *    · El IDXXXXXX no existe en la cache + seeds (tenant desconocido).
+ *
+ *  En ambos casos el page handler debe responder con 404 / "no
+ *  encontrado". NO hay fallback al id interno legacy. */
+export function resolveTenantId(ref: string): string | undefined {
+  if (!isValidTenantRef(ref)) return undefined;
+  return buildRefToIdMap().get(ref);
 }
 
-/** Devuelve el `IDXXXXXX` público de un id interno · null si no está
- *  disponible. Usado por los helpers de navegación para construir
- *  URLs canónicas. */
+/** Devuelve el `IDXXXXXX` público de un id interno · `undefined` si
+ *  no está disponible. Usado por los helpers de navegación para
+ *  construir URLs canónicas (`agencyHref`, `developerHref`, links). */
 export function getPublicRef(internalId: string): string | undefined {
   const fromCache = buildIdToRefMap().get(internalId);
   if (fromCache) return fromCache;
