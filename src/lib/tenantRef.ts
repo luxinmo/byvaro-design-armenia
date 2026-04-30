@@ -40,9 +40,9 @@ export function isValidTenantRef(s: string | undefined | null): s is string {
   return TENANT_REF_RE.test(s);
 }
 
-/** Formatea para display · agrupa en bloques de 3 para legibilidad
- *  humana sin afectar al valor canónico. `ID123456` → `ID·123·456`. */
+/** Formatea para display · devuelve el valor canónico tal cual (sin
+ *  separadores ni guiones). El usuario indicó explícitamente "sin
+ *  guiones, no inventes cosas" · respetar el formato crudo. */
 export function formatTenantRef(ref: string): string {
-  if (!isValidTenantRef(ref)) return ref;
-  return `${ref.slice(0, 2)}·${ref.slice(2, 5)}·${ref.slice(5, 8)}`;
+  return ref;
 }
