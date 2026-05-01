@@ -32,18 +32,9 @@ import { useCurrentUser } from "@/lib/currentUser";
 import { LUXINMO_PROFILE, useEmpresa, defaultEmpresa } from "@/lib/empresa";
 import { toast } from "sonner";
 
-const EMPRESA_KEY = "byvaro-empresa";
-
-function broadcastEmpresaChange() {
-  window.dispatchEvent(new CustomEvent("byvaro:empresa-changed"));
-  /* `storage` event no se dispara en la pestaña que escribió ·
-   *  el dispatch CustomEvent cubre el mismo-tab y `storage` cubre
-   *  cross-tab automáticamente al setItem. No hace falta nada extra. */
-}
-
 export default function AjustesZonaCriticaDatosPrueba() {
   const user = useCurrentUser();
-  const { empresa } = useEmpresa();
+  const { empresa, patch: patchEmpresa } = useEmpresa();
   const confirm = useConfirm();
 
   /* Solo aplica al lado promotor · `byvaro-empresa` representa al
@@ -70,11 +61,10 @@ export default function AjustesZonaCriticaDatosPrueba() {
       cancelLabel: "Cancelar",
     });
     if (!ok) return;
-    localStorage.setItem(
-      EMPRESA_KEY,
-      JSON.stringify({ ...LUXINMO_PROFILE, updatedAt: Date.now() }),
-    );
-    broadcastEmpresaChange();
+    /* Patch via canonical helper · saveEmpresaForOrg hace write-through
+     *  a Supabase + emite el evento de cambio · ya no tocamos
+     *  localStorage directo. */
+    patchEmpresa({ ...LUXINMO_PROFILE, updatedAt: Date.now() });
     toast.success("Datos demo de Luxinmo cargados · pestañas refrescadas");
   };
 
@@ -88,8 +78,15 @@ export default function AjustesZonaCriticaDatosPrueba() {
       variant: "destructive",
     });
     if (!ok) return;
-    localStorage.removeItem(EMPRESA_KEY);
-    broadcastEmpresaChange();
+    /* Reset via patch · vacía los campos clave · saveEmpresaForOrg
+     *  hace write-through a Supabase. */
+    patchEmpresa({
+      nombreComercial: "",
+      razonSocial: "",
+      cif: "",
+      onboardingCompleto: false,
+      updatedAt: Date.now(),
+    });
     toast.success("Datos del promotor limpiados");
   };
 

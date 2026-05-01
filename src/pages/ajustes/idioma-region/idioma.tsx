@@ -35,15 +35,16 @@
  *    en el idioma del usuario o del cliente final.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Search, Info } from "lucide-react";
 import { SettingsScreen, SettingsCard } from "@/components/settings/SettingsScreen";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Flag } from "@/components/ui/Flag";
+import { useUserSetting } from "@/lib/userSettings";
 
-const KEY = "byvaro.userLocale.v1";
+const SETTING_KEY = "user.locale";
 
 type Language = {
   code: string;       // BCP 47
@@ -86,14 +87,13 @@ const LANGUAGES: Language[] = [
   { code: "ko-KR", countryIso: "KR", label: "Coreano",           native: "한국어" },
 ];
 
-function loadLocale(): string {
-  if (typeof window === "undefined") return "es-ES";
-  return window.localStorage.getItem(KEY) ?? "es-ES";
-}
-
 export default function AjustesIdioma() {
-  const [selected, setSelected] = useState(() => loadLocale());
+  const [persisted, setPersisted] = useUserSetting<string>(SETTING_KEY, "es-ES");
+  const [selected, setSelected] = useState(persisted);
   const [query, setQuery] = useState("");
+
+  /* Sync con DB cuando llega la hidratación. */
+  useEffect(() => { setSelected(persisted); }, [persisted]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -109,9 +109,7 @@ export default function AjustesIdioma() {
   const selectedLang = LANGUAGES.find((l) => l.code === selected);
 
   const save = () => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(KEY, selected);
-    }
+    setPersisted(selected);
     /* TODO(backend): PATCH /api/me { locale: selected } */
     toast.success(`Idioma guardado: ${selectedLang?.label ?? selected}`, {
       description: "Se aplicará cuando esté disponible la traducción de la app.",

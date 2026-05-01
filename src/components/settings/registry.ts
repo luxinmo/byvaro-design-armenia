@@ -107,6 +107,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         { label: "Actividad de inicio de sesión", to: "/ajustes/seguridad/actividad", live: true },
       ]},
       { id: "billing", title: "Facturación y plan", icon: CreditCard, links: [
+        { label: "Comparar planes", to: "/planes", live: true },
         { label: "Plan actual", to: "/ajustes/facturacion/plan", live: true },
         { label: "Método de pago", to: "/ajustes/facturacion/pago", live: true },
         { label: "Facturas", to: "/ajustes/facturacion/facturas", live: true },

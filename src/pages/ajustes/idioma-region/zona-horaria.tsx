@@ -5,14 +5,15 @@
  * (visitas, calendario, timestamps, emails enviados…).
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, Check, Globe } from "lucide-react";
 import { SettingsScreen, SettingsCard } from "@/components/settings/SettingsScreen";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useUserSetting } from "@/lib/userSettings";
 
-const KEY = "byvaro.userTimezone.v1";
+const SETTING_KEY = "user.timezone";
 
 /** Subset curado de zonas horarias relevantes para el mercado Byvaro
  * (Costa del Sol, Costa Blanca + clientes internacionales típicos). */
@@ -33,14 +34,16 @@ const TIMEZONES = [
   { value: "America/Argentina/Buenos_Aires", label: "Buenos Aires", offset: "GMT-03:00" },
 ];
 
-function loadTz(): string {
+function browserTz(): string {
   if (typeof window === "undefined") return "Europe/Madrid";
-  return window.localStorage.getItem(KEY) ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "Europe/Madrid";
+  return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "Europe/Madrid";
 }
 
 export default function AjustesZonaHoraria() {
-  const [selected, setSelected] = useState(() => loadTz());
+  const [persisted, setPersisted] = useUserSetting<string>(SETTING_KEY, browserTz());
+  const [selected, setSelected] = useState(persisted);
   const [query, setQuery] = useState("");
+  useEffect(() => { setSelected(persisted); }, [persisted]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -54,9 +57,7 @@ export default function AjustesZonaHoraria() {
   }, [query]);
 
   const save = () => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(KEY, selected);
-    }
+    setPersisted(selected);
     const tz = TIMEZONES.find((t) => t.value === selected);
     toast.success(`Zona horaria: ${tz?.label ?? selected}`);
   };

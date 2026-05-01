@@ -38,15 +38,16 @@
  *    cache de tasas en backend.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Search } from "lucide-react";
 import { SettingsScreen, SettingsCard } from "@/components/settings/SettingsScreen";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useCurrentUser, isAdmin } from "@/lib/currentUser";
+import { useOrgSetting } from "@/lib/orgSettings";
 
-const KEY = "byvaro.orgCurrency.v1";
+const SETTING_KEY = "currency";
 
 type Currency = {
   code: string;       // ISO 4217
@@ -149,11 +150,6 @@ const GROUP_ORDER = [
 
 const SAMPLE_PRICE = 285_000;
 
-function loadCurrency(): string {
-  if (typeof window === "undefined") return "EUR";
-  return window.localStorage.getItem(KEY) ?? "EUR";
-}
-
 function formatPrice(amount: number, code: string): string {
   try {
     return new Intl.NumberFormat("es-ES", {
@@ -170,8 +166,10 @@ export default function AjustesMoneda() {
   const currentUser = useCurrentUser();
   const canEdit = isAdmin(currentUser);
 
-  const [selected, setSelected] = useState(() => loadCurrency());
+  const [persisted, setPersisted] = useOrgSetting<string>(SETTING_KEY, "EUR");
+  const [selected, setSelected] = useState(persisted);
   const [query, setQuery] = useState("");
+  useEffect(() => { setSelected(persisted); }, [persisted]);
 
   /* Filtrado + agrupación. Mantenemos siempre la moneda actualmente
    * seleccionada visible aunque no matchee el query, para que el
@@ -205,10 +203,7 @@ export default function AjustesMoneda() {
       toast.error("Solo los administradores pueden cambiar la moneda");
       return;
     }
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(KEY, selected);
-    }
-    /* TODO(backend): PATCH /api/organization { currency: selected } */
+    setPersisted(selected);
     toast.success(`Moneda cambiada a ${selectedCurrency?.label ?? selected} (${selected})`);
   };
 

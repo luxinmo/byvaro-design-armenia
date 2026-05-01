@@ -17,12 +17,13 @@ import {
   Home, Building, FileText, CircleDollarSign, CalendarDays,
   Handshake, Contact, Globe, Mail, Settings, ChevronsUpDown, FileSignature,
   Building2, Inbox, User as UserIcon, LogOut, Users, Activity, Sparkles,
-  KeyRound, LayoutGrid,
+  KeyRound, LayoutGrid, Crown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEmpresa } from "@/lib/empresa";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useCurrentUser } from "@/lib/currentUser";
+import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import { useInvitaciones } from "@/lib/invitaciones";
 import { agencies } from "@/data/agencies";
 import { useHasPermission } from "@/lib/permissions";
@@ -168,14 +169,29 @@ export function AppSidebar() {
      Solo aplica a cuentas de agencia. Match por agencyId OR email. */
   const { pendientes: allPendientes } = useInvitaciones();
 
+  /* SCOPE GLOBAL · set de promo IDs del workspace logueado · Carlos
+   *  AEDAS no debe contar promos / ventas / registros de Luxinmo en
+   *  los badges del sidebar (idem para Marta Neinor, Sara Metrovacesa).
+   *  Mismo patrón que Inicio.tsx · Ventas.tsx · Registros.tsx. */
+  const myOrgId = currentOrgIdentity(currentUser).orgId;
+  const myPromoIds = useMemo(() => {
+    const all = [...promotions, ...developerOnlyPromotions];
+    return new Set(
+      all
+        .filter((p) => (p.ownerOrganizationId ?? "developer-default") === myOrgId)
+        .map((p) => p.id),
+    );
+  }, [myOrgId]);
+
   /* Registros pendientes · badge rojo dinámico en el nav.
-     Para agencia: solo los que envió ella. Para promotor: todos. */
+     Para agencia: solo los que envió ella · member filtra por audit.
+     Para developer: solo registros cuyo promotionId pertenece a su org. */
   const createdRegs = useCreatedRegistros();
   const pendingRegistrosCount = useMemo(() => {
     const all = [...createdRegs, ...seedRegistros];
     let scope = isAgencyUser && currentUser.agencyId
       ? all.filter((r) => r.agencyId === currentUser.agencyId)
-      : all;
+      : all.filter((r) => !r.promotionId || myPromoIds.has(r.promotionId));
     /* viewOwn · member solo ve los suyos · CLAUDE.md permissions.md. */
     if (currentUser.role === "member") {
       const myEmail = currentUser.email.toLowerCase();
@@ -184,7 +200,7 @@ export function AppSidebar() {
       );
     }
     return scope.filter((r) => r.estado === "pendiente").length;
-  }, [createdRegs, isAgencyUser, currentUser.agencyId, currentUser.role, currentUser.email]);
+  }, [createdRegs, isAgencyUser, currentUser.agencyId, currentUser.role, currentUser.email, myPromoIds]);
   const agencyEmail = useMemo(() => {
     if (!isAgencyUser || !currentUser.agencyId) return null;
     const a = agencies.find((x) => x.id === currentUser.agencyId);
@@ -199,7 +215,7 @@ export function AppSidebar() {
   }, [allPendientes, isAgencyUser, currentUser.agencyId, agencyEmail]);
 
   /* Promociones · conteo real para mostrar en badge.
-   *  Promotor → promociones activas (visibles + developer-only).
+   *  Promotor → SUS promociones activas (scoped por org).
    *  Agencia  → si tiene invitaciones pendientes, ese es el badge
    *             rojo (atención · click pa añadir a cartera). Si no,
    *             sin badge (la página interna ya cuenta la cartera). */
@@ -208,16 +224,20 @@ export function AppSidebar() {
     return [
       ...promotions.filter((p) => p.status === "active"),
       ...developerOnlyPromotions.filter((p) => p.status === "active"),
-    ].length;
-  }, [isAgencyUser, pendingInvitations]);
+    ].filter((p) => myPromoIds.has(p.id)).length;
+  }, [isAgencyUser, pendingInvitations, myPromoIds]);
 
   /* Ventas · conteo real.
-   *  Promotor → todas las ventas no caídas.
+   *  Promotor → ventas no caídas de SUS promociones.
    *  Agencia admin → ventas no caídas de su agencia.
    *  Agencia member → solo las suyas (audit.actor.email · viewOwn). */
   const ventasCount = useMemo(() => {
     const live = seedSales.filter((v) => v.estado !== "caida");
-    if (!isAgencyUser || !currentUser.agencyId) return live.length;
+    if (!isAgencyUser || !currentUser.agencyId) {
+      /* Developer · scope por workspace · Carlos AEDAS no cuenta
+       *  ventas de Luxinmo en su badge. */
+      return live.filter((v) => v.promotionId && myPromoIds.has(v.promotionId)).length;
+    }
     const byAgency = live.filter((v) => v.agencyId === currentUser.agencyId);
     if (currentUser.role === "member") {
       const myEmail = currentUser.email.toLowerCase();
@@ -226,7 +246,7 @@ export function AppSidebar() {
       ).length;
     }
     return byAgency.length;
-  }, [isAgencyUser, currentUser.agencyId, currentUser.role, currentUser.email]);
+  }, [isAgencyUser, currentUser.agencyId, currentUser.role, currentUser.email, myPromoIds]);
 
   const visibleGroups = (isAgencyUser
     ? groups.map((g) => ({
@@ -240,9 +260,16 @@ export function AppSidebar() {
       items: g.items
         .filter((it) => !permissionHiddenRoutes.has(it.url))
         .map((it) => {
-          /* Promociones · agencia con invitaciones pendientes ve un
-             badge rojo · sin invitaciones, sin badge. Promotor ve el
-             nº de promos activas. */
+          /* Promociones · label dinámico por rol del workspace.
+           *  · agency-only · "Promociones" · catálogo donde colabora ·
+           *    badge rojo si hay invitaciones pendientes.
+           *  · developer-only · "Mis Promociones" · sus propias promos ·
+           *    badge con conteo de promos activas.
+           *  TODO(hybrid · pack activation) · cuando un workspace tenga
+           *  ambos roles activos (ver `Empresa.kinds`), mostrar DOS
+           *  items: "Promociones" → /promociones (vista agency) y
+           *  "Mis Promociones" → /mis-promociones (vista developer).
+           *  Hoy es uno solo según accountType. */
           if (it.url === "/promociones") {
             if (isAgencyUser) {
               return {
@@ -254,6 +281,7 @@ export function AppSidebar() {
             }
             return {
               ...it,
+              title: "Mis Promociones",
               badge: promocionesCount > 0 ? promocionesCount : undefined,
             };
           }
@@ -292,7 +320,7 @@ export function AppSidebar() {
     <aside
       className={cn(
         "hidden lg:flex flex-col shrink-0 border-r border-sidebar-border bg-sidebar sticky top-0 h-screen transition-[width] duration-200",
-        collapsed ? "w-14" : "w-[236px]",
+        collapsed ? "w-14" : "w-[265px]",
       )}
     >
       {/* Logo — en modo colapsado, solo isotipo centrado */}
@@ -492,8 +520,18 @@ export function AppSidebar() {
             {!collapsed && (
               <>
                 <div className="text-left min-w-0 flex-1">
-                  <div className="text-[13px] font-semibold text-foreground truncate leading-tight">
-                    {currentUser.name}
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-[13px] font-semibold text-foreground truncate leading-tight">
+                      {currentUser.name}
+                    </span>
+                    {/* Badge `Admin` solo si el rol es admin · ayuda al
+                     *  usuario a recordar de un vistazo qué puede hacer
+                     *  vs un member sin Settings/billing/roles. */}
+                    {currentUser.role === "admin" && (
+                      <span className="inline-flex items-center h-4 px-1.5 rounded-full bg-primary/10 text-primary text-[9.5px] font-semibold uppercase tracking-wide shrink-0">
+                        Admin
+                      </span>
+                    )}
                   </div>
                   <div className="text-[11px] text-muted-foreground truncate">
                     {isAgencyUser
@@ -536,6 +574,19 @@ export function AppSidebar() {
                   <UserIcon className="h-4 w-4 text-muted-foreground" />
                   Mi perfil
                 </button>
+                {canSeeAjustes && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      navigate("/planes");
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-foreground hover:bg-muted/60 transition-colors"
+                  >
+                    <Crown className="h-4 w-4 text-muted-foreground" />
+                    Mi plan
+                  </button>
+                )}
                 {canSeeAjustes && (
                   <button
                     type="button"

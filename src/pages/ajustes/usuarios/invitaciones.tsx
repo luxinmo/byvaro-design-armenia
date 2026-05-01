@@ -3,15 +3,16 @@
  * Lista invites con resend / revoke.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Mail, Send, X, Plus } from "lucide-react";
 import { SettingsScreen, SettingsCard } from "@/components/settings/SettingsScreen";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { isAdmin, useCurrentUser } from "@/lib/currentUser";
 import { toast } from "sonner";
+import { useOrgSetting } from "@/lib/orgSettings";
 
-const KEY = "byvaro.organization.invitations.v1";
+const SETTING_KEY = "organization.invitations";
 
 type Invitation = { id: string; email: string; role: "admin" | "member"; sentAt: string };
 
@@ -20,22 +21,22 @@ const DEFAULT: Invitation[] = [
   { id: "i2", email: "sofia@empresa.com", role: "admin", sentAt: "Hace 5 días" },
 ];
 
-function load(): Invitation[] {
-  if (typeof window === "undefined") return DEFAULT;
-  try { return JSON.parse(window.localStorage.getItem(KEY) ?? JSON.stringify(DEFAULT)); }
-  catch { return DEFAULT; }
-}
-
 export default function AjustesUsuariosInvitaciones() {
   const user = useCurrentUser();
   const canEdit = isAdmin(user);
-  const [invitations, setInvitations] = useState<Invitation[]>(() => load());
+  const [persisted, setPersisted] = useOrgSetting<Invitation[]>(SETTING_KEY, DEFAULT);
+  const [invitations, setInvitations] = useState<Invitation[]>(persisted);
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState<"admin" | "member">("member");
 
+  useEffect(() => {
+    setInvitations(persisted);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(persisted)]);
+
   const update = (next: Invitation[]) => {
     setInvitations(next);
-    window.localStorage.setItem(KEY, JSON.stringify(next));
+    setPersisted(next);
   };
 
   const send = () => {

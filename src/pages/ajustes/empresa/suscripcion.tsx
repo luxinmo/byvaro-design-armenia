@@ -16,8 +16,9 @@ import {
   setDeveloperPackEnabled,
 } from "@/lib/empresaCategories";
 import { EmpresaCategoryBadges } from "@/components/empresa/EmpresaCategoryBadges";
+import { useOrgSetting } from "@/lib/orgSettings";
 
-const KEY = "byvaro.organization.plan.v1";
+const SETTING_KEY = "organization.plan";
 
 const PLANS = [
   {
@@ -38,23 +39,24 @@ const PLANS = [
   },
 ] as const;
 
-function load(): string {
-  if (typeof window === "undefined") return "promotor";
-  return window.localStorage.getItem(KEY) ?? "promotor";
-}
-
 export default function AjustesEmpresaSuscripcion() {
   const user = useCurrentUser();
   const canEdit = isAdmin(user);
-  const [current, setCurrent] = useState(() => load());
-  const [initial, setInitial] = useState(current);
+  const [persisted, setPersisted] = useOrgSetting<string>(SETTING_KEY, "promotor");
+  const [current, setCurrent] = useState(persisted);
+  const [initial, setInitial] = useState(persisted);
   const { setDirty } = useDirty();
+
+  useEffect(() => {
+    setCurrent(persisted);
+    setInitial(persisted);
+  }, [persisted]);
 
   useEffect(() => { setDirty(current !== initial); }, [current, initial, setDirty]);
 
   const save = () => {
     if (!canEdit) return;
-    window.localStorage.setItem(KEY, current);
+    setPersisted(current);
     setInitial(current);
     setDirty(false);
     toast.success("Plan actualizado · próxima factura ajustada");

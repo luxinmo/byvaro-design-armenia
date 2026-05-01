@@ -27,6 +27,8 @@ import {
   Megaphone,
 } from "lucide-react";
 import { getMissingForPromotion } from "@/lib/publicationRequirements"; // fuente única de verdad de requisitos para publicar
+import { useOverride } from "@/lib/promotionWizardOverrides";
+import { wizardStateToPromotion } from "@/lib/wizardStateToPromotion";
 import { Button } from "@/components/ui/button";
 import { cn, priceForDisplay } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -79,6 +81,7 @@ import { addPromotionToCartera, useAgencyCartera } from "@/lib/agencyCartera";
 import { Flag } from "@/components/ui/Flag";
 import { findLanguageByCode } from "@/lib/languages";
 import { TEAM_MEMBERS, type TeamMember } from "@/lib/team";
+import { useWorkspaceMembers } from "@/lib/useWorkspaceMembers";
 import { getPromoterDisplayName } from "@/lib/promotionRole";
 
 function formatPrice(n: number) {
@@ -97,13 +100,17 @@ const stepConfig: Record<string, { icon: typeof Camera; label: string; descripti
 /** Construye la URL al wizard. Acepta tanto stepName ("Basic info")
  *  como wizardStep id directo ("info_basica"). Para borradores añade
  *  ?draft=<id> para que el wizard cargue ese borrador concreto. */
-function getWizardUrl(step?: string, returnTo?: string, draftId?: string | null) {
+function getWizardUrl(step?: string, returnTo?: string, draftId?: string | null, promotionId?: string | null) {
   const ws = step
     ? (stepConfig[step]?.wizardStep ?? step) // acepta ambos
     : undefined;
   const params = new URLSearchParams();
   if (ws) params.set("step", ws);
   if (draftId) params.set("draft", draftId);
+  /* `promotionId` · cuando se navega desde una promoción ya creada
+   *  (no draft), el wizard hidrata su estado con los datos del Promotion
+   *  · evita que pasos completados aparezcan como pendientes. */
+  if (promotionId) params.set("promotionId", promotionId);
   if (returnTo) params.set("returnTo", returnTo);
   const qs = params.toString();
   return qs ? `/crear-promocion?${qs}` : "/crear-promocion";
@@ -161,34 +168,12 @@ function buildContactsFromTeam(members: TeamMember[]): ContactPerson[] {
     }));
 }
 
-/** Hook reactivo · lee TEAM_MEMBERS de localStorage y se actualiza
- *  cuando el admin modifica algún miembro desde /equipo o /ajustes/perfil. */
+/** Hook reactivo · delega en `useWorkspaceMembers` (canonical source
+ *  of truth · `organization_members` table). Mantiene el shape para
+ *  no romper callers existentes. */
 function useTeamMembersReactive(): TeamMember[] {
-  const [list, setList] = useState<TeamMember[]>(() => {
-    if (typeof window === "undefined") return TEAM_MEMBERS;
-    try {
-      const raw = window.localStorage.getItem("byvaro.organization.members.v4");
-      return raw ? JSON.parse(raw) : TEAM_MEMBERS;
-    } catch { return TEAM_MEMBERS; }
-  });
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const reload = () => {
-      try {
-        const raw = window.localStorage.getItem("byvaro.organization.members.v4");
-        setList(raw ? JSON.parse(raw) : TEAM_MEMBERS);
-      } catch { setList(TEAM_MEMBERS); }
-    };
-    window.addEventListener("byvaro:members-change", reload);
-    window.addEventListener("byvaro:me-change", reload);
-    window.addEventListener("storage", reload);
-    return () => {
-      window.removeEventListener("byvaro:members-change", reload);
-      window.removeEventListener("byvaro:me-change", reload);
-      window.removeEventListener("storage", reload);
-    };
-  }, []);
-  return list;
+  const { members } = useWorkspaceMembers();
+  return members.length > 0 ? members : TEAM_MEMBERS;
 }
 
 export default function DeveloperPromotionDetail({ agentMode = false }: { agentMode?: boolean } = {}) {
@@ -340,6 +325,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   // vez que cambia persistimos + recomputamos el shape DevPromotion.
   const isDraft = !!id && id.startsWith(DRAFT_ID_PREFIX);
   const rawDraftId = isDraft && id ? id.slice(DRAFT_ID_PREFIX.length) : null;
+  /* `promoIdForWizard` · id que se pasa al wizard cuando se abre desde
+   *  una promoción YA creada (no draft) · activa la hidratación desde
+   *  Promotion en `CrearPromocion.tsx`. Para drafts es null (el wizard
+   *  carga el draft desde su propia store). */
+  const promoIdForWizard = !isDraft && id ? id : null;
 
   const [draftState, setDraftState] = useState<WizardState | null>(() => {
     if (!rawDraftId) return null;
@@ -422,7 +412,20 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   ];
   /* Resuelve el param a la promoción · acepta `code` canónico (PR + 5
    *  dígitos) o `id` interno legacy. */
-  const p = findPromotionByParam(id, allPromotions);
+  const pBase = findPromotionByParam(id, allPromotions);
+
+  /* Override del wizard · cuando el promotor edita la promo en
+   *  `/crear-promocion?promotionId=X` los cambios persisten en el
+   *  override store antes de "Publicar". El detail page debe mergear
+   *  para que validadores, banners y secciones reflejen el estado
+   *  EFECTIVO · si no, el usuario llena el wizard pero la ficha
+   *  sigue diciendo "falta 1 campo". Ver `wizardStateToPromotion.ts`. */
+  const wizardOverride = useOverride(pBase?.id ?? null);
+  const p = useMemo(() => {
+    if (!pBase) return null;
+    if (!wizardOverride) return pBase;
+    return wizardStateToPromotion(wizardOverride, pBase);
+  }, [pBase, wizardOverride]);
 
   if (p && !initialized) {
     setComercialesList(p.comerciales || []);
@@ -463,6 +466,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
    * No duplicamos la lógica aquí. */
   const publishMissing = useMemo(() => getMissingForPromotion(p), [p]);
   const isIncomplete = publishMissing.length > 0 || p.status === "incomplete";
+
+  /* Al entrar a una promoción · el usuario aterriza SIEMPRE en
+   *  Vista general · sin auto-cambios de tab ni auto-scroll. El
+   *  banner rojo arriba ("No puedes publicar todavía · Faltan X
+   *  campos") ya lista los pendientes con chips clickables · es el
+   *  user quien decide a dónde ir. */
   /** Si la promo tiene explícitamente canShareWithAgencies=false, está
    *  desactivada. undefined cuenta como activada (legacy). El override local
    *  gana cuando el promotor la activa desde el popup. */
@@ -776,7 +785,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   return (
                     <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-warning/30 bg-warning/10 text-warning text-[11px] font-semibold">
                       <span className="h-1.5 w-1.5 rounded-full bg-warning" />
-                      Sin publicar · faltan {publishMissing.length} {publishMissing.length === 1 ? "campo" : "campos"}
+                      Sin publicar · {publishMissing.length} campo{publishMissing.length === 1 ? "" : "s"} obligatorio{publishMissing.length === 1 ? "" : "s"} por rellenar
                     </span>
                   );
                 }
@@ -966,7 +975,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     </TooltipTrigger>
                     {isIncomplete && (
                       <TooltipContent side="bottom" align="end" className="max-w-xs">
-                        <p className="text-xs font-semibold mb-1">Faltan {publishMissing.length} requisito{publishMissing.length > 1 ? "s" : ""}</p>
+                        <p className="text-xs font-semibold mb-1">Debes rellenar los campos obligatorios</p>
                         <ul className="text-[11px] space-y-0.5 list-disc pl-3.5">
                           {publishMissing.map(m => <li key={m.key}>{m.label}</li>)}
                         </ul>
@@ -977,20 +986,22 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               )}
 
               {/* Pill "Solo uso interno" · cuando la promoción está activa
-                  pero el promotor marcó No compartir. Reemplaza el lugar
-                  donde iría Publicar (ya no aplica, ya está activa) y
-                  recuerda visualmente que NO aparece en el marketplace.
-                  Click abre el dialog de activar compartir. */}
+                  pero el promotor marcó No compartir. Click navega al
+                  wizard al paso de Colaboradores · activación tiene varias
+                  opciones (estructura, forma de pago, validez…) · no es
+                  un toggle modal. */}
               {p.status === "active" && !isIncomplete && !sharingEnabledForPromo && (
                 <Button
+                  asChild
                   size="sm"
                   variant="outline"
-                  onClick={() => setActivateSharingOpen(true)}
                   className="gap-1.5 hidden sm:inline-flex"
-                  title="Activar compartir con agencias"
+                  title="Configurar comisiones para colaborar con agencias"
                 >
-                  <Handshake className="h-3.5 w-3.5" strokeWidth={1.5} />
-                  Solo uso interno
+                  <Link to={getWizardUrl("Collaborators", returnPath, rawDraftId, promoIdForWizard)}>
+                    <Handshake className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    Solo uso interno
+                  </Link>
                 </Button>
               )}
 
@@ -1022,36 +1033,64 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
         {/* Tabs · subrayado Byvaro (patrón de /empresa) */}
         <nav className="flex items-center gap-1 border-b border-border overflow-x-auto no-scrollbar -mx-3 sm:-mx-8 lg:-mx-10 px-3 sm:px-8 lg:px-10">
-          {visibleTabs.map((tab, i) => {
-            /* Badge de la tab Agencias · SOLO solicitudes dirigidas a
-               ESTA promoción (ver `requestedPromotionIds` en
-               `src/data/agencies.ts`). Las solicitudes globales viven
-               en `/colaboradores`, no aquí. */
-            const requestCount = !viewAsCollaborator && tab === "Agencies"
-              ? agencies.filter(a => a.isNewRequest && a.requestedPromotionIds?.includes(p.id)).length
-              : 0;
-            const active = activeTab === i;
-            return (
-              <button
-                key={tab}
-                data-nav-guard
-                onClick={() => setActiveTab(i)}
-                className={cn(
-                  "relative px-4 sm:px-5 py-3 text-[13px] font-medium whitespace-nowrap transition-colors inline-flex items-center gap-1.5",
-                  active
-                    ? "text-primary after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-primary"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {tabLabels[tab] || tab}
-                {requestCount > 0 && (
-                  <span className="h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold inline-flex items-center justify-center tnum">
-                    {requestCount}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+          {(() => {
+            /* Set de tabs que tienen al menos 1 campo pendiente · se
+             *  pinta un punto rojo junto al label · solo lado promotor.
+             *  Mapeo `ficha` (de getMissingForPromotion) → tab key. */
+            const fichaToTabKey: Record<string, string> = {
+              multimedia:   "Overview",
+              basicInfo:    "Overview",
+              location:     "Overview",
+              description:  "Overview",
+              delivery:     "Overview",
+              estado:       "Overview",
+              paymentPlan:  "Overview",
+              units:        "Availability",
+              collaborators: "Comisiones",
+            };
+            const tabsWithMissing = new Set<string>();
+            if (!isAgencyUser) {
+              for (const m of publishMissing) {
+                const tabKey = m.ficha && fichaToTabKey[m.ficha];
+                if (tabKey) tabsWithMissing.add(tabKey);
+              }
+            }
+            return visibleTabs.map((tab, i) => {
+              const requestCount = !viewAsCollaborator && tab === "Agencies"
+                ? agencies.filter(a => a.isNewRequest && a.requestedPromotionIds?.includes(p.id)).length
+                : 0;
+              const hasMissingInTab = tabsWithMissing.has(tab);
+              const active = activeTab === i;
+              return (
+                <button
+                  key={tab}
+                  data-nav-guard
+                  onClick={() => setActiveTab(i)}
+                  className={cn(
+                    "relative px-4 sm:px-5 py-3 text-[13px] font-medium whitespace-nowrap transition-colors inline-flex items-center gap-1.5",
+                    active
+                      ? "text-primary after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-primary"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  title={hasMissingInTab ? "Esta sección tiene campos pendientes" : undefined}
+                >
+                  {tabLabels[tab] || tab}
+                  {/* Punto rojo · campos pendientes en esa tab */}
+                  {hasMissingInTab && (
+                    <span
+                      className="h-1.5 w-1.5 rounded-full bg-destructive"
+                      aria-label="Campos pendientes"
+                    />
+                  )}
+                  {requestCount > 0 && (
+                    <span className="h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold inline-flex items-center justify-center tnum">
+                      {requestCount}
+                    </span>
+                  )}
+                </button>
+              );
+            });
+          })()}
         </nav>
       </header>
 
@@ -1086,10 +1125,10 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                       <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" strokeWidth={1.5} />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-foreground">
-                          No puedes publicar todavía
+                          Debes rellenar los campos obligatorios para publicar
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Faltan {publishMissing.length} campo{publishMissing.length > 1 ? "s" : ""}. Toca para completar:
+                          {publishMissing.length} campo{publishMissing.length === 1 ? "" : "s"} obligatorio{publishMissing.length === 1 ? "" : "s"} pendiente{publishMissing.length === 1 ? "" : "s"} · toca cada uno para completarlo:
                         </p>
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {publishMissing.map((m) => {
@@ -1099,10 +1138,10 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                                 key={m.key}
                                 type="button"
                                 onClick={() => {
-                                  if (wizardStep) navigate(getWizardUrl(wizardStep, returnPath, rawDraftId));
+                                  if (wizardStep) navigate(getWizardUrl(wizardStep, returnPath, rawDraftId, promoIdForWizard));
                                 }}
                                 disabled={!wizardStep}
-                                className="inline-flex items-center gap-1.5 rounded-full border border-destructive/30 bg-background hover:bg-destructive/10 hover:border-destructive/60 px-2.5 py-0.5 text-[11px] font-medium text-destructive transition-colors disabled:cursor-default group"
+                                className="inline-flex items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/10 hover:bg-destructive/15 hover:border-destructive/60 px-2.5 py-0.5 text-[11px] font-semibold text-destructive transition-colors disabled:cursor-default group"
                               >
                                 <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
                                 {m.label}
@@ -1114,7 +1153,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                       </div>
                     </div>
                     <Button
-                      onClick={() => navigate(getWizardUrl(undefined, returnPath, rawDraftId) + "&onlyMissing=1")}
+                      onClick={() => navigate(getWizardUrl(undefined, returnPath, rawDraftId, promoIdForWizard) + "&onlyMissing=1")}
                       className="rounded-full text-xs h-9 px-4 shrink-0 w-full sm:w-auto"
                     >
                       Completar todo
@@ -1127,32 +1166,31 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
             {/* Aviso "Solo uso interno" · la promoción está completa
                 y activa, pero el promotor marcó "No compartir" → no
-                aparece para agencias. Ofrecemos el atajo para
-                activar compartir (abre ActivateSharingDialog y
-                configura comisiones). */}
+                aparece para agencias. La activación tiene varias
+                opciones (estructura de comisiones, forma de pago,
+                condiciones de registro, validez…) · NO es un toggle
+                · es una pantalla de configuración entera.
+                Ofrecemos un text-link al paso del wizard, no un
+                botón modal. */}
             {!viewAsCollaborator && p.status === "active" && !isIncomplete && !sharingEnabledForPromo && (
               <div className="mb-5 rounded-2xl border border-border bg-muted/30 p-5">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                  <div className="flex items-start gap-3 min-w-0 flex-1">
-                    <Handshake className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" strokeWidth={1.5} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-foreground">
-                        Solo uso interno
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Esta promoción está activa para tu equipo pero no se comparte con agencias
-                        colaboradoras. Para publicarla en el marketplace, configura la comisión y
-                        activa la compartición.
-                      </p>
-                    </div>
+                <div className="flex items-start gap-3">
+                  <Handshake className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" strokeWidth={1.5} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">
+                      Solo uso interno
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                      Esta promoción está activa para tu equipo pero no se comparte con agencias
+                      colaboradoras.{" "}
+                      <Link
+                        to={getWizardUrl("Collaborators", returnPath, rawDraftId, promoIdForWizard)}
+                        className="font-semibold text-primary underline-offset-2 hover:underline"
+                      >
+                        Configurar comisiones para colaborar →
+                      </Link>
+                    </p>
                   </div>
-                  <Button
-                    onClick={() => setActivateSharingOpen(true)}
-                    className="rounded-full text-xs h-9 px-4 shrink-0 w-full sm:w-auto"
-                  >
-                    <Handshake className="h-3.5 w-3.5 mr-1.5" strokeWidth={1.75} />
-                    Activar compartir
-                  </Button>
                 </div>
               </div>
             )}
@@ -1824,6 +1862,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             onInvitar={() => setShareOpen(true)}
             onOpenStats={() => setStatsOverlayOpen(true)}
             onActivateSharing={() => setActivateSharingOpen(true)}
+            activateSharingHref={getWizardUrl("Collaborators", returnPath, rawDraftId, promoIdForWizard)}
             onOpenPendientes={() => { /* solicitudes e invitaciones ya se
               muestran inline en la tab Agencias; el dialog queda deprecado */ }}
           />
@@ -1832,7 +1871,9 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         {/* ═══ TAB: COMISIONES ═══ */}
         {activeTabKey === "Comisiones" && (
           <div className="space-y-5">
-            {/* Aviso · compartir desactivado */}
+            {/* Aviso · compartir desactivado · text-link al wizard
+              * (la activación tiene múltiples opciones · va al paso
+              * de Colaboradores donde se configura todo). */}
             {!viewAsCollaborator && !sharingEnabledForPromo && (
               <div className="rounded-2xl border border-warning/25 bg-warning/10 p-4 flex items-start gap-3">
                 <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" strokeWidth={1.5} />
@@ -1842,26 +1883,44 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   </p>
                   <p className="text-xs text-warning/80 leading-relaxed">
                     Mientras esté desactivado, no puedes invitar ni compartir esta
-                    promoción con colaboradores. Actívalo para empezar a invitar —
-                    podrás ajustar condiciones en cada envío.
+                    promoción con colaboradores.{" "}
+                    <Link
+                      to={getWizardUrl("Collaborators", returnPath, rawDraftId, promoIdForWizard)}
+                      className="font-semibold text-warning underline-offset-2 hover:underline"
+                    >
+                      Configurar comisiones para colaborar →
+                    </Link>
                   </p>
                 </div>
-                <button
-                  onClick={() => setActivateSharingOpen(true)}
-                  className="shrink-0 inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-primary text-primary-foreground text-xs font-semibold shadow-soft hover:bg-primary/90 transition-colors"
-                >
-                  <Handshake className="h-3.5 w-3.5" strokeWidth={1.75} />
-                  Activar compartir
-                </button>
               </div>
             )}
 
-            {/* Commission structure card */}
-            <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
+            {/* Commission structure card · si no hay `collaboration`
+             *  object marcamos visualmente con borde rojo + chip
+             *  "Pendiente" para que sea evidente que falta. */}
+            <div
+              data-section-missing={!p.collaboration ? "true" : undefined}
+              className={cn(
+                "rounded-2xl bg-card shadow-soft overflow-hidden scroll-mt-20",
+                p.collaboration ? "border border-border" : "border-2 border-destructive/40",
+              )}
+            >
               <div className="px-5 pt-4 pb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-foreground">Estructura de comisiones</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className={cn(
+                    "text-sm font-semibold",
+                    p.collaboration ? "text-foreground" : "text-destructive",
+                  )}>
+                    Estructura de comisiones
+                  </h2>
+                  {!p.collaboration && (
+                    <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-destructive/10 text-destructive text-[10.5px] font-semibold">
+                      Pendiente
+                    </span>
+                  )}
+                </div>
                 {!viewAsCollaborator && (
-                  <button onClick={() => navigate(getWizardUrl("Collaborators", returnPath, rawDraftId))}
+                  <button onClick={() => navigate(getWizardUrl("Collaborators", returnPath, rawDraftId, promoIdForWizard))}
                     className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-soft transition-colors">
                     <Pencil className="h-3 w-3" /> Editar
                   </button>
@@ -1947,7 +2006,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               <div className="px-5 pt-4 pb-3 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-foreground">Condiciones de registro de clientes</h2>
                 {!viewAsCollaborator && (
-                  <button onClick={() => navigate(getWizardUrl("Collaborators", returnPath, rawDraftId))}
+                  <button onClick={() => navigate(getWizardUrl("Collaborators", returnPath, rawDraftId, promoIdForWizard))}
                     className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-background/90 border border-border/60 text-xs text-muted-foreground hover:text-foreground shadow-soft transition-colors">
                     <Pencil className="h-3 w-3" /> Editar
                   </button>
@@ -2258,7 +2317,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           });
           toast.success("Estructura actualizada");
         }}
-        onOpenWizard={() => navigate(getWizardUrl("Basic info", returnPath, rawDraftId))}
+        onOpenWizard={() => navigate(getWizardUrl("Basic info", returnPath, rawDraftId, promoIdForWizard))}
       />
       <EditDescriptionDialog
         open={editOpen === "description"}
@@ -3471,17 +3530,40 @@ function SectionCard({ title, stepName, missing, onEdit, children, hideEdit, flu
 }) {
   if (missing && hideEdit) return null;
   if (missing) {
-    // Vacío pero sin énfasis rojizo · la ficha lo muestra "sin configurar"
-    // con tono neutro; el aviso de publicación vive arriba en el banner.
+    /* `data-section-missing="true"` · marca el primer faltante para
+     *  el scroll. Visualmente se muestra con borde rojizo + chip
+     *  "Pendiente" + título destructive · fondo levemente teñido en
+     *  destructive/5 para que el promotor identifique de un vistazo
+     *  qué sección requiere atención (los obligatorios sin rellenar). */
     return (
-      <div className="rounded-2xl border border-border bg-card shadow-soft p-5">
+      <div
+        data-section-missing="true"
+        className="rounded-2xl border-2 border-destructive/50 bg-destructive/5 shadow-soft p-5 scroll-mt-20"
+      >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-foreground">{title}</h2>
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7" onClick={onEdit}>
-            <Pencil className="h-3 w-3" /> Editar
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-destructive">{title}</h2>
+            <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-destructive/15 border border-destructive/30 text-destructive text-[10.5px] font-semibold">
+              <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+              Obligatorio
+            </span>
+          </div>
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={onEdit}>
+            <Pencil className="h-3 w-3" /> Rellenar
           </Button>
         </div>
-        <EmptyState icon={stepConfig[stepName]?.icon || Settings} message={`${title} sin configurar`} sub={`Pulsa "Editar" para añadir ${title.toLowerCase()}.`} />
+        {(() => {
+          const Icon = stepConfig[stepName]?.icon || Settings;
+          return (
+            <div className="flex items-center justify-center py-6 text-center">
+              <div>
+                <Icon className="h-6 w-6 text-destructive/40 mx-auto mb-2" />
+                <p className="text-xs font-semibold text-destructive">{title} · campo obligatorio sin rellenar</p>
+                <p className="text-xs text-destructive/70 mt-0.5">Pulsa "Rellenar" para completar {title.toLowerCase()}.</p>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     );
   }

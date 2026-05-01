@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { useDirty } from "@/components/settings/SettingsDirtyContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useOrgSetting } from "@/lib/orgSettings";
 
-const KEY = "byvaro.privacy.retention.v1";
+const SETTING_KEY = "privacy.retention";
 
 const OPTIONS = [
   { v: "30", l: "30 días", desc: "Mínimo legal — solo para entidades muy reguladas." },
@@ -22,12 +23,6 @@ const OPTIONS = [
 
 type State = { records: string; emails: string; activityLogs: string };
 const DEFAULT: State = { records: "1825", emails: "365", activityLogs: "90" };
-
-function load(): State {
-  if (typeof window === "undefined") return DEFAULT;
-  try { return { ...DEFAULT, ...JSON.parse(window.localStorage.getItem(KEY) ?? "{}") }; }
-  catch { return DEFAULT; }
-}
 
 function RetentionPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
@@ -50,14 +45,20 @@ function RetentionPicker({ value, onChange }: { value: string; onChange: (v: str
 }
 
 export default function AjustesPrivacidadRetencion() {
-  const [state, setState] = useState<State>(() => load());
-  const [initial, setInitial] = useState(state);
+  const [persisted, setPersisted] = useOrgSetting<State>(SETTING_KEY, DEFAULT);
+  const [state, setState] = useState<State>(persisted);
+  const [initial, setInitial] = useState<State>(persisted);
   const { setDirty } = useDirty();
+  useEffect(() => {
+    setState(persisted);
+    setInitial(persisted);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(persisted)]);
   useEffect(() => { setDirty(JSON.stringify(state) !== JSON.stringify(initial)); }, [state, initial, setDirty]);
   const isDirty = JSON.stringify(state) !== JSON.stringify(initial);
 
   const save = () => {
-    window.localStorage.setItem(KEY, JSON.stringify(state));
+    setPersisted(state);
     setInitial(state);
     setDirty(false);
     toast.success("Retención de datos guardada");

@@ -13,6 +13,16 @@
  */
 
 import type { ContactCommentEntry } from "./types";
+import { mergeContactMetadata } from "@/lib/contactMetadataSync";
+
+/**
+ * Source of truth · `public.contacts.metadata.comments` (JSONB array).
+ * El localStorage cache (`byvaro.contact.<id>.comments.v1`) solo existe
+ * para que `loadAllComments()` sea síncrono · NO es la fuente de verdad.
+ *
+ * Cada operación dispara `mergeContactMetadata()` que escribe el array
+ * actualizado al campo `metadata.comments` del contacto.
+ */
 
 const KEY = (contactId: string) => `byvaro.contact.${contactId}.comments.v1`;
 
@@ -28,6 +38,8 @@ export function loadAddedComments(contactId: string): ContactCommentEntry[] {
 function saveAll(contactId: string, comments: ContactCommentEntry[]): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(KEY(contactId), JSON.stringify(comments));
+  /* Write-through · merge en `contacts.metadata.comments` JSONB. */
+  void mergeContactMetadata(contactId, { comments });
 }
 
 export function addComment(contactId: string, comment: ContactCommentEntry): void {

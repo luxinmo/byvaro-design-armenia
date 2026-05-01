@@ -82,7 +82,7 @@ export default function AjustesUsuariosRoles() {
   const canEdit = isAdmin(user);
   const { setDirty } = useDirty();
 
-  const [perms, setPerms] = useState<RolePermissions>(() => loadRolePermissions());
+  const [perms, setPerms] = useState<RolePermissions>(() => loadRolePermissions(user));
   const [initial, setInitial] = useState(perms);
 
   const isDirty = JSON.stringify(perms) !== JSON.stringify(initial);
@@ -104,7 +104,7 @@ export default function AjustesUsuariosRoles() {
   };
 
   const save = () => {
-    saveRolePermissions(perms);
+    saveRolePermissions(user, perms);
     setInitial(perms);
     setDirty(false);
     toast.success("Permisos de roles guardados");

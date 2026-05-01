@@ -32,6 +32,13 @@ import { useCurrentUser } from "@/lib/currentUser";
 import { useEmpresa } from "@/lib/empresa";
 import { resolveDeveloperLogo, getDeveloperAvatar } from "@/lib/developerDirectory";
 import { getPromoterDisplayName } from "@/lib/promotionRole";
+import { getPromoStats } from "@/lib/promoStats";
+import { getPromoActivity } from "@/lib/promoActivity";
+import { useCalendarEvents } from "@/lib/calendarStorage";
+import { useAllSales } from "@/lib/salesStorage";
+import { sales as salesMock } from "@/data/sales";
+import { useCreatedRegistros } from "@/lib/registrosStorage";
+import { registros as SEED_REGISTROS } from "@/data/records";
 import { useInvitacionesForAgency } from "@/lib/invitaciones";
 import { canPublishPromotion } from "@/lib/publicationRequirements";
 
@@ -253,11 +260,36 @@ function formatPrice(n: number) {
 function statusTag(
   p: { status: string; canShareWithAgencies?: boolean } & Promotion,
 ): { label: string; variant: "success" | "warning" | "muted" | "danger" } {
-  if (p.status === "sold-out") return { label: "Vendida", variant: "danger" };
-  if (p.status === "inactive") return { label: "Inactiva", variant: "muted" };
-  if (!canPublishPromotion(p)) return { label: "Sin publicar", variant: "warning" };
-  if (p.canShareWithAgencies === false) return { label: "Solo uso interno", variant: "muted" };
-  return { label: "Publicada", variant: "success" };
+  /* Modelo de estados · acordado 2026-05-01:
+   *
+   *    BORRADOR     · status === "incomplete"
+   *                   Faltan datos · no se puede activar.
+   *
+   *    ACTIVA       · status === "active" Y (canShare === false O
+   *                   0 agencias colaborando todavía).
+   *                   Operativa para uso interno · las agencias NO
+   *                   la ven hasta que el promotor invite/comparta
+   *                   con al menos una.
+   *
+   *    PUBLICADA    · status === "active" + canShare !== false +
+   *                   ≥1 agencia en `promotionsCollaborating`.
+   *                   Visible al exterior · al menos una agencia
+   *                   está colaborando.
+   *
+   *    VENDIDA      · status === "sold-out"
+   *                   Todas las unidades vendidas · solo lectura. */
+  if (p.status === "sold-out")   return { label: "Vendida",  variant: "danger" };
+  if (p.status === "incomplete") return { label: "Borrador", variant: "muted" };
+  if (p.status === "inactive")   return { label: "Borrador", variant: "muted" }; // legacy
+  if (p.status === "active") {
+    /* "Publicada" requiere ≥1 agencia colaborando · si nadie la ha
+     *  recibido todavía, sigue siendo "Activa" aunque canShare=true. */
+    const sharedWithAtLeastOne = p.canShareWithAgencies !== false
+      && countAgenciesForPromotion(p.id) > 0;
+    if (sharedWithAtLeastOne) return { label: "Publicada", variant: "success" };
+    return { label: "Activa", variant: "warning" };
+  }
+  return { label: "Borrador", variant: "muted" };
 }
 
 type LastUnitDetail = {
@@ -454,30 +486,48 @@ export default function Promociones() {
 
   const allPromotions: DevPromotion[] = useMemo(() => {
     if (isAgencyUser) {
-      /* Agencia: une promociones públicas + developerOnly (hay agencias
-       * invitadas a colaborar en ambas) y filtra por los IDs que figuran
-       * en `promotionsCollaborating` de la agencia activa O en
-       * invitaciones pendientes (para que aparezcan junto al resto
-       * con el chip "Invitación"). */
+      /* Agencia · ve únicamente:
+       *   1. Promociones PUBLICADAS donde colabora (status=active +
+       *      canShare=true).
+       *   2. Promociones VENDIDAS donde haya hecho al menos una venta
+       *      (mantiene visibilidad histórica del trabajo cerrado).
+       *   3. Invitaciones pendientes (chip "Invitación").
+       *  NO ve borradores, activas-internas, ni vendidas-sin-venta. */
       const collaboratingIds = new Set(activeAgency?.promotionsCollaborating ?? []);
       for (const id of pendingInvitationPromoIds) collaboratingIds.add(id);
+      /* IDs de promos donde mi agencia hizo al menos 1 venta no caída.
+       *  Admin · ve todas las ventas de la agencia.
+       *  Member · solo ventas donde ÉL es el agente (audit.actor.email
+       *           o agentName cruzado con su id). Cumple la regla:
+       *           "vendida visible para el user que hizo la venta + admin". */
+      const isMember = currentUser.role === "member";
+      const myEmail = currentUser.email.toLowerCase();
+      const salesPromoIds = new Set<string>();
+      for (const s of salesMock) {
+        if (s.agencyId !== currentUser.agencyId) continue;
+        if (s.estado === "caida") continue;
+        if (!s.promotionId) continue;
+        if (isMember) {
+          /* El member solo ve la venta si es él quien la hizo · cruzamos
+           *  por audit (preferente) o por nombre del agente. */
+          const auditEmail = s.audit?.actor.email?.toLowerCase();
+          if (auditEmail !== myEmail) continue;
+        }
+        salesPromoIds.add(s.promotionId);
+      }
       const pool: DevPromotion[] = [
         ...developerOnlyPromotions,
         ...promotions.map((p) => ({ ...p } as DevPromotion)),
       ];
       return pool
         .filter((p) => {
-          if (!collaboratingIds.has(p.id)) return false;
-          if (p.status !== "active") return false;
-          /* `canPublishPromotion` valida si EL DUEÑO de la promo
-             (promotor / comercializador) puede publicarla · no aplica
-             al lado agencia · las que llegan a `promotionsCollaborating`
-             ya pasaron ese gate del owner. Si re-validáramos aquí,
-             leeríamos `byvaro-empresa` del localStorage de la agencia
-             (que NO es el workspace del owner) y filtraríamos en falso.
-             Bug encontrado · ver REGLA DE ORO en CLAUDE.md. */
-          if ((p as DevPromotion).canShareWithAgencies === false) return false;
-          return true;
+          /* Publicada en mi cartera · OK */
+          if (collaboratingIds.has(p.id)
+              && p.status === "active"
+              && p.canShareWithAgencies !== false) return true;
+          /* Vendida con venta cerrada por mi agencia · OK */
+          if (p.status === "sold-out" && salesPromoIds.has(p.id)) return true;
+          return false;
         })
         /* Las invitaciones arriba del todo · llaman más a la acción. */
         .sort((a, b) => {
@@ -620,13 +670,55 @@ export default function Promociones() {
   // En móvil: sólo Activas / Incompletas / Vendidas (el "Todas" es
   // implícito al no tener ninguno seleccionado). Mantenemos "Todas"
   // como opción visible desde sm+ para consistencia.
-  const statusFilterOptions = [
-    { key: "all", label: "Todas", mobile: false },
-    { key: "active", label: "Activas", mobile: true },
-    { key: "published", label: "Publicadas", mobile: true },
-    { key: "incomplete", label: "Incompletas", mobile: true },
-    { key: "sold-out", label: "Vendidas", mobile: true },
-  ] as const;
+  /* Tabs · estados acordados (Todas · Borrador · Activas ·
+   *  Publicadas · Vendidas). Las claves se usan en `statusFilter`.
+   *  El tab "Borrador" se OCULTA si el workspace no tiene ninguna ·
+   *  evita ruido visual cuando todo está completo. Mismo principio
+   *  para "Vendidas". */
+  const hasDraft = useMemo(
+    () => allPromotions.some((p) => p.status === "incomplete" || p.status === "inactive"),
+    [allPromotions],
+  );
+  const hasSoldOut = useMemo(
+    () => allPromotions.some((p) => p.status === "sold-out"),
+    [allPromotions],
+  );
+  const statusFilterOptions = useMemo(() => {
+    const opts: { key: string; label: string; mobile: boolean }[] = [
+      { key: "all",        label: "Todas",      mobile: false },
+    ];
+    /* REGLA DE BYVARO · agency-side simplificado:
+     *    · "Activas"  · todas las promociones donde colabora vivas
+     *      (técnicamente status=active + canShare=true · pero la
+     *      agencia no necesita ver esa distinción interna · para ella
+     *      todo lo que ve está activo y operable).
+     *    · "Vendidas" · solo si tiene al menos 1 venta cerrada en una
+     *      promo que ya está sold-out.
+     *  NO se muestra "Borrador", "Publicadas", "Inactiva" · son
+     *  conceptos del promotor que no aplican al lado agencia. */
+    if (isAgencyUser) {
+      opts.push({ key: "published",  label: "Activas", mobile: true });
+      if (hasSoldOut) opts.push({ key: "sold-out", label: "Vendidas", mobile: true });
+      return opts;
+    }
+    /* Developer · orden: Todas → Activas → Publicadas → Borrador →
+     *  Vendidas. Borrador y Vendidas al final · son estados terminales
+     *  o pre-trabajo · el flujo principal son Activas y Publicadas. */
+    opts.push({ key: "active",     label: "Activas",    mobile: true });
+    opts.push({ key: "published",  label: "Publicadas", mobile: true });
+    if (hasDraft)   opts.push({ key: "draft",    label: "Borrador", mobile: true });
+    if (hasSoldOut) opts.push({ key: "sold-out", label: "Vendidas", mobile: true });
+    return opts;
+  }, [hasDraft, hasSoldOut, isAgencyUser]);
+
+  /* Si el statusFilter activo deja de existir (ej. el promotor
+   *  borra el último borrador estando en tab "Borrador"), volvemos a
+   *  "Todas" para no quedar mostrando lista vacía con tab fantasma. */
+  useEffect(() => {
+    if (!statusFilterOptions.some((o) => o.key === statusFilter)) {
+      setStatusFilter("all");
+    }
+  }, [statusFilterOptions, statusFilter]);
 
   /* Set de IDs del workspace propio · usado para el sentinel
    * `developer-default` del filtro. */
@@ -635,20 +727,58 @@ export default function Promociones() {
     [],
   );
 
+  /* Actividad LIVE por promoción · derivada de registros/visitas/
+   *  ventas reales en los últimos 14 días. Reemplaza el campo seed
+   *  `Promotion.activity` (eliminado · era hardcoded).
+   *  Declarado ANTES de `filtered`/`sortedAndFiltered` porque ambos
+   *  lo consumen · TDZ si va después. */
+  const calendarEvents = useCalendarEvents();
+  const allSales = useAllSales();
+  const createdRegs = useCreatedRegistros();
+  const activityByPromo = useMemo(() => {
+    const sources = {
+      registros: [...createdRegs, ...SEED_REGISTROS],
+      events: calendarEvents.map((ev) => ({
+        type: ev.type,
+        status: ev.status,
+        start: ev.start,
+        promotionId: (ev as { promotionId?: string }).promotionId,
+      })),
+      sales: allSales,
+    };
+    const map = new Map<string, ReturnType<typeof getPromoActivity>>();
+    for (const p of allPromotions) {
+      map.set(p.id, getPromoActivity(p.id, sources));
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allPromotions, calendarEvents, allSales, createdRegs]);
+  const getActivity = (id: string) =>
+    activityByPromo.get(id) ?? { inquiries: 0, reservations: 0, visits: 0, trend: 0 };
+
   /* ─── Filtrado (gestión + búsqueda avanzada combinadas) ─── */
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return allPromotions.filter(p => {
-      // Estado (tabs) · "published" es derivado (status=active + requisitos
-      // de publicación OK + canShareWithAgencies !== false). Solo aplica
-      // al lado promotor · agencia no debe re-validar `canPublishPromotion`
-      // (lee `byvaro-empresa` del workspace propio, que NO es el del owner).
-      if (statusFilter === "published") {
+      /* Tabs (modelo 2026-05-01):
+       *  · draft     · incomplete / inactive (legacy).
+       *  · active    · active + (canShare=false O 0 agencias colaborando).
+       *  · published · active + canShare!=false + ≥1 agencia colaborando.
+       *  · sold-out  · sold-out.
+       *  · all       · sin filtro. */
+      if (statusFilter === "draft") {
+        if (p.status !== "incomplete" && p.status !== "inactive") return false;
+      } else if (statusFilter === "active") {
         if (p.status !== "active") return false;
-        if (!isAgencyUser && !canPublishPromotion(p as unknown as Promotion)) return false;
+        const shared = (p as DevPromotion).canShareWithAgencies !== false
+          && countAgenciesForPromotion(p.id) > 0;
+        if (shared) return false; // está publicada · no es "activa pura"
+      } else if (statusFilter === "published") {
+        if (p.status !== "active") return false;
         if ((p as DevPromotion).canShareWithAgencies === false) return false;
-      } else if (statusFilter !== "all" && p.status !== statusFilter) {
-        return false;
+        if (countAgenciesForPromotion(p.id) === 0) return false; // sin agencias = no publicada
+      } else if (statusFilter === "sold-out") {
+        if (p.status !== "sold-out") return false;
       }
 
       // Búsqueda textual (nombre, ubicación, código, developer)
@@ -662,11 +792,16 @@ export default function Promociones() {
 
       // ──────── Gestión ────────
       if (activityFilter.length > 0) {
+        /* Badge dinámico (last-units desde unidades) + activity dinámica
+         *  (high-demand / inactive desde registros·visitas reales).
+         *  Cero datos seed-static. */
+        const live = getPromoStats(p.id, p);
+        const act = activityByPromo.get(p.id) ?? { inquiries: 0, visits: 0, reservations: 0, trend: 0 };
         const ok = activityFilter.some(f => {
-          if (f === "new") return p.badge === "new";
-          if (f === "last-units") return p.badge === "last-units";
-          if (f === "high-demand") return (p.activity?.inquiries ?? 0) >= 20;
-          if (f === "inactive") return (p.activity?.inquiries ?? 0) === 0 && (p.activity?.visits ?? 0) === 0;
+          if (f === "new") return live.badge === "new";
+          if (f === "last-units") return live.badge === "last-units";
+          if (f === "high-demand") return act.inquiries >= 20;
+          if (f === "inactive") return act.inquiries === 0 && act.visits === 0;
           return false;
         });
         if (!ok) return false;
@@ -746,7 +881,13 @@ export default function Promociones() {
     const arr = [...filtered];
     switch (sort) {
       case "trending":
-        return arr.sort((a, b) => (b.activity?.trend ?? 0) - (a.activity?.trend ?? 0));
+        /* Trend dinámico desde activity LIVE (registros + visitas + ventas
+         *  últimos 14d). Sustituye al ordering por seed `activity.trend`. */
+        return arr.sort((a, b) => {
+          const aT = activityByPromo.get(a.id)?.trend ?? 0;
+          const bT = activityByPromo.get(b.id)?.trend ?? 0;
+          return bT - aT;
+        });
       case "priceAsc":
         return arr.sort((a, b) => a.priceMin - b.priceMin);
       case "priceDesc":
@@ -762,12 +903,15 @@ export default function Promociones() {
           const aNew = a.badge === "new" ? 1 : 0;
           const bNew = b.badge === "new" ? 1 : 0;
           if (aNew !== bNew) return bNew - aNew;
-          return (b.activity?.inquiries ?? 0) - (a.activity?.inquiries ?? 0);
+          /* Actividad live (registros + visitas + reservas últimos 14d). */
+          const aAct = activityByPromo.get(a.id)?.inquiries ?? 0;
+          const bAct = activityByPromo.get(b.id)?.inquiries ?? 0;
+          return bAct - aAct;
         });
     }
-  }, [filtered, sort]);
+  }, [filtered, sort, activityByPromo]);
 
-  const isTrending = (p: DevPromotion) => (p.activity?.trend ?? 0) >= TRENDING_THRESHOLD;
+  const isTrending = (p: DevPromotion) => getActivity(p.id).trend >= TRENDING_THRESHOLD;
 
   return (
     <div className="flex flex-col min-h-full bg-background">
@@ -777,7 +921,9 @@ export default function Promociones() {
           {/* Title · visible en todos los breakpoints, tamaño igual a Inicio */}
           <div className="shrink-0 min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground leading-none">Comercial</p>
-            <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight leading-tight mt-1">Promociones</h1>
+            <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight leading-tight mt-1">
+              {isAgencyUser ? "Promociones" : "Mis Promociones"}
+            </h1>
           </div>
 
           {/* Controles: búsqueda + FILTROS (al lado) + CTA */}
@@ -902,7 +1048,7 @@ export default function Promociones() {
                   const isInvitation = isAgencyUser && pendingInvitationPromoIds.has(p.id);
                   return (
                     <div key={p.id} className="relative">
-                      <PromoCardCompact promo={p} isTrending={isTrending(p)} />
+                      <PromoCardCompact promo={p} isTrending={isTrending(p)} isAgencyUser={isAgencyUser} />
                       {isInvitation && (
                         <span className="absolute top-3 right-3 inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-destructive text-destructive-foreground text-[10.5px] font-semibold shadow-soft pointer-events-none">
                           <Mail className="h-3 w-3" strokeWidth={2.25} />
@@ -926,7 +1072,13 @@ export default function Promociones() {
             <EmptyState />
           ) : (
             sortedAndFiltered.map((p) => {
-              const badgeLabel = p.badge === "new" ? "Nueva" : p.badge === "last-units" ? "Últimas unidades" : null;
+              /* Stats LIVE · derivados de unidades reales · cae a seed
+               *  si la promo no tiene units cargadas. Sustituye el
+               *  badge / availableUnits / totalUnits del seed estático. */
+              const liveStats = getPromoStats(p.id, p);
+              const badgeLabel = liveStats.badge === "new" ? "Nueva"
+                : liveStats.badge === "last-units" ? "Últimas unidades"
+                : null;
               const status = statusTag(p);
               const { typologies, units: availableUnits, lastUnit } = getAvailableData(p.id);
               const trending = isTrending(p);
@@ -1025,9 +1177,16 @@ export default function Promociones() {
                           </Tag>
                         )}
                       </div>
-                      <Tag variant={status.variant} size="sm" className="shrink-0">
-                        {status.label}
-                      </Tag>
+                      {/* Tag de estado · solo lado promotor. Para
+                       *  agencia es redundante: todo lo que ve está
+                       *  activo por construcción · solo "Vendida" tiene
+                       *  significado para ella (la cerró pero ya no
+                       *  está disponible). */}
+                      {(!isAgencyUser || p.status === "sold-out") && (
+                        <Tag variant={status.variant} size="sm" className="shrink-0">
+                          {status.label}
+                        </Tag>
+                      )}
                     </div>
 
                     {/* Name + developer + delivery */}
@@ -1044,54 +1203,49 @@ export default function Promociones() {
                       )}
                     </div>
 
-                    {/* Missing steps · aviso neutral (gris). En el listado es
-                        información, no un error — una promoción recién creada
-                        naturalmente tiene pasos pendientes. El tono rojo se
-                        reserva para dentro de la ficha cuando el promotor la
-                        abre para publicar. */}
-                    {hasMissing && (
+                    {/* Solo developer · pasos pendientes informativos. El
+                     *  aviso "Sin publicar" / "Sin compartir" se muestra
+                     *  abajo en el footer reemplazando "0 agencias" para
+                     *  no duplicar copy. */}
+                    {!isAgencyUser && hasMissing && (
                       <div className="flex items-start gap-2.5 mb-3 px-3 py-2.5 rounded-xl bg-muted/40 border border-border">
                         <AlertTriangle className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" strokeWidth={1.5} />
                         <div>
-                          <p className="text-sm xl:text-xs font-semibold text-foreground mb-0.5">Pasos pendientes para publicar</p>
-                          <p className="text-sm xl:text-xs text-muted-foreground">{p.missingSteps!.join(" · ")}</p>
+                          <p className="text-sm xl:text-xs font-semibold text-foreground mb-0.5">
+                            Pasos pendientes para publicar
+                          </p>
+                          <p className="text-sm xl:text-xs text-muted-foreground">
+                            {p.missingSteps!.join(" · ")} · las agencias no pueden ver esta promoción hasta que la publiques.
+                          </p>
                         </div>
                       </div>
                     )}
 
-                    {/* Cannot share warning */}
-                    {p.canShareWithAgencies === false && !hasMissing && (
-                      <div className="flex items-start gap-2.5 mb-3 px-3 py-2.5 rounded-xl bg-warning/10 border border-warning/20">
-                        <Ban className="h-4 w-4 text-warning shrink-0 mt-0.5" />
-                        <div>
-                          <p className="text-sm xl:text-xs font-semibold text-warning mb-0.5">No se puede compartir con agencias</p>
-                          <p className="text-sm xl:text-xs text-muted-foreground">Configura comisiones en Colaboradores para habilitar el share</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Metrics row */}
+                    {/* Metrics row · counts en vivo desde unidades reales */}
                     <div className="flex items-center gap-5 xl:gap-6 mb-2 xl:mb-3">
-                      <Metric label="Disponibles" value={`${p.availableUnits} / ${p.totalUnits}`} />
+                      <Metric label="Disponibles" value={`${liveStats.availableUnits} / ${liveStats.totalUnits}`} />
                       <Metric label="Comisión" value={`${p.commission}%`} />
                       {p.constructionProgress !== undefined && (
                         <Metric label="Obra" value={`${p.constructionProgress}%`} />
                       )}
                     </div>
 
-                    {/* Trending activity box */}
-                    {p.activity && trending && (
-                      <div className="hidden sm:flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 px-3 py-2 rounded-xl bg-warning/10 border border-warning/20">
-                        <div className="flex items-center gap-1 text-warning">
-                          <TrendingUp className="h-3.5 w-3.5" />
-                          <span className="text-xs font-semibold">+{p.activity.trend}%</span>
+                    {/* Trending activity box · datos LIVE de los últimos 14d */}
+                    {trending && (() => {
+                      const a = getActivity(p.id);
+                      return (
+                        <div className="hidden sm:flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 px-3 py-2 rounded-xl bg-warning/10 border border-warning/20">
+                          <div className="flex items-center gap-1 text-warning">
+                            <TrendingUp className="h-3.5 w-3.5" />
+                            <span className="text-xs font-semibold">{a.trend > 0 ? "+" : ""}{a.trend}%</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground">{a.inquiries} consultas</span>
+                          <span className="text-xs text-muted-foreground">{a.reservations} reservas</span>
+                          <span className="text-xs text-muted-foreground">{a.visits} visitas</span>
+                          <span className="text-[10px] text-muted-foreground/60 sm:ml-auto">Últimas 2 semanas</span>
                         </div>
-                        <span className="text-xs text-muted-foreground">{p.activity.inquiries} consultas</span>
-                        <span className="text-xs text-muted-foreground">{p.activity.reservations} reservas</span>
-                        <span className="text-xs text-muted-foreground">{p.activity.visits} visitas</span>
-                        <span className="text-[10px] text-muted-foreground/60 sm:ml-auto">Últimas 2 semanas</span>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Price */}
                     <p className="text-lg font-bold text-foreground tracking-tight mb-1 xl:mb-3">
@@ -1158,12 +1312,32 @@ export default function Promociones() {
                     <div className="mt-auto pt-2 xl:pt-3 border-t border-border/30 flex items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground/60 min-w-0">
                         {(() => {
+                          /* Developer · footer warning según estado:
+                           *    Borrador → "Completa para activar"
+                           *    Activa (sin agencias o sharing off) →
+                           *           "Comparte para publicar"
+                           *    Publicada / Vendida → contador real */
+                          const isDraft = !isAgencyUser
+                            && (p.status === "incomplete" || p.status === "inactive");
+                          const realAgenciesNow = countAgenciesForPromotion(p.id);
+                          const isActiveNotShared = !isAgencyUser
+                            && p.status === "active"
+                            && (p.canShareWithAgencies === false || realAgenciesNow === 0);
+                          if (isDraft || isActiveNotShared) {
+                            const label = isDraft
+                              ? "Completa para activar"
+                              : "Publica para compartir";
+                            const tooltip = isDraft
+                              ? "Faltan datos · complétalos y actívala. Después publica la promoción para compartirla con agencias."
+                              : "Esta promoción está activa para uso interno. Publícala para que las agencias colaboradoras puedan verla y registrar clientes.";
+                            return (
+                              <span className="flex items-center gap-1 text-warning" title={tooltip}>
+                                <AlertTriangle className="h-3.5 w-3.5 xl:h-3 xl:w-3" strokeWidth={2.5} />
+                                <span className="font-semibold">{label}</span>
+                              </span>
+                            );
+                          }
                           const realAgencies = countAgenciesForPromotion(p.id);
-                          /* Se muestra siempre · 0 también es información
-                             (significa que la promoción aún no tiene
-                             colaboradores). Si es 0 se tiñe en gris
-                             para que no compita visualmente con
-                             promociones con tracción. */
                           return (
                             <span className={cn(
                               "flex items-center gap-1",
@@ -1812,9 +1986,11 @@ function AgencySearcher({
 /* ═══════════════════════════════════════════════════════════════════
    PromoCardCompact · tarjeta vertical para vista Cuadrícula
    ═══════════════════════════════════════════════════════════════════ */
-function PromoCardCompact({ promo: p, isTrending }: { promo: DevPromotion; isTrending: boolean }) {
+function PromoCardCompact({ promo: p, isTrending, isAgencyUser }: { promo: DevPromotion; isTrending: boolean; isAgencyUser: boolean }) {
   const fmt = (n: number) =>
     new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+  /* Stats LIVE desde unidades reales · ver helper canónico. */
+  const liveStats = getPromoStats(p.id, p);
   return (
     <article className={cn(
       "group bg-card border rounded-2xl overflow-hidden shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer",
@@ -1827,9 +2003,9 @@ function PromoCardCompact({ promo: p, isTrending }: { promo: DevPromotion; isTre
             Trending
           </Tag>
         )}
-        {p.badge && (
+        {liveStats.badge && (
           <Tag variant="overlay" size="sm" shape="pill" className="absolute top-3 left-3 shadow-soft">
-            {p.badge === "new" ? "Nueva" : "Últimas unidades"}
+            {liveStats.badge === "new" ? "Nueva" : "Últimas unidades"}
           </Tag>
         )}
       </div>
@@ -1844,9 +2020,28 @@ function PromoCardCompact({ promo: p, isTrending }: { promo: DevPromotion; isTre
           {p.priceMax > p.priceMin && <span className="text-muted-foreground font-normal"> — {fmt(p.priceMax)}</span>}
         </p>
         <div className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[11.5px]">
-          <span className="text-muted-foreground"><span className="font-semibold text-foreground tnum">{p.availableUnits}/{p.totalUnits}</span> disp.</span>
+          <span className="text-muted-foreground"><span className="font-semibold text-foreground tnum">{liveStats.availableUnits}/{liveStats.totalUnits}</span> disp.</span>
           <span className="text-muted-foreground"><span className="font-semibold text-foreground tnum">{p.commission}%</span> com.</span>
           {(() => {
+            /* Developer · misma lógica que list view (modelo 2026-05-01). */
+            const isDraft = !isAgencyUser
+              && (p.status === "incomplete" || p.status === "inactive");
+            const realAgenciesNow = countAgenciesForPromotion(p.id);
+            const isActiveNotShared = !isAgencyUser
+              && p.status === "active"
+              && (p.canShareWithAgencies === false || realAgenciesNow === 0);
+            if (isDraft || isActiveNotShared) {
+              const label = isDraft ? "Borrador" : "Sin publicar";
+              const tooltip = isDraft
+                ? "Faltan datos · completa la promoción y actívala"
+                : "Publica la promoción para compartirla con agencias";
+              return (
+                <span className="inline-flex items-center gap-1 text-warning" title={tooltip}>
+                  <AlertTriangle className="h-3 w-3" strokeWidth={2.5} />
+                  <span className="text-[10px] font-semibold">{label}</span>
+                </span>
+              );
+            }
             const realAgencies = countAgenciesForPromotion(p.id);
             return (
               <span

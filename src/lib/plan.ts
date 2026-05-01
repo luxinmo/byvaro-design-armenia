@@ -1,138 +1,235 @@
 /**
- * plan.ts · Suscripción del workspace y límites por plan (Fase 1).
+ * plan.ts · Suscripción del workspace y límites por plan.
  *
- * QUÉ
- * ----
- * Modelo mínimo de "plan activo" del workspace para validar el
- * paywall de 249€/mes para promotores. Solo dos tiers en Fase 1:
+ * Source of truth · `public.workspace_plans` (Supabase). El localStorage
+ * cache (`byvaro.plan.v1::<orgId>`) solo existe para que `usePlan()`
+ * pueda devolver síncrono en el render · NO es la fuente de verdad.
  *
- *   · `trial`         · gratis, con límites duros que disparan el modal
- *                       de upgrade (CLAUDE.md §"Paywall validación").
- *   · `promoter_249`  · pagado · 249€/mes + IVA · sin tope práctico.
+ * Mutaciones · `setPlan(tier)` escribe primero a Supabase (UPSERT) y
+ * luego al cache. `usePlan()` hidrata desde Supabase en mount cuando
+ * el cache está vacío.
  *
- * Las agencias permanecen FREE (no se monetizan en Fase 1) — su plan
- * es siempre `trial` pero los gates no se evalúan en cuentas con
- * `accountType !== "developer"`.
- *
- * CÓMO
- * ----
- * Persistencia mock: `localStorage` con clave `byvaro.plan.v1`. Esta
- * clave es **workspace-level** (todos los miembros del developer
- * comparten el mismo plan). El hook `usePlan()` se suscribe al evento
- * `byvaro:plan-change` y al `storage` event para reaccionar en vivo
- * y entre pestañas.
- *
- * TODO(backend):
- *   GET  /api/workspace/plan          → { tier, since, expiresAt? }
- *   POST /api/workspace/plan/subscribe { stripePriceId } → 200
- *   POST /api/workspace/plan/cancel   → 200
- *   El backend respeta workspace-tenancy: el plan vive en la
- *   organización (developer org), nunca por usuario.
+ * TODO(backend) · Stripe webhook actualiza la fila tras
+ * `customer.subscription.created/updated` · cliente NO debe llamar a
+ * `setPlan("promoter_249")` salvo durante validación frontend-only.
  */
 
 import { useEffect, useState } from "react";
+import { useCurrentUser, currentWorkspaceKey } from "@/lib/currentUser";
+import type { CurrentUser } from "@/lib/currentUser";
 
 /* ══════ Tipos ════════════════════════════════════════════════════ */
 
-export type PlanTier = "trial" | "promoter_249";
+export type PlanTier =
+  | "trial"
+  | "promoter_249"
+  | "promoter_329"
+  | "agency_free"
+  | "agency_marketplace"
+  | "enterprise";
 
 export type PlanLimits = {
-  /** Promociones en estado "activa" simultáneas. */
   activePromotions: number;
-  /** Agencias invitadas (cualquier estado · pendiente, activa, etc). */
-  invitedAgencies: number;
-  /** Registros recibidos en total (acumulado · pendientes + decididos). */
-  registros: number;
+  collabRequests: number;
+  signaturesPerMonth: number;
+  landingPages: number;
 };
 
-/**
- * Límites por plan (Fase 1 · validación).
- *
- * Los números del trial son **tunables**. Pensados para que el promotor
- * llegue a probar el producto con sustancia antes de toparse con el
- * paywall: una promoción no basta (1 era demasiado restrictivo · te
- * obliga a pagar antes de ver valor), 2 le permite comparar.
- *
- * trial · 2 promociones / 5 agencias / 40 registros.
- * promoter_249 · 5 promociones (cap del producto) / ilimitado / ilimitado.
- */
 export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
-  trial: {
-    activePromotions: 2,
-    invitedAgencies: 5,
-    registros: 40,
-  },
-  promoter_249: {
-    activePromotions: 5,
-    invitedAgencies: Number.POSITIVE_INFINITY,
-    registros: Number.POSITIVE_INFINITY,
-  },
+  trial: { activePromotions: 5, collabRequests: Number.POSITIVE_INFINITY, signaturesPerMonth: 50, landingPages: Number.POSITIVE_INFINITY },
+  promoter_249: { activePromotions: 5, collabRequests: Number.POSITIVE_INFINITY, signaturesPerMonth: 50, landingPages: Number.POSITIVE_INFINITY },
+  promoter_329: { activePromotions: 10, collabRequests: Number.POSITIVE_INFINITY, signaturesPerMonth: 50, landingPages: Number.POSITIVE_INFINITY },
+  agency_free: { activePromotions: Number.POSITIVE_INFINITY, collabRequests: 10, signaturesPerMonth: 0, landingPages: 10 },
+  agency_marketplace: { activePromotions: Number.POSITIVE_INFINITY, collabRequests: Number.POSITIVE_INFINITY, signaturesPerMonth: 15, landingPages: Number.POSITIVE_INFINITY },
+  enterprise: { activePromotions: Number.POSITIVE_INFINITY, collabRequests: Number.POSITIVE_INFINITY, signaturesPerMonth: Number.POSITIVE_INFINITY, landingPages: Number.POSITIVE_INFINITY },
 };
 
-/** Etiqueta humana del plan (para UI). */
 export const PLAN_LABEL: Record<PlanTier, string> = {
-  trial: "Gratis",
+  trial: "Promotor · 6 meses gratis",
   promoter_249: "Promotor · 249€/mes",
+  promoter_329: "Promotor · 329€/mes",
+  agency_free: "Agencia · Gratis",
+  agency_marketplace: "Agencia · Marketplace · 99€/mes",
+  enterprise: "Enterprise",
 };
 
-/* ══════ Storage ══════════════════════════════════════════════════ */
+export function isAgencyPlan(tier: PlanTier): boolean {
+  return tier === "agency_free" || tier === "agency_marketplace";
+}
+export function isPromoterPlan(tier: PlanTier): boolean {
+  return tier === "trial" || tier === "promoter_249" || tier === "promoter_329";
+}
+export function isPaidPlan(tier: PlanTier): boolean {
+  return tier === "promoter_249" || tier === "promoter_329"
+    || tier === "agency_marketplace" || tier === "enterprise";
+}
 
-const STORAGE_KEY = "byvaro.plan.v1";
+/* ══════ Cache local · render-only ════════════════════════════════ */
+
+const KEY_PREFIX = "byvaro.plan.v1::";
 const CHANGE_EVENT = "byvaro:plan-change";
 
-function readPlan(): PlanTier {
-  if (typeof window === "undefined") return "trial";
-  const raw = localStorage.getItem(STORAGE_KEY);
-  return raw === "promoter_249" ? "promoter_249" : "trial";
+const ALL_TIERS: PlanTier[] = [
+  "trial", "promoter_249", "promoter_329",
+  "agency_free", "agency_marketplace", "enterprise",
+];
+
+function keyFor(workspaceKey: string): string {
+  return `${KEY_PREFIX}${workspaceKey}`;
 }
 
-/** Lee el plan actual del workspace · safe-server (devuelve "trial"). */
-export function getCurrentPlan(): PlanTier {
-  return readPlan();
+function readCache(workspaceKey: string): PlanTier | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(keyFor(workspaceKey));
+  if (raw && (ALL_TIERS as string[]).includes(raw)) return raw as PlanTier;
+  return null;
 }
 
-/** Cambia el plan del workspace · dispara evento para refrescar UI. */
-export function setPlan(tier: PlanTier) {
+function writeCache(workspaceKey: string, tier: PlanTier): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, tier);
-  window.dispatchEvent(new Event(CHANGE_EVENT));
+  localStorage.setItem(keyFor(workspaceKey), tier);
+  window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: { workspaceKey } }));
 }
 
-/** Helper para el flujo "suscribirse" del UpgradeModal · simula la
- *  activación instantánea (en backend real haría POST /subscribe). */
-export function subscribeToPromoter249() {
-  setPlan("promoter_249");
+/* ══════ Source of truth · Supabase ═══════════════════════════════ */
+
+/** Resolve org id desde el current user · 'developer-default' single-tenant. */
+function orgIdForUser(user: CurrentUser): string {
+  if (user.accountType === "agency" && user.agencyId) return user.agencyId;
+  return "developer-default";
 }
 
-/** Helper para "cancelar suscripción" desde /ajustes/plan. */
-export function cancelSubscription() {
-  setPlan("trial");
+function defaultTierForUser(user: CurrentUser): PlanTier {
+  return user.accountType === "agency" ? "agency_free" : "trial";
+}
+
+/** Hidrata el plan desde Supabase y refresca el cache local. */
+export async function hydratePlanFromSupabase(user: CurrentUser): Promise<PlanTier | null> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return null;
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return null;
+    const orgId = orgIdForUser(user);
+    const { data, error } = await supabase
+      .from("workspace_plans")
+      .select("tier")
+      .eq("organization_id", orgId)
+      .maybeSingle();
+    if (error) {
+      console.warn("[plan:hydrate]", error.message);
+      return null;
+    }
+    const tier = (data?.tier ?? null) as PlanTier | null;
+    if (tier) writeCache(currentWorkspaceKey(user), tier);
+    return tier;
+  } catch (e) {
+    console.warn("[plan:hydrate] skipped:", e);
+    return null;
+  }
+}
+
+/** Lee el plan actual del cache · sync · safe-server. */
+export function getCurrentPlan(user?: CurrentUser): PlanTier {
+  if (typeof window === "undefined") return "trial";
+  if (user) {
+    const cached = readCache(currentWorkspaceKey(user));
+    if (cached) return cached;
+    return defaultTierForUser(user);
+  }
+  /* Fallback legacy · sin user, intenta cualquier tier guardado */
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith(KEY_PREFIX)) {
+      const v = localStorage.getItem(k);
+      if (v && (ALL_TIERS as string[]).includes(v)) return v as PlanTier;
+    }
+  }
+  return "trial";
+}
+
+/** Cambia el plan · write-through (Supabase upsert + cache). */
+export function setPlan(user: CurrentUser, tier: PlanTier): void {
+  if (typeof window === "undefined") return;
+  const orgId = orgIdForUser(user);
+  writeCache(currentWorkspaceKey(user), tier);
+
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return;
+      const { error } = await supabase
+        .from("workspace_plans")
+        .upsert({
+          organization_id: orgId,
+          tier,
+          activated_at: isPaidPlan(tier) ? new Date().toISOString() : null,
+          cancelled_at: tier === "trial" ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "organization_id" });
+      if (error) console.warn("[plan:set]", error.message);
+    } catch (e) {
+      console.warn("[plan:set] skipped:", e);
+    }
+  })();
+}
+
+export function subscribeToPromoter249(user: CurrentUser): void {
+  setPlan(user, "promoter_249");
+}
+
+export function cancelSubscription(user: CurrentUser): void {
+  setPlan(user, "trial");
 }
 
 /* ══════ Hook reactivo ════════════════════════════════════════════ */
 
-/** React hook · devuelve el tier vigente y se actualiza en vivo. */
 export function usePlan(): PlanTier {
-  const [tier, setTier] = useState<PlanTier>(readPlan);
+  const user = useCurrentUser();
+  const wsKey = currentWorkspaceKey(user);
+  const [tier, setTier] = useState<PlanTier>(() =>
+    readCache(wsKey) ?? defaultTierForUser(user),
+  );
+
+  /* Hidratación desde Supabase en mount si el cache está vacío. */
   useEffect(() => {
-    const cb = () => setTier(readPlan());
+    let cancelled = false;
+    if (readCache(wsKey)) return; // ya hidratado
+    void (async () => {
+      const fromDb = await hydratePlanFromSupabase(user);
+      if (cancelled) return;
+      if (fromDb) setTier(fromDb);
+    })();
+    return () => { cancelled = true; };
+  }, [user, wsKey]);
+
+  useEffect(() => {
+    const cb = () => {
+      const fromCache = readCache(wsKey);
+      if (fromCache) setTier(fromCache);
+    };
     window.addEventListener(CHANGE_EVENT, cb);
     window.addEventListener("storage", cb);
     return () => {
       window.removeEventListener(CHANGE_EVENT, cb);
       window.removeEventListener("storage", cb);
     };
-  }, []);
+  }, [wsKey]);
+
+  /* Default per accountType cuando el storage no tiene un tier
+   *  congruente con el rol. */
+  if (user.accountType === "agency" && !isAgencyPlan(tier)) {
+    return "agency_free";
+  }
+  if (user.accountType === "developer" && !isPromoterPlan(tier) && tier !== "enterprise") {
+    return "trial";
+  }
   return tier;
 }
 
-/** Conveniencia · devuelve los límites del plan actual ya resueltos. */
 export function usePlanLimits(): PlanLimits {
   const tier = usePlan();
   return PLAN_LIMITS[tier];
-}
-
-/** ¿El workspace ya está en plan pagado? · útil para gates. */
-export function isPaidPlan(tier: PlanTier): boolean {
-  return tier === "promoter_249";
 }

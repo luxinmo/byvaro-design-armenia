@@ -81,6 +81,30 @@ function write(orgId: string, ids: string[]) {
   }));
 }
 
+/** Hidrata desde Supabase · `dismissed_invitations` per-user. */
+export async function hydrateDescartadasFromSupabase(): Promise<void> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const orgId = readCurrentOrgIdSync();
+    if (!orgId) return;
+    const { data, error } = await supabase
+      .from("dismissed_invitations")
+      .select("invitation_id")
+      .eq("user_id", user.id);
+    if (error) {
+      console.warn("[invitacionesDescartadas:hydrate]", error.message);
+      return;
+    }
+    const ids = (data ?? []).map((r) => r.invitation_id as string);
+    write(orgId, ids);
+  } catch (e) {
+    console.warn("[invitacionesDescartadas:hydrate] skipped:", e);
+  }
+}
+
 /** ¿La agencia descartó esta invitación? Si `orgId` no se pasa, lee
  *  del workspace logueado · útil para callers que ya están en
  *  contexto del current user. */
@@ -89,13 +113,32 @@ export function isInvitacionDescartada(invitationId: string, orgId?: string): bo
 }
 
 /** Añade el id al set de descartadas. Idempotente. Scoped al
- *  workspace logueado salvo que se pase `orgId` explícito. */
+ *  workspace logueado salvo que se pase `orgId` explícito.
+ *  Source of truth · `public.dismissed_invitations` (per-user). */
 export function descartarInvitacion(invitationId: string, orgId?: string): void {
   const effectiveOrgId = orgId ?? readCurrentOrgIdSync();
   if (!effectiveOrgId) return;
   const current = read(effectiveOrgId);
   if (current.includes(invitationId)) return;
   write(effectiveOrgId, [...current, invitationId]);
+
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { error } = await supabase
+        .from("dismissed_invitations")
+        .upsert({
+          user_id: user.id,
+          invitation_id: invitationId,
+        }, { onConflict: "user_id,invitation_id" });
+      if (error) console.warn("[invitacionesDescartadas:save]", error.message);
+    } catch (e) {
+      console.warn("[invitacionesDescartadas:save] skipped:", e);
+    }
+  })();
 }
 
 /** Hook reactivo · resuelve orgId del user actual y se re-renderiza

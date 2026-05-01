@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   BarChart3, Plus, ChevronRight, ChevronLeft, Star, Inbox, MailPlus,
   Users2, Building, Search, List, LayoutGrid, Mail, X, Check,
@@ -139,12 +139,18 @@ interface Props {
   onInvitar: () => void;
   onOpenStats: () => void;
   onActivateSharing: () => void;
+  /** URL al paso de Colaboradores del wizard · activación de la
+   *  colaboración · NO es un toggle modal · es una pantalla con
+   *  varias opciones (estructura de comisiones, forma de pago,
+   *  condiciones de registro…). Click en el text-link "Configurar
+   *  comisiones" del empty-state navega aquí. */
+  activateSharingHref?: string;
   onOpenPendientes: () => void;
 }
 
 export function AgenciasTabStats({
   promotion: p, canShare, sharingEnabled, isIncomplete, isDraft,
-  onInvitar, onOpenStats, onActivateSharing,
+  onInvitar, onOpenStats, onActivateSharing, activateSharingHref,
 }: Props) {
   const navigate = useNavigate();
   const { invitacionesCount } = usePromotionPendientes(p.id);
@@ -326,12 +332,12 @@ export function AgenciasTabStats({
         icon={Lock}
         eyebrow="Solo uso interno"
         title="Esta promoción no está compartida con agencias"
-        description="La has marcado como de uso interno. Tu equipo puede trabajarla, pero ninguna agencia colaboradora la ve ni puede registrar clientes. Actívalo cuando quieras abrirla a tu red."
-        primaryCta={{
-          label: "Activar compartir",
-          icon: Share2,
-          onClick: onActivateSharing,
-        }}
+        description="La has marcado como de uso interno. Tu equipo puede trabajarla, pero ninguna agencia colaboradora la ve ni puede registrar clientes. La activación tiene varias opciones (estructura de comisiones, forma de pago, condiciones de registro)."
+        primaryCta={
+          activateSharingHref
+            ? { label: "Configurar comisiones para colaborar", href: activateSharingHref }
+            : { label: "Activar compartir", icon: Share2, onClick: onActivateSharing }
+        }
       />
     );
   }
@@ -1192,13 +1198,15 @@ function EmptyStatePanel({
   eyebrow: string;
   title: string;
   description: string;
-  primaryCta: {
-    label: string;
-    icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
-    onClick: () => void;
-  } | null;
+  /** CTA · cuando trae `href` se renderiza como text-link (acción
+   *  con múltiples opciones · navega a otra pantalla, p. ej. el
+   *  wizard de comisiones). Cuando trae `onClick` es un botón
+   *  primario para acciones puntuales (refrescar, abrir invitación). */
+  primaryCta:
+    | { label: string; icon: React.ComponentType<{ className?: string; strokeWidth?: number }>; onClick: () => void; href?: undefined }
+    | { label: string; icon?: React.ComponentType<{ className?: string; strokeWidth?: number }>; href: string; onClick?: undefined }
+    | null;
 }) {
-  const CtaIcon = primaryCta?.icon;
   return (
     <div className="rounded-2xl border border-border bg-card shadow-soft p-8 sm:p-12 text-center">
       <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/50 mb-4">
@@ -1213,13 +1221,21 @@ function EmptyStatePanel({
       <p className="text-[13px] text-muted-foreground leading-relaxed mt-2 max-w-lg mx-auto">
         {description}
       </p>
-      {primaryCta && CtaIcon && (
+      {primaryCta && primaryCta.href && (
+        <Link
+          to={primaryCta.href}
+          className="mt-5 inline-block text-sm font-semibold text-primary underline-offset-2 hover:underline"
+        >
+          {primaryCta.label} →
+        </Link>
+      )}
+      {primaryCta && primaryCta.onClick && primaryCta.icon && (
         <button
           type="button"
           onClick={primaryCta.onClick}
           className="mt-5 inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-foreground text-background text-xs font-semibold hover:bg-foreground/90 transition-colors"
         >
-          <CtaIcon className="h-3.5 w-3.5" strokeWidth={2} />
+          <primaryCta.icon className="h-3.5 w-3.5" strokeWidth={2} />
           {primaryCta.label}
         </button>
       )}

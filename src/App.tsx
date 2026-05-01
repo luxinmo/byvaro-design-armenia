@@ -12,6 +12,7 @@ import Actividad from "@/pages/Actividad";
 import Sugerencias from "@/pages/Sugerencias";
 import Estadisticas from "@/pages/Estadisticas";
 import Promociones from "@/pages/Promociones";
+import Planes from "@/pages/Planes";
 import Inmuebles from "@/pages/Inmuebles";
 import Registros from "@/pages/Registros";
 import Leads from "@/pages/Leads";
@@ -252,6 +253,7 @@ export default function App() {
                 <Route path="/estadisticas" element={<Estadisticas />} />
                 <Route path="/promociones" element={<Promociones />} />
                 <Route path="/promociones/:id" element={<PromocionDetalle />} />
+                <Route path="/planes" element={<Planes />} />
                 {/* Inmuebles · catálogo de unidades sueltas del workspace.
                  *  Accesible a developer Y agency · cada org ve sólo los
                  *  suyos (storage scopeado por workspace).

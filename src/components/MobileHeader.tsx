@@ -136,6 +136,14 @@ export function MobileHeader() {
                     {group.items.map((item) => {
                       const isActive = location.pathname === item.url;
                       const Icon = item.icon;
+                      /* Label dinámico para /promociones · developer ve
+                       *  "Mis Promociones" · agency ve "Promociones".
+                       *  TODO(hybrid · pack activation) · ambos roles
+                       *  juntos verán dos items distintos. */
+                      const title = item.url === "/promociones"
+                        && currentUser.accountType !== "agency"
+                        ? "Mis Promociones"
+                        : item.title;
                       return (
                         <NavLink
                           key={item.url}
@@ -149,7 +157,7 @@ export function MobileHeader() {
                           )}
                         >
                           <Icon className="h-[18px] w-[18px]" />
-                          {item.title}
+                          {title}
                         </NavLink>
                       );
                     })}
@@ -176,8 +184,15 @@ export function MobileHeader() {
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-semibold text-sidebar-foreground truncate leading-tight">
-                      {currentUser.name}
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-[13px] font-semibold text-sidebar-foreground truncate leading-tight">
+                        {currentUser.name}
+                      </span>
+                      {currentUser.role === "admin" && (
+                        <span className="inline-flex items-center h-4 px-1.5 rounded-full bg-primary/10 text-primary text-[9.5px] font-semibold uppercase tracking-wide shrink-0">
+                          Admin
+                        </span>
+                      )}
                     </div>
                     <div className="text-[11px] text-sidebar-foreground/60 truncate">
                       {userSubtitle}

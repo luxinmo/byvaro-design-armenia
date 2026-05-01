@@ -28,6 +28,7 @@ import {
   CheckCircle2, Users, Building2,
 } from "lucide-react";
 import { TEAM_MEMBERS, type TeamMember } from "@/lib/team";
+import { useWorkspaceMembers } from "@/lib/useWorkspaceMembers";
 import { findLanguageByCode } from "@/lib/languages";
 import { findJobTitle } from "@/data/jobTitles";
 import {
@@ -40,16 +41,6 @@ import { Flag } from "@/components/ui/Flag";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-const KEY_MEMBERS = "byvaro.organization.members.v4";
-
-function loadMembers(): TeamMember[] {
-  if (typeof window === "undefined") return TEAM_MEMBERS;
-  try {
-    const raw = window.localStorage.getItem(KEY_MEMBERS);
-    return raw ? JSON.parse(raw) : TEAM_MEMBERS;
-  } catch { return TEAM_MEMBERS; }
-}
-
 /* ═══════════════════════════════════════════════════════════════════ */
 
 export default function EquipoMiembroEstadisticas() {
@@ -57,7 +48,10 @@ export default function EquipoMiembroEstadisticas() {
   const navigate = useNavigate();
   const [window, setWindow] = useState<StatsWindow>("30d");
 
-  const members = useMemo(loadMembers, []);
+  /* Source of truth · `useWorkspaceMembers` hidrata desde
+   *  `organization_members` (Supabase) con fallback al seed. */
+  const { members: wsMembers } = useWorkspaceMembers();
+  const members: TeamMember[] = wsMembers.length > 0 ? wsMembers : TEAM_MEMBERS;
   const member = members.find((m) => m.id === id);
   const stats = id ? getMemberStats(id, window) : null;
   const teamAvg = useMemo(() => getTeamAverages(window), [window]);

@@ -3,7 +3,7 @@
  * Lista de tarjetas/SEPA + añadir nueva (mock).
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CreditCard, Plus, Trash2, Star } from "lucide-react";
 import { SettingsScreen, SettingsCard } from "@/components/settings/SettingsScreen";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,9 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { isAdmin, useCurrentUser } from "@/lib/currentUser";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useOrgSetting } from "@/lib/orgSettings";
 
-const KEY = "byvaro.organization.paymentMethods.v1";
+const SETTING_KEY = "organization.paymentMethods";
 
 type PayMethod = {
   id: string;
@@ -28,23 +29,23 @@ const DEFAULT: PayMethod[] = [
   { id: "pm1", type: "card", brand: "visa", last4: "4242", expiry: "08/27", holderName: "Arman Rahmanov", primary: true },
 ];
 
-function load(): PayMethod[] {
-  if (typeof window === "undefined") return DEFAULT;
-  try { return JSON.parse(window.localStorage.getItem(KEY) ?? JSON.stringify(DEFAULT)); }
-  catch { return DEFAULT; }
-}
-
 const BRAND_LABELS = { visa: "Visa", mastercard: "MasterCard", amex: "Amex" } as const;
 
 export default function AjustesFacturacionPago() {
   const user = useCurrentUser();
   const canEdit = isAdmin(user);
-  const [methods, setMethods] = useState<PayMethod[]>(() => load());
+  const [persisted, setPersisted] = useOrgSetting<PayMethod[]>(SETTING_KEY, DEFAULT);
+  const [methods, setMethods] = useState<PayMethod[]>(persisted);
   const confirm = useConfirm();
+
+  useEffect(() => {
+    setMethods(persisted);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(persisted)]);
 
   const update = (next: PayMethod[]) => {
     setMethods(next);
-    window.localStorage.setItem(KEY, JSON.stringify(next));
+    setPersisted(next);
   };
 
   const remove = async (id: string) => {

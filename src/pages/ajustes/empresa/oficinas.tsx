@@ -15,8 +15,9 @@ import { UserSelect } from "@/components/ui/UserSelect";
 import { findTeamMember } from "@/lib/team";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useOrgSetting } from "@/lib/orgSettings";
 
-const KEY = "byvaro.organization.offices.v1";
+const SETTING_KEY = "organization.offices";
 
 type Office = {
   id: string;
@@ -35,36 +36,35 @@ const DEFAULT: Office[] = [
   { id: "o2", name: "Estepona",    city: "Estepona", address: "Av. Litoral 14", managerId: "u2", phone: "+34 952 111 111", primary: false },
 ];
 
-function load(): Office[] {
-  if (typeof window === "undefined") return DEFAULT;
-  try {
-    const raw = window.localStorage.getItem(KEY);
-    if (!raw) return DEFAULT;
-    const parsed = JSON.parse(raw) as Array<Office & { manager?: string }>;
-    /* Migración silenciosa del schema viejo `{ manager: string }` → `{ managerId }`.
-     * Busca el miembro por nombre; si no coincide, deja el manager como null. */
-    return parsed.map((o) => {
-      if (o.managerId !== undefined) return o as Office;
-      const legacy = (o as { manager?: string }).manager;
-      const found = legacy ? findTeamMember(legacy) : undefined;
-      return { ...o, managerId: found?.id ?? null } as Office;
-    });
-  } catch { return DEFAULT; }
+function migrateLegacy(parsed: Array<Office & { manager?: string }>): Office[] {
+  return parsed.map((o) => {
+    if (o.managerId !== undefined) return o as Office;
+    const legacy = (o as { manager?: string }).manager;
+    const found = legacy ? findTeamMember(legacy) : undefined;
+    return { ...o, managerId: found?.id ?? null } as Office;
+  });
 }
 
 export default function AjustesEmpresaOficinas() {
   const user = useCurrentUser();
   const canEdit = isAdmin(user);
-  const [offices, setOffices] = useState<Office[]>(() => load());
-  const [initial, setInitial] = useState(offices);
+  const [persisted, setPersisted] = useOrgSetting<Office[]>(SETTING_KEY, DEFAULT);
+  const [offices, setOffices] = useState<Office[]>(migrateLegacy(persisted));
+  const [initial, setInitial] = useState<Office[]>(migrateLegacy(persisted));
   const { setDirty } = useDirty();
+  useEffect(() => {
+    const m = migrateLegacy(persisted);
+    setOffices(m);
+    setInitial(m);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(persisted)]);
 
   useEffect(() => { setDirty(JSON.stringify(offices) !== JSON.stringify(initial)); }, [offices, initial, setDirty]);
   const isDirty = JSON.stringify(offices) !== JSON.stringify(initial);
 
   const save = () => {
     if (!canEdit) return;
-    window.localStorage.setItem(KEY, JSON.stringify(offices));
+    setPersisted(offices);
     setInitial(offices);
     setDirty(false);
     toast.success("Oficinas guardadas");

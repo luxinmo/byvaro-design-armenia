@@ -1,15 +1,13 @@
 /**
- * usagePressure.ts · Computa el contador "más urgente" del plan trial.
+ * usagePressure.ts · Computa el contador "más urgente" del plan
+ * actual del viewer · pill ámbar en el header (`<UsagePill>`).
  *
- * Dado el plan + counters, devuelve la métrica con mayor presión
- * (% más alto contra su tope) si es ≥ NEAR_LIMIT_THRESHOLD. Si todos
- * los counters están por debajo del umbral, devuelve null.
+ * Solo hay 2 límites en Byvaro (ver `plan.ts`):
+ *   · `activePromotions` · promotores · 5 (249) · 10 (329).
+ *   · `collabRequests`   · agencia free · 10 en provincia.
  *
- * Lo usa `<UsagePill>` para decidir si pintar el pill ámbar y qué
- * texto mostrar.
- *
- * Solo aplica al promotor en plan trial · si el viewer es agencia o
- * el plan es `promoter_249`, devuelve null (no hay presión).
+ * El pill aparece cuando el contador relevante alcanza el 80% del
+ * tope. Si no hay tope (ilimitado), devuelve null y el pill no sale.
  */
 
 import { usePlan, PLAN_LIMITS } from "@/lib/plan";
@@ -20,7 +18,7 @@ import { useCurrentUser } from "@/lib/currentUser";
 export const NEAR_LIMIT_THRESHOLD = 0.8;
 
 export type UpgradeReason = {
-  /** Etiqueta para UI · "promociones" / "agencias" / "registros". */
+  /** Etiqueta para UI · "promociones" / "solicitudes". */
   label: string;
   used: number;
   limit: number;
@@ -30,25 +28,30 @@ export function useUpgradeReason(): UpgradeReason | null {
   const tier = usePlan();
   const counters = useUsageCounters();
   const currentUser = useCurrentUser();
-
-  if (currentUser.accountType !== "developer") return null;
-  if (tier !== "trial") return null;
-
   const limits = PLAN_LIMITS[tier];
-  /* Calcula la presión de cada métrica · 0..1+. Mayor que 1 = ya pasada. */
-  const candidates: UpgradeReason[] = [
-    { label: "promociones", used: counters.activePromotions, limit: limits.activePromotions },
-    { label: "agencias",    used: counters.invitedAgencies,  limit: limits.invitedAgencies },
-    { label: "registros",   used: counters.registros,        limit: limits.registros },
-  ];
-  /* Filtra los infinitos (no aplican en trial pero por defensa). */
-  const finite = candidates.filter((c) => c.limit !== Number.POSITIVE_INFINITY && c.limit > 0);
-  if (finite.length === 0) return null;
 
-  /* Ranking por ratio · si nadie pasa el umbral, no mostramos nada. */
-  finite.sort((a, b) => (b.used / b.limit) - (a.used / a.limit));
-  const top = finite[0];
-  if (!top || top.used / top.limit < NEAR_LIMIT_THRESHOLD) return null;
+  /* Promotor · presiona contra activePromotions si el plan tiene
+   *  límite finito (trial · 249 · 329). Promoter ilimitado / enterprise
+   *  · no hay presión. */
+  if (currentUser.accountType === "developer") {
+    const limit = limits.activePromotions;
+    if (limit === Number.POSITIVE_INFINITY || limit <= 0) return null;
+    const used = counters.activePromotions;
+    if (used / limit < NEAR_LIMIT_THRESHOLD) return null;
+    return { label: "promociones", used, limit };
+  }
 
-  return top;
+  /* Agencia · presiona contra collabRequests · solo en agency_free.
+   *  En marketplace el límite es ∞ y no hay pill. */
+  if (currentUser.accountType === "agency") {
+    const limit = limits.collabRequests;
+    if (limit === Number.POSITIVE_INFINITY || limit <= 0) return null;
+    /* TODO(backend): contador real desde
+     *  `GET /api/workspace/usage` · campo collabRequestsSent. */
+    const used = 0;
+    if (used / limit < NEAR_LIMIT_THRESHOLD) return null;
+    return { label: "solicitudes", used, limit };
+  }
+
+  return null;
 }

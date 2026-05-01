@@ -20,8 +20,9 @@ import { PhoneInput } from "@/components/ui/PhoneInput";
 import { useDirty } from "@/components/settings/SettingsDirtyContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useUserSetting } from "@/lib/userSettings";
 
-const KEY = "byvaro.user.phones.v1";
+const SETTING_KEY = "user.phones";
 
 type PhoneRow = {
   id: string;
@@ -38,24 +39,22 @@ const TYPE_LABELS = {
   other: "Otro",
 } as const;
 
-function load(): PhoneRow[] {
-  if (typeof window === "undefined") {
-    return [{ id: "p1", type: "mobile", number: "+34 600 000 000", primary: true }];
-  }
-  try {
-    const raw = window.localStorage.getItem(KEY);
-    return raw
-      ? JSON.parse(raw)
-      : [{ id: "p1", type: "mobile", number: "+34 600 000 000", primary: true }];
-  } catch {
-    return [];
-  }
-}
+const DEFAULT_PHONES: PhoneRow[] = [
+  { id: "p1", type: "mobile", number: "+34 600 000 000", primary: true },
+];
 
 export default function AjustesPerfilContacto() {
-  const [phones, setPhones] = useState<PhoneRow[]>(() => load());
-  const [initial, setInitial] = useState(phones);
+  const [persisted, setPersisted] = useUserSetting<PhoneRow[]>(SETTING_KEY, DEFAULT_PHONES);
+  const [phones, setPhones] = useState<PhoneRow[]>(persisted);
+  const [initial, setInitial] = useState<PhoneRow[]>(persisted);
   const { setDirty } = useDirty();
+
+  /* Sync con DB cuando llega la hidratación. */
+  useEffect(() => {
+    setPhones(persisted);
+    setInitial(persisted);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(persisted)]);
 
   useEffect(() => {
     setDirty(JSON.stringify(phones) !== JSON.stringify(initial));
@@ -88,7 +87,7 @@ export default function AjustesPerfilContacto() {
     setPhones((p) => p.map((x) => ({ ...x, primary: x.id === id })));
 
   const save = () => {
-    window.localStorage.setItem(KEY, JSON.stringify(phones));
+    setPersisted(phones);
     setInitial(phones);
     setDirty(false);
     toast.success("Teléfonos guardados");

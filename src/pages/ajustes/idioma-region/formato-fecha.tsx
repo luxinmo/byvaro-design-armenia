@@ -4,14 +4,16 @@
  * con formato americano, etc.).
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import { SettingsScreen, SettingsCard } from "@/components/settings/SettingsScreen";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useUserSetting } from "@/lib/userSettings";
 
-const KEY = "byvaro.userDateFormat.v1";
+const SETTING_KEY_DATE = "user.dateFormat";
+const SETTING_KEY_TIME = "user.timeFormat";
 
 const FORMATS = [
   { value: "DD/MM/YYYY", example: "21/04/2026", label: "DD/MM/AAAA", region: "España, Europa" },
@@ -26,24 +28,17 @@ const TIME_FORMATS = [
   { value: "12h", example: "2:30 PM", label: "12 horas (2:30 PM)" },
 ];
 
-function loadDate(): string {
-  if (typeof window === "undefined") return "DD/MM/YYYY";
-  return window.localStorage.getItem(KEY) ?? "DD/MM/YYYY";
-}
-function loadTime(): string {
-  if (typeof window === "undefined") return "24h";
-  return window.localStorage.getItem(KEY + ".time") ?? "24h";
-}
-
 export default function AjustesFormatoFecha() {
-  const [date, setDate] = useState(() => loadDate());
-  const [time, setTime] = useState(() => loadTime());
+  const [persistedDate, setPersistedDate] = useUserSetting<string>(SETTING_KEY_DATE, "DD/MM/YYYY");
+  const [persistedTime, setPersistedTime] = useUserSetting<string>(SETTING_KEY_TIME, "24h");
+  const [date, setDate] = useState(persistedDate);
+  const [time, setTime] = useState(persistedTime);
+  useEffect(() => { setDate(persistedDate); }, [persistedDate]);
+  useEffect(() => { setTime(persistedTime); }, [persistedTime]);
 
   const save = () => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(KEY, date);
-      window.localStorage.setItem(KEY + ".time", time);
-    }
+    setPersistedDate(date);
+    setPersistedTime(time);
     toast.success(`Formato de fecha guardado · ${date} · ${time === "24h" ? "24h" : "12h"}`);
   };
 
