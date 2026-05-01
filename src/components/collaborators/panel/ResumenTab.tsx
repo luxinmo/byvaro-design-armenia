@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type { Agency } from "@/data/agencies";
+import { agencies, type Agency } from "@/data/agencies";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { promotions } from "@/data/promotions";
 import {
@@ -124,8 +124,15 @@ function usePromoCatalog() {
       m.set(p.id, {
         id: p.id,
         ownerOrganizationId: p.ownerOrganizationId,
-        canShareWithAgencies: true, // promotions.ts (legacy public marketplace) son shareable por default
-        name: p.name, active: true, status: "active",
+        /* Respetamos el `canShareWithAgencies` real si viene en el seed
+         *  · solo cuando no está declarado, asumimos true (legacy
+         *  marketplace). NO marcamos todo como active · respetamos
+         *  el status real para que el contador "X / Y compartidas"
+         *  refleje solo las publicables (no incompletas ni vendidas). */
+        canShareWithAgencies: (p as { canShareWithAgencies?: boolean }).canShareWithAgencies !== false,
+        name: p.name,
+        active: p.status === "active",
+        status: p.status as PromoStatus,
         location: p.location,
         commission: typeof p.commission === "number" && p.commission > 0 ? p.commission : undefined,
         image: p.image,
@@ -365,10 +372,24 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false, developerOrgId
      Si `developerOrgId` está scoped, filtramos a las promos owned
      por ese developer concreto · evita mezclar promos de Luxinmo
      en el panel de AEDAS (cross-developer leak). */
+  /* "PUBLICADAS" según REGLA DE ORO de CLAUDE.md ·
+   *  status=active + canShare=true + AL MENOS 1 AGENCIA colaborando.
+   *  Una promo activa con canShare=true pero sin agencias todavía es
+   *  "Activa", NO "Publicada" · no entra en este denominador. */
   const activePromos = useMemo<PromoEntry[]>(
     () => {
+      /* Set de promoIds con al menos una agencia colaborando · cruza
+       *  todos los `agencies[].promotionsCollaborating`. */
+      const sharedAtLeastOnce = new Set<string>();
+      for (const ag of agencies) {
+        for (const id of ag.promotionsCollaborating ?? []) {
+          sharedAtLeastOnce.add(id);
+        }
+      }
       const all = Array.from(promoCatalog.values()).filter(
-        (p) => p.active && p.canShareWithAgencies !== false,
+        (p) => p.active
+          && p.canShareWithAgencies !== false
+          && sharedAtLeastOnce.has(p.id),
       );
       if (!developerOrgId) return all;
       return all.filter(
