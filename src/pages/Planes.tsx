@@ -429,21 +429,6 @@ export default function Planes() {
           </p>
         </header>
 
-        {/* ═══════════ PLAN ACTUAL + USO ═══════════ */}
-        <CurrentPlanBanner
-          tier={tier}
-          usage={usage}
-          onCancel={() => {
-            const downgrade: PlanTier = isAgency ? "agency_free" : "trial";
-            cancelSubscription(user);
-            setPlan(user, downgrade);
-            toast.info("Suscripción cancelada", {
-              description: isAgency
-                ? "Has vuelto al plan Gratis · conservas tus datos."
-                : "Has vuelto al plan inicial · conservas tus ventas y datos.",
-            });
-          }}
-        />
 
         {/* ═══════════ DOS SECCIONES INDEPENDIENTES ═══════════
           * Cada workspace puede tener AMBOS packs activos a la vez ·
