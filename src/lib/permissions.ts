@@ -99,7 +99,48 @@ export type PermissionKey =
    *  vuelta a `paused/archived`. Es una sub-acción de `edit` que
    *  algunos flujos prefieren gating por separado · admin-only por
    *  defecto. Backend · `PATCH /promotions/:id { status }`. */
-  | "promotions.publish";
+  | "promotions.publish"
+  /* ═══════════════════════════════════════════════════════════════
+     Permisos de VISIBILIDAD por OWNERSHIP · `*.viewAll` / `*.viewOwn`.
+     Modelo doc en `docs/permissions.md §1`:
+       · `viewAll` ve TODOS los registros del workspace.
+       · `viewOwn` ve solo los registros donde el usuario aparece como
+         owner (assigned_to / agentUserId / assigneeUserId / etc).
+       · `viewAll` IMPLICA `viewOwn` (el filtro se desactiva).
+     Default · admin viewAll en todos · member viewOwn en todos.
+     ═══════════════════════════════════════════════════════════════ */
+  /** Ver TODOS los contactos del workspace. */
+  | "contacts.viewAll"
+  /** Ver solo contactos donde el usuario está en `assignedTo`. */
+  | "contacts.viewOwn"
+  /** Ver TODOS los registros entrantes del workspace. */
+  | "records.viewAll"
+  /** Ver solo registros donde el usuario es `decidedByUserId`. Pendientes
+   *  sin owner se consideran "del workspace" · solo aparecen con viewAll. */
+  | "records.viewOwn"
+  /** Ver TODAS las oportunidades (leads) del workspace. */
+  | "opportunities.viewAll"
+  /** Ver solo oportunidades donde `agentUserId === user.id`. */
+  | "opportunities.viewOwn"
+  /** Ver TODAS las ventas del workspace. */
+  | "sales.viewAll"
+  /** Ver solo ventas donde el agente resuelto desde `agentName` es el
+   *  user actual. */
+  | "sales.viewOwn"
+  /** Ver TODAS las visitas (events `type=visit`) del workspace. */
+  | "visits.viewAll"
+  /** Ver solo visitas donde `assigneeUserId === user.id`. */
+  | "visits.viewOwn"
+  /** Ver TODOS los documentos del workspace. */
+  | "documents.viewAll"
+  /** Ver solo documentos donde el contacto/lead asociado tiene al user
+   *  en su ownership. */
+  | "documents.viewOwn"
+  /** Ver TODOS los emails enviados/recibidos del workspace. */
+  | "emails.viewAll"
+  /** Ver solo emails donde el user es sender/recipient o donde el
+   *  contacto asociado le pertenece. */
+  | "emails.viewOwn";
 
 const STORAGE_KEY = "byvaro.workspace.rolePermissions.v1";
 
@@ -123,9 +164,30 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
     "promotions.create",
     "promotions.edit",
     "promotions.publish",
+    /* Visibilidad · admin tiene viewAll en TODOS los dominios.
+     *  El escudo `isAdmin(user)` en `useHasPermission` hace que esto
+     *  sea redundante a nivel runtime, pero lo declaramos explícito
+     *  para que el editor de roles muestre los toggles correctos. */
+    "contacts.viewAll",     "contacts.viewOwn",
+    "records.viewAll",      "records.viewOwn",
+    "opportunities.viewAll", "opportunities.viewOwn",
+    "sales.viewAll",        "sales.viewOwn",
+    "visits.viewAll",       "visits.viewOwn",
+    "documents.viewAll",    "documents.viewOwn",
+    "emails.viewAll",       "emails.viewOwn",
   ],
   member: [
     "whatsapp.viewOwn",
+    /* Visibilidad · member ve solo lo suyo en cada dominio. Si el admin
+     *  quiere darle vista global, edita la matriz desde
+     *  `/ajustes/usuarios/roles` y añade `*.viewAll` por dominio. */
+    "contacts.viewOwn",
+    "records.viewOwn",
+    "opportunities.viewOwn",
+    "sales.viewOwn",
+    "visits.viewOwn",
+    "documents.viewOwn",
+    "emails.viewOwn",
   ],
 };
 

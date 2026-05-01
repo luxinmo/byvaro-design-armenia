@@ -44,6 +44,8 @@ import {
 } from "@/lib/calendarHelpers";
 import { findTeamMember, getAllTeamMembers, memberInitials, getMemberAvatarUrl } from "@/lib/team";
 import { useCurrentUser } from "@/lib/currentUser";
+import { useVisibilityFilter, useVisibilityState } from "@/lib/visibility";
+import { NoAccessView } from "@/components/ui/NoAccessView";
 import { CreateCalendarEventDialog } from "@/components/calendar/CreateCalendarEventDialog";
 import { UserContextSwitcher } from "@/components/ui/UserContextSwitcher";
 import { cn } from "@/lib/utils";
@@ -96,6 +98,19 @@ export default function Calendario() {
     });
   }, [rawEvents, isAgencyUser, currentUser.id, currentUser.agencyId]);
 
+  /* Visibilidad por OWNERSHIP · si el rol no tiene `visits.viewAll`,
+   *  el predicado filtra por `assigneeUserId === user.id`. Cubre tanto
+   *  visitas como cualquier otro tipo de evento (call/meeting/block).
+   *  Admin tiene escudo en `useHasPermission`. */
+  const visibilityFilter = useVisibilityFilter<typeof rawEvents[number]>(
+    "visits",
+    (ev) => ev.assigneeUserId ?? null,
+  );
+  const visibleByOwnership = useMemo(
+    () => allEvents.filter(visibilityFilter),
+    [allEvents, visibilityFilter],
+  );
+
   const teamMembers = useMemo(() => getAllTeamMembers(), []);
 
   /* ─── Estado de vista ─── */
@@ -124,13 +139,13 @@ export default function Calendario() {
 
   /* ─── Eventos filtrados · todas las vistas los consumen. ─── */
   const filteredEvents = useMemo(() => {
-    return allEvents.filter((ev) => {
+    return visibleByOwnership.filter((ev) => {
       if (focusUserId && ev.assigneeUserId !== focusUserId) return false;
       if (typeFilter.size > 0 && !typeFilter.has(ev.type)) return false;
       if (statusFilter.size > 0 && !statusFilter.has(ev.status)) return false;
       return true;
     });
-  }, [allEvents, typeFilter, statusFilter, focusUserId]);
+  }, [visibleByOwnership, typeFilter, statusFilter, focusUserId]);
 
   /* ─── Navegación ─── */
   const goToday = () => setViewDate(new Date());
@@ -185,6 +200,17 @@ export default function Calendario() {
     setSearchParams(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allEvents]);
+
+  /* Sin permiso `visits.viewAll` ni `visits.viewOwn` · placeholder.
+   *  Admin queda fuera del branch por escudo. */
+  const { hasAccess } = useVisibilityState("visits");
+  if (!hasAccess) {
+    return (
+      <div className="flex-1 grid place-items-center p-8">
+        <NoAccessView feature="Calendario" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-full bg-background">

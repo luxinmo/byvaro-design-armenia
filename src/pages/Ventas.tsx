@@ -36,6 +36,9 @@ import { agencies } from "@/data/agencies";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/currentUser";
 import { currentOrgIdentity } from "@/lib/orgCollabRequests";
+import { useVisibilityFilter, useVisibilityState } from "@/lib/visibility";
+import { findTeamMember } from "@/lib/team";
+import { NoAccessView } from "@/components/ui/NoAccessView";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -133,18 +136,31 @@ export default function Ventas() {
       .filter((p) => (p.ownerOrganizationId ?? "developer-default") === myOrgId)
       .map((p) => p.id),
   ), [myOrgId]);
+  /* Visibilidad por OWNERSHIP · si el rol no tiene `sales.viewAll`,
+   *  el predicado devuelto por `useVisibilityFilter` filtra por
+   *  `agentName → TeamMember.id === user.id`. Admin tiene escudo en
+   *  `useHasPermission`. Ortogonal al filtro org/agency-scope. */
+  const visibilityFilter = useVisibilityFilter<Venta>("sales", (s) => {
+    if (!s.agentName) return null;
+    return findTeamMember(s.agentName)?.id ?? null;
+  });
+
   const baseSales = useMemo(() => {
+    let scoped: Venta[];
     if (isAgencyUser) {
       const byAgency = salesMock.filter((v) => v.agencyId === currentUser.agencyId);
       if (currentUser.role === "member") {
         const myEmail = currentUser.email.toLowerCase();
-        return byAgency.filter((v) => v.audit?.actor.email?.toLowerCase() === myEmail);
+        scoped = byAgency.filter((v) => v.audit?.actor.email?.toLowerCase() === myEmail);
+      } else {
+        scoped = byAgency;
       }
-      return byAgency;
+    } else {
+      /* Developer · solo ventas de mis promociones (workspace owner). */
+      scoped = salesMock.filter((v) => v.promotionId && myPromoIds.has(v.promotionId));
     }
-    /* Developer · solo ventas de mis promociones (workspace owner). */
-    return salesMock.filter((v) => v.promotionId && myPromoIds.has(v.promotionId));
-  }, [isAgencyUser, currentUser.agencyId, currentUser.role, currentUser.email, myPromoIds]);
+    return scoped.filter(visibilityFilter);
+  }, [isAgencyUser, currentUser.agencyId, currentUser.role, currentUser.email, myPromoIds, visibilityFilter]);
   const [sales, setSales] = useState<Venta[]>(baseSales);
   useEffect(() => { setSales(baseSales); }, [baseSales]);
   const [viewMode, setViewMode] = useState<"kanban" | "tabla">("kanban");
@@ -249,6 +265,17 @@ export default function Ventas() {
       .filter(v => v.estado === "escriturada" && v.fechaEscritura && isThisMonth(parseISO(v.fechaEscritura)))
       .reduce((s, v) => s + v.precioFinal, 0);
   }, [sales]);
+
+  /* Sin permiso `sales.viewAll` ni `sales.viewOwn` · placeholder amigable.
+   *  El admin queda fuera de este branch por escudo en `useHasPermission`. */
+  const { hasAccess } = useVisibilityState("sales");
+  if (!hasAccess) {
+    return (
+      <div className="flex-1 grid place-items-center p-8">
+        <NoAccessView feature="Ventas" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-full bg-background">

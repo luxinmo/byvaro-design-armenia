@@ -22,9 +22,26 @@ import {
   deriveByvaroEmail,
 } from "@/components/emails/accounts";
 import { useCurrentUser } from "@/lib/currentUser";
+import { useVisibilityState } from "@/lib/visibility";
+import { NoAccessView } from "@/components/ui/NoAccessView";
 
 export default function Emails() {
   const user = useCurrentUser();
+  /* Gate `emails.viewOwn` · cada usuario ve solo sus cuentas conectadas.
+   *  Hoy el modelo single-account ya respeta ownership por construcción
+   *  (`byvaroAccount` se deriva de `user.email`) · sin permiso, ni
+   *  siquiera entras al cliente.
+   *  TODO(backend): cuando exista bandeja unificada de equipo
+   *  (`emails.viewAll`) el admin podrá ver delegated mailboxes y emails
+   *  de otros miembros · ahí este gate se diferenciará. */
+  const emailsAccess = useVisibilityState("emails");
+  if (!emailsAccess.hasAccess) {
+    return (
+      <div className="flex-1 grid place-items-center p-8">
+        <NoAccessView feature="Emails" />
+      </div>
+    );
+  }
 
   /* Cuenta nativa de Byvaro · cada usuario tiene <localpart>@mail.byvaro.com
    * al darse de alta. Se prepone a la lista de cuentas para que el
