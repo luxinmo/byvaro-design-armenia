@@ -65,6 +65,12 @@ const COPY: Record<PaywallTrigger, Copy> = {
     subtitle: (u, l) =>
       `Tu workspace ha recibido ${u} registros (límite ${l} en gratis). Suscríbete para aprobar registros sin tope.`,
   },
+  collabRequest: {
+    icon: Users,
+    title: "Has llegado al límite de solicitudes",
+    subtitle: (u, l) =>
+      `Has enviado ${u} de ${l} solicitudes de colaboración del plan gratis. Cuando los promotores respondan se libera el cupo · o pasa al plan Marketplace para enviar sin límite.`,
+  },
   near_limit: {
     icon: Info,
     title: "Estás cerca del límite gratuito",

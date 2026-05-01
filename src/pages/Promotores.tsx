@@ -26,9 +26,22 @@ import { agencies, type Agency } from "@/data/agencies";
 import { useResolvedPromotores } from "@/lib/useResolvedAgencies";
 import {
   DEFAULT_DEVELOPER_ID,
-  hasActiveDeveloperCollab,
   getCollaboratingDeveloperIds,
 } from "@/lib/developerNavigation";
+import { promotions } from "@/data/promotions";
+import { developerOnlyPromotions } from "@/data/developerPromotions";
+import { useUsageGuard } from "@/lib/usageGuard";
+import {
+  crearOrgCollabRequest,
+  currentOrgIdentity,
+  getMyOwnEmpresa,
+  hasMinimumIdentityData,
+  useHasPendingRequestTo,
+  useSentOrgCollabRequests,
+} from "@/lib/orgCollabRequests";
+import { toast } from "sonner";
+import { Send, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { getPublicRef } from "@/lib/tenantRefResolver";
 import { LUXINMO_SEED } from "@/data/developerSeed";
 import { useEmpresa } from "@/lib/empresa";
@@ -91,6 +104,15 @@ function PromotoresAgencyView() {
   const [especialidadFilter, setEspecialidadFilter] = useState<string[]>([]);
   const activeFilterCount = marketsFilter.length + especialidadFilter.length;
 
+  /* Solicitudes de colaboración · gate del plan agency_free (10 max).
+   *  Cuando se acepta o rechaza, el slot se libera. */
+  const collabGuard = useUsageGuard("collabRequest");
+  const sentPending = useSentOrgCollabRequests(user, "pendiente");
+  const pendingTargetIds = useMemo(
+    () => new Set(sentPending.map((r) => r.toOrgId)),
+    [sentPending],
+  );
+
   /* Selección + favoritos · paridad con `/colaboradores`. Aunque
    *  hoy single-tenant solo hay 1 promotor en la lista, el patrón
    *  se mantiene para que cuando aterrice multi-tenant funcione. */
@@ -114,18 +136,41 @@ function PromotoresAgencyView() {
      son los KPIs de la relación de ESTA agencia con el promotor. */
   /* Promotores externos resueltos · merge seed + cache hidratado. */
   const resolvedPromotores = useResolvedPromotores();
+
+  /* Set de developers ELEGIBLES · tienen al menos una promo publicada
+   *  (active + canShareWithAgencies) o una vendida (sold-out · tuvieron
+   *  publicada antes). El marketplace muestra TODOS los elegibles · la
+   *  agencia ve cuáles son sus colaboradores activos y cuáles puede
+   *  descubrir / solicitar.
+   *
+   *  TODO(backend): este set se computa server-side via
+   *  `GET /api/marketplace/promotores` con join contra `promotions`
+   *  · respeta visibilidad pública (no expone promos de uso interno
+   *  ni borradores). */
+  const eligibleDeveloperIds = useMemo(() => {
+    const out = new Set<string>();
+    const allPromos = [...promotions, ...developerOnlyPromotions];
+    for (const p of allPromos) {
+      const ownerId = p.ownerOrganizationId;
+      if (!ownerId) continue;
+      const isPublished = p.status === "active" && p.canShareWithAgencies !== false;
+      const isSoldOut = p.status === "sold-out";
+      if (isPublished || isSoldOut) out.add(ownerId);
+    }
+    return out;
+  }, []);
+
   const promotoresList = useMemo<Agency[]>(() => {
-    if (!myAgency || !hasActiveDeveloperCollab(user)) return [];
-    /* SCOPED · solo los developers con los que MI agencia realmente
-     *  colabora · cruza `myAgency.promotionsCollaborating` contra
-     *  los owners reales de cada promo. Si Anna solo colabora con
-     *  Luxinmo, NO ve AEDAS/Neinor/Habitat/Metrovacesa en su listado.
-     *  Antes hardcodeaba Luxinmo como synthetic + añadía TODOS los
-     *  externos · leak. */
+    if (!myAgency) return [];
+    /* MARKETPLACE · listamos TODOS los developers elegibles (con
+     *  promo publicada o vendida) · marcamos los que ya colaboran
+     *  con `estadoColaboracion: "activa"`, los demás aparecen sin
+     *  vínculo · la agencia puede enviar solicitud de colaboración. */
     const collabDevs = getCollaboratingDeveloperIds(myAgency);
-    /* Synthetic Luxinmo · solo si Anna colabora con developer-default. */
     const cards: Agency[] = [];
-    if (collabDevs.has(DEFAULT_DEVELOPER_ID)) {
+
+    /* Synthetic Luxinmo · siempre que sea elegible. */
+    if (eligibleDeveloperIds.has(DEFAULT_DEVELOPER_ID)) {
       const name = developerEmpresa.nombreComercial?.trim()
         || developerEmpresa.razonSocial?.trim()
         || listingSeed.nombreComercial;
@@ -138,23 +183,32 @@ function PromotoresAgencyView() {
         return listingSeed.location;
       })();
       const idiomasUpper = (developerEmpresa.idiomasAtencion ?? []).map((s) => s.toUpperCase());
+      const isCollab = collabDevs.has(DEFAULT_DEVELOPER_ID);
       cards.push({
         id: DEFAULT_DEVELOPER_ID,
         name, logo, location,
         type: "Network",
         description: developerEmpresa.overview?.trim() || listingSeed.description || "",
-        visitsCount: myAgency.visitsCount ?? 0,
-        registrations: myAgency.registrations ?? 0,
-        salesVolume: myAgency.salesVolume ?? 0,
-        collaboratingSince: myAgency.collaboratingSince,
-        status: "active",
+        /* KPIs comerciales · si la agencia ya colabora, vienen del
+         *  histórico de la relación; si no, son 0 (marketplace · aún
+         *  no ha hecho nada con este promotor). */
+        visitsCount: isCollab ? (myAgency.visitsCount ?? 0) : 0,
+        registrations: isCollab ? (myAgency.registrations ?? 0) : 0,
+        salesVolume: isCollab ? (myAgency.salesVolume ?? 0) : 0,
+        collaboratingSince: isCollab ? myAgency.collaboratingSince : undefined,
+        status: isCollab ? "active" : "inactive",
         offices: [],
-        promotionsCollaborating: myAgency.promotionsCollaborating ?? [],
-        totalPromotionsAvailable: myAgency.promotionsCollaborating?.length ?? 0,
-        origen: "invited",
-        estadoColaboracion: "activa",
-        registrosAportados: myAgency.registrosAportados ?? 0,
-        ventasCerradas: myAgency.ventasCerradas ?? 0,
+        promotionsCollaborating: isCollab ? (myAgency.promotionsCollaborating ?? []) : [],
+        /* totalPromotionsAvailable · cuántas promos publicables tiene
+         *  el promotor · útil aunque no colabores aún. */
+        totalPromotionsAvailable: [...promotions, ...developerOnlyPromotions]
+          .filter((p) => p.ownerOrganizationId === DEFAULT_DEVELOPER_ID
+            && p.status === "active"
+            && p.canShareWithAgencies !== false).length,
+        origen: isCollab ? "invited" : "marketplace",
+        estadoColaboracion: isCollab ? "activa" : undefined,
+        registrosAportados: isCollab ? (myAgency.registrosAportados ?? 0) : 0,
+        ventasCerradas: isCollab ? (myAgency.ventasCerradas ?? 0) : 0,
         comisionMedia: myAgency.comisionMedia,
         mercados: listingSeed.mercados ?? ["ES"],
         idiomasAtencion: idiomasUpper.length > 0 ? idiomasUpper : (listingSeed.idiomasAtencion ?? []),
@@ -162,16 +216,35 @@ function PromotoresAgencyView() {
         ratingPromotor: 0,
         googleRating: developerEmpresa.googleRating || listingSeed.googleRating,
         googleRatingsTotal: developerEmpresa.googleRatingsTotal || listingSeed.googleRatingsTotal,
-        lastActivityAt: myAgency.lastActivityAt,
+        lastActivityAt: isCollab ? myAgency.lastActivityAt : undefined,
         verificada: !!developerEmpresa.verificada,
       } as Agency);
     }
-    /* Externos · solo los que también están en collabDevs. */
+    /* Externos · TODOS los elegibles · marcamos colaboración real. */
     for (const promo of resolvedPromotores) {
-      if (collabDevs.has(promo.id)) cards.push(promo);
+      if (!eligibleDeveloperIds.has(promo.id)) continue;
+      const isCollab = collabDevs.has(promo.id);
+      cards.push(isCollab ? promo : {
+        ...promo,
+        /* Marketplace card · sin colaboración activa. KPIs a 0 · la
+         *  agencia aún no ha operado con este promotor. */
+        visitsCount: 0,
+        registrations: 0,
+        salesVolume: 0,
+        collaboratingSince: undefined,
+        status: "inactive",
+        promotionsCollaborating: [],
+        origen: "marketplace",
+        estadoColaboracion: undefined,
+        registrosAportados: 0,
+        ventasCerradas: 0,
+        contractSignedAt: undefined,
+        contractExpiresAt: undefined,
+        lastActivityAt: undefined,
+      } as Agency);
     }
     return cards;
-  }, [myAgency, user, developerEmpresa, listingSeed, resolvedPromotores]);
+  }, [myAgency, developerEmpresa, listingSeed, resolvedPromotores, eligibleDeveloperIds]);
 
   /* Catálogos derivados de la lista actual de promotores */
   const allMarkets = useMemo(() => {
@@ -221,6 +294,44 @@ function PromotoresAgencyView() {
     setEspecialidadFilter([]);
   };
 
+  /** Envía solicitud de colaboración a un promotor. Comprobaciones:
+   *  · La agencia tiene los datos mínimos de identidad (CIF + nombre).
+   *  · No hay solicitud previa pendiente al mismo promotor.
+   *  · El plan permite enviar más solicitudes (gate del usageGuard). */
+  const sendCollabRequest = (target: Agency) => {
+    if (collabGuard.blocked) {
+      collabGuard.openUpgrade();
+      return;
+    }
+    if (pendingTargetIds.has(target.id)) {
+      toast.info(`Ya tienes una solicitud pendiente con ${target.name}`);
+      return;
+    }
+    const myIdentity = currentOrgIdentity(user);
+    const myEmpresa = getMyOwnEmpresa(user);
+    const check = hasMinimumIdentityData(myEmpresa);
+    if (!check.ok) {
+      toast.error("Completa tus datos de empresa antes de enviar la solicitud", {
+        description: `Faltan: ${check.missing.join(", ")}`,
+      });
+      navigate("/ajustes/empresa/datos");
+      return;
+    }
+    crearOrgCollabRequest({
+      fromOrgId: myIdentity.orgId,
+      fromOrgName: myEmpresa.nombreComercial?.trim() || myEmpresa.razonSocial?.trim() || myIdentity.orgName,
+      fromOrgKind: myIdentity.orgKind,
+      toOrgId: target.id,
+      toOrgName: target.name,
+      toOrgKind: "developer",
+      message: undefined,
+      requestedBy: { name: user.name, email: user.email },
+    });
+    toast.success(`Solicitud enviada a ${target.name}`, {
+      description: "Te avisaremos cuando responda.",
+    });
+  };
+
   return (
     <div className="flex flex-col min-h-full bg-background">
       <section className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-3">
@@ -233,9 +344,45 @@ function PromotoresAgencyView() {
               Promotores & comercializadores
             </h1>
             <p className="text-[12.5px] text-muted-foreground mt-1 max-w-2xl">
-              Promotores con los que tu agencia colabora · sus promociones aparecen
-              en tu cartera y puedes registrar clientes sobre ellas.
+              Marketplace de promotores con promociones publicadas o vendidas
+              previamente · los que ya colaboras aparecen marcados como activos
+              · puedes solicitar colaboración al resto.
             </p>
+
+            {/* Banner cuota de solicitudes · solo si el plan tiene
+             *  límite finito (agency_free → 10 · marketplace → ∞). */}
+            {Number.isFinite(collabGuard.limit) && (
+              <div className={cn(
+                "mt-4 flex items-center justify-between gap-3 rounded-2xl border px-4 py-3",
+                collabGuard.blocked
+                  ? "border-warning/40 bg-warning/10"
+                  : (collabGuard.used ?? 0) >= collabGuard.limit * 0.8
+                    ? "border-warning/30 bg-warning/5"
+                    : "border-border bg-muted/30",
+              )}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <Send className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={1.75} />
+                  <p className="text-xs text-foreground">
+                    <span className="font-semibold">{collabGuard.used ?? 0}</span>
+                    <span className="text-muted-foreground"> / {collabGuard.limit} solicitudes pendientes ·{" "}</span>
+                    <span className="text-muted-foreground">
+                      {collabGuard.blocked
+                        ? "límite alcanzado · pasa a Marketplace para enviar sin tope"
+                        : `${collabGuard.limit - (collabGuard.used ?? 0)} restantes este mes`}
+                    </span>
+                  </p>
+                </div>
+                {collabGuard.blocked && (
+                  <Button
+                    size="sm"
+                    onClick={collabGuard.openUpgrade}
+                    className="rounded-full text-xs h-8 shrink-0"
+                  >
+                    Upgrade
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 mt-5">
@@ -341,30 +488,60 @@ function PromotoresAgencyView() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filtered.map((p) => (
-                <AgencyGridCard
-                  key={p.id}
-                  agency={p}
-                  onClick={() => navigate(`/promotor/${p.publicRef || getPublicRef(p.id) || p.id}/panel`)}
-                  /* Lado agencia mirando al promotor · categorías
-                   *  derivadas del developer real (Promotor /
-                   *  Comercializador según promociones activas). */
-                  categories={getEmpresaCategories({ accountType: "developer" })}
-                  /* Sin chip de contrato ni incidencias en el shape
-                   *  sintético del developer · esos datos no llegan
-                   *  cross-tenant en el mock. */
-                  hideContractStatus
-                  hideIncidentsStatus
-                  /* Selección + favoritos · paridad con
-                   *  `/colaboradores` lado promotor. */
-                  selected={selectedIds.includes(p.id)}
-                  onToggleSelect={() => toggleSelectId(p.id)}
-                  isFavorite={isFavorite(p.id)}
-                  onToggleFavorite={() => toggleFavorite(p.id)}
-                  /* Regla Byvaro · sólo colaboradores activos. */
-                  canInteract={p.status === "active" && p.estadoColaboracion === "activa"}
-                />
-              ))}
+              {filtered.map((p) => {
+                const isCollab = p.estadoColaboracion === "activa" && p.status === "active";
+                const isPending = pendingTargetIds.has(p.id);
+                /* Card del promotor · si NO hay colaboración activa,
+                 *  el footerSlot ofrece "Solicitar colaboración" (o
+                 *  marca pending si ya se envió una). En cards con
+                 *  colaboración activa, el footer queda vacío. */
+                const footer = !isCollab ? (
+                  <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-border/50">
+                    {isPending ? (
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                        <span className="h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
+                        Solicitud enviada
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <AlertCircle className="h-3 w-3" strokeWidth={1.75} />
+                        Sin colaboración
+                      </span>
+                    )}
+                    <Button
+                      size="sm"
+                      variant={isPending ? "outline" : "default"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isPending) return;
+                        sendCollabRequest(p);
+                      }}
+                      disabled={isPending}
+                      className="rounded-full text-xs h-7 px-3"
+                    >
+                      <Send className="h-3 w-3 mr-1" strokeWidth={1.75} />
+                      {isPending ? "Pendiente" : "Solicitar"}
+                    </Button>
+                  </div>
+                ) : null;
+                return (
+                  <AgencyGridCard
+                    key={p.id}
+                    agency={p}
+                    onClick={() => navigate(`/promotor/${p.publicRef || getPublicRef(p.id) || p.id}/panel`)}
+                    categories={getEmpresaCategories({ accountType: "developer" })}
+                    hideContractStatus
+                    hideIncidentsStatus
+                    selected={selectedIds.includes(p.id)}
+                    onToggleSelect={() => toggleSelectId(p.id)}
+                    isFavorite={isFavorite(p.id)}
+                    onToggleFavorite={() => toggleFavorite(p.id)}
+                    canInteract={isCollab}
+                    requestedAt={isPending ? sentPending.find((r) => r.toOrgId === p.id)?.createdAt : undefined}
+                    footerSlot={footer}
+                  />
+                );
+              })}
             </div>
           )}
         </div>

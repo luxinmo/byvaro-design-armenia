@@ -47,7 +47,11 @@ import { cn } from "@/lib/utils";
 import {
   usePlan, PLAN_LIMITS, PLAN_LABEL, setPlan, isPaidPlan,
   cancelSubscription,
-  type PlanTier,
+  usePlanState,
+  setAgencyPack, setPromoterPack,
+  AGENCY_PACK_LABEL, PROMOTER_PACK_LABEL,
+  isAgencyActive, isPromoterActive,
+  type PlanTier, type AgencyPack, type PromoterPack,
 } from "@/lib/plan";
 import { useUsageCounters } from "@/lib/usage";
 import { useCurrentUser } from "@/lib/currentUser";
@@ -441,17 +445,40 @@ export default function Planes() {
           }}
         />
 
-        {/* ═══════════ GRID DE 4 PLANES ═══════════ */}
-        <section className="mt-10 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
-          {PLANS.map((plan) => (
-            <PlanCard
-              key={plan.id}
-              plan={plan}
-              isActive={plan.id === activePlanId}
-              onSelect={() => setCheckoutPlan(plan)}
-            />
-          ))}
-        </section>
+        {/* ═══════════ DOS SECCIONES INDEPENDIENTES ═══════════
+          * Cada workspace puede tener AMBOS packs activos a la vez ·
+          * un promotor que quiere catálogo de inmobiliarias activa el
+          * pack agencia, una agencia que quiere comercializar activa
+          * el pack promotor. Los beneficios "alta nueva" (10
+          * solicitudes / 6m gratis) son específicos del pack que se
+          * eligió al CREAR la cuenta · ver `signupKind`. */}
+        <PackSection
+          title="Pack Inmobiliaria"
+          eyebrow="Para agencias colaboradoras"
+          description="Catálogo de promotores y comercializadores · puedes registrar clientes en sus promociones y cobrar comisiones."
+          plans={PLANS.filter((p) => p.audience === "agencia")}
+          activePlanId={activePlanId}
+          onSelect={(p) => setCheckoutPlan(p)}
+          crossPackNote={
+            user.accountType === "developer"
+              ? "Como promotor, activar el pack Inmobiliaria te da acceso al directorio. Las 10 solicitudes gratis son solo para nuevas altas de inmobiliaria · si activas Gratis aquí, tendrás 0 solicitudes (pasa a Marketplace para ilimitadas)."
+              : null
+          }
+        />
+
+        <PackSection
+          title="Pack Promotor / Comercializador"
+          eyebrow="Para crear y publicar promociones"
+          description="Crea tu obra nueva, comparte con agencias, gestiona registros y cierra ventas."
+          plans={PLANS.filter((p) => p.audience === "promotor")}
+          activePlanId={activePlanId}
+          onSelect={(p) => setCheckoutPlan(p)}
+          crossPackNote={
+            user.accountType === "agency"
+              ? "Como inmobiliaria, activar el pack Promotor te permite crear tus propias promociones. Los 6 meses gratis son solo para altas nuevas de promotor · empezarás directamente en 249€/mes."
+              : null
+          }
+        />
 
         {/* Dialog de pago · se abre al pulsar la CTA de una card */}
         <PlanCheckoutDialog
@@ -722,6 +749,64 @@ function CurrentPlanBanner({
   );
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   PackSection · sección con título + nota cross-pack + grid de planes
+   ══════════════════════════════════════════════════════════════════ */
+function PackSection({
+  title,
+  eyebrow,
+  description,
+  plans,
+  activePlanId,
+  onSelect,
+  crossPackNote,
+}: {
+  title: string;
+  eyebrow: string;
+  description: string;
+  plans: Plan[];
+  activePlanId: string | null;
+  onSelect: (plan: Plan) => void;
+  /** Aviso solo visible cuando el viewer NO encaja en el signupKind
+   *  natural del pack (promotor activando agencia, etc.). Explica
+   *  los beneficios "alta nueva" que NO se heredan. */
+  crossPackNote: string | null;
+}) {
+  return (
+    <section className="mt-10">
+      <header className="mb-4">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          {eyebrow}
+        </p>
+        <h2 className="text-[18px] sm:text-[20px] font-bold tracking-tight text-foreground mt-1">
+          {title}
+        </h2>
+        <p className="text-[13px] text-muted-foreground mt-1 max-w-2xl">
+          {description}
+        </p>
+        {crossPackNote && (
+          <div className="mt-3 rounded-xl border border-warning/30 bg-warning/5 px-3.5 py-2.5 flex items-start gap-2">
+            <Lock className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" strokeWidth={1.75} />
+            <p className="text-[12px] text-foreground leading-relaxed">
+              {crossPackNote}
+            </p>
+          </div>
+        )}
+      </header>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+        {plans.map((plan) => (
+          <PlanCard
+            key={plan.id}
+            plan={plan}
+            isActive={plan.id === activePlanId}
+            onSelect={() => onSelect(plan)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function PlanCard({
   plan,
   isActive,
@@ -888,7 +973,20 @@ function PlanCheckoutDialog({
     setSubmitting(true);
     /* Simulamos latencia · backend real tarda ~1-2s con Stripe. */
     setTimeout(() => {
-      setPlan(user, tier);
+      /* Activamos el pack adecuado según la audience del plan ·
+       *  preserva el otro pack del workspace (un promotor que activa
+       *  Marketplace mantiene su trial/249/329). */
+      if (plan.audience === "agencia") {
+        const pack: AgencyPack = plan.id === "agency-marketplace" ? "marketplace" : "free";
+        setAgencyPack(user, pack);
+      } else if (plan.audience === "promotor") {
+        const pack: PromoterPack = plan.id === "promoter-329" ? "promoter_329"
+          : plan.id === "promoter-249" ? "promoter_249"
+          : "trial";
+        setPromoterPack(user, pack);
+      } else {
+        setPlan(user, tier);
+      }
       toast.success(`Plan ${plan.name} activado`, {
         description: isFreePlan
           ? "Tu cuenta gratis está lista · empieza a invitar promotores."
