@@ -16,7 +16,6 @@
  */
 
 import { developerOnlyPromotions } from "./developerPromotions";
-import { promotions as promotionsLegacy } from "./promotions";
 import { getAllContracts } from "@/lib/collaborationContracts";
 import type { LicenciaInmobiliaria } from "@/lib/licenses";
 
@@ -844,34 +843,12 @@ export function getAgencyShareStats(agency: Agency): {
   sharedActive: number;
   sharedDeclared: number;
 } {
-  /* "Publicadas" segun CLAUDE.md (REGLA DE ORO Estados de promoción):
-   *   status=active + canShare !== false + AL MENOS 1 agencia comparte.
-   *  Cruza ambos arrays · `developerOnlyPromotions` (dev-X, prom-X) +
-   *  `promotions` legacy. */
-  const all = [
-    ...developerOnlyPromotions,
-    ...promotionsLegacy.filter(
-      (p) => !developerOnlyPromotions.some((d) => d.id === p.id),
-    ),
-  ];
-  /* Set de promoIds con al menos 1 agencia colaborando · cruza
-   *  TODAS las agencies del seed. */
-  const sharedAtLeastOnce = new Set<string>();
-  for (const ag of agencies) {
-    for (const id of ag.promotionsCollaborating ?? []) {
-      sharedAtLeastOnce.add(id);
-    }
-  }
-  const publicadas = all.filter((p) =>
-    p.status === "active"
-    && (p as { canShareWithAgencies?: boolean }).canShareWithAgencies !== false
-    && sharedAtLeastOnce.has(p.id),
-  );
-  const publicadasIds = new Set(publicadas.map((p) => p.id));
+  const activePromos = developerOnlyPromotions.filter((p) => p.status === "active");
+  const activeIds = new Set(activePromos.map((p) => p.id));
   const declared = agency.promotionsCollaborating ?? [];
-  const sharedActive = declared.filter((id) => publicadasIds.has(id)).length;
+  const sharedActive = declared.filter((id) => activeIds.has(id)).length;
   return {
-    activeTotal: publicadas.length,
+    activeTotal: activePromos.length,
     sharedActive,
     sharedDeclared: declared.length,
   };
