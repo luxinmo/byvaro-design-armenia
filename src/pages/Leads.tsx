@@ -26,7 +26,7 @@
  * TODO(ui): ficha interior `/oportunidades/:id` con pipeline bar + matching + timeline.
  */
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Search, X, Inbox, Mail, CheckCircle2,
@@ -45,8 +45,10 @@ import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { Building2 } from "lucide-react";
 import { UserSelect } from "@/components/ui/UserSelect";
 import { findTeamMember, memberInitials, getMemberAvatarUrl } from "@/lib/team";
-import { useLeadAssignee, setLeadAssignee } from "@/components/leads/leadAssigneeStorage";
+import { useLeadAssignee, setLeadAssignee, getLeadAssignee } from "@/components/leads/leadAssigneeStorage";
 import { useCurrentUser } from "@/lib/currentUser";
+import { useVisibilityFilter, useVisibilityState } from "@/lib/visibility";
+import { NoAccessView } from "@/components/ui/NoAccessView";
 import { cn } from "@/lib/utils";
 
 function flagOf(code?: string): string {
@@ -83,10 +85,29 @@ export default function Leads() {
    * leads del promotor (cross-agencia). El modelo Lead actual no tiene
    * `agencyId` · hasta que lo tengamos, agency ve lista vacía. Esto
    * evita fuga. */
-  const visibleLeads = useMemo(() => {
+  const orgLeads = useMemo(() => {
     if (currentUser.accountType === "agency") return [];
     return allLeads;
   }, [currentUser.accountType]);
+
+  /* Visibilidad por OWNERSHIP · si el rol no tiene `opportunities.viewAll`,
+   *  el predicado filtra por `assignee → user.id`. Owner se resuelve
+   *  primero del override en localStorage (`getLeadAssignee`) · si no,
+   *  cae al snapshot `lead.assignedTo.name` cruzado con TEAM_MEMBERS. */
+  const ownerOfLead = useCallback((l: Lead): string | null => {
+    const override = getLeadAssignee(l.id);
+    if (override) return override;
+    if (l.assignedTo?.name) {
+      const m = findTeamMember(l.assignedTo.name);
+      if (m) return m.id;
+    }
+    return null;
+  }, []);
+  const visibilityFilter = useVisibilityFilter<Lead>("opportunities", ownerOfLead);
+  const visibleLeads = useMemo(
+    () => orgLeads.filter(visibilityFilter),
+    [orgLeads, visibilityFilter],
+  );
 
   const counts = useMemo(() => ({
     total:       visibleLeads.length,
@@ -115,7 +136,18 @@ export default function Leads() {
         return true;
       })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [search, quickFilter]);
+  }, [search, quickFilter, visibleLeads]);
+
+  /* Sin permiso `opportunities.viewAll` ni `opportunities.viewOwn` ·
+   *  placeholder amigable. Admin queda fuera por escudo. */
+  const { hasAccess } = useVisibilityState("opportunities");
+  if (!hasAccess) {
+    return (
+      <div className="flex-1 grid place-items-center p-8">
+        <NoAccessView feature="Oportunidades" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-full bg-background">

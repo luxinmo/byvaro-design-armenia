@@ -59,6 +59,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { motion, AnimatePresence } from "framer-motion";
 import { agencies as ALL_AGENCIES } from "@/data/agencies";
 import { useCurrentUser } from "@/lib/currentUser";
+import { useVisibilityFilter, useVisibilityState } from "@/lib/visibility";
+import { NoAccessView } from "@/components/ui/NoAccessView";
 import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import { getAgenciesForDeveloper } from "@/lib/developerNavigation";
 import { useCreatedRegistros } from "@/lib/registrosStorage";
@@ -190,11 +192,23 @@ export default function Registros() {
     );
   }, [myOrgIdReg]);
 
+  /* Visibilidad por OWNERSHIP · `records.viewOwn` filtra por
+   *  `decidedByUserId === user.id` para developer side (member solo ve
+   *  los que él decidió). Pendientes sin owner solo aparecen con
+   *  `viewAll` (admin/escudo). El fallback agency-side por
+   *  `audit.actor.email` queda intacto · es ortogonal a este filtro. */
+  const recordsVisibilityFilter = useVisibilityFilter<Registro>(
+    "records",
+    (r) => r.decidedByUserId ?? null,
+  );
+
   const scopedList = useMemo(() => {
     const combined = [...createdRegistros, ...registrosMock];
     if (!isAgencyUser) {
-      /* Lado DEVELOPER · solo registros de promociones de mi workspace. */
-      return combined.filter((r) => !r.promotionId || myPromoIdsReg.has(r.promotionId));
+      /* Lado DEVELOPER · solo registros de promociones de mi workspace,
+       *  además filtrados por ownership (member ve solo los suyos). */
+      const orgScoped = combined.filter((r) => !r.promotionId || myPromoIdsReg.has(r.promotionId));
+      return orgScoped.filter(recordsVisibilityFilter);
     }
     /* Filtro tenant · solo registros de la agencia del usuario. */
     const byAgency = combined.filter((r) => r.agencyId === currentUser.agencyId);
@@ -212,7 +226,7 @@ export default function Registros() {
       );
     }
     return byAgency;
-  }, [createdRegistros, isAgencyUser, currentUser.agencyId, currentUser.role, currentUser.email, myPromoIdsReg]);
+  }, [createdRegistros, isAgencyUser, currentUser.agencyId, currentUser.role, currentUser.email, myPromoIdsReg, recordsVisibilityFilter]);
 
   // Estado de datos (mutable para aprobar/rechazar en memoria).
   const [records, setRecords] = useState<Registro[]>(scopedList);
@@ -851,6 +865,17 @@ export default function Registros() {
     { value: "duplicado", label: "Duplicados" },
     { value: "caducado", label: "Caducados" },
   ];
+
+  /* Sin permiso `records.viewAll` ni `records.viewOwn` · placeholder.
+   *  Admin queda fuera por escudo · agencia member ya filtra arriba. */
+  const recordsAccess = useVisibilityState("records");
+  if (!recordsAccess.hasAccess) {
+    return (
+      <div className="flex-1 grid place-items-center p-8">
+        <NoAccessView feature="Registros" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-full bg-background">

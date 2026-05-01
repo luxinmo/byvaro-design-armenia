@@ -41,6 +41,8 @@ import { PublicRefBadge } from "@/components/ui/PublicRefBadge";
 import { OriginsPill } from "@/components/contacts/OriginsPill";
 import { ActivityFreshness } from "@/components/contacts/ActivityFreshness";
 import { useCurrentUser, isAdmin } from "@/lib/currentUser";
+import { useVisibilityFilter, useVisibilityState } from "@/lib/visibility";
+import { NoAccessView } from "@/components/ui/NoAccessView";
 import { Flag } from "@/components/ui/Flag";
 import { resolveNationality } from "@/data/nationalities";
 
@@ -133,6 +135,15 @@ export default function Contactos() {
    *               === agencia actual). NO ve los del promotor ni los de
    *               otras agencias.
    *   Sin backend, nos basta un filtrado sobre el universo agregado. */
+  /* Visibilidad por OWNERSHIP · canónico vía `useVisibilityFilter`.
+   *  · `contacts.viewAll` → admin/escudo o rol con esa key → ve todo.
+   *  · `contacts.viewOwn` → solo donde aparece en `assignedToUserIds`.
+   *  TODO(backend): mover a SQL `WHERE me.id = ANY(assigned_to)`. */
+  const contactsVisibilityFilter = useVisibilityFilter<Contact>(
+    "contacts",
+    (c) => c.assignedToUserIds ?? null,
+  );
+
   const allContacts = useMemo<Contact[]>(() => {
     const deleted = loadDeletedContactIds();
     const tenantScope = [...loadCreatedContacts(), ...loadImportedContacts(), ...MOCK_CONTACTS]
@@ -141,21 +152,9 @@ export default function Contactos() {
         if (viewerIsAgency) return c.ownerAgencyId === currentUser.agencyId;
         return !c.ownerAgencyId;
       });
-    /* CLAUDE.md `permissions.md` · viewOwn vs viewAll.
-     *  · admin → todos los del tenant.
-     *  · member → solo aquellos donde está como assigned
-     *    (`assignedToUserIds` incluye su id). Si no hay
-     *    assignedToUserIds, NO los ve · evita fuga de cartera.
-     * TODO(backend): mover a SQL `WHERE assignee_id = $1`. */
-    if (currentUser.role === "member") {
-      const myId = currentUser.id;
-      return tenantScope.filter((c) =>
-        (c.assignedToUserIds ?? []).includes(myId),
-      );
-    }
-    return tenantScope;
+    return tenantScope.filter(contactsVisibilityFilter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createVersion, viewerIsAgency, currentUser.agencyId, currentUser.role, currentUser.id]);
+  }, [createVersion, viewerIsAgency, currentUser.agencyId, contactsVisibilityFilter]);
 
   const [orgTags, setOrgTagsState] = useState<ContactTag[]>(() => loadOrgTags());
   const setOrgTags = (next: ContactTag[] | ((prev: ContactTag[]) => ContactTag[])) => {
@@ -310,6 +309,17 @@ export default function Contactos() {
         });
     }
   }, [filtered, sort]);
+
+  /* Sin permiso `contacts.viewAll` ni `contacts.viewOwn` · placeholder.
+   *  Admin queda fuera por escudo. */
+  const contactsAccess = useVisibilityState("contacts");
+  if (!contactsAccess.hasAccess) {
+    return (
+      <div className="flex-1 grid place-items-center p-8">
+        <NoAccessView feature="Contactos" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-full bg-background">
