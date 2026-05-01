@@ -39,7 +39,7 @@ import { agencies as ALL_AGENCIES } from "@/data/agencies";
 import { useCreatedRegistros } from "@/lib/registrosStorage";
 import { registros as SEED_REGISTROS } from "@/data/records";
 import { useCurrentUser } from "@/lib/currentUser";
-import { currentOrgIdentity } from "@/lib/orgCollabRequests";
+import { currentOrgIdentity, useSentOrgCollabRequests } from "@/lib/orgCollabRequests";
 import { getCollaboratingDeveloperIds } from "@/lib/developerNavigation";
 
 /* ══════ Counters puros ═══════════════════════════════════════════ */
@@ -96,6 +96,11 @@ export type UsageCounters = {
   activePromotions: number;
   invitedAgencies: number;
   registros: number;
+  /** Solicitudes de colaboración enviadas por la agencia que aún no han
+   *  sido aceptadas/rechazadas · cuentan contra el límite del plan
+   *  agency_free (10 max). Una vez la otra parte responde
+   *  (acepta/rechaza), el slot se libera. */
+  collabRequests: number;
 };
 
 /**
@@ -110,20 +115,26 @@ export function useUsageCounters(): UsageCounters {
   const created = useCreatedRegistros();
   const user = useCurrentUser();
   const orgId = currentOrgIdentity(user).orgId;
+  /* Solicitudes pendientes enviadas por la org actual · usado para gate
+   *  de plan agency_free (10 max). */
+  const sentPending = useSentOrgCollabRequests(user, "pendiente");
   const [counters, setCounters] = useState<UsageCounters>(() => ({
     activePromotions: countActivePromotions(orgId),
     invitedAgencies: countInvitedAgencies(orgId),
     registros: countRegistros(created, orgId),
+    collabRequests: 0,
   }));
 
-  /* Re-derivar si la lista de registros creados o el orgId cambian. */
+  /* Re-derivar si la lista de registros creados, el orgId o las
+   *  solicitudes enviadas cambian. */
   useEffect(() => {
     setCounters({
       activePromotions: countActivePromotions(orgId),
       invitedAgencies: countInvitedAgencies(orgId),
       registros: countRegistros(created, orgId),
+      collabRequests: sentPending.length,
     });
-  }, [created, orgId]);
+  }, [created, orgId, sentPending.length]);
 
   return counters;
 }

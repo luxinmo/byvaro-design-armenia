@@ -33,18 +33,19 @@
  */
 
 import { useSyncExternalStore } from "react";
-import { usePlan, PLAN_LIMITS, type PlanTier } from "@/lib/plan";
+import { usePlan, usePlanState, PLAN_LIMITS, deriveLimits, type PlanTier } from "@/lib/plan";
 import { useUsageCounters, type UsageCounters } from "@/lib/usage";
 import { useCurrentUser } from "@/lib/currentUser";
 
 /* ══════ Tipos ════════════════════════════════════════════════════ */
 
-/** Trigger del paywall · alineado con las 3 acciones bloqueables de Fase 1. */
+/** Trigger del paywall · alineado con las acciones bloqueables de Fase 1. */
 export type PaywallTrigger =
   | "createPromotion"
   | "inviteAgency"
   | "acceptRegistro"
-  | "near_limit"; // entrada manual desde banner del header
+  | "collabRequest"   // agencia envía solicitud de colaboración a un promotor
+  | "near_limit";     // entrada manual desde banner del header
 
 export type GuardResult = {
   /** ¿La acción está bloqueada por el plan actual? */
@@ -64,12 +65,9 @@ export type GuardResult = {
 function counterFor(action: PaywallTrigger, c: UsageCounters): number | null {
   switch (action) {
     case "createPromotion": return c.activePromotions;
+    case "collabRequest":   return c.collabRequests;
     /* `inviteAgency` y `acceptRegistro` ya NO son límites del producto
-     *  · se quedan como no-op para no romper consumers existentes
-     *  (`InvitarAgenciaModal`, etc.). El guard nunca bloqueará estas
-     *  acciones porque el límite es ∞ (ver `limitFor`).
-     *  TODO(cleanup): cuando todos los callers dejen de pedir el guard
-     *  para estas dos acciones, eliminar también del PaywallTrigger. */
+     *  · se quedan como no-op para no romper consumers existentes. */
     case "inviteAgency":    return null;
     case "acceptRegistro":  return null;
     case "near_limit":      return null;
@@ -80,36 +78,46 @@ function limitFor(action: PaywallTrigger, tier: PlanTier): number {
   const lim = PLAN_LIMITS[tier];
   switch (action) {
     case "createPromotion": return lim.activePromotions;
-    /* Acciones sin límite · ver counterFor. Devolvemos ∞ para que el
-     *  guard nunca bloquee aunque alguien siga llamando al hook. */
+    case "collabRequest":   return lim.collabRequests;
     case "inviteAgency":    return Number.POSITIVE_INFINITY;
     case "acceptRegistro":  return Number.POSITIVE_INFINITY;
     case "near_limit":      return Number.POSITIVE_INFINITY;
   }
 }
 
-/** ¿El viewer está en una persona monetizada en Fase 1?
- *  Solo developer paga · agency siempre `blocked: false`. */
-function isMonetizedAccount(accountType: string | undefined): boolean {
-  return accountType === "developer";
+/** ¿El viewer está en una persona monetizada en Fase 1? · ahora con
+ *  el modelo de packs split, la monetización depende del PACK del
+ *  workspace, no del accountType original. Cualquier viewer con el
+ *  pack relevante activo está sujeto a gate del paywall. */
+function isMonetizedAction(action: PaywallTrigger): boolean {
+  if (action === "createPromotion") return true;
+  if (action === "collabRequest") return true;
+  return false;
 }
 
 /* ══════ Hook principal ═══════════════════════════════════════════ */
 
 export function useUsageGuard(action: PaywallTrigger): GuardResult {
+  const planState = usePlanState();
   const tier = usePlan();
   const counters = useUsageCounters();
-  const currentUser = useCurrentUser();
 
-  const limit = limitFor(action, tier);
+  const limits = deriveLimits(planState);
+
+  /* Limit según el pack relevante de la acción · si el pack está
+   *  inactivo (agency_pack=none o promoter_pack=none), limit=0 ·
+   *  blocked=true desde la primera intentona. */
+  let limit = Number.POSITIVE_INFINITY;
+  if (action === "createPromotion") limit = limits.activePromotions;
+  else if (action === "collabRequest") limit = limits.collabRequests;
+
   const used = counterFor(action, counters);
-  const monetized = isMonetizedAccount(currentUser.accountType);
+  const monetized = isMonetizedAction(action);
 
   const blocked =
     monetized
     && action !== "near_limit"
-    && used !== null
-    && used >= limit;
+    && (used ?? 0) >= limit;
 
   return {
     blocked,
