@@ -51,11 +51,21 @@ const AVATAR_URL =
 export function MobileBottomNav() {
   const location = useLocation();
   const isAgencyUser = useCurrentUser().accountType === "agency";
-  const visibleTabs = tabs.filter((t) => {
-    if (t.promotorOnly && isAgencyUser) return false;
-    if (t.agencyOnly && !isAgencyUser) return false;
-    return true;
-  });
+  const visibleTabs = tabs
+    .filter((t) => {
+      if (t.promotorOnly && isAgencyUser) return false;
+      if (t.agencyOnly && !isAgencyUser) return false;
+      return true;
+    })
+    /* Label dinámico para /promociones · developer ve "Mis Promociones",
+     *  agency ve "Promociones". Ver REGLA en sidebar.
+     *  TODO(hybrid · pack activation) · cuando un workspace tenga ambos
+     *  roles, mostrar 2 tabs distintas (Promociones + Mis Promociones). */
+    .map((t) =>
+      t.url === "/promociones" && !isAgencyUser
+        ? { ...t, label: "Mis Promociones" }
+        : t,
+    );
 
   return (
     <nav
@@ -93,7 +103,7 @@ export function MobileBottomNav() {
             <tab.icon
               className="h-[22px] w-[22px]"
               strokeWidth={isActive ? 2.2 : 1.75}
-              fill={isActive && (tab.label === "Inicio" || tab.label === "Promociones") ? "currentColor" : "none"}
+              fill={isActive && (tab.label === "Inicio" || tab.label === "Promociones" || tab.label === "Mis Promociones") ? "currentColor" : "none"}
             />
           ) : null;
 

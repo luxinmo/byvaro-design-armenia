@@ -11,8 +11,9 @@ import { Button } from "@/components/ui/button";
 import { useDirty } from "@/components/settings/SettingsDirtyContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useOrgSetting } from "@/lib/orgSettings";
 
-const KEY = "byvaro.notifications.weekly.v1";
+const SETTING_KEY = "notifications.weekly";
 
 const DAYS = [
   { v: "mon", l: "Lun" }, { v: "tue", l: "Mar" }, { v: "wed", l: "Mié" },
@@ -35,22 +36,24 @@ const DEFAULT: State = {
   includeSales: true, includeRecords: true, includeAgencies: true, includeMicrosites: false,
 };
 
-function load(): State {
-  if (typeof window === "undefined") return DEFAULT;
-  try { return { ...DEFAULT, ...JSON.parse(window.localStorage.getItem(KEY) ?? "{}") }; }
-  catch { return DEFAULT; }
-}
-
 export default function AjustesNotificacionesResumen() {
-  const [state, setState] = useState<State>(() => load());
-  const [initial, setInitial] = useState(state);
+  const [persisted, setPersisted] = useOrgSetting<State>(SETTING_KEY, DEFAULT);
+  const [state, setState] = useState<State>(persisted);
+  const [initial, setInitial] = useState(persisted);
   const { setDirty } = useDirty();
+
+  /* Sync con DB cuando llega la hidratación. */
+  useEffect(() => {
+    setState(persisted);
+    setInitial(persisted);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(persisted)]);
 
   useEffect(() => { setDirty(JSON.stringify(state) !== JSON.stringify(initial)); }, [state, initial, setDirty]);
   const isDirty = JSON.stringify(state) !== JSON.stringify(initial);
 
   const save = () => {
-    window.localStorage.setItem(KEY, JSON.stringify(state));
+    setPersisted(state);
     setInitial(state);
     setDirty(false);
     toast.success("Configuración del resumen semanal guardada");

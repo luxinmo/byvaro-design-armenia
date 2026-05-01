@@ -907,6 +907,74 @@ solo, que deja la sección visible al togglear preview.
 
 ---
 
+## 🏷️ REGLA DE ORO · Estados de promoción (canónicos)
+
+> **Una promoción solo puede estar en UNO de estos 4 estados a la vez.
+> Cualquier UI que renderice un tag, filtro o aviso debe usar
+> EXACTAMENTE esta nomenclatura · cero variantes.**
+
+| Estado | Condición técnica | Significa |
+|---|---|---|
+| **Borrador** | `status === "incomplete"` (o legacy `"inactive"`) | Faltan datos · no se puede activar ni publicar |
+| **Activa** | `status === "active"` + `canShareWithAgencies === false` | Activada para uso interno · agencias NO la ven · botón compartir DESACTIVADO |
+| **Publicada** | `status === "active"` + `canShareWithAgencies === true` | Activa + compartida con agencias · visible al exterior · microsite vivo |
+| **Vendida** | `status === "sold-out"` | Todas las unidades vendidas · solo lectura |
+
+**Lifecycle:** Borrador → Activa → Publicada → Vendida (las dos últimas
+son simétricas via toggle de sharing).
+
+### Tabs / filtros
+
+- **Lado promotor (`/promociones`):** `Todas · Borrador · Activas ·
+  Publicadas · Vendidas`. "Borrador" se OCULTA si no hay ninguna ·
+  igual con "Vendidas".
+- **Lado agencia (`/promociones`):** `Todas · Activas · Vendidas`.
+  - "Activas" = lo que la agencia ve en su cartera (técnicamente
+    `status=active + canShare=true` desde la óptica del promotor ·
+    para la agencia es simplemente "activa y operable").
+  - "Vendidas" = solo si la agencia hizo al menos una venta cerrada
+    en una promo que después pasó a `sold-out`. Se OCULTA si no
+    aplica.
+    - **Admin de la agencia** · ve TODAS las promos vendidas donde
+      la agencia haya cerrado al menos una venta.
+    - **Member** · solo ve las promos vendidas donde ÉL hizo la
+      venta personalmente (cruzado por `sale.audit.actor.email`).
+      Una venta de su compañero NO le aparece.
+  - **No se muestran** "Borrador" ni "Publicadas" para la agencia ·
+    son distinciones internas del promotor que no aplican al rol
+    agencia.
+
+### Footer accionable de la card (lado promotor)
+
+- **Borrador** · 🟡 "Completa para activar"
+- **Activa** (no compartida) · 🟡 "Publica para compartir"
+- **Publicada / Vendida** · contador real `Users · N agencias`
+
+Lado agencia · NO mostrar avisos de publicación · ya filtra el pool
+para no enseñar promos en estados internos.
+
+### Source of truth
+
+- Tag visible: `statusTag(p)` en `src/pages/Promociones.tsx` ·
+  derivado SOLO de `p.status` + `p.canShareWithAgencies`. Nunca de
+  `canPublishPromotion()` (ese check es para el botón "Publicar",
+  no para el tag).
+- Filtros agency: en el `useMemo` de `allPromotions` cuando
+  `isAgencyUser`. Pool = (publicadas en cartera) ∪ (vendidas con
+  venta cerrada de mi agencia).
+
+### Cuando aterrice backend
+
+- Modelo SQL: tabla `promotions` con `status enum('incomplete',
+  'active','sold-out')` + `canShareWithAgencies boolean`. La columna
+  legacy `"inactive"` se migra a `"incomplete"`.
+- Endpoint `GET /api/promotions?tab=draft|active|published|sold-out`
+  filtra server-side · agency JWT recibe pool restringido por RLS.
+- Tab "Vendidas" para agency: backend chequea `EXISTS(SELECT 1 FROM
+  sales WHERE promotion_id=p.id AND agency_id=:me AND estado != 'caida')`.
+
+---
+
 ## 🪞 REGLA DE ORO · Mirror del panel del promotor desde la agencia
 
 > Cuando una agencia ve a "su" promotor, accede a las pantallas espejo

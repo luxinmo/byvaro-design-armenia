@@ -20,7 +20,7 @@
 
 import type { RoleOption } from "@/components/crear-promocion/types";
 import type { Promotion } from "@/data/promotions";
-import { loadEmpresa } from "./empresa";
+import { loadEmpresa, loadEmpresaForOrg } from "./empresa";
 
 /** Rol con default · si la promo no lo trae, "promotor". */
 export function resolveOwnerRole(
@@ -68,28 +68,30 @@ export function getOwnerRoleLabelFromString(
 }
 
 /** Nombre comercial del promotor / comercializador propietario de la
- *  promoción. Resuelve dinámicamente desde `byvaro-empresa`
- *  (`useEmpresa().nombreComercial`) · si el admin cambia el nombre en
- *  /ajustes/empresa/datos, todas las superficies (cards, hero,
+ *  promoción. Resuelve dinámicamente desde el `Empresa` del workspace
+ *  dueño (`promo.ownerOrganizationId`) · si el admin cambia el nombre
+ *  en /ajustes/empresa/datos, todas las superficies (cards, hero,
  *  registros, lista de la agencia colaboradora) lo reflejan sin
  *  redeploy.
  *
- *  Si no hay nombre guardado, devuelve el `developer` que traiga la
- *  promoción (legacy seeds). NUNCA cae al label genérico
- *  "Promotor" / "Comercializador" como nombre comercial — esa copy es
- *  el rol, no el nombre, y mostrarla como nombre engaña al usuario.
- *  Si ambos están vacíos, devuelve "" y el caller decide si oculta la
- *  línea o muestra placeholder.
+ *  Multi-tenant · usa `loadEmpresaForOrg(promo.ownerOrganizationId)`
+ *  · NUNCA `loadEmpresa()` global · si no, AEDAS verá "Luxinmo Real
+ *  Estate" en sus propias cards porque la legacy global lee siempre
+ *  `developer-default`. Sin `ownerOrganizationId` cae al `developer`
+ *  que traiga la promoción (legacy seeds). NUNCA usa el label
+ *  genérico "Promotor"/"Comercializador" como nombre comercial · esa
+ *  copy es el rol, no el nombre.
  *
- *  Single-tenant mock · `byvaro-empresa` siempre contiene los datos
- *  del developer. Backend producción · cambiar a `GET
- *  /api/promociones/:id` que devuelve `ownerOrganization.commercialName`. */
+ *  Backend producción · cambiar a `GET /api/promociones/:id` que
+ *  devuelve `ownerOrganization.commercialName` ya resuelto · este
+ *  helper se simplifica a un getter del campo. */
 export function getPromoterDisplayName(
-  promo: Pick<Promotion, "developer" | "ownerRole"> | null | undefined,
+  promo: Pick<Promotion, "developer" | "ownerRole" | "ownerOrganizationId"> | null | undefined,
 ): string {
   if (typeof window !== "undefined") {
     try {
-      const stored = loadEmpresa();
+      const orgId = promo?.ownerOrganizationId;
+      const stored = orgId ? loadEmpresaForOrg(orgId) : loadEmpresa();
       const comercial = stored?.nombreComercial?.trim();
       if (comercial) return comercial;
       const razon = stored?.razonSocial?.trim();

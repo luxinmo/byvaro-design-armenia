@@ -27,12 +27,11 @@ export type Promotion = {
   constructionProgress?: number;
   hasShowFlat?: boolean;
   buildingType?: BuildingType;
-  activity?: {
-    inquiries: number;
-    reservations: number;
-    visits: number;
-    trend: number;
-  };
+  /* `activity` ELIMINADO del tipo · era seed estático. La actividad
+   *  real se computa en vivo desde registros + visitas + ventas via
+   *  `usePromoActivity(promoId)` / `getPromoActivity()` en
+   *  `src/lib/promoActivity.ts`. NUNCA volver a meter este campo
+   *  como dato estático del seed. */
   /** Modo de validación · `directo` o `por_visita`. Si falta, asumir
    *  `por_visita` (alineado con la copy histórica del wizard que
    *  prometía preregistro tras visita). Ver `WizardState.modoValidacionRegistro`
@@ -109,7 +108,6 @@ const RAW_PROMOTIONS: Promotion[] = [
     constructionProgress: 45,
     hasShowFlat: true,
     buildingType: "plurifamiliar",
-    activity: { inquiries: 34, reservations: 6, visits: 18, trend: 65 },
   },
   {
     id: "2",
@@ -136,7 +134,6 @@ const RAW_PROMOTIONS: Promotion[] = [
     constructionProgress: 92,
     hasShowFlat: true,
     buildingType: "plurifamiliar",
-    activity: { inquiries: 48, reservations: 8, visits: 22, trend: 120 },
   },
   {
     id: "3",
@@ -163,7 +160,6 @@ const RAW_PROMOTIONS: Promotion[] = [
     constructionProgress: 10,
     hasShowFlat: false,
     buildingType: "unifamiliar-multiple",
-    activity: { inquiries: 12, reservations: 2, visits: 5, trend: 15 },
   },
   {
     id: "4",
@@ -189,7 +185,6 @@ const RAW_PROMOTIONS: Promotion[] = [
     constructionProgress: 60,
     hasShowFlat: true,
     buildingType: "plurifamiliar",
-    activity: { inquiries: 8, reservations: 1, visits: 3, trend: -5 },
   },
   {
     id: "5",
@@ -216,7 +211,6 @@ const RAW_PROMOTIONS: Promotion[] = [
     constructionProgress: 98,
     hasShowFlat: false,
     buildingType: "plurifamiliar",
-    activity: { inquiries: 41, reservations: 5, visits: 15, trend: 85 },
   },
   {
     id: "6",
@@ -242,7 +236,6 @@ const RAW_PROMOTIONS: Promotion[] = [
     constructionProgress: 30,
     hasShowFlat: false,
     buildingType: "unifamiliar-multiple",
-    activity: { inquiries: 5, reservations: 0, visits: 1, trend: -10 },
   },
   {
     id: "7",

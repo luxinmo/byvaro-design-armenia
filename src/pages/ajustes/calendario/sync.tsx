@@ -29,8 +29,9 @@ import { Button } from "@/components/ui/button";
 import { getAllTeamMembers, memberInitials, getMemberAvatarUrl } from "@/lib/team";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useOrgSetting } from "@/lib/orgSettings";
 
-const KEY_GOOGLE = "byvaro.calendar.googleSync.v1";
+const SETTING_KEY = "calendar.googleSync";
 
 type GoogleSyncStatus = Record<string, {
   connected: boolean;
@@ -38,26 +39,18 @@ type GoogleSyncStatus = Record<string, {
   lastSyncAt?: string; // ISO
 }>;
 
-function load(): GoogleSyncStatus {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(KEY_GOOGLE);
-    return raw ? (JSON.parse(raw) as GoogleSyncStatus) : {};
-  } catch {
-    return {};
-  }
-}
-
-function save(s: GoogleSyncStatus): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY_GOOGLE, JSON.stringify(s));
-}
-
 export default function AjustesCalendarioSync() {
   const teamMembers = getAllTeamMembers().filter((m) => !m.status || m.status === "active");
-  const [statusMap, setStatusMap] = useState<GoogleSyncStatus>(() => load());
+  const [persisted, setPersisted] = useOrgSetting<GoogleSyncStatus>(SETTING_KEY, {});
+  const [statusMap, setStatusMap] = useState<GoogleSyncStatus>(persisted);
 
-  useEffect(() => save(statusMap), [statusMap]);
+  useEffect(() => {
+    setStatusMap(persisted);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(persisted)]);
+
+  /* Cualquier cambio se persiste en write-through al org_settings. */
+  useEffect(() => { setPersisted(statusMap); /* eslint-disable-next-line */ }, [JSON.stringify(statusMap)]);
 
   const connect = (userId: string, email: string) => {
     setStatusMap((m) => ({

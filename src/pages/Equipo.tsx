@@ -42,43 +42,30 @@ import { toast } from "sonner";
 import { MemberFormDialog } from "@/components/team/MemberFormDialog";
 import { InviteMemberDialog } from "@/components/team/InviteMemberDialog";
 import { DeactivateUserDialog } from "@/components/team/DeactivateUserDialog";
-import { emitMembersChange } from "@/lib/meStorage";
 import type { HandoverPlan } from "@/lib/assetOwnership";
+import { useWorkspaceMembers } from "@/lib/useWorkspaceMembers";
+import { useUserSetting } from "@/lib/userSettings";
 
-/* Storage por workspace · `byvaro.organization.members.v4:${tenant}`.
- * Antes era una key global que fugaba el equipo del promotor a las
- * agencias · ver REGLA DE ORO multi-tenant en CLAUDE.md. */
-function persistAt(workspaceKey: string, m: TeamMember[]) {
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(teamStorageKey(workspaceKey), JSON.stringify(m));
-    /* Notificamos a meStorage · sidebar, perfil personal y cualquier
-     * consumer de useCurrentUser/useMe se refrescan en caliente. */
-    emitMembersChange();
-  }
-}
+/* `persistAt` eliminado · usamos `useWorkspaceMembers().setMembers()`
+ * que ya hace write-through a Supabase. */
 
 /* ═══════════════════════════════════════════════════════════════════
    Página
    ═══════════════════════════════════════════════════════════════════ */
 
 type ViewMode = "gallery" | "list";
-const VIEW_KEY = "byvaro.equipo.view.v1";
+const VIEW_SETTING_KEY = "equipo.view";
 
 export default function Equipo() {
   const user = useCurrentUser();
   const canEdit = isAdmin(user);
   const workspaceKey = currentWorkspaceKey(user);
-  /* Re-leer desde la key correcta cada vez que cambia el workspace
-   * (account switcher: developer → agency en otra pestaña, etc.). */
-  const [members, setMembers] = useState<TeamMember[]>(() => getMembersForWorkspace(workspaceKey));
-  useEffect(() => {
-    setMembers(getMembersForWorkspace(workspaceKey));
-  }, [workspaceKey]);
+  /* Source of truth · `useWorkspaceMembers` hace write-through a
+   *  `organization_members` (Supabase) cada vez que llamamos a
+   *  `setMembers`. Re-lee al cambiar workspace. */
+  const { members, setMembers } = useWorkspaceMembers(workspaceKey);
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<ViewMode>(() => {
-    if (typeof window === "undefined") return "gallery";
-    return (window.localStorage.getItem(VIEW_KEY) as ViewMode) ?? "gallery";
-  });
+  const [view, setView] = useUserSetting<ViewMode>(VIEW_SETTING_KEY, "gallery");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   /** Miembro que el admin quiere desactivar · abre DeactivateUserDialog
@@ -92,14 +79,6 @@ export default function Equipo() {
   );
   const openEdit = (id: string) => setEditingId(id);
   const closeEdit = () => setEditingId(null);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") window.localStorage.setItem(VIEW_KEY, view);
-  }, [view]);
-
-  useEffect(() => {
-    persistAt(workspaceKey, members);
-  }, [members, workspaceKey]);
 
   const update = (id: string, patch: Partial<TeamMember>) =>
     setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));

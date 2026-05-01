@@ -64,9 +64,15 @@ export type GuardResult = {
 function counterFor(action: PaywallTrigger, c: UsageCounters): number | null {
   switch (action) {
     case "createPromotion": return c.activePromotions;
-    case "inviteAgency":    return c.invitedAgencies;
-    case "acceptRegistro":  return c.registros;
-    case "near_limit":      return null; // no aplica · el banner ya elige
+    /* `inviteAgency` y `acceptRegistro` ya NO son límites del producto
+     *  · se quedan como no-op para no romper consumers existentes
+     *  (`InvitarAgenciaModal`, etc.). El guard nunca bloqueará estas
+     *  acciones porque el límite es ∞ (ver `limitFor`).
+     *  TODO(cleanup): cuando todos los callers dejen de pedir el guard
+     *  para estas dos acciones, eliminar también del PaywallTrigger. */
+    case "inviteAgency":    return null;
+    case "acceptRegistro":  return null;
+    case "near_limit":      return null;
   }
 }
 
@@ -74,8 +80,10 @@ function limitFor(action: PaywallTrigger, tier: PlanTier): number {
   const lim = PLAN_LIMITS[tier];
   switch (action) {
     case "createPromotion": return lim.activePromotions;
-    case "inviteAgency":    return lim.invitedAgencies;
-    case "acceptRegistro":  return lim.registros;
+    /* Acciones sin límite · ver counterFor. Devolvemos ∞ para que el
+     *  guard nunca bloquee aunque alguien siga llamando al hook. */
+    case "inviteAgency":    return Number.POSITIVE_INFINITY;
+    case "acceptRegistro":  return Number.POSITIVE_INFINITY;
     case "near_limit":      return Number.POSITIVE_INFINITY;
   }
 }

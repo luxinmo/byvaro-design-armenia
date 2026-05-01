@@ -50,7 +50,61 @@ const DEFAULT_SIGNATURES: EmailSignature[] = [
   },
 ];
 
-/* ══════ Persistencia ══════ */
+/* ══════ Persistencia ══════
+ * Source of truth · `public.email_signatures` (Supabase). El
+ * localStorage cache (`byvaro.emailSignatures.v1`) solo existe para
+ * que `loadSignatures()` sea síncrono · NO es la fuente de verdad. */
+
+async function getCurrentOrgUser(): Promise<{ orgId: string; userId: string } | null> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");
+    if (!isSupabaseConfigured) return null;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data } = await supabase
+      .from("organization_members")
+      .select("organization_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const orgId = (data?.organization_id as string) ?? null;
+    if (!orgId) return null;
+    return { orgId, userId: user.id };
+  } catch { return null; }
+}
+
+export async function hydrateSignaturesFromSupabase(): Promise<EmailSignature[] | null> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");
+    if (!isSupabaseConfigured) return null;
+    const ctx = await getCurrentOrgUser();
+    if (!ctx) return null;
+    const { data, error } = await supabase
+      .from("email_signatures")
+      .select("id, name, body, is_default, metadata")
+      .eq("user_id", ctx.userId)
+      .order("created_at");
+    if (error) {
+      console.warn("[signatures:hydrate]", error.message);
+      return null;
+    }
+    const sigs: EmailSignature[] = (data ?? []).map((r) => ({
+      id: r.id as string,
+      name: r.name as string,
+      html: r.body as string,
+      isDefault: r.is_default as boolean,
+      accountId: ((r.metadata as { accountId?: string })?.accountId) ?? null,
+    }));
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sigs));
+      const def = sigs.find((s) => s.isDefault);
+      if (def) window.localStorage.setItem(DEFAULT_ID_KEY, def.id);
+    }
+    return sigs;
+  } catch (e) {
+    console.warn("[signatures:hydrate] skipped:", e);
+    return null;
+  }
+}
 
 export function loadSignatures(): EmailSignature[] {
   if (typeof window === "undefined") return DEFAULT_SIGNATURES;
@@ -64,9 +118,40 @@ export function loadSignatures(): EmailSignature[] {
   }
 }
 
+/** Replace-all del set de firmas del usuario actual. */
 export function saveSignatures(list: EmailSignature[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const ctx = await getCurrentOrgUser();
+      if (!ctx) return;
+      /* Replace-all · borramos las del user y volvemos a insertar. */
+      const { error: delErr } = await supabase
+        .from("email_signatures")
+        .delete()
+        .eq("user_id", ctx.userId);
+      if (delErr) console.warn("[signatures:save:delete]", delErr.message);
+      if (list.length === 0) return;
+      const rows = list.map((s) => ({
+        id: s.id.startsWith("sig-") ? undefined : s.id,
+        organization_id: ctx.orgId,
+        user_id: ctx.userId,
+        name: s.name,
+        body: s.html,
+        is_default: !!s.isDefault,
+        metadata: { accountId: s.accountId ?? null },
+      }));
+      const { error: insErr } = await supabase
+        .from("email_signatures")
+        .insert(rows);
+      if (insErr) console.warn("[signatures:save:insert]", insErr.message);
+    } catch (e) {
+      console.warn("[signatures:save] skipped:", e);
+    }
+  })();
 }
 
 export function getDefaultSignatureId(): string | null {
@@ -78,6 +163,26 @@ export function setDefaultSignatureId(id: string | null) {
   if (typeof window === "undefined") return;
   if (id) window.localStorage.setItem(DEFAULT_ID_KEY, id);
   else window.localStorage.removeItem(DEFAULT_ID_KEY);
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const ctx = await getCurrentOrgUser();
+      if (!ctx) return;
+      /* Limpia is_default de todas y marca la nueva. */
+      await supabase.from("email_signatures")
+        .update({ is_default: false })
+        .eq("user_id", ctx.userId);
+      if (id) {
+        await supabase.from("email_signatures")
+          .update({ is_default: true })
+          .eq("user_id", ctx.userId)
+          .eq("id", id);
+      }
+    } catch (e) {
+      console.warn("[signatures:setDefault] skipped:", e);
+    }
+  })();
 }
 
 /**

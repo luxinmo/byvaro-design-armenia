@@ -26,11 +26,20 @@ import type {
   SubUni, SubVarias, EstadoPromocion, FaseConstruccion, EstiloVivienda,
 } from "@/components/crear-promocion/types";
 import { defaultWizardState } from "@/components/crear-promocion/types";
-import { canPublishWizard } from "@/lib/publicationRequirements"; // valida requisitos (fotos, unidades, plan pagos, ubicación, entrega, estado, comisiones)
+import { promotions } from "@/data/promotions";
+import { developerOnlyPromotions } from "@/data/developerPromotions";
+import { unitsByPromotion } from "@/data/units";
+import { promotionToWizardState } from "@/lib/promotionToWizardState";
+import {
+  getOverride as getPromoWizardOverride,
+  saveOverride as savePromoWizardOverride,
+} from "@/lib/promotionWizardOverrides";
+import { canPublishWizard, getMissingForWizard } from "@/lib/publicationRequirements";
+import { AlertTriangle } from "lucide-react";
 import { saveDraft as persistDraft, getDraft, deleteDraft } from "@/lib/promotionDrafts";
 import { createPromotionFromWizard } from "@/lib/promotionsStorage";
 import { currentOrgIdentity } from "@/lib/orgCollabRequests";
-import { useCurrentUser } from "@/lib/currentUser";
+import { useCurrentUser, isAdmin } from "@/lib/currentUser";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useUsageGuard } from "@/lib/usageGuard";
 import {
@@ -152,11 +161,34 @@ export default function CrearPromocion() {
   const createGuard = useUsageGuard("createPromotion");
   const [searchParams] = useSearchParams();
   const draftIdParam = searchParams.get("draft");
-  // Carga inicial · prioridad: draft del query param > legacy migración > default
+  /* `?promotionId=X` · cuando el wizard se abre desde la ficha de una
+   *  promoción YA creada (botón "Completar todo" o "Editar"), hidratamos
+   *  el `WizardState` con todos los datos existentes · evita que pasos
+   *  ya rellenados aparezcan como pendientes. Sin esto, el wizard
+   *  arrancaba con `defaultWizardState` (vacío) aunque el `Promotion`
+   *  estuviera 95% completo · inconsistencia que confundía al user. */
+  const promotionIdParam = searchParams.get("promotionId");
+  // Carga inicial · prioridad: draft > promotionId hydration > legacy > default
   const initialDraft = useMemo(() => {
     if (draftIdParam) {
       const d = getDraft(draftIdParam);
       if (d) return { id: d.id, state: d.state };
+    }
+    /* Hidratar desde Promotion existente · cubre marketplace seeds y
+     *  developerOnlyPromotions. Buscamos por id O por code (PR44444…).
+     *  PRIORIDAD · si hay override guardado del wizard sobre esa
+     *  misma promo, lo cargamos antes que el mapper · preserva edits
+     *  del user (descripción, fotos extra, ajustes de comisiones)
+     *  entre sesiones. */
+    if (promotionIdParam) {
+      const all = [...promotions, ...developerOnlyPromotions];
+      const found = all.find((p) => p.id === promotionIdParam || p.code === promotionIdParam);
+      if (found) {
+        const override = getPromoWizardOverride(found.id);
+        if (override) return { id: null, state: override };
+        const units = unitsByPromotion[found.id] ?? [];
+        return { id: null, state: promotionToWizardState(found, units) };
+      }
     }
     const legacy = loadLegacyDraft(); // se consume y borra la legacy key
     if (legacy) return { id: null, state: legacy };
@@ -166,6 +198,15 @@ export default function CrearPromocion() {
 
   const [state, setState] = useState<WizardState>(initialDraft.state);
   const [draftId, setDraftId] = useState<string | null>(initialDraft.id);
+
+  /* Resuelve `?promotionId=X` al `id` interno · activa el flujo de
+   *  override (save/load) en vez del flujo de drafts genérico. */
+  const resolvedPromotionId = useMemo(() => {
+    if (!promotionIdParam) return null;
+    const all = [...promotions, ...developerOnlyPromotions];
+    const found = all.find((p) => p.id === promotionIdParam || p.code === promotionIdParam);
+    return found?.id ?? null;
+  }, [promotionIdParam]);
   // Modo "sólo completar lo que falta" · activado desde la ficha. El
   // wizard salta todos los pasos ya completados y al terminar vuelve a
   // la ficha (returnTo) en vez de ir al paso de revisión.
@@ -186,6 +227,9 @@ export default function CrearPromocion() {
 
   // Auto-save con debounce (~400ms). Evita escribir localStorage en cada
   // keypress y da tiempo a mostrar el estado "Guardando…".
+  // Si estamos editando una promo existente (`resolvedPromotionId`),
+  // guardamos en el override store (por-promo) en vez de en el draft
+  // genérico · así los cambios persisten al volver a abrir la promo.
   useEffect(() => {
     if (isFirstRenderRef.current) {
       isFirstRenderRef.current = false;
@@ -194,6 +238,12 @@ export default function CrearPromocion() {
     setSaving(true);
     if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = window.setTimeout(() => {
+      if (resolvedPromotionId) {
+        savePromoWizardOverride(resolvedPromotionId, state);
+        setSavedAt(Date.now());
+        setSaving(false);
+        return;
+      }
       const res = persistDraft(state, draftId ?? undefined);
       if (!draftId) setDraftId(res.id);
       if (!res.ok && res.error === "quota") {
@@ -209,7 +259,7 @@ export default function CrearPromocion() {
     return () => {
       if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
     };
-  }, [state]);
+  }, [state, resolvedPromotionId]);
 
   /* Pasos visibles según ramificación (depende de tipo/subUni) */
   const visibleSteps = useMemo(() => getAllSteps(state).map(s => s.id), [state]);
@@ -351,9 +401,14 @@ export default function CrearPromocion() {
 
   /* Al entrar en modo `onlyMissing`, saltar directamente al primer
      paso incompleto para que el usuario no vea el "role" / "tipo"
-     ya resueltos. */
+     ya resueltos.
+     EXCEPCIÓN · si la URL trae `?step=X` explícito, respetamos ese
+     step aunque `onlyMissing=1` esté activo · permite que el user
+     entre a un step concreto (ej. revisar la descripción que ya
+     escribió) sin que el wizard le redirija a otro pendiente. */
   useEffect(() => {
     if (!onlyMissing) return;
+    if (searchParams.get("step")) return; // respeta step explícito
     if (isStepComplete(state, step)) {
       const firstMissing = visibleSteps.find((s) => !isStepComplete(state, s));
       if (firstMissing) setStep(firstMissing);
@@ -438,6 +493,12 @@ export default function CrearPromocion() {
    *  que el id se conserve y no se cree un draft duplicado. */
   const flushSave = (): string => {
     if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
+    /* Editando promo existente · save al override store · NO crea
+     *  draft huérfano. Idempotente (mismo promotionId siempre). */
+    if (resolvedPromotionId) {
+      savePromoWizardOverride(resolvedPromotionId, state);
+      return resolvedPromotionId;
+    }
     const res = persistDraft(state, draftId ?? undefined);
     if (!draftId) setDraftId(res.id);
     if (!res.ok && res.error === "quota") {
@@ -604,6 +665,54 @@ export default function CrearPromocion() {
                   </h1>
                   <p className="text-sm text-muted-foreground mt-1.5">{meta.subtitle}</p>
                 </div>
+
+                {/* Banner de campos pendientes · solo si quedan
+                 *  obligatorios pendientes para publicar. Click en el
+                 *  chip salta al step correspondiente. Visible en TODOS
+                 *  los steps · refuerza la sensación de progreso y
+                 *  enseña dónde están los huecos. */}
+                {(() => {
+                  const missing = getMissingForWizard(state);
+                  if (missing.length === 0) return null;
+                  /* Mapeo `jumpTo` (key del wizard) ↔ StepId del wizard. */
+                  const jumpToStepId: Record<string, StepId> = {
+                    multimedia: "multimedia",
+                    crear_unidades: "crear_unidades",
+                    colaboradores: "colaboradores",
+                    plan_pagos: "plan_pagos",
+                    info_basica: "info_basica",
+                    detalles: "detalles",
+                    estado: "estado",
+                  };
+                  return (
+                    <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4">
+                      <div className="flex items-start gap-2.5 mb-2.5">
+                        <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" strokeWidth={1.75} />
+                        <p className="text-sm font-semibold text-foreground">
+                          Falta{missing.length === 1 ? "" : "n"} {missing.length} campo{missing.length === 1 ? "" : "s"} para publicar
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {missing.map((m) => {
+                          const target = m.jumpTo ? jumpToStepId[m.jumpTo] : undefined;
+                          const clickable = !!target && target !== step;
+                          return (
+                            <button
+                              key={m.key}
+                              type="button"
+                              disabled={!clickable}
+                              onClick={() => target && setStep(target)}
+                              className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-background hover:bg-destructive/10 hover:border-destructive/60 px-2.5 py-0.5 text-[11.5px] font-medium text-destructive transition-colors disabled:cursor-default disabled:opacity-60"
+                              title={clickable ? "Ir a este paso" : "Estás en este paso · complétalo abajo"}
+                            >
+                              {m.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* ─── Step: role ─── */}
                 {step === "role" && (
@@ -1126,9 +1235,17 @@ export default function CrearPromocion() {
                   <MultimediaStep state={state} update={update} />
                 )}
 
-                {/* ─── Step: colaboradores ─── */}
+                {/* ─── Step: colaboradores ───
+                  * `canManage` · solo admin del workspace puede tocar el
+                  * toggle de colaboración. Cuando llegue
+                  * `Promotion.createdByUserId`, sumamos el OR de creador.
+                  * TODO(backend): `isAdmin(user) || promo.createdByUserId === user.id`. */}
                 {step === "colaboradores" && (
-                  <ColaboradoresStep state={state} update={update} />
+                  <ColaboradoresStep
+                    state={state}
+                    update={update}
+                    canManage={isAdmin(currentUser)}
+                  />
                 )}
 
                 {/* ─── Step: crear_unidades ─── */}

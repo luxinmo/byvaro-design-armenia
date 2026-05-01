@@ -11,16 +11,15 @@
  * Estructura SQL equivalente:
  *   SELECT * FROM promotions WHERE owner_organization_id = :orgId
  *
- * El frontend NO debe leer `promotions`/`developerOnlyPromotions`/
- * `EXTERNAL_PROMOTOR_PORTFOLIO` directamente desde un componente que
- * pinta data per-tenant · usa este helper para que el filtro sea
- * explícito y trazable.
+ * Único almacén:
+ *   · `promotions.ts` + `developerOnlyPromotions.ts` con
+ *     `ownerOrganizationId` poblado en cada fila. Sin owner explícito
+ *     se asume `developer-default` (Luxinmo legacy).
  *
- * Mock single-tenant (estado actual):
- *   · "developer-default" → promociones de Luxinmo (`promotions.ts` +
- *     `developerOnlyPromotions.ts`).
- *   · "prom-1", "prom-2"…  → mocks de portfolio para promotores
- *     externos (`EXTERNAL_PROMOTOR_PORTFOLIO`).
+ *  Histórico · existió un `EXTERNAL_PROMOTOR_PORTFOLIO` con entries
+ *  lite para promotores externos. Migrado en 2026-05-01 · todo vive
+ *  en `developerOnlyPromotions` con shape `DevPromotion` completo
+ *  (clickeable, scopeable, único origen).
  *
  * Cuando aterrice backend:
  *   - Una sola tabla `promotions` con `owner_organization_id NOT NULL`.
@@ -31,10 +30,6 @@
 
 import { promotions, type Promotion } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion } from "@/data/developerPromotions";
-import {
-  EXTERNAL_PROMOTOR_PORTFOLIO,
-  type ExternalPortfolioEntry,
-} from "@/data/promotores";
 
 /** ID canónico del único developer en el mock single-tenant. */
 export const DEFAULT_DEVELOPER_ORG_ID = "developer-default";
@@ -48,31 +43,19 @@ export const DEFAULT_DEVELOPER_ORG_ID = "developer-default";
  *    · priceMax · totalUnits · availableUnits · delivery? ·
  *    ownerOrganizationId.
  */
-export type PortfolioItem = Promotion | DevPromotion | ExternalPortfolioEntry;
+export type PortfolioItem = Promotion | DevPromotion;
 
 /** Devuelve todas las promociones cuyo `ownerOrganizationId === orgId`.
  *
- *  Para `developer-default` (Luxinmo) une las dos fuentes legacy
- *  (`promotions.ts` + `developerOnlyPromotions.ts`) filtradas por
- *  owner explícito o el default de compatibilidad.
- *
- *  Para promotores externos (`prom-X`) une el seed lite
- *  `EXTERNAL_PROMOTOR_PORTFOLIO[orgId]` con cualquier `DevPromotion`
- *  o `Promotion` que tenga `ownerOrganizationId === orgId`. Esto
- *  permite añadir copias completas (mismo shape DevPromotion) de
- *  promociones de Luxinmo asignadas a un externo · ej. la copia
- *  de PRM-0051 a AEDAS.
- *
- *  Nota: en el mock, los seeds antiguos sin `ownerOrganizationId`
- *  asumen `developer-default` (compatibilidad). El backend escribirá
- *  el campo en TODAS las filas, eliminando este fallback.
- */
+ *  Une las dos fuentes legacy (`promotions.ts` + `developerOnlyPromotions.ts`)
+ *  y filtra por `ownerOrganizationId === orgId`. Las filas sin owner
+ *  explícito asumen `developer-default` (compatibilidad single-tenant
+ *  histórica · el backend escribirá el campo en TODAS las filas y
+ *  eliminará este fallback). */
 export function getPromotionsByOwner(orgId: string): PortfolioItem[] {
-  const owned = [...promotions, ...developerOnlyPromotions].filter(
+  return [...promotions, ...developerOnlyPromotions].filter(
     (p) => (p.ownerOrganizationId ?? DEFAULT_DEVELOPER_ORG_ID) === orgId,
   );
-  if (orgId === DEFAULT_DEVELOPER_ORG_ID) return owned;
-  return [...(EXTERNAL_PROMOTOR_PORTFOLIO[orgId] ?? []), ...owned];
 }
 
 /** Conveniencia · solo activas / incompletas (no sold-out, no

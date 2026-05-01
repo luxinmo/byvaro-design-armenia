@@ -115,7 +115,12 @@ export function PromocionesMap({ promotions: promos }: { promotions: DevPromotio
           />
           <FitBounds points={points} />
           {geoPromos.map(({ promo, coords }) => {
-            const trending = (promo.activity?.trend ?? 0) >= 50;
+            /* `activity` se eliminó del seed · trending dinámico debe
+             *  pasarse por prop o computarse aquí. Por ahora false ·
+             *  el mapa no necesita marcar trending hasta que aterrice
+             *  backend. TODO(backend): aceptar `trendingIds: Set<string>`
+             *  por prop calculado en el caller con `usePromoActivity`. */
+            const trending = false;
             return (
               <Marker
                 key={promo.id}
@@ -207,7 +212,12 @@ export function PromocionesMap({ promotions: promos }: { promotions: DevPromotio
             </div>
           ) : (
             geoPromos.map(({ promo }) => {
-              const trending = (promo.activity?.trend ?? 0) >= 50;
+              /* `activity` se eliminó del seed · trending dinámico debe
+             *  pasarse por prop o computarse aquí. Por ahora false ·
+             *  el mapa no necesita marcar trending hasta que aterrice
+             *  backend. TODO(backend): aceptar `trendingIds: Set<string>`
+             *  por prop calculado en el caller con `usePromoActivity`. */
+            const trending = false;
               return (
                 <article
                   key={promo.id}

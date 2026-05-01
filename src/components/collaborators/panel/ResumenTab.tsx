@@ -25,7 +25,6 @@ import { cn } from "@/lib/utils";
 import type { Agency } from "@/data/agencies";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { promotions } from "@/data/promotions";
-import { EXTERNAL_PROMOTOR_PORTFOLIO } from "@/data/promotores";
 import {
   CONTRACT_NEAR_EXPIRY_DAYS,
   daysUntilContractExpiry,
@@ -139,31 +138,13 @@ function usePromoCatalog() {
         constructionProgress: p.constructionProgress,
       });
     }
-    /* Portfolio externo · `EXTERNAL_PROMOTOR_PORTFOLIO` cubre las
-     *  promociones de AEDAS, Neinor, Habitat, Metrovacesa con shape
-     *  ligero. Las añadimos aquí para que el panel de un developer
-     *  externo muestre su portfolio real (no solo el `dev-2-aedas-copy`
-     *  de developerOnlyPromotions). */
-    for (const [orgId, entries] of Object.entries(EXTERNAL_PROMOTOR_PORTFOLIO)) {
-      for (const e of entries) {
-        if (m.has(e.id)) continue;
-        m.set(e.id, {
-          id: e.id,
-          ownerOrganizationId: e.ownerOrganizationId ?? orgId,
-          canShareWithAgencies: true, // lite seed · siempre shareable por default
-          name: e.name,
-          active: e.status === "active" || !e.status,
-          status: (e.status as PromoStatus) ?? "active",
-          location: e.location,
-          image: e.image,
-          availableUnits: e.availableUnits,
-          totalUnits: e.totalUnits,
-          priceMin: e.priceMin,
-          priceMax: e.priceMax,
-          delivery: e.delivery,
-        });
-      }
-    }
+    /* Histórico · existió un loop sobre `EXTERNAL_PROMOTOR_PORTFOLIO`
+     *  para que la ficha de promotores externos (AEDAS, Neinor, etc.)
+     *  no saliera vacía. Migrado en 2026-05-01 · todas esas promos
+     *  viven ya en `developerOnlyPromotions` con shape DevPromotion
+     *  completo (entries `dev-aedas-1`/`dev-aedas-2`/`dev-neinor-1`/
+     *  `dev-neinor-2`/`dev-habitat-1`/`dev-metrovacesa-1`/
+     *  `dev-metrovacesa-2`). El primer loop arriba ya las cubre. */
     return m;
   }, []);
 }

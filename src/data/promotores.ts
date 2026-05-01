@@ -208,106 +208,22 @@ export const promotores: Agency[] = [
   },
 ];
 
-/* ═══════════════════════════════════════════════════════════════════
-   Mini portfolio por promotor externo · solo para PortfolioShowcase.
-
-   Propósito: cuando una agencia (o el workspace logueado actuando
-   como comercializador) entra a `/promotor/prom-1`, debe ver el
-   portfolio del PROMOTOR mostrado, no las promociones del
-   workspace logueado. En el mock no tenemos un dataset completo de
-   promociones por promotor externo · usamos esta tabla con 2
-   promociones representativas de cada uno.
-
-   Cuando aterrice backend: `GET /api/promotor/:id/portfolio?status=active`
-   reemplaza esto.
-
-   Shape compatible con `PortfolioShowcase` (subset de `Promotion`).
-   ═══════════════════════════════════════════════════════════════════ */
-export interface ExternalPortfolioEntry {
-  id: string;
-  /** ID del workspace dueño (FK a `organizations`) · siempre el id
-   *  del promotor externo (`prom-1`, `prom-2`…). Cuando llegue
-   *  multi-tenant real, este campo se valida server-side. */
-  ownerOrganizationId: string;
-  name: string;
-  location: string;
-  image?: string;
-  status?: "active" | "incomplete" | "inactive" | "sold-out";
-  badge?: "new" | "last-units";
-  priceMin: number;
-  priceMax: number;
-  totalUnits: number;
-  availableUnits: number;
-  delivery?: string;
-}
-
-export const EXTERNAL_PROMOTOR_PORTFOLIO: Record<string, ExternalPortfolioEntry[]> = {
-  "prom-1": [
-    {
-      id: "aedas-1", ownerOrganizationId: "prom-1", name: "Célere Castellana",
-      location: "Madrid · Chamartín",
-      image: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&h=600&fit=crop",
-      status: "active", badge: "new",
-      priceMin: 580_000, priceMax: 1_400_000,
-      totalUnits: 96, availableUnits: 38, delivery: "Q2 2027",
-    },
-    {
-      id: "aedas-2", ownerOrganizationId: "prom-1", name: "Aura Rivas",
-      location: "Rivas Vaciamadrid",
-      image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&h=600&fit=crop",
-      status: "active",
-      priceMin: 320_000, priceMax: 480_000,
-      totalUnits: 142, availableUnits: 17, delivery: "Q4 2025",
-    },
-  ],
-  "prom-2": [
-    {
-      id: "neinor-1", ownerOrganizationId: "prom-2", name: "Edificio Bilbao Alta",
-      location: "Bilbao · Abando",
-      image: "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&h=600&fit=crop",
-      status: "active", badge: "last-units",
-      priceMin: 420_000, priceMax: 950_000,
-      totalUnits: 56, availableUnits: 4, delivery: "Q1 2026",
-    },
-    {
-      id: "neinor-2", ownerOrganizationId: "prom-2", name: "Vegas del Saz",
-      location: "Madrid · El Saz",
-      image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&h=600&fit=crop",
-      status: "active",
-      priceMin: 290_000, priceMax: 410_000,
-      totalUnits: 82, availableUnits: 22, delivery: "Q3 2026",
-    },
-  ],
-  "prom-3": [
-    {
-      id: "habitat-1", ownerOrganizationId: "prom-3", name: "Habitat Diagonal Mar",
-      location: "Barcelona · Diagonal Mar",
-      image: "https://images.unsplash.com/photo-1565953522043-baea26b83b7e?w=800&h=600&fit=crop",
-      status: "active",
-      priceMin: 510_000, priceMax: 1_200_000,
-      totalUnits: 64, availableUnits: 11, delivery: "Q4 2026",
-    },
-  ],
-  "prom-4": [
-    {
-      id: "metrovacesa-1", ownerOrganizationId: "prom-4", name: "Mirador del Levante",
-      location: "Valencia · Marina Real",
-      image: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&h=600&fit=crop",
-      status: "active",
-      priceMin: 380_000, priceMax: 720_000,
-      totalUnits: 110, availableUnits: 41, delivery: "Q3 2027",
-    },
-    {
-      id: "metrovacesa-2", ownerOrganizationId: "prom-4", name: "Skyline Plaza",
-      location: "Sevilla · Cartuja",
-      image: "https://images.unsplash.com/photo-1494526585095-c41746248156?w=800&h=600&fit=crop",
-      status: "active", badge: "new",
-      priceMin: 260_000, priceMax: 410_000,
-      totalUnits: 88, availableUnits: 64, delivery: "Q2 2027",
-    },
-  ],
-};
-
-export function getExternalPromotorPortfolio(id: string): ExternalPortfolioEntry[] {
-  return EXTERNAL_PROMOTOR_PORTFOLIO[id] ?? [];
-}
+/* ─── DEPRECATED · `EXTERNAL_PROMOTOR_PORTFOLIO` ─────────────────
+ *
+ *  Antes existía un store paralelo con entries lite (`ExternalPortfolioEntry`)
+ *  para que las fichas de promotores externos no salieran vacías. Hoy
+ *  TODAS las promociones reales viven en `developerOnlyPromotions`
+ *  con shape `DevPromotion` completo (ver entries `dev-aedas-1`,
+ *  `dev-aedas-2`, `dev-neinor-1`, `dev-neinor-2`, `dev-habitat-1`,
+ *  `dev-metrovacesa-1`, `dev-metrovacesa-2`).
+ *
+ *  El helper `getPromotionsByOwner(orgId)` en `src/lib/promotionsByOwner.ts`
+ *  es la ÚNICA fuente · filtra `developerOnlyPromotions` por
+ *  `ownerOrganizationId === orgId`.
+ *
+ *  Beneficio · IDs son clickables, las promos aparecen en el `/promociones`
+ *  del owner cuando entra a su workspace, y no hay duplicados (Edificio
+ *  Bilbao Alta solía aparecer 2 veces en la ficha de Neinor).
+ *
+ *  Backend · single SELECT desde `promotions WHERE owner_organization_id = $1`.
+ * ────────────────────────────────────────────────────────────── */

@@ -17,6 +17,7 @@
  * de SharedWidgets y tokens HSL.
  */
 
+import { useEffect, useRef } from "react";
 import {
   Globe, Home, Handshake, Info, Users, Shield, ClipboardList, Clock,
   Plus, Trash2, AlertTriangle, Handshake as HandshakeIcon,
@@ -49,9 +50,16 @@ const clasificacionOpts: { value: ClasificacionCliente; label: string; recommend
 export function ColaboradoresStep({
   state,
   update,
+  canManage = true,
 }: {
   state: WizardState;
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
+  /** Solo el admin del workspace o el creador de la promoción pueden
+   *  activar/desactivar la colaboración. Otros members ven el toggle
+   *  bloqueado y un mensaje explícito. Default true (retro-compat).
+   *  TODO(backend): cuando exista `Promotion.createdByUserId`, este
+   *  prop se computa como `isAdmin(user) || promo.createdByUserId === user.id`. */
+  canManage?: boolean;
 }) {
   const addHito = () =>
     update("hitosComision", [...state.hitosComision, { pagoCliente: 0, pagoColaborador: 0 }]);
@@ -71,8 +79,89 @@ export function ColaboradoresStep({
   const totalCliente = state.hitosComision.reduce((s, h) => s + h.pagoCliente, 0);
   const totalColab = state.hitosComision.reduce((s, h) => s + h.pagoColaborador, 0);
 
+  /* Activación implícita · cuando el usuario aterriza en este paso
+   *  (típicamente desde un text-link "Configurar comisiones para
+   *  colaborar →" en la ficha o desde el sidebar del wizard) ya está
+   *  diciendo "quiero colaborar con agencias". Solo se activa UNA
+   *  VEZ en el mount · si después el usuario pulsa el text-link
+   *  "Desactivar colaboración · volver a uso interno" abajo, el
+   *  efecto NO la vuelve a activar (el ref `autoActivated` lo
+   *  inhabilita). El guardado real al "Publicar" persiste el cambio.
+   *  TODO(backend): cuando aterrice `Promotion.createdByUserId`,
+   *  bloquear este efecto si `!canManage`. */
+  const didMount = useRef(false);
+  useEffect(() => {
+    if (didMount.current) return;
+    didMount.current = true;
+    if (canManage && !state.colaboracion) {
+      update("colaboracion", true);
+    }
+  }, [canManage, state.colaboracion, update]);
+
   return (
     <div className="flex flex-col gap-5">
+      {/* Read-only · solo admin/creador puede gestionar · TODO(backend):
+       *  comprobar `createdByUserId` cuando exista en el modelo. */}
+      {!canManage && (
+        <div className="flex items-start gap-2 rounded-xl border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground leading-relaxed">
+          <Shield className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={1.75} />
+          <span>
+            Solo el administrador del workspace o quien creó esta promoción
+            puede activar o desactivar la colaboración con agencias. Puedes
+            consultar la estructura abajo · los cambios no se guardarán.
+          </span>
+        </div>
+      )}
+
+      {/* ═════ TOGGLE · activar/desactivar comisiones ═════
+        * Botón de activación/desactivación del módulo entero. Al
+        * desactivar la promoción sigue siendo operable internamente
+        * (el equipo registra y vende) pero queda fuera del marketplace
+        * y no se puede compartir con agencias colaboradoras. */}
+      <div className="rounded-xl border border-border bg-card px-4 py-3 flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground shrink-0">
+            <Handshake className="h-4 w-4" strokeWidth={1.5} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              {state.colaboracion ? "Comisiones activadas" : "Comisiones desactivadas"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+              {state.colaboracion
+                ? "Puedes publicar la promoción y compartirla con agencias colaboradoras."
+                : "La promoción puede seguir funcionando internamente, pero no podrás publicarla ni compartirla con colaboradores."}
+            </p>
+          </div>
+          <Switch
+            checked={state.colaboracion}
+            disabled={!canManage}
+            onCheckedChange={(checked) => {
+              if (!canManage) return;
+              update("colaboracion", checked);
+            }}
+          />
+        </div>
+
+        {/* Warning · desactivado → impacto explícito */}
+        {!state.colaboracion && (
+          <div className="flex items-start gap-2 rounded-lg bg-warning/10 px-3 py-2 text-xs leading-relaxed">
+            <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" strokeWidth={1.75} />
+            <span className="text-foreground">
+              <span className="font-medium">Solo uso interno.</span>
+              <span className="text-muted-foreground"> La promoción puede
+                seguir funcionando para tu equipo (registros, visitas, ventas)
+                pero <strong>no podrás publicarla ni compartirla con
+                colaboradores</strong>. Activa el toggle para abrir colaboración.</span>
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Si está desactivado · no mostramos la config de comisiones · cero
+       *  ruido · el user puede activar arriba. */}
+      {!state.colaboracion ? null : (
+      <>
       {/* ─── Header info ─── */}
       <div className="rounded-lg bg-muted/30 border border-border px-3 py-2.5 flex gap-2 text-xs text-muted-foreground leading-relaxed">
         <Handshake className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary" strokeWidth={1.5} />
@@ -121,13 +210,15 @@ export function ColaboradoresStep({
                 min={0} max={100}
                 className={cn(inputBase, "w-20 h-9 text-center text-sm tnum")}
               />
-              <span className="text-sm text-muted-foreground font-medium">%</span>
+              <span className="text-sm text-muted-foreground font-medium">
+                %{!state.ivaIncluido && <span className="ml-1 text-foreground">+ IVA</span>}
+              </span>
               <div className="flex items-center gap-2 ml-auto">
                 <Switch
                   checked={state.ivaIncluido}
                   onCheckedChange={(checked) => update("ivaIncluido", checked)}
                 />
-                <span className="text-xs text-muted-foreground">IVA incluido</span>
+                <span className="text-xs text-muted-foreground">{state.ivaIncluido ? "IVA incluido" : "IVA excluido"}</span>
               </div>
             </div>
           </div>
@@ -148,7 +239,9 @@ export function ColaboradoresStep({
                   min={0} max={100}
                   className={cn(inputBase, "w-20 h-9 text-center text-sm tnum")}
                 />
-                <span className="text-sm text-muted-foreground font-medium">%</span>
+                <span className="text-sm text-muted-foreground font-medium">
+                  %{!state.ivaIncluido && <span className="ml-1 text-foreground">+ IVA</span>}
+                </span>
               </div>
               <p className="text-[10px] text-muted-foreground">Comprador residente fuera del país</p>
             </div>
@@ -167,7 +260,9 @@ export function ColaboradoresStep({
                   min={0} max={100}
                   className={cn(inputBase, "w-20 h-9 text-center text-sm tnum")}
                 />
-                <span className="text-sm text-muted-foreground font-medium">%</span>
+                <span className="text-sm text-muted-foreground font-medium">
+                  %{!state.ivaIncluido && <span className="ml-1 text-foreground">+ IVA</span>}
+                </span>
               </div>
               <p className="text-[10px] text-muted-foreground">Comprador residente en el mismo país</p>
             </div>
@@ -176,7 +271,7 @@ export function ColaboradoresStep({
                 checked={state.ivaIncluido}
                 onCheckedChange={(checked) => update("ivaIncluido", checked)}
               />
-              <span className="text-xs text-muted-foreground">IVA incluido</span>
+              <span className="text-xs text-muted-foreground">{state.ivaIncluido ? "IVA incluido" : "IVA excluido"}</span>
             </div>
           </div>
         )}
@@ -464,16 +559,51 @@ export function ColaboradoresStep({
         </div>
       </div>
 
-      {/* ═════ CARD 5 · Forma de pago ═════ */}
-      <div className="rounded-xl border border-border bg-card px-5 py-4 flex flex-col gap-4">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
-            <Home className="h-4 w-4" strokeWidth={1.5} />
+      {/* ═════ CARD 5 · Forma de pago ═════
+        * Si la colaboración está activa pero no se ha elegido forma
+        * de pago · campo obligatorio · pintamos el card en rojizo
+        * (border-destructive/40 + bg-destructive/5 + chip "Obligatorio")
+        * para que el promotor lo identifique de un vistazo. */}
+      {(() => {
+        const formaPagoMissing = state.colaboracion && !state.formaPagoComision;
+        return (
+      <div className={cn(
+        "rounded-xl border bg-card px-5 py-4 flex flex-col gap-4",
+        formaPagoMissing
+          ? "border-2 border-destructive/50 bg-destructive/5"
+          : "border-border",
+      )}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-lg shrink-0",
+              formaPagoMissing ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary",
+            )}>
+              <Home className="h-4 w-4" strokeWidth={1.5} />
+            </div>
+            <div>
+              <p className={cn(
+                "text-sm font-semibold",
+                formaPagoMissing ? "text-destructive" : "text-foreground",
+              )}>
+                Forma de pago de comisiones
+              </p>
+              <p className={cn(
+                "text-xs",
+                formaPagoMissing ? "text-destructive/70" : "text-muted-foreground",
+              )}>
+                {formaPagoMissing
+                  ? "Campo obligatorio · selecciona una opción"
+                  : "¿Cuándo se abona la comisión al colaborador?"}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground">Forma de pago de comisiones</p>
-            <p className="text-xs text-muted-foreground">¿Cuándo se abona la comisión al colaborador?</p>
-          </div>
+          {formaPagoMissing && (
+            <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-destructive/15 border border-destructive/30 text-destructive text-[10.5px] font-semibold shrink-0">
+              <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+              Obligatorio
+            </span>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -571,6 +701,11 @@ export function ColaboradoresStep({
           </div>
         )}
       </div>
+        );
+      })()}
+
+      </>
+      )}
 
     </div>
   );

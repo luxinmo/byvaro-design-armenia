@@ -13,8 +13,9 @@ import { useDirty } from "@/components/settings/SettingsDirtyContext";
 import { isAdmin, useCurrentUser } from "@/lib/currentUser";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useOrgSetting } from "@/lib/orgSettings";
 
-const KEY = "byvaro.promotions.validity.v1";
+const SETTING_KEY = "promotions.validity";
 
 type State = {
   defaultDays: number;
@@ -26,25 +27,26 @@ type State = {
 const DEFAULT: State = { defaultDays: 30, allowExtension: true, extensionDays: 15, notifyBeforeExpiry: 7 };
 const PRESETS = [15, 30, 45, 60, 90];
 
-function load(): State {
-  if (typeof window === "undefined") return DEFAULT;
-  try { return { ...DEFAULT, ...JSON.parse(window.localStorage.getItem(KEY) ?? "{}") }; }
-  catch { return DEFAULT; }
-}
-
 export default function AjustesPromocionesValidez() {
   const user = useCurrentUser();
   const canEdit = isAdmin(user);
-  const [state, setState] = useState<State>(() => load());
-  const [initial, setInitial] = useState(state);
+  const [persisted, setPersisted] = useOrgSetting<State>(SETTING_KEY, DEFAULT);
+  const [state, setState] = useState<State>(persisted);
+  const [initial, setInitial] = useState<State>(persisted);
   const { setDirty } = useDirty();
+
+  useEffect(() => {
+    setState(persisted);
+    setInitial(persisted);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(persisted)]);
 
   useEffect(() => { setDirty(JSON.stringify(state) !== JSON.stringify(initial)); }, [state, initial, setDirty]);
   const isDirty = JSON.stringify(state) !== JSON.stringify(initial);
 
   const save = () => {
     if (!canEdit) return;
-    window.localStorage.setItem(KEY, JSON.stringify(state));
+    setPersisted(state);
     setInitial(state);
     setDirty(false);
     toast.success("Validez por defecto guardada");

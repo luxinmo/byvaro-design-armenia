@@ -23,6 +23,30 @@ export type PersistedComposeDraft = {
 
 const KEY = "byvaro.emailComposeDraft.v1";
 
+/**
+ * Source of truth · `public.email_drafts` (Supabase). Mantiene 1 fila
+ * por usuario para el borrador del Compose flotante (kind=compose).
+ * El localStorage cache solo existe para que el Compose pueda
+ * restaurar al instante al abrir.
+ */
+
+async function getCurrentOrgUser(): Promise<{ orgId: string; userId: string } | null> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");
+    if (!isSupabaseConfigured) return null;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data } = await supabase
+      .from("organization_members")
+      .select("organization_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const orgId = (data?.organization_id as string) ?? null;
+    if (!orgId) return null;
+    return { orgId, userId: user.id };
+  } catch { return null; }
+}
+
 export function loadComposeDraft(): PersistedComposeDraft | null {
   if (typeof window === "undefined") return null;
   try {
@@ -45,11 +69,56 @@ export function saveComposeDraft(draft: { to: string; subject: string; body: str
     savedAt: new Date().toISOString(),
   };
   window.localStorage.setItem(KEY, JSON.stringify(payload));
+
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const ctx = await getCurrentOrgUser();
+      if (!ctx) return;
+      /* 1 borrador "compose" por usuario · delete-then-insert porque
+       *  email_drafts no tiene unique constraint en user_id. */
+      const toEmails = draft.to.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+      await supabase
+        .from("email_drafts")
+        .delete()
+        .eq("user_id", ctx.userId)
+        .filter("metadata->>kind", "eq", "compose");
+      const { error } = await supabase
+        .from("email_drafts")
+        .insert({
+          organization_id: ctx.orgId,
+          user_id: ctx.userId,
+          subject: draft.subject,
+          body: draft.body,
+          to_emails: toEmails,
+          metadata: { kind: "compose" },
+        });
+      if (error) console.warn("[drafts:save]", error.message);
+    } catch (e) {
+      console.warn("[drafts:save] skipped:", e);
+    }
+  })();
 }
 
 export function clearComposeDraft() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(KEY);
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const ctx = await getCurrentOrgUser();
+      if (!ctx) return;
+      const { error } = await supabase
+        .from("email_drafts")
+        .delete()
+        .eq("user_id", ctx.userId);
+      if (error) console.warn("[drafts:clear]", error.message);
+    } catch (e) {
+      console.warn("[drafts:clear] skipped:", e);
+    }
+  })();
 }
 
 /**

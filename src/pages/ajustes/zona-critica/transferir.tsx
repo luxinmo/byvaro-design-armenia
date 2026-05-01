@@ -11,19 +11,17 @@ import { Input } from "@/components/ui/input";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { isAdmin, useCurrentUser } from "@/lib/currentUser";
 import { toast } from "sonner";
-
-const KEY = "byvaro.organization.members.v1";
-
-function loadMembers(): { id: string; name: string; email: string }[] {
-  if (typeof window === "undefined") return [];
-  try { return JSON.parse(window.localStorage.getItem(KEY) ?? "[]"); }
-  catch { return []; }
-}
+import { useWorkspaceMembers } from "@/lib/useWorkspaceMembers";
 
 export default function AjustesZonaCriticaTransferir() {
   const user = useCurrentUser();
   const canEdit = isAdmin(user);
-  const members = loadMembers().filter((m) => m.id !== user.id);
+  /* Source of truth · `useWorkspaceMembers` lee de `team` storage que
+   *  ya tiene write-through a Supabase via `team.ts`. */
+  const { members: allMembers } = useWorkspaceMembers();
+  const members = allMembers
+    .filter((m) => m.id !== user.id)
+    .map((m) => ({ id: m.id, name: m.fullName ?? m.name, email: m.email }));
   const [targetEmail, setTargetEmail] = useState("");
   const [confirmText, setConfirmText] = useState("");
   const confirm = useConfirm();

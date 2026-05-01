@@ -9,8 +9,13 @@ export default defineConfig({
   // Si algún día queremos GitHub Pages con subdirectorio, habría que
   // reactivar base: "/byvaro-design-armenia/" y el SPA 404.html trick.
   server: {
-    host: "::",
+    /* `host: true` · escucha en TODAS las interfaces (v4 + v6) ·
+     *  alcanzable desde la LAN como `http://<IP-del-mac>:8080`.
+     *  Antes era `"::"` (solo IPv6) · algunos dispositivos IPv4
+     *  fallaban al conectar dependiendo del stack de red. */
+    host: true,
     port: 8080,
+    strictPort: true,
     /* HMR · cuando se accede desde otro equipo de la LAN
      * (`http://192.168.x.x:8080`), el WebSocket de Hot Module
      * Reload se conecta al mismo host del navegador. Sin

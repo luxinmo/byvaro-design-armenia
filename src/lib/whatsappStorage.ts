@@ -1,44 +1,41 @@
 /**
  * Storage de la configuración de WhatsApp del workspace.
  *
+ * Source of truth · `public.whatsapp_settings` (Supabase). El localStorage
+ * cache (`byvaro.workspace.whatsapp.v1::<orgId>`) solo existe para que
+ * `loadWhatsAppSetup()` sea síncrono · NO es la fuente de verdad.
+ *
  * El workspace conecta UN proveedor (Business API o Web) y el resto
  * del equipo lo comparte. Cada agente tiene su identidad cuando envía
  * mensajes, pero el número/canal subyacente es único.
  *
- * Persistencia local mientras no haya backend (`byvaro.workspace.whatsapp.v1`).
- *
- * TODO(backend) — endpoints reales:
- *   POST /api/workspace/whatsapp/setup    { method, ... }   → crea setup
- *   GET  /api/workspace/whatsapp                            → estado actual
- *   POST /api/workspace/whatsapp/disconnect                 → reset
- *   GET  /api/contacts/:id/whatsapp/messages                → conversación
- *   POST /api/contacts/:id/whatsapp/messages { text }       → enviar (firma con currentUser)
- *
  * NOTA seguridad:
- *  - El "ver conversaciones de otros agentes" requiere que el rol del
- *    usuario tenga permiso `whatsapp.viewAll`. Por defecto solo admin.
- *  - El "enviar mensajes" solo permite firmar como el currentUser; el
- *    backend NUNCA debe aceptar `authorId` desde el cliente.
+ *  - El token de Meta NO se guarda en `whatsapp_settings` · va en una
+ *    tabla server-only con encryption-at-rest (TODO backend).
+ *  - El "ver conversaciones de otros agentes" requiere `whatsapp.viewAll`.
+ *  - El "enviar mensajes" solo permite firmar como el currentUser.
  */
 
 export type WhatsAppMethod = "businessApi" | "web";
 
 export type WhatsAppSetup = {
   method: WhatsAppMethod;
-  /** ISO datetime de cuando se conectó. */
   connectedAt: string;
-  /** Solo para Business API: número de empresa registrado. */
   businessNumber?: string;
-  /** Nombre humano del proveedor / dispositivo (display). */
   displayName?: string;
 };
 
-const KEY = "byvaro.workspace.whatsapp.v1";
+const KEY_PREFIX = "byvaro.workspace.whatsapp.v1::";
+const CHANGE = "byvaro:whatsapp-setup-change";
 
-export function loadWhatsAppSetup(): WhatsAppSetup | null {
+function keyFor(orgId: string): string { return `${KEY_PREFIX}${orgId}`; }
+
+/* ══════ Cache local · render-only ════════════════════════════════ */
+
+function readCache(orgId: string): WhatsAppSetup | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = window.localStorage.getItem(keyFor(orgId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as WhatsAppSetup;
     if (!parsed.method) return null;
@@ -46,21 +43,140 @@ export function loadWhatsAppSetup(): WhatsAppSetup | null {
   } catch { return null; }
 }
 
+function writeCache(orgId: string, setup: WhatsAppSetup | null): void {
+  if (typeof window === "undefined") return;
+  if (setup) {
+    window.localStorage.setItem(keyFor(orgId), JSON.stringify(setup));
+  } else {
+    window.localStorage.removeItem(keyFor(orgId));
+  }
+  window.dispatchEvent(new CustomEvent(CHANGE, { detail: { orgId } }));
+}
+
+/* ══════ Source of truth · Supabase ═══════════════════════════════ */
+
+async function getCurrentOrgId(): Promise<string | null> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return null;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data } = await supabase
+      .from("organization_members")
+      .select("organization_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    return (data?.organization_id as string) ?? null;
+  } catch { return null; }
+}
+
+export async function hydrateWhatsAppFromSupabase(): Promise<WhatsAppSetup | null> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return null;
+    const orgId = await getCurrentOrgId();
+    if (!orgId) return null;
+    const { data, error } = await supabase
+      .from("whatsapp_settings")
+      .select("is_connected, phone_number_id, display_phone, metadata")
+      .eq("organization_id", orgId)
+      .maybeSingle();
+    if (error) {
+      console.warn("[whatsapp:hydrate]", error.message);
+      return null;
+    }
+    if (!data || !data.is_connected) {
+      writeCache(orgId, null);
+      return null;
+    }
+    const meta = (data.metadata ?? {}) as Partial<WhatsAppSetup>;
+    const setup: WhatsAppSetup = {
+      method: (meta.method as WhatsAppMethod) ?? "web",
+      connectedAt: meta.connectedAt ?? new Date().toISOString(),
+      businessNumber: (data.display_phone as string) ?? meta.businessNumber,
+      displayName: meta.displayName,
+    };
+    writeCache(orgId, setup);
+    return setup;
+  } catch (e) {
+    console.warn("[whatsapp:hydrate] skipped:", e);
+    return null;
+  }
+}
+
+/* ══════ API pública ══════════════════════════════════════════════ */
+
+/** Lee setup · sync · safe-server. Si el cache está vacío devuelve null
+ *  · llama a `hydrateWhatsAppFromSupabase()` para refrescar. */
+export function loadWhatsAppSetup(): WhatsAppSetup | null {
+  if (typeof window === "undefined") return null;
+  /* Itera todas las claves · single-tenant lookup pragmático para
+   *  call sites legacy que no tienen orgId. */
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const k = window.localStorage.key(i);
+    if (k && k.startsWith(KEY_PREFIX)) {
+      try {
+        const raw = window.localStorage.getItem(k);
+        if (raw) {
+          const parsed = JSON.parse(raw) as WhatsAppSetup;
+          if (parsed.method) return parsed;
+        }
+      } catch {}
+    }
+  }
+  return null;
+}
+
 export function saveWhatsAppSetup(setup: WhatsAppSetup): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY, JSON.stringify(setup));
+
   void (async () => {
-    const { mergeOrgMetadata } = await import("./orgMetadataSync");
-    await mergeOrgMetadata({ whatsappSetup: setup });
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const orgId = await getCurrentOrgId();
+      if (!orgId) return;
+      writeCache(orgId, setup);
+      const { error } = await supabase
+        .from("whatsapp_settings")
+        .upsert({
+          organization_id: orgId,
+          is_connected: true,
+          display_phone: setup.businessNumber ?? null,
+          metadata: setup,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "organization_id" });
+      if (error) console.warn("[whatsapp:save]", error.message);
+    } catch (e) {
+      console.warn("[whatsapp:save] skipped:", e);
+    }
   })();
 }
 
 export function clearWhatsAppSetup(): void {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(KEY);
+
   void (async () => {
-    const { mergeOrgMetadata } = await import("./orgMetadataSync");
-    await mergeOrgMetadata({ whatsappSetup: null });
+    try {
+      const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      if (!isSupabaseConfigured) return;
+      const orgId = await getCurrentOrgId();
+      if (!orgId) return;
+      writeCache(orgId, null);
+      const { error } = await supabase
+        .from("whatsapp_settings")
+        .upsert({
+          organization_id: orgId,
+          is_connected: false,
+          phone_number_id: null,
+          display_phone: null,
+          metadata: null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "organization_id" });
+      if (error) console.warn("[whatsapp:clear]", error.message);
+    } catch (e) {
+      console.warn("[whatsapp:clear] skipped:", e);
+    }
   })();
 }
 

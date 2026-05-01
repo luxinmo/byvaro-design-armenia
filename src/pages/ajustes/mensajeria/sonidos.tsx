@@ -10,8 +10,9 @@ import { Button } from "@/components/ui/button";
 import { useDirty } from "@/components/settings/SettingsDirtyContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useUserSetting } from "@/lib/userSettings";
 
-const KEY = "byvaro.messaging.sounds.v1";
+const SETTING_KEY = "user.messaging.sounds";
 
 const SOUNDS = [
   { id: "subtle", name: "Sutil", description: "Suave, sin interrumpir." },
@@ -35,12 +36,6 @@ const DEFAULT: State = {
   silentInMeetings: true, newMessage: true, newMention: true, newRecord: false,
 };
 
-function load(): State {
-  if (typeof window === "undefined") return DEFAULT;
-  try { return { ...DEFAULT, ...JSON.parse(window.localStorage.getItem(KEY) ?? "{}") }; }
-  catch { return DEFAULT; }
-}
-
 function playSound() {
   /* Generate a small beep with WebAudio — no external assets needed */
   try {
@@ -58,15 +53,22 @@ function playSound() {
 }
 
 export default function AjustesMensajeriaSonidos() {
-  const [state, setState] = useState<State>(() => load());
-  const [initial, setInitial] = useState(state);
+  const [persisted, setPersisted] = useUserSetting<State>(SETTING_KEY, DEFAULT);
+  const [state, setState] = useState<State>(persisted);
+  const [initial, setInitial] = useState<State>(persisted);
   const { setDirty } = useDirty();
+
+  useEffect(() => {
+    setState(persisted);
+    setInitial(persisted);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(persisted)]);
 
   useEffect(() => { setDirty(JSON.stringify(state) !== JSON.stringify(initial)); }, [state, initial, setDirty]);
   const isDirty = JSON.stringify(state) !== JSON.stringify(initial);
 
   const save = () => {
-    window.localStorage.setItem(KEY, JSON.stringify(state));
+    setPersisted(state);
     setInitial(state);
     setDirty(false);
     toast.success("Preferencias de sonido guardadas");

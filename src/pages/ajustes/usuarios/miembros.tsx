@@ -31,22 +31,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { isAdmin, useCurrentUser, currentWorkspaceKey } from "@/lib/currentUser";
-import { type TeamMember, type TeamMemberStatus, getMembersForWorkspace, teamStorageKey } from "@/lib/team";
+import { type TeamMember, type TeamMemberStatus, getMembersForWorkspace } from "@/lib/team";
 import "@/lib/agencyTeamSeeds";
 import { findLanguageByCode } from "@/lib/languages";
-import { emitMembersChange } from "@/lib/meStorage";
+import { useWorkspaceMembers } from "@/lib/useWorkspaceMembers";
 import { Flag } from "@/components/ui/Flag";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-/* Storage por workspace (developer / agency-XX) · ver
- * REGLA DE ORO multi-tenant en CLAUDE.md. */
-function persistAt(workspaceKey: string, m: TeamMember[]) {
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(teamStorageKey(workspaceKey), JSON.stringify(m));
-    emitMembersChange();
-  }
-}
+/* `persistAt` eliminado · usamos `useWorkspaceMembers().setMembers()`
+ * que ya hace write-through a Supabase (`organization_members` table) ·
+ * source of truth canónica. */
 
 /* ═══════════════════════════════════════════════════════════════════
    Helpers visuales
@@ -87,17 +82,13 @@ export default function AjustesUsuariosMiembros() {
   const user = useCurrentUser();
   const canEdit = isAdmin(user);
   const workspaceKey = currentWorkspaceKey(user);
-  const [members, setMembers] = useState<TeamMember[]>(() => getMembersForWorkspace(workspaceKey));
-  useEffect(() => {
-    setMembers(getMembersForWorkspace(workspaceKey));
-  }, [workspaceKey]);
+  /* Source of truth · `useWorkspaceMembers` hace write-through a
+   *  `organization_members` (Supabase) cada vez que llamamos a
+   *  `setMembers`. */
+  const { members, setMembers } = useWorkspaceMembers(workspaceKey);
   const [inviteEmail, setInviteEmail] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const confirm = useConfirm();
-
-  useEffect(() => {
-    persistAt(workspaceKey, members);
-  }, [members, workspaceKey]);
 
   const update = (id: string, patch: Partial<TeamMember>) =>
     setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));

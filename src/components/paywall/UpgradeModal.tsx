@@ -34,6 +34,7 @@ import {
   type PaywallTrigger,
 } from "@/lib/usageGuard";
 import { subscribeToPromoter249, PLAN_LABEL } from "@/lib/plan";
+import { useCurrentUser } from "@/lib/currentUser";
 import { usePaywallAnalytics } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 
@@ -77,6 +78,7 @@ const COPY: Record<PaywallTrigger, Copy> = {
 export function UpgradeModal() {
   const state = useUpgradeModalState();
   const analytics = usePaywallAnalytics();
+  const currentUser = useCurrentUser();
   const open = state.open;
 
   /* Emite `paywall.shown` cada vez que el modal pasa a `open=true`.
@@ -124,7 +126,7 @@ export function UpgradeModal() {
     analytics.track("paywall.subscribe_clicked", { trigger, used, limit });
     /* Mock · activa el plan en localStorage. En backend real sería un
      * fetch('/api/subscribe') que redirige a Stripe Checkout. */
-    subscribeToPromoter249();
+    subscribeToPromoter249(currentUser);
     closeUpgradeModal();
     toast.success("¡Suscripción activada!", {
       description: "Plan Promotor 249€/mes · cuenta sin límites.",

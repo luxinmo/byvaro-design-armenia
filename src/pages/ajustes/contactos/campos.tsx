@@ -14,8 +14,9 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { isAdmin, useCurrentUser } from "@/lib/currentUser";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useOrgSetting } from "@/lib/orgSettings";
 
-const KEY = "byvaro.contacts.customFields.v1";
+const SETTING_KEY = "contacts.customFields";
 
 type FieldType = "text" | "number" | "date" | "select" | "boolean";
 type Field = {
@@ -37,19 +38,20 @@ const DEFAULT: Field[] = [
   { id: "f3", label: "Origen del lead", type: "select", required: false, options: ["Web", "Recomendación", "Portal", "Evento"] },
 ];
 
-function load(): Field[] {
-  if (typeof window === "undefined") return DEFAULT;
-  try { const raw = window.localStorage.getItem(KEY); return raw ? JSON.parse(raw) : DEFAULT; }
-  catch { return DEFAULT; }
-}
-
 export default function AjustesContactosCampos() {
   const user = useCurrentUser();
   const canEdit = isAdmin(user);
-  const [fields, setFields] = useState<Field[]>(() => load());
-  const [initial, setInitial] = useState(fields);
+  const [persisted, setPersisted] = useOrgSetting<Field[]>(SETTING_KEY, DEFAULT);
+  const [fields, setFields] = useState<Field[]>(persisted);
+  const [initial, setInitial] = useState<Field[]>(persisted);
   const { setDirty } = useDirty();
   const confirm = useConfirm();
+
+  useEffect(() => {
+    setFields(persisted);
+    setInitial(persisted);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(persisted)]);
 
   useEffect(() => { setDirty(JSON.stringify(fields) !== JSON.stringify(initial)); }, [fields, initial, setDirty]);
   const isDirty = JSON.stringify(fields) !== JSON.stringify(initial);
@@ -73,7 +75,7 @@ export default function AjustesContactosCampos() {
 
   const save = () => {
     if (!canEdit) return;
-    window.localStorage.setItem(KEY, JSON.stringify(fields));
+    setPersisted(fields);
     setInitial(fields);
     setDirty(false);
     toast.success("Campos personalizados guardados");

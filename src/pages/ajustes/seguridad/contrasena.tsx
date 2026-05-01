@@ -40,8 +40,9 @@ import { renderPasswordChangeCode } from "@/lib/email-templates/passwordChangeCo
 import { EmailPreviewDialog } from "@/components/security/EmailPreviewDialog";
 import { isTwoFactorEnabled, mockVerifyTotpCode } from "@/lib/twoFactor";
 import { Smartphone } from "lucide-react";
+import { getUserSetting, setUserSetting, clearUserSetting } from "@/lib/userSettings";
 
-const PENDING_KEY = "byvaro.security.passwordChange.pending.v1";
+const PENDING_SETTING_KEY = "security.passwordChange.pending";
 const TTL_MINUTES = 10;
 const RESEND_COOLDOWN_SEC = 30;
 const CODE_LENGTH = 6;
@@ -71,26 +72,27 @@ function generateCode(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
+/* TODO(backend): este flujo entero (request/verify) debe ir server-side
+ *  con tokens CSRF + rate limiting + envío real de email. Mientras
+ *  tanto, persistimos el pending en `user_settings.data['security.passwordChange.pending']`
+ *  para que sobreviva entre dispositivos del mismo usuario y no se
+ *  quede solo en localStorage. */
 function loadPending(): PendingChange | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(PENDING_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as PendingChange;
-    if (Date.now() > parsed.expiresAt) {
-      window.localStorage.removeItem(PENDING_KEY);
-      return null;
-    }
-    return parsed;
-  } catch { return null; }
+  const stored = getUserSetting<PendingChange | null>(PENDING_SETTING_KEY, null);
+  if (!stored) return null;
+  if (Date.now() > stored.expiresAt) {
+    clearUserSetting(PENDING_SETTING_KEY);
+    return null;
+  }
+  return stored;
 }
 
 function savePending(p: PendingChange) {
-  window.localStorage.setItem(PENDING_KEY, JSON.stringify(p));
+  setUserSetting(PENDING_SETTING_KEY, p);
 }
 
 function clearPending() {
-  window.localStorage.removeItem(PENDING_KEY);
+  clearUserSetting(PENDING_SETTING_KEY);
 }
 
 type Step = "form" | "verify" | "done";
