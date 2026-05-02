@@ -770,12 +770,18 @@ export function getDeveloperProfile(tenantId: string): Empresa | undefined {
   return undefined;
 }
 
-/** Resuelve el orgId desde un usuario actual sin importar de
- *  `currentUser.ts` para evitar ciclos · usa solo accountType+agencyId. */
-function userOrgId(user: { accountType: string; agencyId?: string } | null | undefined): string {
+/** Resuelve el orgId desde un usuario actual.
+ *
+ *  Prioridad:
+ *  1. `user.organizationId` · UUID real del workspace · puesto por
+ *     Login.tsx tras query a organization_members. Source of truth
+ *     para users registrados via /register.
+ *  2. `user.agencyId` · legacy (mockUsers / agencias seed).
+ *  3. `DEFAULT_DEVELOPER_TENANT_ID` · ultimate fallback.
+ */
+function userOrgId(user: { accountType: string; agencyId?: string; organizationId?: string } | null | undefined): string {
+  if (user?.organizationId) return user.organizationId;
   if (user?.accountType === "agency" && user.agencyId) return user.agencyId;
-  /* Developer no-Luxinmo · `agencyId` lleva el workspace externo
-   *  (`prom-1` AEDAS, `prom-2` Neinor, etc.). Sin él, fallback Luxinmo. */
   if (user?.accountType === "developer" && user.agencyId) return user.agencyId;
   return DEFAULT_DEVELOPER_TENANT_ID;
 }

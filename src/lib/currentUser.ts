@@ -121,19 +121,50 @@ function buildAgencyUser(agencyId: string, agencyEmail?: string): CurrentUser {
   };
 }
 
-/** Construye un usuario developer a partir del MockUser logueado.
- *  Cuando `developerEmail` no coincide con ningún mock (o no existe),
- *  cae en DEVELOPER_USER (arman · admin) por compatibilidad. */
-function buildDeveloperUser(developerEmail?: string): CurrentUser {
+/** Construye un usuario developer.
+ *
+ *  Phase 2 (signup real) · usa los datos del sessionStorage que
+ *  Login.tsx pobló desde Supabase Auth + organization_members:
+ *    · developerEmail · email del JWT
+ *    · organizationId · UUID real del workspace en DB
+ *    · userName · raw_user_meta_data.name del JWT
+ *
+ *  Phase 1 (legacy con mockUsers) · si NO hay datos de signup real,
+ *  cae al mock por email · solo para tests con cuentas demo. */
+function buildDeveloperUser(
+  developerEmail?: string,
+  organizationId?: string,
+  userName?: string,
+): CurrentUser {
   if (!developerEmail) return DEVELOPER_USER;
+
+  /* Si tenemos organizationId real (signup real vía /register), lo
+   *  usamos · es la fuente de verdad. */
+  if (organizationId) {
+    return {
+      id: developerEmail, // se reemplaza por user_profiles.user_id en hidratación
+      name: userName ?? developerEmail.split("@")[0],
+      email: developerEmail,
+      role: "admin",
+      organizationId,
+      accountType: "developer",
+      agencyId: undefined,
+    };
+  }
+
+  /* Fallback legacy · busca en mockUsers (vacío en producción · solo
+   *  útil si alguien añade demos de prueba). */
   const mock = mockUsers.find(
     (u) => u.accountType === "developer"
         && u.email.toLowerCase() === developerEmail.toLowerCase(),
   );
-  if (!mock) return DEVELOPER_USER;
-  /* `mock.agencyId` para developers no-Luxinmo lleva su workspace
-   *  (`prom-1` AEDAS, `prom-2` Neinor, etc.). Para Luxinmo no se setea
-   *  · `currentOrgIdentity` cae a `"developer-default"`. */
+  if (!mock) {
+    return {
+      ...DEVELOPER_USER,
+      email: developerEmail,
+      name: userName ?? developerEmail.split("@")[0],
+    };
+  }
   return {
     id: mock.teamMemberId ?? "u1",
     name: mock.name,
@@ -146,14 +177,14 @@ function buildDeveloperUser(developerEmail?: string): CurrentUser {
 }
 
 export function useCurrentUser(): CurrentUser {
-  const { type, agencyId, developerEmail, agencyEmail } = useAccountType();
+  const { type, agencyId, developerEmail, agencyEmail, organizationId, userName } = useAccountType();
   /* Fachada legacy · delega en meStorage. Ver ADR-050 y `src/lib/meStorage.ts`.
    * Se sincroniza automáticamente con la lista de TEAM_MEMBERS — si un
    * admin edita al usuario actual desde `/equipo`, este hook se refresca. */
   const profile = usePersistedProfile();
   return useMemo(() => {
     if (type === "agency") return buildAgencyUser(agencyId, agencyEmail);
-    const base = buildDeveloperUser(developerEmail);
+    const base = buildDeveloperUser(developerEmail, organizationId, userName);
     /* `usePersistedProfile()` lee la entrada `MY_ID="u1"` de meStorage ·
      *  hardcoded a Arman/Luxinmo. SOLO debemos aplicar el override cuando
      *  el usuario logueado realmente sea Arman (mismo email). Para
@@ -177,7 +208,7 @@ export function useCurrentUser(): CurrentUser {
       avatar:     profile?.avatar,
       phone:      profile?.phone,
     };
-  }, [type, agencyId, developerEmail, agencyEmail, profile]);
+  }, [type, agencyId, developerEmail, agencyEmail, organizationId, userName, profile]);
 }
 
 export function isAdmin(user: CurrentUser): boolean {

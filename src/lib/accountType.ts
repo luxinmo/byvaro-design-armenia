@@ -38,6 +38,16 @@ const DEVELOPER_EMAIL_KEY = "byvaro.accountType.developerEmail.v1";
  *  dentro de la misma agencia (ej. laura@primeproperties admin vs
  *  tom@primeproperties member). Solo tiene sentido cuando type === "agency". */
 const AGENCY_EMAIL_KEY = "byvaro.accountType.agencyEmail.v1";
+/** organization_id real del workspace donde el user es member (viene
+ *  de la query a organization_members tras login). Es la clave para
+ *  que `useEmpresa()` cargue los datos REALES del workspace en
+ *  Supabase · sin esto cae al fallback "developer-default" que NO
+ *  existe en DB para users registrados via /register. */
+const ORG_ID_KEY = "byvaro.accountType.organizationId.v1";
+/** Nombre del user logueado · viene de auth.users.raw_user_meta_data.
+ *  Usado por useCurrentUser para mostrar nombre real en sidebar/UI
+ *  sin tener que llamar a Supabase en cada render. */
+const USER_NAME_KEY = "byvaro.accountType.userName.v1";
 const CHANGE_EVENT = "byvaro:account-change";
 
 /** Agencia por defecto cuando el usuario activa modo agencia sin elegir una. */
@@ -48,6 +58,10 @@ type Snapshot = {
   agencyId: string;
   developerEmail?: string;
   agencyEmail?: string;
+  /** organization_id real del workspace · se setea en login. */
+  organizationId?: string;
+  /** Nombre completo del user · se setea en login desde JWT metadata. */
+  userName?: string;
 };
 
 /** sessionStorage vive por pestaña; así el usuario puede tener una pestaña como
@@ -62,7 +76,9 @@ function read(): Snapshot {
   const agencyId = sessionStorage.getItem(AGENCY_KEY) ?? DEFAULT_AGENCY_ID;
   const developerEmail = sessionStorage.getItem(DEVELOPER_EMAIL_KEY) ?? undefined;
   const agencyEmail = sessionStorage.getItem(AGENCY_EMAIL_KEY) ?? undefined;
-  return { type, agencyId, developerEmail, agencyEmail };
+  const organizationId = sessionStorage.getItem(ORG_ID_KEY) ?? undefined;
+  const userName = sessionStorage.getItem(USER_NAME_KEY) ?? undefined;
+  return { type, agencyId, developerEmail, agencyEmail, organizationId, userName };
 }
 
 function emit() {
@@ -106,6 +122,15 @@ export function loginAs(
   type: AccountType,
   emailOrAgencyId?: string,
   agencyEmail?: string,
+  /** organization_id real del workspace · debe pasarse desde Login.tsx
+   *  tras query a organization_members. Si no se pasa, useEmpresa cae
+   *  al fallback "developer-default" que NO existe en DB para users
+   *  registrados via /register. */
+  organizationId?: string,
+  /** Nombre completo del user · pasarlo desde authData.user.user_metadata.name
+   *  para que el sidebar/UI lo muestre sin tener que llamar a Supabase
+   *  en cada render. */
+  userName?: string,
 ) {
   sessionStorage.setItem(STORAGE_KEY, type);
   // Limpia cualquier identidad previa del otro rol para que no se mezclen.
@@ -121,6 +146,10 @@ export function loginAs(
     if (emailOrAgencyId) sessionStorage.setItem(DEVELOPER_EMAIL_KEY, emailOrAgencyId);
     else sessionStorage.removeItem(DEVELOPER_EMAIL_KEY);
   }
+  if (organizationId) sessionStorage.setItem(ORG_ID_KEY, organizationId);
+  else sessionStorage.removeItem(ORG_ID_KEY);
+  if (userName) sessionStorage.setItem(USER_NAME_KEY, userName);
+  else sessionStorage.removeItem(USER_NAME_KEY);
   emit();
 }
 
