@@ -6,18 +6,18 @@
  *
  * Un promotor inmobiliario tiene ciclos · puede pasar meses sin
  * promoción activa, y luego volver con un nuevo proyecto. Para que
- * Byvaro sea su CRM real, el plan Gratis es la base permanente:
+ * Byvaro sea su CRM real, el plan Básico es la base permanente:
  *
  *   - Acceso a sus datos siempre (contactos, ventas históricas,
  *     contratos firmados, microsites archivados).
  *   - Sin crear promociones nuevas hasta upgrade al plan de pago.
  *
  * El "trial" NO es un plan distinto · es una ventana de **180 días**
- * encima del plan Gratis donde el promotor recién registrado tiene
+ * encima del plan Básico donde el promotor recién registrado tiene
  * acceso completo (mismas capacidades que el plan de pago) para
  * arrancar sin fricción. Cuando se acaba la ventana, el promotor:
  *
- *   - Se queda en plan Gratis (acceso a sus datos · sin nuevas promos).
+ *   - Se queda en plan Básico (acceso a sus datos · sin nuevas promos).
  *   - O pasa al plan de pago para seguir creando.
  *
  * UI · 3 cajas en lugar del card único de antes:
@@ -87,7 +87,7 @@ export default function AjustesFacturacionPlan() {
 
   const handleActivateMarketplace = () => {
     setPlan(user, "agency_marketplace");
-    toast.success("Marketplace activado", {
+    toast.success("Plan Plus activado", {
       description: "Acceso al directorio nacional de promotores.",
     });
   };
@@ -124,7 +124,7 @@ export default function AjustesFacturacionPlan() {
               </p>
             </div>
             <p className="text-xl font-bold tracking-tight text-foreground">
-              Plan Gratis
+              Básico
             </p>
             <p className="text-[12.5px] text-muted-foreground mt-1 leading-relaxed flex-1">
               Tu plan permanente · acceso a tus datos siempre · sin tarjeta requerida.
@@ -182,7 +182,7 @@ export default function AjustesFacturacionPlan() {
                   Finalizada
                 </p>
                 <p className="text-[12.5px] text-muted-foreground mt-1 leading-relaxed flex-1">
-                  Sigues en el plan Gratis · activa el plan de pago para crear promociones nuevas.
+                  Sigues en el plan Básico · activa el plan de pago para crear promociones nuevas.
                 </p>
               </>
             )}
@@ -202,7 +202,7 @@ export default function AjustesFacturacionPlan() {
               249€<span className="text-sm font-medium text-muted-foreground">/mes</span>
             </p>
             <p className="text-[12.5px] text-muted-foreground mt-1 leading-relaxed flex-1">
-              Plan Promotor · IVA excl. · sin permanencia · cancela cuando quieras.
+              Plan Plus · IVA excl. · sin permanencia · cancela cuando quieras.
             </p>
             <button
               type="button"
@@ -220,9 +220,9 @@ export default function AjustesFacturacionPlan() {
           </article>
         </div>
 
-        {/* ═══════════ FILOSOFÍA · Cómo funciona el plan Gratis ═══════════ */}
+        {/* ═══════════ FILOSOFÍA · Cómo funciona el plan Básico ═══════════ */}
         <SettingsCard
-          title="Cómo funciona tu plan Gratis"
+          title="Cómo funciona tu plan Básico"
           description="Diseñado para los ciclos reales del negocio inmobiliario."
         >
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -245,7 +245,7 @@ export default function AjustesFacturacionPlan() {
                 Conservas tus datos siempre
               </p>
               <p className="text-[11.5px] text-muted-foreground leading-relaxed">
-                Cuando termina la prueba (o entre proyectos), sigues en el plan Gratis · contactos, ventas y microsites accesibles.
+                Cuando termina la prueba (o entre proyectos), sigues en el plan Básico · contactos, ventas y microsites accesibles.
               </p>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -316,7 +316,7 @@ export default function AjustesFacturacionPlan() {
                 Tu prueba ha terminado
               </p>
               <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-relaxed">
-                Sigues en el plan Gratis con acceso a todos tus datos · para crear promociones nuevas, activa el plan Promotor.
+                Sigues en el plan Básico con acceso a todos tus datos · para crear promociones nuevas, activa el plan Plus.
               </p>
             </div>
             <Button
@@ -338,7 +338,7 @@ export default function AjustesFacturacionPlan() {
                 Comparar todos los planes
               </p>
               <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                Plan Gratis · Promotor · Volumen · Inmobiliaria · feature list completa.
+                Básico · Plus · Ultra · módulo Inmobiliaria · feature list completa.
               </p>
             </div>
             <Link
@@ -397,7 +397,7 @@ export default function AjustesFacturacionPlan() {
           {tier === "agency_free" && (
             <Button onClick={handleActivateMarketplace} className="rounded-full bg-foreground text-background hover:bg-foreground/90">
               <Crown className="h-3.5 w-3.5" />
-              Activar Marketplace
+              Activar Plus
             </Button>
           )}
           {isPaidTier && tier !== "enterprise" && (
@@ -412,7 +412,7 @@ export default function AjustesFacturacionPlan() {
         title="Uso del workspace"
         description={
           tier === "agency_free"
-            ? "Cuando agotes las 10 solicitudes en tu provincia, activa Marketplace para acceso nacional ilimitado."
+            ? "Cuando agotes las 10 solicitudes en tu provincia, activa el plan Plus para acceso nacional ilimitado."
             : "En el plan actual todas las métricas son ilimitadas."
         }
       >
@@ -454,7 +454,7 @@ export default function AjustesFacturacionPlan() {
 
       {tier === "agency_free" && (
         <SettingsCard
-          title="¿Qué desbloquea Marketplace?"
+          title="¿Qué desbloquea el plan Plus?"
           description="99€/mes · IVA excluido · cancela cuando quieras."
         >
           <ul className="space-y-2.5">
@@ -478,7 +478,7 @@ export default function AjustesFacturacionPlan() {
       {tier === "promoter_249" && (
         <SettingsCard
           title="¿Necesitas más promociones?"
-          description="Volumen · 329€/mes · IVA excluido · hasta 10 promociones activas."
+          description="Plan Ultra · 329€/mes · IVA excluido · hasta 10 promociones activas."
         >
           <ul className="space-y-2.5">
             <li className="flex items-start gap-2.5">
@@ -516,7 +516,7 @@ export default function AjustesFacturacionPlan() {
               Comparar todos los planes
             </p>
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-              Agencia · Promotor · Volumen · Enterprise · feature list completa.
+              Inmobiliaria · Promotor · Ultra · Enterprise · feature list completa.
             </p>
           </div>
           <Link

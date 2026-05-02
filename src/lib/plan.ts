@@ -147,21 +147,21 @@ export function deriveLimits(state: PlanState): PlanLimits {
 
 export const AGENCY_PACK_LABEL: Record<AgencyPack, string> = {
   none: "Sin pack agencia",
-  free: "Agencia · Gratis",
-  marketplace: "Agencia · Marketplace · 99€/mes",
+  free: "Inmobiliaria · Básico",
+  marketplace: "Inmobiliaria · Plus · 99€/mes",
 };
 
 export const PROMOTER_PACK_LABEL: Record<PromoterPack, string> = {
   none: "Sin pack promotor",
-  /* FILOSOFÍA · "trial" en DB se traduce visualmente a "Plan Gratis"
+  /* FILOSOFÍA · "trial" en DB se traduce visualmente a "Básico"
    *  porque el trial NO es un plan distinto · es una ventana de
-   *  180 días de bonus encima del plan Gratis. Cuando se acaba la
-   *  ventana, el promotor sigue en el plan Gratis (acceso a sus
-   *  datos · sin crear promociones nuevas) o decide pasar al de pago.
+   *  180 días de bonus encima del plan Básico. Cuando se acaba la
+   *  ventana, el promotor sigue en Básico (acceso a sus datos ·
+   *  sin crear promociones nuevas) o decide pasar al de pago.
    *  Ver `/ajustes/facturacion/plan` · explicación de las 3 cajas. */
-  trial: "Plan Gratis",
-  promoter_249: "Promotor · 249€/mes",
-  promoter_329: "Promotor · 329€/mes",
+  trial: "Básico",
+  promoter_249: "Plus · 249€/mes",
+  promoter_329: "Ultra · 329€/mes",
 };
 
 /** Etiqueta humana del estado total (paquete principal). */
@@ -223,11 +223,11 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
 };
 
 export const PLAN_LABEL: Record<PlanTier, string> = {
-  trial: "Plan Gratis",
-  promoter_249: "Promotor · 249€/mes",
-  promoter_329: "Promotor · 329€/mes",
-  agency_free: "Agencia · Gratis",
-  agency_marketplace: "Agencia · Marketplace · 99€/mes",
+  trial: "Básico",
+  promoter_249: "Plus · 249€/mes",
+  promoter_329: "Ultra · 329€/mes",
+  agency_free: "Inmobiliaria · Básico",
+  agency_marketplace: "Inmobiliaria · Plus · 99€/mes",
   enterprise: "Enterprise",
 };
 
