@@ -16,7 +16,7 @@
  * (20260502250000_promotion_drafts.sql) creó la tabla.
  */
 
-import type { WizardState } from "@/components/crear-promocion/types";
+import type { WizardState, StepId } from "@/components/crear-promocion/types";
 import { memCache } from "./memCache";
 
 const DRAFTS_KEY = "byvaro-promotion-drafts";
@@ -30,6 +30,11 @@ export interface PromotionDraft {
   /** % aproximado de completitud (0-100) para un badge de progreso. */
   progress: number;
   state: WizardState;
+  /** Último paso del wizard donde estaba el user al guardar. Cuando
+   *  reabre el draft, lo llevamos directamente ahí (no a "role") para
+   *  no obligarle a volver a recorrer todo. NULL en drafts creados
+   *  antes de esta feature · caen al default "role". */
+  currentStep?: StepId;
 }
 
 const genId = () => `d-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -115,16 +120,30 @@ export interface SaveDraftResult {
 
 /** Upsert: guarda un borrador. Si no se pasa id, crea uno nuevo.
  *  Devuelve info estructurada con el id final, si se truncó algún
- *  draft antiguo, y si falló por quota. */
-export function saveDraft(state: WizardState, existingId?: string): SaveDraftResult {
+ *  draft antiguo, y si falló por quota.
+ *
+ *  `currentStep` opcional · cuando el wizard llama saveDraft pasa el
+ *  step actual para que al reabrir el draft volvamos justo ahí.
+ *  Si no se pasa, se intenta preservar el step previo del mismo id
+ *  (no perder progreso de navegación al hacer un save sin step). */
+export function saveDraft(
+  state: WizardState,
+  existingId?: string,
+  currentStep?: StepId,
+): SaveDraftResult {
   let drafts = readRaw();
   const id = existingId ?? genId();
+  /* Preservar currentStep del draft anterior si el caller no lo pasa
+   * explícitamente · evita borrar el step al ejecutar un save legacy
+   * sin el nuevo argumento. */
+  const previous = drafts.find((d) => d.id === id);
   const draft: PromotionDraft = {
     id,
     name: state.nombrePromocion?.trim() || "Promoción sin nombre",
     updatedAt: Date.now(),
     progress: estimateProgress(state),
     state,
+    currentStep: currentStep ?? previous?.currentStep,
   };
   const idx = drafts.findIndex((d) => d.id === id);
   if (idx >= 0) drafts[idx] = draft;
@@ -188,6 +207,7 @@ async function syncDraftToSupabase(draft: PromotionDraft): Promise<void> {
         name: draft.name,
         progress: draft.progress,
         state: draft.state,
+        current_step: draft.currentStep ?? null,
         updated_at: new Date(draft.updatedAt).toISOString(),
       }, { onConflict: "id" });
     if (error) console.warn("[drafts:save]", error.message);
@@ -227,7 +247,7 @@ export async function hydrateDraftsFromSupabase(): Promise<void> {
     if (!user) return;
     const { data, error } = await supabase
       .from("promotion_drafts")
-      .select("id, name, progress, state, updated_at")
+      .select("id, name, progress, state, current_step, updated_at")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false });
     if (error) {
@@ -240,6 +260,7 @@ export async function hydrateDraftsFromSupabase(): Promise<void> {
       updatedAt: r.updated_at ? Date.parse(r.updated_at as string) : Date.now(),
       progress: (r.progress as number) ?? 0,
       state: r.state as WizardState,
+      currentStep: (r.current_step as StepId | null) ?? undefined,
     }));
     writeRaw(drafts);
     /* Notificar a consumidores que el cache cambió · `useState(() =>
@@ -272,8 +293,12 @@ function missingStepsFor(s: WizardState): string[] {
   return missing;
 }
 
-/** Prefijo que identifica un id de borrador en la URL de la ficha. */
-export const DRAFT_ID_PREFIX = "draft:";
+/** Prefijo que identifica un id de borrador en la URL de la ficha.
+ *  Antes era "draft:" pero el `:` es carácter especial en URIs y en
+ *  React Router se trataba de forma inconsistente (a veces el browser
+ *  lo encoded a %3A, a veces no, y la ruta `/promociones/:id` no
+ *  resolvía el param correctamente). Con guion no hay ambigüedad. */
+export const DRAFT_ID_PREFIX = "draft-";
 
 /** Mapea subtipo técnico a label comercial visible. */
 const SUBTIPO_LABEL: Record<string, string> = {
@@ -343,7 +368,13 @@ export function draftToPromotionData(d: PromotionDraft) {
 
   return {
     id: `${DRAFT_ID_PREFIX}${d.id}`,
-    code: s.refPromocion?.trim() || "DRAFT",
+    /* `code` vacío para borradores · si lo seteamos a "DRAFT" o
+     * cualquier otro literal, `promotionHref()` lo prefiere sobre el
+     * id y todos los drafts navegan a la MISMA URL (/promociones/DRAFT)
+     * · click en un borrador no abre la ficha. Con code undefined,
+     * promotionHref cae al id (que SÍ es único: draft:abc123) y la
+     * ruta se resuelve correctamente. */
+    code: s.refPromocion?.trim() || undefined,
     name: d.name,
     location: [s.direccionPromocion?.ciudad, s.direccionPromocion?.provincia]
       .filter(Boolean).join(", ") || "Sin ubicación",
