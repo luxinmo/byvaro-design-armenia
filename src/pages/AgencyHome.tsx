@@ -42,8 +42,13 @@ export default function AgencyHome() {
   const agency = useMemo(() => agencies.find((a) => a.id === user.agencyId), [user.agencyId]);
   /* Cartera reactiva · merge entre `agency.promotionsCollaborating`
    * (seed) y los override locales del agency (lo que ha aceptado o
-   * descartado vía /invite/:token). */
-  const carteraIds = useAgencyCartera(agency ?? agencies[0]);
+   * descartado vía /invite/:token).
+   *
+   * Defensivo · si la agencia no existe en seed (caso signup real
+   * tras /register · solo está en DB), pasamos null para que el
+   * hook devuelva Set vacío sin crashear. La hidratación posterior
+   * traerá la cartera real desde Supabase. */
+  const carteraIds = useAgencyCartera(agency ?? null);
 
   /* Promociones donde colabora la agencia · ids del seed + ids de la
    * cartera local. Filtros de visibilidad: activa, publicable, no
