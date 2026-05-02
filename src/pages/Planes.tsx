@@ -429,56 +429,93 @@ export default function Planes() {
     <TooltipProvider delayDuration={150}>
     <div className="min-h-full bg-background">
       <div className="px-4 sm:px-6 lg:px-8 pt-8 sm:pt-12 pb-16 max-w-content mx-auto">
-        {/* ═══════════ HERO ═══════════ */}
+        {/* ═══════════ HERO ═══════════
+         *  Subtitle adaptado al accountType · habla directamente a
+         *  ESTE usuario en lugar de explicar las dos personas a la vez. */}
         <header className="text-center max-w-2xl mx-auto">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Planes Byvaro
           </p>
           <h1 className="text-[28px] sm:text-[36px] lg:text-[44px] font-bold tracking-tight text-foreground leading-tight mt-2">
-            Vende obra nueva sin fricción.
+            {user.accountType === "agency"
+              ? "Crece sin pagar de más."
+              : "Vende obra nueva sin fricción."}
           </h1>
           <p className="text-[14.5px] sm:text-base text-muted-foreground mt-4 leading-relaxed">
-            CRM, ventas, microsites, IA de duplicados, WhatsApp y emails ·
-            todo en una sola plataforma. Empieza gratis si eres agencia ·
-            6 meses sin cargo si eres promotor.
+            {user.accountType === "agency"
+              ? "CRM, microsites, WhatsApp, IA de duplicados · todo incluido. Si te invita un promotor, gratis para siempre."
+              : "CRM, ventas, microsites, IA de duplicados, WhatsApp y emails · todo en una sola plataforma. 6 meses de prueba sin tarjeta."}
           </p>
         </header>
 
 
-        {/* ═══════════ DOS SECCIONES INDEPENDIENTES ═══════════
-          * Cada workspace puede tener AMBOS packs activos a la vez ·
-          * un promotor que quiere catálogo de inmobiliarias activa el
-          * pack agencia, una agencia que quiere comercializar activa
-          * el pack promotor. Los beneficios "alta nueva" (10
-          * solicitudes / 6m gratis) son específicos del pack que se
-          * eligió al CREAR la cuenta · ver `signupKind`. */}
-        <PackSection
-          title="Pack Inmobiliaria"
-          eyebrow="Para agencias colaboradoras"
-          description="Catálogo de promotores y comercializadores · puedes registrar clientes en sus promociones y cobrar comisiones."
-          plans={PLANS.filter((p) => p.audience === "agencia")}
-          activePlanIds={activePlanIds}
-          onSelect={(p) => setCheckoutPlan(p)}
-          crossPackNote={
-            user.accountType === "developer"
-              ? "Como promotor, activar el pack Inmobiliaria te da acceso al directorio. Las 10 solicitudes gratis son solo para nuevas altas de inmobiliaria · si activas Gratis aquí, tendrás 0 solicitudes (pasa a Marketplace para ilimitadas)."
-              : null
-          }
-        />
+        {/* ═══════════ JERARQUÍA POR TIPO DE CUENTA ═══════════
+          *
+          * Antes había DOS secciones equiparables (Pack Inmobiliaria
+          * + Pack Promotor) que confundían · el usuario veía planes
+          * que no aplicaban a su signup_kind y avisos negativos del
+          * tipo "esta opción te da 0 solicitudes".
+          *
+          * Ahora · 1 sección PRINCIPAL grande con SUS planes y, debajo,
+          * 1 banner-addon discreto para el otro pack (solo el plan de
+          * pago aplicable · sin "Gratis"/"Trial" cross-pack que no
+          * sirven). Si el usuario no quiere el addon, simplemente lo
+          * ignora · si lo quiere, click y activa.
+          *
+          * Mapping:
+          *   developer → primary "Pack Promotor" · addon "Marketplace 99€"
+          *   agency    → primary "Pack Inmobiliaria" · addon "Promotor 249€"  */}
+        {(() => {
+          const isAgencyAccount = user.accountType === "agency";
+          const primaryAudience: "agencia" | "promotor" = isAgencyAccount ? "agencia" : "promotor";
+          const primaryTitle = isAgencyAccount
+            ? "Tu plan · Inmobiliaria"
+            : "Tu plan · Promotor / Comercializador";
+          const primaryEyebrow = isAgencyAccount
+            ? "Trabajas con promotores · cobras comisiones"
+            : "Creas y publicas promociones de obra nueva";
+          const primaryDescription = isAgencyAccount
+            ? "Empieza gratis · si te invita un promotor el plan se mantiene gratuito para siempre."
+            : "6 meses de prueba sin tarjeta · luego 249€/mes (IVA excl.) · sin permanencia.";
+          const primaryPlans = PLANS.filter((p) => p.audience === primaryAudience);
 
-        <PackSection
-          title="Pack Promotor / Comercializador"
-          eyebrow="Para crear y publicar promociones"
-          description="Crea tu obra nueva, comparte con agencias, gestiona registros y cierra ventas."
-          plans={PLANS.filter((p) => p.audience === "promotor")}
-          activePlanIds={activePlanIds}
-          onSelect={(p) => setCheckoutPlan(p)}
-          crossPackNote={
-            user.accountType === "agency"
-              ? "Como inmobiliaria, activar el pack Promotor te permite crear tus propias promociones. Los 6 meses gratis son solo para altas nuevas de promotor · empezarás directamente en 249€/mes."
-              : null
-          }
-        />
+          /* Addon · plan de pago del OTRO pack · agency_free y trial
+           * son específicos del signup_kind original así que no
+           * aplican aquí. */
+          const addonPlan = isAgencyAccount
+            ? PLANS.find((p) => p.id === "promoter-249")
+            : PLANS.find((p) => p.id === "agency-marketplace");
+          const addonTitle = isAgencyAccount
+            ? "¿También quieres crear tus propias promociones?"
+            : "¿También quieres acceder al directorio de inmobiliarias?";
+          const addonHint = isAgencyAccount
+            ? "Activa el pack Promotor · facturación desde el día 1 (los 6 meses gratis son solo para altas nuevas de promotor)."
+            : "Activa el pack Inmobiliaria · directorio nacional · co-listings con otras agencias.";
+
+          return (
+            <>
+              <PackSection
+                title={primaryTitle}
+                eyebrow={primaryEyebrow}
+                description={primaryDescription}
+                plans={primaryPlans}
+                activePlanIds={activePlanIds}
+                onSelect={(p) => setCheckoutPlan(p)}
+                crossPackNote={null}
+              />
+
+              {addonPlan && (
+                <AddonSection
+                  title={addonTitle}
+                  hint={addonHint}
+                  plan={addonPlan}
+                  isActive={activePlanIds.has(addonPlan.id)}
+                  onSelect={() => setCheckoutPlan(addonPlan)}
+                />
+              )}
+            </>
+          );
+        })()}
 
         {/* Dialog de pago · se abre al pulsar la CTA de una card */}
         <PlanCheckoutDialog
@@ -752,6 +789,91 @@ function CurrentPlanBanner({
 /* ══════════════════════════════════════════════════════════════════
    PackSection · sección con título + nota cross-pack + grid de planes
    ══════════════════════════════════════════════════════════════════ */
+/* AddonSection · banner compacto que ofrece el cross-pack como
+ * upgrade opcional · jerárquicamente DEBAJO del pack principal · una
+ * sola card horizontal con precio + features clave + CTA. Sin avisos
+ * negativos · sin opciones que no aplican.
+ *
+ * Si el addon ya está activo, mostramos badge "Activado" y el botón
+ * cambia a "Gestionar" (lleva al dialog igual). */
+function AddonSection({
+  title,
+  hint,
+  plan,
+  isActive,
+  onSelect,
+}: {
+  title: string;
+  hint: string;
+  plan: Plan;
+  isActive: boolean;
+  onSelect: () => void;
+}) {
+  /* Solo mostramos las 3 features clave · el detalle completo está
+   * en el plan principal. Filtramos a strings (sin tooltips) para
+   * compactar. */
+  const keyFeatures = plan.features
+    .map((f) => (typeof f === "string" ? f : f.label))
+    .slice(0, 3);
+
+  return (
+    <section className="mt-8">
+      <article className={cn(
+        "bg-card border rounded-2xl p-5 sm:p-6 shadow-soft",
+        isActive ? "border-primary/40 ring-1 ring-primary/20" : "border-border",
+      )}>
+        <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-6">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-[15px] font-bold tracking-tight text-foreground">
+                {title}
+              </h3>
+              {isActive && (
+                <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-primary/10 text-primary text-[10.5px] font-semibold tracking-wide uppercase">
+                  <Check className="h-3 w-3" strokeWidth={2.5} />
+                  Activado
+                </span>
+              )}
+            </div>
+            <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
+              {hint}
+            </p>
+            <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+              {keyFeatures.map((f) => (
+                <li key={f} className="inline-flex items-center gap-1.5 text-[12px] text-foreground/80">
+                  <Check className="h-3 w-3 text-success shrink-0" strokeWidth={2.5} />
+                  {f}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
+            <div className="text-right">
+              <span className="text-2xl font-bold tracking-tight text-foreground">{plan.price}</span>
+              {plan.priceNote && (
+                <span className="text-[11.5px] text-muted-foreground ml-1">{plan.priceNote}</span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={onSelect}
+              className={cn(
+                "inline-flex items-center gap-1.5 h-10 px-5 rounded-full text-sm font-semibold transition-all shadow-soft",
+                isActive
+                  ? "border border-border bg-card text-foreground hover:bg-muted"
+                  : "bg-foreground text-background hover:bg-foreground/90",
+              )}
+            >
+              {isActive ? "Gestionar" : plan.ctaLabel}
+              {!isActive && <ArrowRight className="h-3.5 w-3.5" />}
+            </button>
+          </div>
+        </div>
+      </article>
+    </section>
+  );
+}
+
 function PackSection({
   title,
   eyebrow,
