@@ -194,25 +194,28 @@ export function memberInitials(member: Pick<TeamMember, "name">): string {
 
 /**
  * URL del avatar a usar para un miembro del equipo.
- *  - Si el miembro tiene `avatarUrl` propio (subido por el admin), se usa.
- *  - Si no, generamos una URL determinista de Pravatar a partir del
- *    email para que cada miembro tenga "su cara" estable.
+ *  - Si el miembro tiene `avatarUrl` propio (subido en
+ *    `/ajustes/perfil/personal` o por el admin desde `/equipo`), se usa.
+ *  - Si no, devuelve `""` · los consumers caen a iniciales con el color
+ *    del agente. Antes devolvíamos `https://i.pravatar.cc/150?u=email`
+ *    (caras aleatorias de extraños) que era confuso para usuarios
+ *    reales · "¿quién es esa persona?". Iniciales es lo correcto hasta
+ *    que el user suba foto.
  *
- * TODO(backend): cuando los miembros suban avatar real, reemplazar
- *   pravatar por la URL firmada de S3/equivalente.
+ * Cuando el storage real de avatars (Supabase Storage bucket
+ * `user-avatars`) esté conectado en el flow de perfil, los users que
+ * suban foto la verán aquí · el resto seguirá con iniciales.
  */
 export function getMemberAvatarUrl(member: Pick<TeamMember, "email" | "avatarUrl">): string {
-  if (member.avatarUrl) return member.avatarUrl;
-  return `https://i.pravatar.cc/150?u=${encodeURIComponent(member.email)}`;
+  return member.avatarUrl?.trim() || "";
 }
 
 /**
  * Versión por nombre — busca el miembro y devuelve su avatar.
- * Si no existe en el equipo (p.ej. agente histórico que ya no está),
- * devuelve un avatar pravatar usando el nombre como seed.
+ * Si no existe en el equipo o no tiene foto, devuelve `""` · los
+ * consumers caen a iniciales.
  */
 export function getAvatarUrlByName(name: string): string {
   const member = findTeamMember(name);
-  if (member) return getMemberAvatarUrl(member);
-  return `https://i.pravatar.cc/150?u=${encodeURIComponent(name)}`;
+  return member ? getMemberAvatarUrl(member) : "";
 }

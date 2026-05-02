@@ -43,10 +43,11 @@ function inferLanguages(agencyId: string): string[] {
   return Array.from(langs);
 }
 
-/* Avatar determinista por email · evita el efecto "siempre la misma
- * cara" cuando hay muchos miembros mock. */
-function avatarFor(email: string): string {
-  return `https://i.pravatar.cc/320?u=${encodeURIComponent(email)}`;
+/* Antes generábamos un avatar pravatar (caras aleatorias de extraños)
+ * por cada miembro sintético del seed · confundía a usuarios reales.
+ * Ahora devolvemos string vacío · los componentes caen a iniciales. */
+function avatarFor(_email: string): string {
+  return "";
 }
 
 /* Job title razonable según el rol · admin = Director / Partner ·
