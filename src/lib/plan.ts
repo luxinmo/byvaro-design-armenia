@@ -81,11 +81,23 @@ export const DEFAULT_PLAN_STATE_AGENCY: PlanState = {
   promoterPack: "none",
 };
 
-export const DEFAULT_PLAN_STATE_PROMOTER: PlanState = {
-  signupKind: "promoter",
-  agencyPack: "none",
-  promoterPack: "trial",
-};
+/** Genera el state default del promotor con trialEndsAt sintético
+ *  basado en la hora actual · usado para que la primera pintura
+ *  ANTES de que la hidratación termine ya muestre el contador
+ *  correcto en `/ajustes/facturacion/plan`. La hidratación
+ *  posterior reemplaza con la fecha real del DB. */
+function buildDefaultPromoterState(): PlanState {
+  const now = Date.now();
+  return {
+    signupKind: "promoter",
+    agencyPack: "none",
+    promoterPack: "trial",
+    trialStartedAt: new Date(now).toISOString(),
+    trialEndsAt: new Date(now + 180 * 24 * 60 * 60 * 1000).toISOString(),
+  };
+}
+
+export const DEFAULT_PLAN_STATE_PROMOTER: PlanState = buildDefaultPromoterState();
 
 /** Computa los límites efectivos a partir de la combinación de packs.
  *  Suma capabilities · si solo tiene agency_pack, no puede crear
@@ -271,7 +283,10 @@ export function formatTrialEndDate(state: PlanState): string | null {
 
 /* ══════ Cache local · render-only ════════════════════════════════ */
 
-const KEY_PREFIX = "byvaro.plan.v2::";
+/* Bump v3 · invalida cualquier cache previo que no tenía
+ *  trialStartedAt/trialEndsAt · evita estados inconsistentes
+ *  durante la primera pintura post-deploy. */
+const KEY_PREFIX = "byvaro.plan.v3::";
 const CHANGE_EVENT = "byvaro:plan-change";
 
 function keyFor(workspaceKey: string): string {

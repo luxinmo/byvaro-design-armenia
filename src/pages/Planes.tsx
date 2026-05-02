@@ -95,6 +95,29 @@ type FeatureBlock = {
    ══════════════════════════════════════════════════════════════════ */
 
 const PLANS: Plan[] = [
+  /* Plan Gratis del promotor · base canónica de la filosofía Byvaro.
+   * Acceso a sus datos siempre · sin crear promociones nuevas.
+   * Los nuevos signups arrancan aquí con 180 días de prueba completa
+   * encima · ver `src/lib/plan.ts::TRIAL_DURATION_DAYS`. */
+  {
+    id: "promoter-free",
+    audience: "promotor",
+    name: "Plan Gratis",
+    price: "0 €",
+    priceNote: "para siempre",
+    trialNote: "180 días de prueba completa al empezar",
+    blurb:
+      "Tu plan permanente · pensado para los ciclos del negocio inmobiliario. Conserva tus datos siempre, paga solo cuando produces.",
+    features: [
+      "Acceso a tus contactos, ventas y contratos firmados",
+      "Microsites archivados accesibles",
+      "Lectura completa del histórico (registros, visitas, emails)",
+      "180 días de prueba completa al darte de alta",
+      "Sin tarjeta requerida",
+      "Vuelve al plan de pago cuando tengas una promoción nueva",
+    ],
+    ctaLabel: "Empezar gratis",
+  },
   {
     id: "agency-free",
     audience: "agencia",
@@ -352,15 +375,14 @@ const FEATURES: FeatureBlock[] = [
    ══════════════════════════════════════════════════════════════════ */
 
 /* Mapeo de `PlanTier` → `Plan.id` del catálogo de cards · usado para
- *  resaltar la card del plan actual. trial/promoter_249 cuentan ambos
- *  como "promoter-249" en el grid (la card incluye los 6 meses gratis
- *  como trial note). */
+ *  resaltar la card del plan actual. tier=trial mapea a "promoter-free"
+ *  (Plan Gratis es el base · trial es solo una ventana). */
 function planIdFromTier(tier: PlanTier): string {
   switch (tier) {
     case "agency_free":         return "agency-free";
     case "agency_marketplace":  return "agency-marketplace";
     case "promoter_329":        return "promoter-329";
-    case "trial":
+    case "trial":               return "promoter-free";
     case "promoter_249":        return "promoter-249";
     case "enterprise":          return "enterprise";
     default:                    return "";
@@ -372,6 +394,7 @@ function tierFromPlanId(planId: string): PlanTier | null {
   switch (planId) {
     case "agency-free":         return "agency_free";
     case "agency-marketplace":  return "agency_marketplace";
+    case "promoter-free":       return "trial"; // Gratis activa el "trial" base
     case "promoter-249":        return "promoter_249";
     case "promoter-329":        return "promoter_329";
     case "enterprise":          return "enterprise";
@@ -385,19 +408,27 @@ export default function Planes() {
   const counters = useUsageCounters();
   const limits = PLAN_LIMITS[tier];
   const user = useCurrentUser();
-  /* `activePlanIds` · Set con los planes que están activos AHORA ·
-   *  con el modelo de packs split puede haber 0, 1 o 2 cards
-   *  marcadas (un workspace dual con agency_free + promoter_249
-   *  marca AMBAS). NO usamos `tier` legacy que solo tiene 1. */
+  /* `activePlanIds` · Set con los planes que están activos AHORA.
+   *
+   *  Filosofía Plan Gratis · ver `src/lib/plan.ts`:
+   *  - `promoter_pack='trial'` → el plan ACTIVO es "promoter-free"
+   *    (Plan Gratis es el plan base · trial es solo una ventana
+   *    de 180 días encima).
+   *  - `promoter_pack='promoter_249'` o `promoter_329'` → activo
+   *    el plan de pago correspondiente.
+   *  - `agency_pack='free'/'marketplace'` → activo el card de
+   *    inmobiliaria correspondiente.
+   *
+   *  Un workspace dual (developer + agency_pack) marca AMBAS cards. */
   const activePlanIds = useMemo(() => {
     const ids = new Set<string>();
     if (planState.agencyPack === "free") ids.add("agency-free");
     else if (planState.agencyPack === "marketplace") ids.add("agency-marketplace");
-    if (planState.promoterPack === "trial" || planState.promoterPack === "promoter_249") {
-      ids.add("promoter-249");
-    } else if (planState.promoterPack === "promoter_329") {
-      ids.add("promoter-329");
-    }
+    /* Promotor en trial → plan ACTIVO es Gratis (no 249) · el
+     * trial es una ventana de bonus, no un plan. */
+    if (planState.promoterPack === "trial") ids.add("promoter-free");
+    else if (planState.promoterPack === "promoter_249") ids.add("promoter-249");
+    else if (planState.promoterPack === "promoter_329") ids.add("promoter-329");
     return ids;
   }, [planState]);
 
@@ -476,7 +507,7 @@ export default function Planes() {
             : "Creas y publicas promociones de obra nueva";
           const primaryDescription = isAgencyAccount
             ? "Empieza gratis · si te invita un promotor el plan se mantiene gratuito para siempre."
-            : "6 meses de prueba sin tarjeta · luego 249€/mes (IVA excl.) · sin permanencia.";
+            : "El Plan Gratis es tu base permanente · 180 días de prueba completa al empezar · cuando produces, pasa al plan de pago.";
           const primaryPlans = PLANS.filter((p) => p.audience === primaryAudience);
 
           /* Addon · plan de pago del OTRO pack · agency_free y trial
@@ -917,7 +948,14 @@ function PackSection({
           </div>
         )}
       </header>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+      <div className={cn(
+        "grid grid-cols-1 gap-4 sm:gap-5",
+        /* 3 cards (Plan Gratis + 249 + 329) en línea desde sm para
+         * que la 3ª NO se baje · el usuario lo pidió explícitamente. */
+        plans.length === 3
+          ? "sm:grid-cols-3"
+          : "md:grid-cols-2",
+      )}>
         {plans.map((plan) => (
           <PlanCard
             key={plan.id}

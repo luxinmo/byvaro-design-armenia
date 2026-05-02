@@ -109,9 +109,10 @@ export default function AjustesFacturacionPlan() {
       <SettingsScreen
         title="Plan actual"
         description="Tu suscripción y los días de prueba que quedan."
+        maxWidth="wide"
       >
-        {/* ═══════════ 3 CAJAS ═══════════ */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+        {/* ═══════════ 3 CAJAS · siempre en línea desde sm ═══════════ */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* CAJA 1 · Plan actual = Gratis */}
           <article className="bg-card border border-border rounded-2xl p-5 shadow-soft flex flex-col">
             <div className="flex items-center gap-2 mb-3">

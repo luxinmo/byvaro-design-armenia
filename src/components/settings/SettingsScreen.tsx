@@ -19,14 +19,23 @@ export function SettingsScreen({
   description,
   actions,
   children,
+  maxWidth,
 }: {
   title: string;
   description?: string;
   actions?: ReactNode;
   children: ReactNode;
+  /** Override del ancho máximo · default 860px (lectura cómoda).
+   *  Páginas con KPI strips o grids de 3+ cards (ej. /ajustes/
+   *  facturacion/plan) pueden pasar "wide" para 1080px · evita
+   *  que las cajas queden estranguladas. */
+  maxWidth?: "default" | "wide";
 }) {
   return (
-    <div className="w-full max-w-[860px]">
+    <div className={cn(
+      "w-full",
+      maxWidth === "wide" ? "max-w-[1080px]" : "max-w-[860px]",
+    )}>
       <header className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0">
           <h1 className="text-xl font-semibold text-foreground tracking-tight">{title}</h1>
