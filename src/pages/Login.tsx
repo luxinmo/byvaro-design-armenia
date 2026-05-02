@@ -156,14 +156,19 @@ export default function Login() {
     const orgKind = Array.isArray(m.organizations) ? m.organizations[0]?.kind : m.organizations?.kind;
     const accountType: "developer" | "agency" = orgKind === "agency" ? "agency" : "developer";
 
-    /* Reusamos `loginAs` para mantener el resto de la app intacta · el
-     * sessionStorage se llena con accountType + agencyId/developerEmail
-     * como siempre. La sesión Supabase queda en localStorage del cliente
-     * (storageKey `byvaro.supabase.auth.v1`) gestionada por el SDK. */
+    /* Reusamos `loginAs` · ahora pasamos también organization_id real
+     * (de organization_members) y nombre del user (de auth metadata)
+     * para que useCurrentUser y useEmpresa los lean del sessionStorage
+     * sin necesidad de query Supabase en cada render. */
+    const userName = (authData.user.user_metadata?.name as string | undefined)
+      ?? authData.user.email?.split("@")[0]
+      ?? "";
     loginAs(
       accountType,
       accountType === "agency" ? m.organization_id : authData.user.email!,
       accountType === "agency" ? authData.user.email! : undefined,
+      m.organization_id, // ← organization_id real del workspace
+      userName,           // ← nombre del JWT metadata
     );
     setSubmitting(false);
 
