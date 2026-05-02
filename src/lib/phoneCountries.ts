@@ -350,3 +350,37 @@ export function buildPhone(country: PhoneCountry, localNumber: string): string {
   const local = localNumber.replace(/\D/g, "");
   return local ? `+${country.prefix} ${local}` : "";
 }
+
+/** Parsea un teléfono crudo (cualquier formato: "+34 688...", "+34688...",
+ *  "688...") en `{ prefix, local }`. Si no detecta país, devuelve el
+ *  número entero como local con el prefijo por defecto.
+ *
+ *  - "+34 688928822" → { prefix: "+34", local: "688928822" }
+ *  - "+34688928822"  → { prefix: "+34", local: "688928822" }
+ *  - "688928822"     → { prefix: "+34", local: "688928822" } (asume default ES)
+ *  - ""              → { prefix: "+34", local: "" } */
+export function parsePhone(
+  raw: string,
+  defaultPrefix = "+34",
+): { prefix: string; local: string } {
+  const trimmed = (raw || "").trim();
+  if (!trimmed) return { prefix: defaultPrefix, local: "" };
+  if (trimmed.startsWith("+")) {
+    const country = detectCountryFromPhone(trimmed);
+    if (country) {
+      return { prefix: `+${country.prefix}`, local: stripPrefix(trimmed, country) };
+    }
+    /* Sin match · partimos por el primer espacio si lo hay. */
+    const space = trimmed.indexOf(" ");
+    if (space > 0) {
+      return {
+        prefix: trimmed.slice(0, space),
+        local: trimmed.slice(space + 1).replace(/\D/g, ""),
+      };
+    }
+  }
+  /* No empieza por "+" · asumimos local sin prefijo · devolvemos el
+   *  default. Si el número trae espacios u otros separadores, los
+   *  limpiamos para que el guardado quede consistente. */
+  return { prefix: defaultPrefix, local: trimmed.replace(/\D/g, "") };
+}

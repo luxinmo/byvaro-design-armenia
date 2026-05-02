@@ -22,7 +22,7 @@ import {
   FUENTES_CLIENTES, type FuenteCliente, fuenteClienteLabel,
   PCT_OTROS, sumPct,
 } from "@/lib/marketingCatalog";
-import { PHONE_COUNTRIES } from "@/lib/phoneCountries";
+import { PHONE_COUNTRIES, parsePhone } from "@/lib/phoneCountries";
 import {
   MARKETING_CHANNELS, CATEGORY_LABEL, channelFaviconUrl,
   groupMarketingChannels, type MarketingChannelCategory,
@@ -1431,16 +1431,11 @@ function VerificationSection({
   /* Selecciona un miembro existente como representante · arrastra
    * sus datos al rep y guarda el `memberId` para auditoría. */
   const selectMember = (m: TeamMember) => {
-    /* Parse del teléfono: si empieza por "+", extraemos prefijo. */
-    let prefix = rep.phonePrefix || "+34";
-    let local = m.phone || "";
-    if (local.startsWith("+")) {
-      const space = local.indexOf(" ");
-      if (space > 0) {
-        prefix = local.slice(0, space);
-        local = local.slice(space + 1).replace(/\s+/g, " ");
-      }
-    }
+    /* Parse canónico del teléfono · soporta "+34 688...", "+34688..."
+     * y números sin prefijo. Antes el parser solo splitteaba por
+     * espacio · si el número venía concatenado (`+34688928822`) el
+     * prefix se duplicaba en pantalla (`+34 +34688928822`). */
+    const { prefix, local } = parsePhone(m.phone || "", rep.phonePrefix || "+34");
     update("verificacionRepresentante", {
       memberId: m.id,
       nombreCompleto: m.name,
