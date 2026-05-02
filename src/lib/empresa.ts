@@ -563,6 +563,53 @@ function saveEmpresaForOrg(orgId: string, e: Empresa) {
       const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
       if (!isSupabaseConfigured) return;
 
+      /* PRE-CHECK · la sesión Supabase debe corresponder a un member
+       *  admin del orgId que estamos guardando. Si no, los UPDATEs
+       *  fallan con 42501 (RLS) y el toast genérico dice 'permisos'
+       *  · en realidad el problema es que el JWT no coincide con la
+       *  cuenta seleccionada en el AccountSwitcher.
+       *
+       *  Causas típicas: sesión Supabase caducada, AccountSwitcher
+       *  cambió sessionStorage sin re-auth (caso fixed en ADR pero
+       *  por si quedó algún residuo), o el user mock no tiene
+       *  password Supabase válida. */
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        if (shouldShowToast("session_missing")) {
+          const { toast } = await import("sonner");
+          toast.error("No tienes sesión Supabase activa", {
+            description: "Cierra sesión e inicia sesión de nuevo desde /login para que los cambios persistan.",
+          });
+        }
+        return;
+      }
+      const { data: ms, error: msErr } = await supabase
+        .from("organization_members")
+        .select("role,status")
+        .eq("user_id", user.id)
+        .eq("organization_id", orgId)
+        .eq("status", "active")
+        .maybeSingle();
+      if (msErr) console.warn("[saveEmpresa] members lookup:", msErr.message);
+      if (!ms) {
+        if (shouldShowToast("session_mismatch")) {
+          const { toast } = await import("sonner");
+          toast.error("Tu sesión está vinculada a otra cuenta", {
+            description: `El JWT activo (${user.email}) no es member de ${orgId}. Cierra sesión y entra con la cuenta correcta para guardar.`,
+          });
+        }
+        return;
+      }
+      if (ms.role !== "admin") {
+        if (shouldShowToast("session_not_admin")) {
+          const { toast } = await import("sonner");
+          toast.error("No eres admin de esta empresa", {
+            description: "Solo los admins pueden editar los datos de empresa. Contacta con el admin de tu workspace.",
+          });
+        }
+        return;
+      }
+
       /* Map Empresa shape → split entre `organizations` (campos core)
        * y `organization_profiles` (resto). Mantenemos la convención
        * de que el cliente nunca toca `kind` ni `id` del row. */
