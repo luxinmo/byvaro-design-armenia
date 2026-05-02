@@ -34,7 +34,7 @@
  *  Hoy hacen `openUpgradeModal` para no romper el flujo de validación.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -381,10 +381,25 @@ function tierFromPlanId(planId: string): PlanTier | null {
 
 export default function Planes() {
   const tier = usePlan();
+  const planState = usePlanState();
   const counters = useUsageCounters();
   const limits = PLAN_LIMITS[tier];
   const user = useCurrentUser();
-  const activePlanId = planIdFromTier(tier);
+  /* `activePlanIds` · Set con los planes que están activos AHORA ·
+   *  con el modelo de packs split puede haber 0, 1 o 2 cards
+   *  marcadas (un workspace dual con agency_free + promoter_249
+   *  marca AMBAS). NO usamos `tier` legacy que solo tiene 1. */
+  const activePlanIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (planState.agencyPack === "free") ids.add("agency-free");
+    else if (planState.agencyPack === "marketplace") ids.add("agency-marketplace");
+    if (planState.promoterPack === "trial" || planState.promoterPack === "promoter_249") {
+      ids.add("promoter-249");
+    } else if (planState.promoterPack === "promoter_329") {
+      ids.add("promoter-329");
+    }
+    return ids;
+  }, [planState]);
 
   /* Plan seleccionado · cuando el user pulsa la CTA de una card.
    *  Si es null, el dialog está cerrado. */
@@ -442,7 +457,7 @@ export default function Planes() {
           eyebrow="Para agencias colaboradoras"
           description="Catálogo de promotores y comercializadores · puedes registrar clientes en sus promociones y cobrar comisiones."
           plans={PLANS.filter((p) => p.audience === "agencia")}
-          activePlanId={activePlanId}
+          activePlanIds={activePlanIds}
           onSelect={(p) => setCheckoutPlan(p)}
           crossPackNote={
             user.accountType === "developer"
@@ -456,7 +471,7 @@ export default function Planes() {
           eyebrow="Para crear y publicar promociones"
           description="Crea tu obra nueva, comparte con agencias, gestiona registros y cierra ventas."
           plans={PLANS.filter((p) => p.audience === "promotor")}
-          activePlanId={activePlanId}
+          activePlanIds={activePlanIds}
           onSelect={(p) => setCheckoutPlan(p)}
           crossPackNote={
             user.accountType === "agency"
@@ -742,7 +757,7 @@ function PackSection({
   eyebrow,
   description,
   plans,
-  activePlanId,
+  activePlanIds,
   onSelect,
   crossPackNote,
 }: {
@@ -750,7 +765,9 @@ function PackSection({
   eyebrow: string;
   description: string;
   plans: Plan[];
-  activePlanId: string | null;
+  /** Set de IDs de plan activos · permite marcar 2 cards a la vez
+   *  cuando el workspace tiene ambos packs (agency + promoter). */
+  activePlanIds: Set<string>;
   onSelect: (plan: Plan) => void;
   /** Aviso solo visible cuando el viewer NO encaja en el signupKind
    *  natural del pack (promotor activando agencia, etc.). Explica
@@ -783,7 +800,7 @@ function PackSection({
           <PlanCard
             key={plan.id}
             plan={plan}
-            isActive={plan.id === activePlanId}
+            isActive={activePlanIds.has(plan.id)}
             onSelect={() => onSelect(plan)}
           />
         ))}
