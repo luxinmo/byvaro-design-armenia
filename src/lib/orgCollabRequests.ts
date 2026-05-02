@@ -109,12 +109,18 @@ export function currentOrgIdentity(user: CurrentUser): {
   orgKind: OrgKind;
   orgName: string;
 } {
+  /* Cadena de resolución del orgId · idéntica a `userOrgId()` en
+   *  `src/lib/empresa.ts` · ambas DEBEN coincidir para que el banner
+   *  "no eres visible" y la pantalla de preview lean la misma empresa.
+   *
+   *  1. `user.organizationId` · UUID real de la DB · seteado por
+   *     `loginAs()` tras login/signup vía Supabase.
+   *  2. `user.agencyId` · legacy (mockUsers + agency seeds, también
+   *     workspaces externos `prom-X`).
+   *  3. Sentinel default por accountType. */
   if (user.accountType === "developer") {
-    /* `agencyId` actúa como organizationId también para developers
-     *  no-Luxinmo (workspaces externos `prom-X`). Si no lo lleva, cae
-     *  al default `developer-default` (Luxinmo). */
     return {
-      orgId: user.agencyId || "developer-default",
+      orgId: user.organizationId || user.agencyId || "developer-default",
       orgKind: "developer",
       /* El nombre se rellena en el caller con `useEmpresa()` ·
        *  mantener este helper sin acceso al storage de empresa. */
@@ -122,7 +128,7 @@ export function currentOrgIdentity(user: CurrentUser): {
     };
   }
   return {
-    orgId: user.agencyId ?? "ag-unknown",
+    orgId: user.organizationId || user.agencyId || "ag-unknown",
     orgKind: "agency",
     orgName: user.name,
   };
