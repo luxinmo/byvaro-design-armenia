@@ -51,7 +51,7 @@ import {
   useHasPendingRequestTo,
   type OrgKind,
 } from "@/lib/orgCollabRequests";
-import { AlertTriangle, Lock, Send } from "lucide-react";
+import { AlertTriangle, Lock, Send, X, Check } from "lucide-react";
 import { toast } from "sonner";
 import type { Empresa as EmpresaType } from "@/lib/empresa";
 import type { CurrentUser } from "@/lib/currentUser";
@@ -502,6 +502,24 @@ export default function Empresa({
           <CompanyVisibilityBanner missing={myIdentityCheck.missing} />
         )}
 
+        {/* ═════ Pantalla bloqueante "No eres visible" ═════
+            Si el dueño activa "Previsualizar como usuario" pero
+            todavía le faltan los campos críticos para ser visible
+            (logo, identidad, contacto), reemplazamos el preview por
+            esta pantalla informativa. Evita que vea una ficha vacía
+            y crea fricción intencional para completar antes de
+            compartirla. */}
+        {!isVisitor && viewMode === "preview" && (() => {
+          const visibilityMissing = getPublicVisibilityMissing(empresa);
+          if (visibilityMissing.length === 0) return null;
+          return (
+            <NotVisibleScreen
+              missing={visibilityMissing}
+              onBackToEdit={() => setViewMode("edit")}
+            />
+          );
+        })()}
+
         {/* ═════ CTA · enviar solicitud de colaboración ═════
             REGLA · NUNCA mostrar este CTA en la ficha propia (un
             usuario no puede solicitarse colaboración a sí mismo).
@@ -529,6 +547,13 @@ export default function Empresa({
         {/* ═════ Slot del visitante (overlay promotor: contrato + acciones) ═════ */}
         {isVisitor && visitorSlot}
 
+        {/* En preview mode con datos faltantes, ocultamos toda la
+         *  ficha y mostramos solo la pantalla "No eres visible" arriba.
+         *  Cuando el dueño rellene los campos, la pantalla
+         *  desaparece y la preview real se muestra. */}
+        {!isVisitor && viewMode === "preview"
+          && getPublicVisibilityMissing(empresa).length > 0 ? null : (
+        <>
         {/* ═════ Profile hero ═════ */}
         <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-soft">
           {/* Cover · si no hay portada, mostramos un patrón geométrico
@@ -698,6 +723,8 @@ export default function Empresa({
             <EmpresaSidebar empresa={empresa} oficinasCount={oficinas.length} update={update} />
           )}
         </div>
+        </>
+        )}
       </div>
 
       {/* ═════ Modales de edición (solo dueño) ═════ */}
@@ -753,6 +780,138 @@ function categoryHeroColor(c: EmpresaCategory): string {
     case "promotor":        return "text-success";
     case "comercializador": return "text-warning";
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Visibility check para "Previsualizar como usuario"
+   ═══════════════════════════════════════════════════════════════════
+
+   Calcula los campos críticos para que la ficha pública sea
+   presentable a un colaborador. Diferente de
+   `hasMinimumIdentityData()` (que valida envío de solicitudes) ·
+   este check incluye también el LOGO y el nombre comercial · sin
+   ellos el visitante ve un perfil vacío que da mala imagen y le
+   resta confianza al promotor / inmobiliaria.
+
+   Cada entry tiene:
+     · `key` · estable para keys de React.
+     · `label` · qué le decimos al user que falta.
+     · `done(empresa)` · boolean true cuando está completo.
+
+   La pantalla "No eres visible" muestra TODOS los items con
+   estado check/cross para que el user vea de un vistazo qué
+   tiene y qué falta. */
+type VisibilityField = {
+  key: string;
+  label: string;
+  done: (e: EmpresaType) => boolean;
+};
+
+const VISIBILITY_FIELDS: VisibilityField[] = [
+  { key: "logo", label: "Logo de la empresa (avatar)", done: (e) => !!e.logoUrl?.trim() },
+  { key: "nombre", label: "Nombre comercial", done: (e) => !!e.nombreComercial?.trim() },
+  { key: "razon", label: "Razón social", done: (e) => !!e.razonSocial?.trim() },
+  { key: "cif", label: "CIF/NIF/VAT", done: (e) => !!e.cif?.trim() },
+  {
+    key: "direccion",
+    label: "Dirección fiscal (ciudad y país)",
+    done: (e) =>
+      !!(e.direccionFiscalCompleta?.trim()
+        || (e.direccionFiscal?.ciudad?.trim() && e.direccionFiscal?.pais?.trim())),
+  },
+  {
+    key: "contacto",
+    label: "Email o teléfono de contacto",
+    done: (e) => !!(e.email?.trim() || e.telefono?.trim()),
+  },
+];
+
+/** Devuelve los campos faltantes para que la ficha sea visible. */
+function getPublicVisibilityMissing(empresa: EmpresaType): VisibilityField[] {
+  return VISIBILITY_FIELDS.filter((f) => !f.done(empresa));
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Pantalla "No eres visible" en preview con datos faltantes
+   ═══════════════════════════════════════════════════════════════════ */
+function NotVisibleScreen({
+  missing, onBackToEdit,
+}: {
+  missing: VisibilityField[];
+  onBackToEdit: () => void;
+}) {
+  /* Lista completa con check/cross · damos contexto · el usuario ve
+   *  qué tiene Y qué falta · más motivador que solo lista de errores. */
+  return (
+    <section className="mt-2 mb-6 rounded-2xl border border-border bg-card overflow-hidden shadow-soft">
+      <div className="px-5 sm:px-7 py-7 sm:py-8 text-center bg-muted/30 border-b border-border">
+        <div className="mx-auto h-12 w-12 rounded-2xl bg-warning/15 text-warning grid place-items-center mb-3">
+          <AlertTriangle className="h-5 w-5" strokeWidth={1.8} />
+        </div>
+        <h2 className="text-[18px] sm:text-[20px] font-bold tracking-tight text-foreground">
+          No eres visible para tus colaboradores
+        </h2>
+        <p className="mt-2 text-[13px] sm:text-[13.5px] text-muted-foreground leading-relaxed max-w-md mx-auto">
+          Tu ficha pública aún no tiene los datos mínimos para que un promotor o una inmobiliaria pueda confiar en ti. Para ser visible al menos debes añadir estos campos:
+        </p>
+      </div>
+
+      <div className="px-5 sm:px-7 py-5 sm:py-6">
+        <ul className="space-y-2">
+          {VISIBILITY_FIELDS.map((f) => {
+            const isMissing = missing.some((m) => m.key === f.key);
+            return (
+              <li
+                key={f.key}
+                className={cn(
+                  "flex items-center gap-3 rounded-xl border px-3 py-2.5",
+                  isMissing
+                    ? "border-warning/30 bg-warning/5"
+                    : "border-success/20 bg-success/5",
+                )}
+              >
+                <span
+                  className={cn(
+                    "h-6 w-6 rounded-full grid place-items-center shrink-0",
+                    isMissing
+                      ? "bg-warning/20 text-warning"
+                      : "bg-success/20 text-success",
+                  )}
+                >
+                  {isMissing ? (
+                    <X className="h-3 w-3" strokeWidth={2.5} />
+                  ) : (
+                    <Check className="h-3 w-3" strokeWidth={2.5} />
+                  )}
+                </span>
+                <span
+                  className={cn(
+                    "text-[13px] flex-1",
+                    isMissing ? "text-foreground" : "text-muted-foreground line-through",
+                  )}
+                >
+                  {f.label}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+
+        <div className="mt-5 flex flex-col sm:flex-row gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={onBackToEdit}
+            className="inline-flex items-center justify-center gap-1.5 h-10 px-5 rounded-full bg-foreground text-background text-[13px] font-semibold hover:bg-foreground/90 transition-colors shadow-soft"
+          >
+            Volver a editar y completar
+          </button>
+          <p className="text-[11.5px] text-muted-foreground self-center">
+            Cuando completes los campos, este aviso desaparece y la ficha será visible.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 /* ═══════════════════════════════════════════════════════════════════
