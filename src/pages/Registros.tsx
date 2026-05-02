@@ -1366,9 +1366,9 @@ function RegistroDetail({
           role: agency.contactoPrincipal.rol,
         }
       : null;
-  const agentAvatar = agent
-    ? `https://i.pravatar.cc/150?u=${encodeURIComponent(agent.email)}`
-    : null;
+  /* Sin foto real → null · el componente cae a iniciales. Antes
+   * caía a pravatar (caras aleatorias) que confundía. */
+  const agentAvatar: string | null = null;
 
   return (
     <div className="bg-card overflow-hidden flex flex-col h-full lg:h-auto lg:border lg:border-border lg:rounded-2xl lg:shadow-soft">

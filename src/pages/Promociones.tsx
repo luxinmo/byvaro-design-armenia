@@ -977,6 +977,18 @@ export default function Promociones() {
 
   const isTrending = (p: DevPromotion) => getActivity(p.id).trend >= TRENDING_THRESHOLD;
 
+  /* Modo del empty state · si NO hay promociones en absoluto (workspace
+   *  recién creado / aún sin invitaciones aceptadas), pintamos el
+   *  bienvenida con CTA en lugar del genérico "sin resultados". El
+   *  bienvenida se omite si el usuario está filtrando · en ese caso es
+   *  la búsqueda la que vacía la lista, no el workspace. */
+  const emptyMode: EmptyStateMode = (() => {
+    if (allPromotions.length === 0 && !hasFilters && !search.trim()) {
+      return isAgencyUser ? "welcome-agency" : "welcome-developer";
+    }
+    return "filtered";
+  })();
+
   return (
     <div className="flex flex-col min-h-full bg-background">
       {/* ═══════════ HEADER ═══════════ */}
@@ -1105,7 +1117,7 @@ export default function Promociones() {
         <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
           <div className="max-w-content mx-auto">
             {sortedAndFiltered.length === 0 ? (
-              <EmptyState />
+              <EmptyState mode={emptyMode} onCreate={() => navigate("/crear-promocion")} />
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {sortedAndFiltered.map(p => {
@@ -1133,7 +1145,7 @@ export default function Promociones() {
       <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
         <div className="max-w-content mx-auto flex flex-col gap-3 lg:gap-4">
           {sortedAndFiltered.length === 0 ? (
-            <EmptyState />
+            <EmptyState mode={emptyMode} onCreate={() => navigate("/crear-promocion")} />
           ) : (
             sortedAndFiltered.map((p) => {
               /* Stats LIVE · derivados de unidades reales · cae a seed
@@ -2248,7 +2260,63 @@ function Metric({ label, value, className }: { label: string; value: string; cla
   );
 }
 
-function EmptyState() {
+/** Estado vacío del listado.
+ *  - `welcome-developer` · workspace recién creado, 0 promociones · CTA
+ *    para crear la primera. NO se muestra si hay filtros activos
+ *    (en ese caso pintamos "sin resultados" para que el user entienda
+ *    que es la búsqueda la que devuelve 0).
+ *  - `welcome-agency` · agencia que aún no tiene promociones en su
+ *    cartera (sin invitaciones aceptadas). Sin CTA propio · ellas no
+ *    crean promociones · solo informa.
+ *  - `filtered` (default) · hay datos pero el filtro/búsqueda no los
+ *    deja ver. */
+type EmptyStateMode = "filtered" | "welcome-developer" | "welcome-agency";
+
+function EmptyState({
+  mode = "filtered",
+  onCreate,
+}: {
+  mode?: EmptyStateMode;
+  onCreate?: () => void;
+}) {
+  if (mode === "welcome-developer") {
+    return (
+      <div className="py-20 text-center max-w-md mx-auto">
+        <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary grid place-items-center mx-auto mb-4">
+          <Building2 className="h-5 w-5" strokeWidth={1.75} />
+        </div>
+        <h3 className="text-sm font-semibold">Crea tu primera promoción o comercialización</h3>
+        <p className="text-[12.5px] text-muted-foreground mt-1.5 leading-relaxed">
+          Cuando publiques una promoción podrás compartirla con tus
+          inmobiliarias colaboradoras y empezar a recibir clientes.
+        </p>
+        {onCreate && (
+          <button
+            type="button"
+            onClick={onCreate}
+            className="mt-5 inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-foreground text-background text-[13px] font-semibold hover:bg-foreground/90 transition-colors shadow-soft"
+          >
+            <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+            Crear promoción
+          </button>
+        )}
+      </div>
+    );
+  }
+  if (mode === "welcome-agency") {
+    return (
+      <div className="py-20 text-center max-w-md mx-auto">
+        <div className="h-12 w-12 rounded-2xl bg-muted grid place-items-center mx-auto mb-4">
+          <Mail className="h-5 w-5 text-muted-foreground" strokeWidth={1.75} />
+        </div>
+        <h3 className="text-sm font-semibold">Aún no colaboras en ninguna promoción</h3>
+        <p className="text-[12.5px] text-muted-foreground mt-1.5 leading-relaxed">
+          Cuando un promotor te invite a colaborar o aceptes una solicitud,
+          su promoción aparecerá aquí.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="py-20 text-center">
       <div className="h-12 w-12 rounded-2xl bg-muted grid place-items-center mx-auto mb-4">

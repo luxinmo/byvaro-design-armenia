@@ -71,32 +71,26 @@ export function ActivityTimeline({
 }
 
 /** Resuelve el avatar del actor del evento · usa datos reales cuando
- *  los hay (audit.actor · decidedByUserId → TEAM_MEMBERS · contacto
- *  principal de la agencia) y cae a pravatar determinista en el resto.
- *  Devuelve null para eventos del sistema (se pinta un bot). */
+ *  los hay (decidedByUserId → TEAM_MEMBERS) y devuelve null en el
+ *  resto · los consumers caen a iniciales. Devuelve null para eventos
+ *  del sistema (se pinta un bot). Antes esta función caía a pravatar
+ *  (caras aleatorias) que confundía a usuarios reales. */
 function resolveActorAvatar(event: RegistroTimelineEvent, record: Registro): string | null {
   // Sistema → sin foto (se pinta icono bot)
   if (event.actor === "Sistema") return null;
-  // Submitted · colaborador · email real del audit si existe, sino el
-  // del contacto principal de la agencia (seed).
-  if (event.type === "submitted") {
-    if (record.audit?.actor.email) {
-      return `https://i.pravatar.cc/150?u=${encodeURIComponent(record.audit.actor.email)}`;
-    }
-    if (record.origen === "collaborator" && record.agencyId) {
-      const ag = agencies.find((a) => a.id === record.agencyId);
-      if (ag?.contactoPrincipal?.email) {
-        return `https://i.pravatar.cc/150?u=${encodeURIComponent(ag.contactoPrincipal.email)}`;
-      }
-    }
-  }
-  // Decision · miembro del equipo del promotor.
+  // Decision · miembro del equipo del promotor con avatar real.
   if (event.type === "decision" && record.decidedByUserId) {
     const m = findTeamMember(record.decidedByUserId);
-    if (m) return getMemberAvatarUrl(m);
+    const url = m ? getMemberAvatarUrl(m) : "";
+    if (url) return url;
   }
-  // Fallback · pravatar determinista por nombre (si hay actor).
-  if (event.actor) return `https://i.pravatar.cc/150?u=${encodeURIComponent(event.actor)}`;
+  // Submitted · colaborador con avatar real (si lo tiene).
+  if (event.type === "submitted" && record.audit?.actor.email) {
+    const m = findTeamMember(record.audit.actor.email);
+    const url = m ? getMemberAvatarUrl(m) : "";
+    if (url) return url;
+  }
+  // Sin foto real · null · el caller pinta iniciales con el color del actor.
   return null;
 }
 
