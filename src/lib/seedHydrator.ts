@@ -201,7 +201,7 @@ export function hydrateSeedsFromSupabase(): Promise<void> {
       const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
       if (!isSupabaseConfigured) return;
 
-      const [promosRes, unitsRes, orgsRes, profilesRes, leadsRes, salesRes, registrosRes] = await Promise.all([
+      const [promosRes, unitsRes, orgsRes, profilesRes, leadsRes, salesRes, registrosRes, privateMetaRes] = await Promise.all([
         supabase.from("promotions").select("*"),
         supabase.from("promotion_units").select("*"),
         supabase.from("organizations").select("*"),
@@ -209,7 +209,23 @@ export function hydrateSeedsFromSupabase(): Promise<void> {
         supabase.from("leads").select("*"),
         supabase.from("sales").select("*"),
         supabase.from("registros").select("*"),
+        /* RPC · devuelve private_metadata SOLO para promociones donde
+         *  el caller es owner o colaborador activo. Cross-tenant queries
+         *  reciben array vacío para esa promo (nunca expone commission,
+         *  comerciales, collaboration config a no participantes). */
+        supabase.rpc("list_promotion_private_metadata"),
       ]);
+
+      /* Merge private_metadata en cada PromotionRow.metadata antes de
+       *  pasar a mergePromotionFromDb · para participantes restituye
+       *  commission/comerciales/collaboration; para no participantes la
+       *  RPC no devuelve esa fila y los campos quedan en seed defaults. */
+      const privByPromo = new Map<string, Record<string, unknown>>();
+      if (!privateMetaRes.error && privateMetaRes.data) {
+        for (const r of privateMetaRes.data as Array<{ promotion_id: string; private_metadata: Record<string, unknown> }>) {
+          privByPromo.set(r.promotion_id, r.private_metadata ?? {});
+        }
+      }
 
       if (promosRes.error) {
         console.warn("[seedHydrator:promos]", promosRes.error.message);
@@ -220,7 +236,16 @@ export function hydrateSeedsFromSupabase(): Promise<void> {
          *  collaboration config, etc.). Promos en DB sin match en
          *  seed se añaden como nueva entrada. */
         const dbById = new Map<string, PromotionRow>();
-        for (const r of promosRes.data as PromotionRow[]) dbById.set(r.id, r);
+        for (const r of promosRes.data as PromotionRow[]) {
+          /* Merge private_metadata en metadata si el viewer puede verlo.
+           *  Para no-participantes, privByPromo no tiene la entrada y la
+           *  promo queda con metadata público. */
+          const priv = privByPromo.get(r.id);
+          if (priv) {
+            r.metadata = { ...(r.metadata ?? {}), ...priv };
+          }
+          dbById.set(r.id, r);
+        }
         /* Patch existing developerOnlyPromotions */
         for (const p of developerOnlyPromotions) {
           const r = dbById.get(p.id);

@@ -555,18 +555,14 @@ function saveEmpresaForOrg(orgId: string, e: Empresa) {
       /* Map Empresa shape → split entre `organizations` (campos core)
        * y `organization_profiles` (resto). Mantenemos la convención
        * de que el cliente nunca toca `kind` ni `id` del row. */
+      /* Datos PÚBLICOS del directorio · cualquier authenticated puede
+       *  leerlos (campos display: nombre, logo, web, ciudad, redes). */
       const orgPatch: Record<string, unknown> = {
         legal_name: e.razonSocial || null,
         display_name: e.nombreComercial || null,
-        tax_id: e.cif || null,
-        email: e.email || null,
-        phone: e.telefono || null,
         website: e.sitioWeb || null,
         logo_url: e.logoUrl || null,
         cover_url: e.coverUrl || null,
-        address_line: e.direccionFiscalCompleta || null,
-        address_street: e.direccionFiscal?.direccion || null,
-        address_postal_code: e.direccionFiscal?.codigoPostal || null,
         address_city: e.direccionFiscal?.ciudad || null,
         address_province: e.direccionFiscal?.provincia || null,
         country: e.direccionFiscal?.pais || null,
@@ -590,21 +586,12 @@ function saveEmpresaForOrg(orgId: string, e: Empresa) {
         license_number: e.licencias?.[0]?.numero ?? null,
         licenses: e.licencias ?? null,
         attention_languages: e.idiomasAtencion ?? null,
-        commission_national_default: e.comisionNacionalDefault,
-        commission_international_default: e.comisionInternacionalDefault,
-        commission_payment_term_days: e.plazoPagoComisionDias,
-        main_contact_email: e.email || null,
-        main_contact_phone: e.telefono || null,
         schedule: e.horario || null,
         linkedin: e.linkedin || null,
         instagram: e.instagram || null,
         facebook: e.facebook || null,
         youtube: e.youtube || null,
         tiktok: e.tiktok || null,
-        marketing_top_nationalities: e.marketingTopNacionalidades ?? null,
-        marketing_product_types: e.marketingTiposProducto ?? null,
-        marketing_client_sources: e.marketingFuentesClientes ?? null,
-        marketing_portals: e.marketingPortales ?? null,
         google_place_id: e.googlePlaceId || null,
         google_rating: e.googleRating || null,
         google_ratings_total: e.googleRatingsTotal || null,
@@ -615,6 +602,34 @@ function saveEmpresaForOrg(orgId: string, e: Empresa) {
         .from("organization_profiles").upsert(profilePatch, { onConflict: "organization_id" });
       if (profErr) {
         console.warn("[saveEmpresa] organization_profiles upsert failed:", profErr.message);
+      }
+
+      /* Datos PRIVADOS · RLS member-only. Cross-tenant queries NUNCA
+       *  los ven · son la frontera de privacidad inter-empresa. */
+      const privatePatch: Record<string, unknown> = {
+        organization_id: orgId,
+        tax_id: e.cif || null,
+        internal_email: e.email || null,
+        internal_phone: e.telefono || null,
+        fiscal_street: e.direccionFiscal?.direccion || null,
+        fiscal_postal_code: e.direccionFiscal?.codigoPostal || null,
+        fiscal_address_line: e.direccionFiscalCompleta || null,
+        commission_national_default: e.comisionNacionalDefault,
+        commission_international_default: e.comisionInternacionalDefault,
+        commission_payment_term_days: e.plazoPagoComisionDias,
+        marketing_top_nationalities: e.marketingTopNacionalidades ?? null,
+        marketing_product_types: e.marketingTiposProducto ?? null,
+        marketing_client_sources: e.marketingFuentesClientes ?? null,
+        marketing_portals: e.marketingPortales ?? null,
+        main_contact_name: e.nombreComercial || null,
+        main_contact_email: e.email || null,
+        main_contact_phone: e.telefono || null,
+        updated_at: new Date().toISOString(),
+      };
+      const { error: privErr } = await supabase
+        .from("organization_private_data").upsert(privatePatch, { onConflict: "organization_id" });
+      if (privErr) {
+        console.warn("[saveEmpresa] organization_private_data upsert failed:", privErr.message);
       }
     } catch (err) {
       console.warn("[saveEmpresa] supabase write skipped:", err);

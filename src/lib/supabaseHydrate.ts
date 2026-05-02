@@ -106,13 +106,35 @@ interface OfficeRow {
   created_at: string;
 }
 
-function rowToEmpresa(o: OrgRow, p: ProfileRow | null): Empresa {
+interface PrivateData {
+  tax_id: string | null;
+  internal_email: string | null;
+  internal_phone: string | null;
+  fiscal_street: string | null;
+  fiscal_postal_code: string | null;
+  fiscal_address_line: string | null;
+  commission_national_default: number | null;
+  commission_international_default: number | null;
+  commission_payment_term_days: number | null;
+  marketing_top_nationalities: unknown;
+  marketing_product_types: unknown;
+  marketing_client_sources: unknown;
+  marketing_portals: string[] | null;
+  main_contact_name: string | null;
+  main_contact_email: string | null;
+  main_contact_phone: string | null;
+}
+
+function rowToEmpresa(o: OrgRow, p: ProfileRow | null, priv: PrivateData | null): Empresa {
+  /* `priv` solo está poblado para el propio workspace (RLS). Para
+   *  workspaces ajenos (directorio), tax_id / comisiones / marketing
+   *  vuelven a sus defaults · NO se exponen datos sensibles. */
   return {
     ...defaultEmpresa,
     publicRef: o.public_ref ?? undefined,
     nombreComercial: o.display_name ?? "",
     razonSocial: o.legal_name ?? "",
-    cif: o.tax_id ?? "",
+    cif: priv?.tax_id ?? "",
     logoUrl: o.logo_url ?? "",
     logoShape: "circle",
     coverUrl: o.cover_url ?? "",
@@ -123,8 +145,8 @@ function rowToEmpresa(o: OrgRow, p: ProfileRow | null): Empresa {
     aboutOverview: p?.public_description ?? "",
     quote: p?.quote ?? "",
     quoteDescription: p?.quote_description ?? "",
-    email: o.email ?? "",
-    telefono: o.phone ?? "",
+    email: priv?.internal_email ?? "",
+    telefono: priv?.internal_phone ?? "",
     horario: p?.schedule ?? "",
     sitioWeb: o.website ?? "",
     linkedin: p?.linkedin ?? "",
@@ -135,23 +157,23 @@ function rowToEmpresa(o: OrgRow, p: ProfileRow | null): Empresa {
     zonasOperacion: [],
     especialidades: [],
     idiomasAtencion: p?.attention_languages ?? [],
-    comisionNacionalDefault: p?.commission_national_default ?? 3,
-    comisionInternacionalDefault: p?.commission_international_default ?? 5,
-    plazoPagoComisionDias: p?.commission_payment_term_days ?? 30,
+    comisionNacionalDefault: priv?.commission_national_default ?? 3,
+    comisionInternacionalDefault: priv?.commission_international_default ?? 5,
+    plazoPagoComisionDias: priv?.commission_payment_term_days ?? 30,
     certificaciones: [],
     licencias: (p?.licenses as Empresa["licencias"]) ?? undefined,
-    marketingTopNacionalidades: (p?.marketing_top_nationalities as Empresa["marketingTopNacionalidades"]) ?? undefined,
-    marketingTiposProducto: (p?.marketing_product_types as Empresa["marketingTiposProducto"]) ?? undefined,
-    marketingFuentesClientes: (p?.marketing_client_sources as Empresa["marketingFuentesClientes"]) ?? undefined,
-    marketingPortales: p?.marketing_portals ?? undefined,
+    marketingTopNacionalidades: (priv?.marketing_top_nationalities as Empresa["marketingTopNacionalidades"]) ?? undefined,
+    marketingTiposProducto: (priv?.marketing_product_types as Empresa["marketingTiposProducto"]) ?? undefined,
+    marketingFuentesClientes: (priv?.marketing_client_sources as Empresa["marketingFuentesClientes"]) ?? undefined,
+    marketingPortales: priv?.marketing_portals ?? undefined,
     direccionFiscal: {
       pais: o.country ?? "",
       provincia: o.address_province ?? "",
       ciudad: o.address_city ?? "",
-      direccion: o.address_street ?? "",
-      codigoPostal: o.address_postal_code ?? "",
+      direccion: priv?.fiscal_street ?? "",
+      codigoPostal: priv?.fiscal_postal_code ?? "",
     },
-    direccionFiscalCompleta: o.address_line ?? "",
+    direccionFiscalCompleta: priv?.fiscal_address_line ?? "",
     moneda: "EUR",
     idiomaDefault: "es",
     zonaHoraria: "Europe/Madrid",
@@ -162,7 +184,7 @@ function rowToEmpresa(o: OrgRow, p: ProfileRow | null): Empresa {
     googleRatingsTotal: p?.google_ratings_total ?? 0,
     googleFetchedAt: p?.google_fetched_at ?? "",
     googleMapsUrl: p?.google_maps_url ?? "",
-    onboardingCompleto: !!(o.legal_name && o.tax_id && o.address_city),
+    onboardingCompleto: !!(o.legal_name && priv?.tax_id && o.address_city),
     updatedAt: 0,
   };
 }
@@ -203,10 +225,15 @@ export function hydrateFromSupabase(): Promise<void> {
 
   hydratePromise = (async () => {
     try {
-      const [orgsRes, profilesRes, officesRes] = await Promise.all([
+      /* Datos públicos · cualquier authenticated puede leerlos · directorio. */
+      const [orgsRes, profilesRes, officesRes, privateRes] = await Promise.all([
         supabase.from("organizations").select("*"),
         supabase.from("organization_profiles").select("*"),
         supabase.from("offices").select("*").eq("status", "active"),
+        /* Datos PRIVADOS · RLS solo devuelve la fila del propio workspace.
+         *  tax_id, comisiones default, marketing intel, contactos
+         *  internos · NUNCA cross-tenant. */
+        supabase.from("organization_private_data").select("*"),
       ]);
 
       if (orgsRes.error) {
@@ -215,13 +242,36 @@ export function hydrateFromSupabase(): Promise<void> {
       }
       if (profilesRes.error) console.warn("[hydrate] profiles error:", profilesRes.error.message);
       if (officesRes.error) console.warn("[hydrate] offices error:", officesRes.error.message);
+      if (privateRes.error) console.warn("[hydrate] private_data error:", privateRes.error.message);
 
       const orgs = (orgsRes.data ?? []) as OrgRow[];
       const profiles = (profilesRes.data ?? []) as ProfileRow[];
       const offices = (officesRes.data ?? []) as OfficeRow[];
+      const privateData = (privateRes.data ?? []) as Array<{
+        organization_id: string;
+        tax_id: string | null;
+        internal_email: string | null;
+        internal_phone: string | null;
+        internal_phone_prefix: string | null;
+        fiscal_street: string | null;
+        fiscal_postal_code: string | null;
+        fiscal_address_line: string | null;
+        commission_national_default: number | null;
+        commission_international_default: number | null;
+        commission_payment_term_days: number | null;
+        marketing_top_nationalities: unknown;
+        marketing_product_types: unknown;
+        marketing_client_sources: unknown;
+        marketing_portals: string[] | null;
+        main_contact_name: string | null;
+        main_contact_email: string | null;
+        main_contact_phone: string | null;
+      }>;
 
       const profileByOrg = new Map<string, ProfileRow>();
       for (const p of profiles) profileByOrg.set(p.organization_id, p);
+      const privateByOrg = new Map<string, typeof privateData[number]>();
+      for (const pd of privateData) privateByOrg.set(pd.organization_id, pd);
 
       const officesByOrg = new Map<string, OfficeRow[]>();
       for (const o of offices) {
@@ -230,10 +280,13 @@ export function hydrateFromSupabase(): Promise<void> {
         officesByOrg.set(o.organization_id, arr);
       }
 
-      /* Escribir cada org en su clave scoped. */
+      /* Escribir cada org en su clave scoped. La PrivateData solo
+       *  estará en `privateByOrg` para el propio workspace (RLS) ·
+       *  el resto de orgs se hidratan SIN datos sensibles. */
       for (const o of orgs) {
         const p = profileByOrg.get(o.id) ?? null;
-        const empresa = rowToEmpresa(o, p);
+        const priv = privateByOrg.get(o.id) ?? null;
+        const empresa = rowToEmpresa(o, p, priv);
         try {
           memCache.setItem(
             `byvaro-empresa:${o.id}`,
