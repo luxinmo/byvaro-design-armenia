@@ -35,14 +35,7 @@ export const activityMonths = [
 ] as const;
 
 /** Mapa agencyId → array de 12 valores (registros/mes). */
-export const collaboratorActivity: Record<string, number[]> = {
-  "ag-1": [2, 3, 4, 3, 5, 4, 6, 5, 7, 6, 8, 9],
-  "ag-2": [5, 6, 4, 7, 8, 9, 7, 10, 8, 9, 11, 12],
-  "ag-3": [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 4, 5],
-  "ag-4": [4, 3, 2, 2, 1, 1, 0, 0, 0, 0, 0, 0], // pausada
-  "ag-5": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // contrato pendiente
-  "ag-6": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // contrato pendiente
-};
+export const collaboratorActivity: Record<string, number[]> = {};
 
 /** Devuelve el máximo valor mensual para normalizar el heatmap. */
 export function getMaxActivity(): number {

@@ -30,13 +30,14 @@ import { useDirty } from "@/components/settings/SettingsDirtyContext";
 import { useMe, updateMe } from "@/lib/meStorage";
 import { uploadUserAvatar } from "@/lib/storage";
 import { supabase, isSupabaseConfigured } from "@/lib/supabaseClient";
+import { UserRefBadge } from "@/components/ui/UserRefBadge";
+import { useUserPublicRef, formatUserRef } from "@/lib/userPublicRef";
 import { toast } from "sonner";
 import { LANGUAGES, findLanguageByCode } from "@/lib/languages";
 import {
   parseJobTitle, encodeJobTitle, derivedDepartment,
 } from "@/data/jobTitles";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 
 const DEPARTMENT_SUGGESTIONS = [
   "Comercial", "Marketing", "Operaciones", "Administración",
@@ -83,6 +84,19 @@ export default function AjustesPerfilPersonal() {
   const [langPickerOpen, setLangPickerOpen] = useState(false);
   const [deptPickerOpen, setDeptPickerOpen] = useState(false);
   const { setDirty } = useDirty();
+
+  /* Resolver el user_id Supabase real para mostrar la public_ref del
+   *  user. `me.id` es el id del TeamMember (puede ser UUID o "u1"
+   *  legacy) · necesitamos el `auth.uid()` real para indexar el cache
+   *  de `user_profiles.public_ref`. */
+  const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    void supabase.auth.getUser().then(({ data }) => {
+      setSupabaseUserId(data.user?.id ?? null);
+    });
+  }, []);
+  const myPublicRef = useUserPublicRef(supabaseUserId);
 
   const isDirty = useMemo(
     () => JSON.stringify(profile) !== JSON.stringify(initial),
@@ -157,6 +171,39 @@ export default function AjustesPerfilPersonal() {
         </Button>
       }
     >
+      {/* ── Referencia pública del usuario ──
+       *  US + 7 dígitos · inmutable · handle externo en URLs y emails. */}
+      {myPublicRef && (
+        <SettingsCard title="Tu referencia pública">
+          <p className="text-xs text-muted-foreground mb-3">
+            Tu identificador único en Byvaro. Aparece en URLs internas
+            de equipo, emails firmados y resoluciones cross-tenant.
+            Es <strong>inmutable</strong> · no se puede modificar.
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <UserRefBadge ref={myPublicRef} size="md" />
+            <button
+              type="button"
+              onClick={async () => {
+                const url = `${window.location.origin}/equipo/${myPublicRef}/estadisticas`;
+                try {
+                  await navigator.clipboard.writeText(url);
+                  toast.success("Enlace copiado", { description: url });
+                } catch {
+                  toast.error("No se pudo copiar el enlace");
+                }
+              }}
+              className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border border-border bg-card hover:bg-muted transition-colors text-[11px]"
+              title="Copiar enlace a tu ficha pública de equipo"
+            >
+              <span className="font-mono text-foreground/80 truncate max-w-[260px]">
+                /equipo/{formatUserRef(myPublicRef)}
+              </span>
+            </button>
+          </div>
+        </SettingsCard>
+      )}
+
       {/* ── Foto de perfil ── */}
       <SettingsCard title="Foto de perfil">
         <div className="flex items-center gap-4">

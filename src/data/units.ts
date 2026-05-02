@@ -148,30 +148,4 @@ function generateUnits(promotionId: string, totalUnits: number, availableUnits: 
 }
 
 // Generate units for all promotions
-export const unitsByPromotion: Record<string, Unit[]> = {
-  "1": generateUnits("1", 48, 12, 344000, 1400000),
-  "2": generateUnits("2", 32, 3, 385000, 920000),
-  "3": generateUnits("3", 24, 18, 890000, 2100000),
-  "4": generateUnits("4", 80, 34, 265000, 580000),
-  "5": generateUnits("5", 56, 1, 310000, 490000),
-  "6": generateUnits("6", 16, 9, 720000, 1800000),
-  "8": generateUnits("8", 40, 0, 550000, 1200000),
-  /* Luxinmo (developer-default) */
-  "dev-1": generateUnits("dev-1", 1, 1, 1250000, 1250000),
-  "dev-2": generateUnits("dev-2", 12, 6, 680000, 1100000),
-  "dev-3": generateUnits("dev-3", 36, 24, 290000, 520000),
-  "dev-4": generateUnits("dev-4", 28, 18, 345000, 780000),
-  "dev-5": generateUnits("dev-5", 44, 30, 215000, 410000),
-  /* AEDAS Homes (prom-1) */
-  "dev-2-aedas-copy": generateUnits("dev-2-aedas-copy", 12, 6, 680000, 1100000),
-  "dev-aedas-1": generateUnits("dev-aedas-1", 96, 38, 580000, 1400000),
-  "dev-aedas-2": generateUnits("dev-aedas-2", 142, 17, 320000, 480000),
-  /* Neinor Homes (prom-2) */
-  "dev-neinor-1": generateUnits("dev-neinor-1", 56, 4, 420000, 950000),
-  "dev-neinor-2": generateUnits("dev-neinor-2", 82, 22, 290000, 410000),
-  /* Hábitat Inmobiliaria (prom-3) */
-  "dev-habitat-1": generateUnits("dev-habitat-1", 64, 11, 510000, 1200000),
-  /* Metrovacesa (prom-4) */
-  "dev-metrovacesa-1": generateUnits("dev-metrovacesa-1", 110, 41, 380000, 720000),
-  "dev-metrovacesa-2": generateUnits("dev-metrovacesa-2", 88, 64, 260000, 410000),
-};
+export const unitsByPromotion: Record<string, Unit[]> = {};

@@ -43,42 +43,7 @@ export type Anejo = {
  * Mock de anejos por promoción. En producción se rellenan desde el
  * wizard al publicar una promoción.
  */
-export const anejosByPromotion: Record<string, Anejo[]> = {
-  "dev-1": [
-    { id: "anejo-dev1-P1", promotionId: "dev-1", publicId: "P1", tipo: "parking",  precio: 18000, status: "available" },
-    { id: "anejo-dev1-P2", promotionId: "dev-1", publicId: "P2", tipo: "parking",  precio: 18000, status: "reserved",  clientName: "María García", reservedAt: "2026-04-10" },
-    { id: "anejo-dev1-P3", promotionId: "dev-1", publicId: "P3", tipo: "parking",  precio: 20000, status: "available" },
-    { id: "anejo-dev1-T1", promotionId: "dev-1", publicId: "T1", tipo: "trastero", precio: 6500,  status: "available" },
-    { id: "anejo-dev1-T2", promotionId: "dev-1", publicId: "T2", tipo: "trastero", precio: 6500,  status: "sold",      clientName: "Pedro Sánchez", soldAt: "2026-03-22" },
-  ],
-  "dev-2": [
-    { id: "anejo-dev2-P1", promotionId: "dev-2", publicId: "P1", tipo: "parking",  precio: 15000, status: "available" },
-    { id: "anejo-dev2-P2", promotionId: "dev-2", publicId: "P2", tipo: "parking",  precio: 15000, status: "available" },
-    { id: "anejo-dev2-T1", promotionId: "dev-2", publicId: "T1", tipo: "trastero", precio: 5000,  status: "available" },
-  ],
-  "dev-3": [
-    { id: "anejo-dev3-P1", promotionId: "dev-3", publicId: "P1", tipo: "parking",  precio: 22000, status: "reserved",  clientName: "Ana Martín", reservedAt: "2026-04-15" },
-    { id: "anejo-dev3-P2", promotionId: "dev-3", publicId: "P2", tipo: "parking",  precio: 22000, status: "available" },
-    { id: "anejo-dev3-T1", promotionId: "dev-3", publicId: "T1", tipo: "trastero", precio: 7000,  status: "available" },
-    { id: "anejo-dev3-T2", promotionId: "dev-3", publicId: "T2", tipo: "trastero", precio: 7000,  status: "available", visibleToAgencies: false },
-    { id: "anejo-dev3-T3", promotionId: "dev-3", publicId: "T3", tipo: "trastero", precio: 7000,  status: "withdrawn" },
-  ],
-  "dev-4": [
-    { id: "anejo-dev4-P1", promotionId: "dev-4", publicId: "P1", tipo: "parking",  precio: 16000, status: "available" },
-    { id: "anejo-dev4-P2", promotionId: "dev-4", publicId: "P2", tipo: "parking",  precio: 16000, status: "sold",      clientName: "Carlos López", soldAt: "2026-02-18" },
-    { id: "anejo-dev4-P3", promotionId: "dev-4", publicId: "P3", tipo: "parking",  precio: 16000, status: "available" },
-    { id: "anejo-dev4-T1", promotionId: "dev-4", publicId: "T1", tipo: "trastero", precio: 5500,  status: "available" },
-    { id: "anejo-dev4-T2", promotionId: "dev-4", publicId: "T2", tipo: "trastero", precio: 5500,  status: "reserved",  clientName: "Laura Fernández", reservedAt: "2026-04-18" },
-  ],
-  "dev-5": [
-    { id: "anejo-dev5-P1", promotionId: "dev-5", publicId: "P1", tipo: "parking",  precio: 12000, status: "available" },
-    { id: "anejo-dev5-P2", promotionId: "dev-5", publicId: "P2", tipo: "parking",  precio: 12000, status: "available" },
-    { id: "anejo-dev5-P3", promotionId: "dev-5", publicId: "P3", tipo: "parking",  precio: 12000, status: "available" },
-    { id: "anejo-dev5-P4", promotionId: "dev-5", publicId: "P4", tipo: "parking",  precio: 12000, status: "reserved",  clientName: "Isabel Ruiz", reservedAt: "2026-04-20" },
-    { id: "anejo-dev5-T1", promotionId: "dev-5", publicId: "T1", tipo: "trastero", precio: 4500,  status: "available" },
-    { id: "anejo-dev5-T2", promotionId: "dev-5", publicId: "T2", tipo: "trastero", precio: 4500,  status: "available" },
-  ],
-};
+export const anejosByPromotion: Record<string, Anejo[]> = {};
 
 export const anejoStatusConfig: Record<AnejoStatus, { label: string; dotClass: string; badgeClass: string }> = {
   available: { label: "Disponible",   dotClass: "bg-success",    badgeClass: "bg-success/10 text-success border border-success/25" },
