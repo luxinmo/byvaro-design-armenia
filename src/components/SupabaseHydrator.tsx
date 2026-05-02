@@ -24,6 +24,7 @@ import { hydrateDeveloperPacksFromSupabase } from "@/lib/empresaCategories";
 import { hydrateUserPublicRefs } from "@/lib/userPublicRef";
 import { hydratePlanForCurrentUser } from "@/lib/plan";
 import { hydrateTeamFromSupabase } from "@/lib/teamHydrator";
+import { hydrateDraftsFromSupabase } from "@/lib/promotionDrafts";
 import { clearMemCache } from "@/lib/memCache";
 import { loginAs } from "@/lib/accountType";
 
@@ -99,6 +100,9 @@ async function hydrateAll(): Promise<void> {
      *  /register no aparecen en /equipo, /ajustes/usuarios/miembros
      *  ni en los selectores de asignación (UserSelect, calendario). */
     hydrateTeamFromSupabase(),
+    /* Borradores de promoción del user · cross-device. Antes vivían
+     *  solo en memCache (in-memory) y se perdían al recargar. */
+    hydrateDraftsFromSupabase(),
   ]);
 }
 

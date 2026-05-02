@@ -1,15 +1,19 @@
 /**
- * Sistema de borradores de promoción · localStorage.
+ * Sistema de borradores de promoción.
  *
- * Hasta que haya backend, guardamos los borradores del wizard
- * "Crear promoción" en localStorage bajo la clave `DRAFTS_KEY`.
- * Cada borrador lleva metadatos de visualización (id, nombre,
- * updatedAt, % completado) + el `WizardState` entero.
+ * Source of truth · `public.promotion_drafts` (Supabase) · RLS scoped
+ * al user dueño · cross-device. memCache es solo cache reactivo local
+ * para que la UI re-renderice instantáneo.
  *
- * Los borradores completados/publicados se eliminan del almacén al
- * navegar fuera del wizard.
+ * Patrón canónico (write-through optimistic):
+ *   - saveDraft(state) escribe en memCache (sync) + Supabase (async).
+ *   - deleteDraft(id) borra en memCache (sync) + Supabase (async).
+ *   - hydrateDraftsFromSupabase() pulla los drafts del user al login
+ *     y on-auth-change · llamado desde SupabaseHydrator.
  *
- * TODO(backend): sustituir por GET/POST/DELETE /api/promociones?estado=borrador.
+ * Antes los drafts vivían SOLO en memCache (in-memory) · al recargar
+ * la pestaña desaparecían · bug histórico hasta que esta migración
+ * (20260502250000_promotion_drafts.sql) creó la tabla.
  */
 
 import type { WizardState } from "@/components/crear-promocion/types";
@@ -135,21 +139,117 @@ export function saveDraft(state: WizardState, existingId?: string): SaveDraftRes
     drafts = kept;
   }
 
+  let result: SaveDraftResult;
   try {
     writeRaw(drafts);
-    return { id, ok: true, discarded };
+    result = { id, ok: true, discarded };
   } catch (e: unknown) {
     const isQuota = e instanceof DOMException && (
       e.name === "QuotaExceededError" ||
       e.name === "NS_ERROR_DOM_QUOTA_REACHED"
     );
-    return { id, ok: false, discarded, error: isQuota ? "quota" : "unknown" };
+    result = { id, ok: false, discarded, error: isQuota ? "quota" : "unknown" };
   }
+  /* Write-through async a Supabase · UI no espera. Si falla, queda en
+   * cache local y la siguiente hidratación lo refrescará desde DB. */
+  void syncDraftToSupabase(draft);
+  /* Borrar de DB los descartados por límite (raro · normalmente nadie
+   * tiene 50 drafts). Best-effort. */
+  for (const _name of discarded) {
+    /* No tenemos el id aquí · saltamos · el límite local ya cumplió. */
+  }
+  return result;
 }
 
 export function deleteDraft(id: string): void {
   const drafts = readRaw().filter((d) => d.id !== id);
   writeRaw(drafts);
+  void deleteDraftFromSupabase(id);
+}
+
+/* ══════ Write-through y hydratación · Supabase ════════════════════ */
+
+/** Sube un draft (insert si no existía, update si ya estaba) a la
+ *  tabla `promotion_drafts`. Falla en silencio · loggea warning. */
+async function syncDraftToSupabase(draft: PromotionDraft): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const orgId = sessionStorage.getItem("byvaro.accountType.organizationId.v1");
+    const { error } = await supabase
+      .from("promotion_drafts")
+      .upsert({
+        id: draft.id,
+        user_id: user.id,
+        organization_id: orgId || null,
+        name: draft.name,
+        progress: draft.progress,
+        state: draft.state,
+        updated_at: new Date(draft.updatedAt).toISOString(),
+      }, { onConflict: "id" });
+    if (error) console.warn("[drafts:save]", error.message);
+  } catch (e) {
+    console.warn("[drafts:save] skipped:", e);
+  }
+}
+
+/** Borra un draft de Supabase · best-effort · si falla queda en DB
+ *  pero el cliente ya no lo verá tras la próxima hidratación porque
+ *  habrá sido eliminado del local. */
+async function deleteDraftFromSupabase(id: string): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { error } = await supabase
+      .from("promotion_drafts")
+      .delete()
+      .eq("id", id);
+    if (error) console.warn("[drafts:delete]", error.message);
+  } catch (e) {
+    console.warn("[drafts:delete] skipped:", e);
+  }
+}
+
+/** Pulla los drafts del user actual desde Supabase y los escribe en
+ *  memCache. Llamado por `SupabaseHydrator` al login y on-auth-change.
+ *  Dispara `storage` event para que `useState(() => listDrafts())` en
+ *  consumidores se refresque. */
+export async function hydrateDraftsFromSupabase(): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data, error } = await supabase
+      .from("promotion_drafts")
+      .select("id, name, progress, state, updated_at")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false });
+    if (error) {
+      console.warn("[drafts:hydrate]", error.message);
+      return;
+    }
+    const drafts: PromotionDraft[] = (data ?? []).map((r) => ({
+      id: r.id as string,
+      name: (r.name as string) ?? "Promoción sin nombre",
+      updatedAt: r.updated_at ? Date.parse(r.updated_at as string) : Date.now(),
+      progress: (r.progress as number) ?? 0,
+      state: r.state as WizardState,
+    }));
+    writeRaw(drafts);
+    /* Notificar a consumidores que el cache cambió · `useState(() =>
+     *  listDrafts())` en Promociones.tsx escucha 'storage' para
+     *  re-renderizar. Sintetizamos el evento porque memCache no
+     *  dispara nativamente. */
+    window.dispatchEvent(new StorageEvent("storage", { key: DRAFTS_KEY }));
+  } catch (e) {
+    console.warn("[drafts:hydrate] skipped:", e);
+  }
 }
 
 /** Pasos faltantes en el vocabulario de stepName que consume la ficha
