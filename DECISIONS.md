@@ -2139,3 +2139,122 @@ transacción. NOT NULL constraint añadida después del backfill.
 - `src/components/empresa/EmpresaAboutTab.tsx` · `TenantRefField` (edit) + `TenantRefDisplay` (preview/visitor).
 - `docs/contract-index.md §1.5 + §1.6` · contrato.
 - Regla de oro en `CLAUDE.md`.
+
+## 2026-05-02 · ADR-060 · Eliminar localStorage como source-of-truth · memCache + splash hidratación
+
+**Contexto.** El prototipo arrancó con `localStorage` como source-of-truth
+de TODO (perfil, equipo, drafts, configuración). Eso causaba data
+divergente cross-device, cross-rol y cross-tab. Multi-tenancy real era
+imposible · localStorage no tiene RLS.
+
+**Decisión.** localStorage se elimina completamente como source-of-truth.
+Sustituido por:
+
+1. `memCache` · Map en memoria con API drop-in de Storage. Vive en
+   `src/lib/memCache.ts`. Vacío al reload · vacío al sign-out.
+2. Hidratadores · cada helper expone `hydrateXFromSupabase()`. Llamados
+   on-mount + on-auth-change desde `SupabaseHydrator`.
+3. Splash bloqueante · `<SupabaseHydrator>` envuelve la app y muestra
+   "Cargando workspace…" hasta que la primera tanda de hidratación
+   termine (~500ms-1s). Una sola espera.
+4. Write-through · cada `saveX()` escribe a memCache (optimistic) +
+   dispatcha event + invoca `syncXToSupabase()` async (best-effort).
+
+**Excepciones intencionales** (siguen usando navegador real):
+- `supabaseClient.ts` → Supabase guarda tokens auth en localStorage.
+- `accountType.ts` + `currentUser.ts` → `sessionStorage` para rol activo
+  per-tab (multi-pestaña con roles distintos).
+
+**Por qué splash bloqueante.** Si los hooks renderizan vacío hasta que
+llegue la hidratación, cada componente necesita loading state. Splash
+único = una espera concentrada vs cientos de spinners.
+
+**Archivos clave**:
+- `src/lib/memCache.ts` · cache singleton.
+- `src/components/SupabaseHydrator.tsx` · splash + Promise.all de 12
+  hidratadores.
+- 76 helpers/components/pages migrados via sed masivo `localStorage.X`
+  → `memCache.X` con auto-import.
+- `docs/backend/architecture/no-localStorage.md` · spec completa.
+
+**No-goals** · NO se eliminó `sessionStorage` de currentUser (rol activo
+per-tab es feature, no bug). NO se persiste memCache entre reloads
+(eso es exactamente lo que queríamos eliminar).
+
+## 2026-05-02 · ADR-061 · Tenant isolation hardening · 4 capas de defensa cross-empresa
+
+**Contexto.** Auditoría detectó 4 fugas críticas cross-tenant:
+
+1. `organizations` con `SELECT public` exponía `tax_id` (CIF), `email`,
+   `phone`, `address_street`, `address_postal_code`, `address_line` ·
+   datos fiscales y de contacto interno visibles a cualquier
+   authenticated/anon.
+2. `organization_profiles` con `SELECT public` exponía
+   `commission_national/international_default` (datos comerciales que
+   afectan poder de negociación), `marketing_top_nationalities/portals/
+   product_types/client_sources` (inteligencia competitiva),
+   `main_contact_*` (contactos internos), `metadata` jsonb (cualquier
+   cosa).
+3. `promotions.metadata` exponía cross-tenant: `commission`,
+   `comerciales` (equipo interno con emails), `puntosDeVentaIds`
+   (oficinas internas), `collaboration` config (comisiones nacional/
+   internacional, IVA, hitos), `agencies` count + `agencyAvatars`
+   (revela red comercial).
+4. `supabaseHydrate.ts` y `seedHydrator.ts` hacían `select *` SIN filtro
+   y poblaban memCache con datos sensibles de TODAS las orgs.
+
+**Decisión · 4 capas de defensa**:
+
+1. **RLS por fila** · cada tabla con `organization_id` filtra por
+   `is_org_member()`. Tablas dual-tenant (sales, registros, leads)
+   con `is_org_member(organization_id) OR is_org_member(agency_id)`.
+
+2. **Column-level grants** · `revoke select on promotions from
+   authenticated, anon` + `grant select(columnas_safe) ...`. La columna
+   `private_metadata` queda sin grant · `permission denied` a anon/auth.
+
+3. **Tabla privada `organization_private_data`** (1:1 con
+   organizations) · alberga `tax_id`, comisiones default, marketing
+   intel, `main_contact_*`. RLS = `is_org_member(organization_id)`.
+   Cross-tenant queries devuelven 0 rows. Las columnas duplicadas en
+   `organizations` y `organization_profiles` quedaron NULIFICADAS post
+   migración.
+
+4. **RPCs SECURITY DEFINER** · cuando frontend necesita datos privados
+   de promociones donde es participante (owner o colaborador activo),
+   llama a `api.list_promotion_private_metadata()`. La RPC chequea
+   membership por fila y solo devuelve las que el caller puede ver.
+
+**Migración**: `supabase/migrations/20260502120000_tenant_isolation_hardening.sql`
+mueve 15 orgs × datos sensibles a `organization_private_data`, parta 21
+promociones × metadata en metadata + private_metadata, y aplica los
+grants/policies/views.
+
+**Frontend**:
+- `supabaseHydrate.ts` pulla `organization_private_data` (RLS solo
+  devuelve la propia) y mergea en `byvaro-empresa:<orgId>`.
+- `empresa.ts saveEmpresaForOrg()` escribe en `organization_private_data`.
+- `seedHydrator.ts` llama RPC `list_promotion_private_metadata` y
+  mergea para participantes.
+
+**Verificación** (anon role en psql):
+- ✅ `tax_id` / `email` / `phone` / `address_street` → NULL en
+  organizations
+- ✅ `commission_*` / `marketing_*` / `main_contact_*` → NULL en
+  profiles
+- ✅ `organization_private_data` → 0 rows
+- ✅ `promotions.private_metadata` → permission denied
+- ✅ `api.list_promotion_private_metadata()` → permission denied
+
+**Archivos clave**:
+- `supabase/migrations/20260502120000_tenant_isolation_hardening.sql`
+- `docs/backend/architecture/tenant-isolation.md` · spec completa.
+- `src/lib/supabaseHydrate.ts` · pulla private_data del propio org.
+- `src/lib/empresa.ts` · split write entre public/private tables.
+- `src/lib/seedHydrator.ts` · RPC bulk para private_metadata.
+
+**No-goals** · NO se rompe el directorio público `/colaboradores` ·
+sigue mostrando nombre/logo/ciudad/redes via columnas safe en
+organizations + profiles (las display, no las sensibles). Microsites
+siguen siendo públicos · `promotion_units.status` y precios siguen en
+columnas safe.

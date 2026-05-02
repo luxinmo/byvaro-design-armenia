@@ -1,22 +1,42 @@
 # Backend handoff · Byvaro
 
-> Entrada única para el agente / equipo que construya el backend real
-> de Byvaro. El frontend (`src/`) está hecho con mocks en
-> `localStorage` y `TODO(backend)` sembrados en el código · esta
-> carpeta explica qué hay que sustituir, en qué orden, y cuál es la
-> shape exacta de cada endpoint.
+> Entrada única para el agente / equipo que construya/mantenga el
+> backend de Byvaro. **Estado a 2026-05-02**: Supabase es la única
+> fuente de verdad · localStorage eliminado completamente · tenant
+> isolation hardened (4 capas). El frontend usa cache en memoria que
+> se hidrata al login.
+
+---
+
+## 0 · ⭐ ESTADO ACTUAL (lee primero)
+
+📄 **`docs/backend/HANDOFF-2026-05-02.md`** — foto consolidada del
+sistema · variables env · cómo aplicar migraciones · cómo arrancar ·
+helpers en src/lib · qué falta (TODO).
+
+📄 **`docs/backend/architecture/no-localStorage.md`** — patrón
+canónico memCache + hidratadores + write-through · cómo extender al
+añadir un store nuevo.
+
+📄 **`docs/backend/architecture/tenant-isolation.md`** — 4 capas de
+defensa cross-empresa · RLS + column grants + tablas privadas + RPCs
+SECURITY DEFINER · auditoría completa de funciones existentes.
+
+📄 **`DECISIONS.md` · ADR-060 + ADR-061** — el porqué de los dos
+refactors críticos recientes (no-localStorage + tenant isolation).
 
 ---
 
 ## 1 · Empieza aquí
 
-1. Lee **`docs/product.md`** — modelo de negocio, personas (promotor,
+1. Lee **`HANDOFF-2026-05-02.md`** (arriba) para el estado actual.
+2. Lee **`docs/product.md`** — modelo de negocio, personas (promotor,
    agencia invitada, agencia marketplace, agencia sin plan).
-2. Lee **`docs/architecture.md`** — arquitectura de información,
+3. Lee **`docs/architecture.md`** — arquitectura de información,
    patrones, flujos críticos.
-3. Lee **`CLAUDE.md` · secciones "REGLA DE ORO"** — son invariantes
+4. Lee **`CLAUDE.md` · secciones "REGLA DE ORO"** — son invariantes
    del producto. Cualquiera de ellas que se rompa es bug.
-4. Vuelve aquí para el plan de implementación.
+5. Vuelve aquí para el plan de implementación.
 
 ---
 
