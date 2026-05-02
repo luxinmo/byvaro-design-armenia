@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Building2, Plus, MapPin, Users, Flame, SlidersHorizontal,
   X, AlertTriangle, Ban, Share2, TrendingUp, Check, ChevronDown,
-  List, Map as MapIcon, LayoutGrid, Mail, ArrowRight, EyeOff,
+  List, Map as MapIcon, LayoutGrid, Mail, ArrowRight, EyeOff, HardHat,
   type LucideIcon,
 } from "lucide-react";
 import { promotions, getBuildingTypeLabel, type Promotion } from "@/data/promotions";
@@ -2188,13 +2188,25 @@ function PromoCardCompact({ promo: p, isTrending, isAgencyUser }: { promo: DevPr
         <div className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[11.5px]">
           <span className="text-muted-foreground"><span className="font-semibold text-foreground tnum">{liveStats.availableUnits}/{liveStats.totalUnits}</span> disp.</span>
           <span className="text-muted-foreground"><span className="font-semibold text-foreground tnum">{p.commission}%</span> com.</span>
-          {(() => {
+          {isAgencyUser ? (
+            /* Lado AGENCIA · NUNCA contador de agencias colaborando ·
+             *  info privada del promotor que revela su red comercial.
+             *  En su lugar, mostramos % obra (info pública del microsite)
+             *  cuando hay dato. */
+            p.constructionProgress !== undefined ? (
+              <span
+                className="inline-flex items-center gap-1 text-muted-foreground"
+                title={`Construcción · ${p.constructionProgress}% completada`}
+              >
+                <HardHat className="h-3 w-3" />
+                <span className="tnum">{p.constructionProgress}%</span>
+              </span>
+            ) : null
+          ) : (() => {
             /* Developer · misma lógica que list view (modelo 2026-05-01). */
-            const isDraft = !isAgencyUser
-              && (p.status === "incomplete" || p.status === "inactive");
+            const isDraft = (p.status === "incomplete" || p.status === "inactive");
             const realAgenciesNow = countAgenciesForPromotion(p.id);
-            const isActiveNotShared = !isAgencyUser
-              && p.status === "active"
+            const isActiveNotShared = p.status === "active"
               && (p.canShareWithAgencies === false || realAgenciesNow === 0);
             if (isDraft || isActiveNotShared) {
               const label = isDraft ? "Borrador" : "Sin compartir";
@@ -2208,7 +2220,7 @@ function PromoCardCompact({ promo: p, isTrending, isAgencyUser }: { promo: DevPr
                 </span>
               );
             }
-            const realAgencies = countAgenciesForPromotion(p.id);
+            const realAgencies = realAgenciesNow;
             return (
               <span
                 className={cn(
