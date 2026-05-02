@@ -145,6 +145,11 @@ export default function Register() {
   // ── Estado del wizard ──
   const [step, setStep] = useState<Step>(1);
   const [requestSent, setRequestSent] = useState(false);
+  /* Pantalla "Email enviado" tras signUp exitoso · evitamos el toast
+   *  efímero · queremos una pantalla dedicada que el user vea hasta
+   *  que pulse el link de su email. */
+  const [signupEmailSent, setSignupEmailSent] = useState(false);
+  const [resending, setResending] = useState(false);
 
   // ── Campos ──
   const [role, setRole]               = useState<Role | null>(null);
@@ -264,13 +269,9 @@ export default function Register() {
       /* Si Supabase requiere confirmación email, signUpData.session
        *  será null. La organization + member ya se creó vía trigger
        *  cuando se insertó el user en auth.users. Mostramos pantalla
-       *  de "verifica tu email". */
+       *  dedicada de "Email enviado". */
       if (!signUpData.session) {
-        toast.success("Cuenta creada", {
-          description: `Te hemos enviado un email de verificación a ${email}. Revisa tu bandeja (y spam).`,
-          duration: 8000,
-        });
-        navigate("/login", { replace: true });
+        setSignupEmailSent(true);
         return;
       }
 
@@ -289,6 +290,84 @@ export default function Register() {
   /* ═══════════════════════════════════════════════════════════════════
      RENDER
      ═══════════════════════════════════════════════════════════════════ */
+
+  // ══ Pantalla "Email de confirmación enviado" tras signup exitoso ══
+  if (signupEmailSent) {
+    const resendEmail = async () => {
+      if (resending) return;
+      setResending(true);
+      try {
+        const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");
+        if (!isSupabaseConfigured) return;
+        const { error } = await supabase.auth.resend({
+          type: "signup",
+          email: email.trim().toLowerCase(),
+          options: { emailRedirectTo: `${window.location.origin}/login` },
+        });
+        if (error) {
+          toast.error("No se pudo reenviar el email", { description: error.message });
+        } else {
+          toast.success("Email reenviado", {
+            description: `Hemos vuelto a enviar el email de confirmación a ${email}.`,
+          });
+        }
+      } catch (e) {
+        toast.error("Error al reenviar", {
+          description: e instanceof Error ? e.message : "Reintenta en unos segundos",
+        });
+      } finally {
+        setResending(false);
+      }
+    };
+
+    return (
+      <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center px-5 py-10">
+        <Link to="/" className="mb-10">
+          <BrandLogo variant="lockup" iconSize={40} wordmarkHeight={20} />
+        </Link>
+        <div className="w-full max-w-md rounded-2xl bg-card border border-border shadow-soft-lg p-6 sm:p-8 text-center space-y-4">
+          <div className="mx-auto h-14 w-14 rounded-full bg-primary/10 text-primary grid place-items-center">
+            <Mail className="h-7 w-7" strokeWidth={1.6} />
+          </div>
+          <h1 className="text-xl font-semibold tracking-tight">Confirma tu email</h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Te hemos enviado un email de confirmación a:
+          </p>
+          <p className="text-sm font-semibold text-foreground break-all">
+            {email}
+          </p>
+          <div className="rounded-xl bg-muted/40 border border-border p-4 text-left space-y-2">
+            <p className="text-xs font-semibold text-foreground">Sigue estos pasos:</p>
+            <ol className="text-xs text-muted-foreground leading-relaxed list-decimal pl-4 space-y-1">
+              <li>Revisa tu bandeja de entrada</li>
+              <li>Si no lo ves en 1-2 minutos, mira la carpeta <strong>Spam</strong> o <strong>Promociones</strong></li>
+              <li>Pulsa el botón <strong>"Confirmar mi email"</strong> dentro del mensaje</li>
+              <li>Volverás a la pantalla de inicio de sesión y podrás entrar con tu password</li>
+            </ol>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            ¿No te llega el email?
+          </p>
+          <button
+            type="button"
+            onClick={resendEmail}
+            disabled={resending}
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-border text-xs font-semibold hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {resending ? "Reenviando…" : "Reenviar email de confirmación"}
+          </button>
+          <div className="pt-2 border-t border-border/60">
+            <Link
+              to="/login"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Ir a iniciar sesión
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ══ Pantalla fin: "Solicitud enviada" ══
   if (requestSent && matchedCompany) {
