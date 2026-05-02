@@ -36,37 +36,9 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"; //
 import { Flag } from "@/components/ui/Flag";
 import { findLanguageByCode } from "@/lib/languages";
 
-const contacts = [
-  {
-    name: "Arman Yeghiazaryan",
-    role: "Founder & Director Comercial",
-    avatar: "https://i.pravatar.cc/80?img=33",
-    phone: "+34 612 345 678",
-    email: "arman@byvaro.com",
-    languages: ["ES", "FR", "EN"],
-  },
-  {
-    name: "María López",
-    role: "Responsable de Ventas",
-    avatar: "https://i.pravatar.cc/80?img=12",
-    phone: "+34 678 901 234",
-    email: "maria@byvaro.com",
-    languages: ["ES", "EN"],
-  },
-  {
-    name: "Thomas Müller",
-    role: "Ventas Internacionales",
-    avatar: "https://i.pravatar.cc/80?img=23",
-    phone: "+49 170 123 456",
-    email: "thomas@byvaro.com",
-    languages: ["DE", "EN", "ES"],
-  },
-];
+const contacts: Array<{ name: string; role: string; email: string; phone: string }> = [];
 
-const salesOffices = [
-  { city: "Oficina Alicante", address: "Av. de la Costa, 15, 03001 Alicante" },
-  { city: "Oficina Madrid", address: "Paseo de la Castellana, 89, 28046 Madrid" },
-];
+const salesOffices: Array<{ name: string; address: string; city: string }> = [];
 
 export function PromotionContacts({ website }: { website: string }) {
   return (

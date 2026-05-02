@@ -62,67 +62,9 @@ export type Delegate = {
 
 /* ══════ Mocks iniciales ══════ */
 
-export const INITIAL_ACCOUNTS: EmailAccount[] = [
-  {
-    id: "a1",
-    provider: "gmail",
-    email: "arman@byvaro.com",
-    name: "Arman Yeghiazaryan",
-    unread: 2,
-    isDefault: true,
-    pushEnabled: true,
-    connectedAt: "8 mar 2026",
-  },
-  {
-    id: "a2",
-    provider: "microsoft",
-    email: "arman@luxinmo.com",
-    name: "Arman · Luxinmo",
-    unread: 5,
-    isDefault: false,
-    pushEnabled: true,
-    connectedAt: "14 mar 2026",
-  },
-  {
-    id: "a3",
-    provider: "imap",
-    email: "ventas@byvaro.com",
-    name: "Ventas Byvaro",
-    unread: 0,
-    isDefault: false,
-    pushEnabled: false,
-    connectedAt: "2 abr 2026",
-    imap: {
-      imapHost: "imap.byvaro.com",
-      imapPort: "993",
-      smtpHost: "smtp.byvaro.com",
-      smtpPort: "587",
-      username: "ventas@byvaro.com",
-      useSsl: true,
-    },
-  },
-  {
-    id: "a4",
-    provider: "gmail",
-    email: "maria.lopez@iberiahomes.com",
-    name: "María López (delegada)",
-    unread: 3,
-    isDefault: false,
-    pushEnabled: false,
-    connectedAt: "10 abr 2026",
-    delegated: true,
-    delegatedFrom: "maria.lopez@iberiahomes.com",
-  },
-];
+export const INITIAL_ACCOUNTS: EmailAccount[] = [];
 
-export const INITIAL_DELEGATES: Delegate[] = [
-  {
-    id: "d1",
-    email: "laura.gomez@byvaro.com",
-    name: "Laura Gómez",
-    grantedAt: "12 abr 2026",
-  },
-];
+export const INITIAL_DELEGATES: Delegate[] = [];
 
 /**
  * Colores usados para el dot de cuenta en la bandeja unificada.
