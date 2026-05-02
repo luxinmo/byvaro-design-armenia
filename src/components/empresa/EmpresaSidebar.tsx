@@ -15,7 +15,7 @@
 import {
   CheckCircle2, Circle,
 } from "lucide-react";
-import type { Empresa } from "@/lib/empresa";
+import { tieneDatosBasicosEmpresa, type Empresa } from "@/lib/empresa";
 import { cn } from "@/lib/utils";
 
 interface ChecklistItem {
@@ -32,7 +32,7 @@ interface ChecklistItem {
 }
 
 function getChecklist(empresa: Empresa, oficinasCount: number): ChecklistItem[] {
-  return [
+  const items: ChecklistItem[] = [
     { key: "nombre",       label: "Nombre comercial",         weight: 10, done: !!empresa.nombreComercial.trim() },
     { key: "legal",        label: "Razón social y CIF",       weight: 10, done: !!empresa.razonSocial.trim() && !!empresa.cif.trim() },
     { key: "logo",         label: "Logo subido",              weight: 10, done: !!empresa.logoUrl },
@@ -40,8 +40,15 @@ function getChecklist(empresa: Empresa, oficinasCount: number): ChecklistItem[] 
     { key: "zonas",        label: "Zonas de operación",       weight: 10, done: empresa.zonasOperacion.length > 0 },
     { key: "oficinas",     label: "Al menos 1 oficina",       weight: 10, done: oficinasCount > 0 },
     { key: "terminos",     label: "Comisión por defecto",     weight: 10, done: empresa.comisionNacionalDefault > 0 },
-    { key: "verificada",   label: "Verificación de empresa",  weight: 30, done: !!empresa.verificada },
   ];
+  /* "Verificación de empresa" solo aparece cuando los datos básicos
+   *  (razón social, CIF, dirección, email, teléfono) ya están
+   *  rellenos · pedir verificación antes de tener identidad básica
+   *  es prematuro y rebaja artificialmente el score (30 pts). */
+  if (tieneDatosBasicosEmpresa(empresa)) {
+    items.push({ key: "verificada", label: "Verificación de empresa", weight: 30, done: !!empresa.verificada });
+  }
+  return items;
 }
 
 function SidebarCard({
