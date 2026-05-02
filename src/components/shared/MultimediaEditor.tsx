@@ -9,13 +9,15 @@
  * ambos consumidores compartan UI, iconografía, categorías y flags.
  */
 
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { toast } from "sonner";
 import {
   ImageIcon, Upload, Star, Lock, Unlock, Trash2, GripVertical,
-  Youtube, Video, Eye, Plus, AlertTriangle, X,
+  Youtube, Video, Eye, Plus, AlertTriangle, X, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FotoItem, VideoItem, FotoCategoria } from "@/components/crear-promocion/types";
+import { uploadPromotionImage, uploadFile } from "@/lib/storage";
 
 const fotoCategorias: { value: FotoCategoria; label: string }[] = [
   { value: "fachada", label: "Fachada" },
@@ -30,12 +32,6 @@ const fotoCategorias: { value: FotoCategoria; label: string }[] = [
   { value: "zonas_comunes", label: "Zonas comunes" },
   { value: "parking", label: "Parking" },
   { value: "otra", label: "Otra" },
-];
-
-const mockUnsplashIds = [
-  "1600585154340-be6161a56a0c", "1502672023488-70e25813eb80",
-  "1564013799919-ab600027ffc6", "1501183638710-841dd1904471",
-  "1600607687939-ce8a6c25118c", "1613490493576-7fde63acd811",
 ];
 
 const inputBase =
@@ -74,12 +70,19 @@ export function MultimediaEditor({
   onFotosChange,
   onVideosChange,
   showCollaborationWarning = false,
+  /* Identifier que namespacea las subidas a Storage. Cuando viene del
+   * wizard pasamos el draftId; cuando viene de la ficha, el promotionId
+   * real. Ambos son strings válidos para path. Si NO se pasa, el
+   * componente sigue funcionando pero deshabilita la subida (no
+   * podríamos generar un path coherente). */
+  uploadScopeId,
 }: {
   fotos: FotoItem[];
   videos: VideoItem[];
   onFotosChange: (next: FotoItem[]) => void;
   onVideosChange: (next: VideoItem[]) => void;
   showCollaborationWarning?: boolean;
+  uploadScopeId?: string;
 }) {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
@@ -87,22 +90,66 @@ export function MultimediaEditor({
   const [videoUrl, setVideoUrl] = useState("");
   const [videoNombre, setVideoNombre] = useState("");
   const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
-  /* ─── Fotos ─── */
-  const addMockPhotos = () => {
+  /* ─── Fotos · upload real a Supabase Storage ─── */
+  /** Trigger el file picker. */
+  const triggerPhotoPicker = () => {
+    if (!uploadScopeId) {
+      toast.error("No se puede subir todavía", {
+        description: "Guarda el borrador antes de subir imágenes.",
+      });
+      return;
+    }
+    photoInputRef.current?.click();
+  };
+
+  /** Sube cada file seleccionado a `promotion-public/<scopeId>/gallery`
+   *  y añade el FotoItem con la URL pública resultante. Hace upload en
+   *  paralelo · si alguno falla, lo notifica pero conserva los OK. */
+  const handlePhotoFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0 || !uploadScopeId) return;
+    setUploadingPhotos(true);
     const base = fotos.length;
-    const seeds = mockUnsplashIds.slice(0, 3);
-    const newPhotos: FotoItem[] = seeds.map((seed, i) => ({
-      id: `foto-${Date.now()}-${i}`,
-      url: `https://images.unsplash.com/photo-${seed}?w=400&q=80`,
-      nombre: `Imagen ${base + i + 1}`,
-      categoria: "otra" as FotoCategoria,
-      esPrincipal: base === 0 && i === 0,
-      bloqueada: false,
-      orden: base + i,
-    }));
-    onFotosChange([...fotos, ...newPhotos]);
-    setUploadOpen(false);
+    try {
+      const results = await Promise.allSettled(
+        Array.from(files).map(async (file, i) => {
+          const url = await uploadPromotionImage(uploadScopeId, file, "gallery");
+          const item: FotoItem = {
+            id: `foto-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+            url,
+            nombre: file.name.replace(/\.[^.]+$/, ""),
+            categoria: "otra" as FotoCategoria,
+            esPrincipal: base === 0 && i === 0,
+            bloqueada: false,
+            orden: base + i,
+          };
+          return item;
+        }),
+      );
+      const ok = results
+        .filter((r): r is PromiseFulfilledResult<FotoItem> => r.status === "fulfilled")
+        .map((r) => r.value);
+      const failed = results.filter((r) => r.status === "rejected").length;
+      if (ok.length > 0) {
+        onFotosChange([...fotos, ...ok]);
+        toast.success(`${ok.length} ${ok.length === 1 ? "imagen subida" : "imágenes subidas"}`);
+      }
+      if (failed > 0) {
+        toast.error(`${failed} ${failed === 1 ? "imagen falló" : "imágenes fallaron"} al subir`);
+      }
+    } catch (e) {
+      toast.error("Error al subir imágenes", {
+        description: e instanceof Error ? e.message : "Inténtalo de nuevo",
+      });
+    } finally {
+      setUploadingPhotos(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+      setUploadOpen(false);
+    }
   };
 
   const setPrincipal = (id: string) =>
@@ -124,19 +171,74 @@ export function MultimediaEditor({
     setDragIdx(idx);
   };
 
-  /* ─── Videos ─── */
-  const addVideo = () => {
-    if (videoType !== "video" && !videoUrl) return;
+  /* ─── Videos · YouTube/Vimeo por URL · MP4 upload a Storage ─── */
+  /** Sube el vídeo MP4 al bucket promotion-public y devuelve la URL.
+   *  El bucket está configurado para públicos. Sin compresión (vídeo
+   *  no se reescala como imagen). Cuidado · MP4 grandes pueden tardar. */
+  const uploadVideoFile = async (file: File): Promise<string | null> => {
+    if (!uploadScopeId) {
+      toast.error("Guarda el borrador antes de subir vídeos");
+      return null;
+    }
+    try {
+      setUploadingVideo(true);
+      const ext = (file.name.split(".").pop() || "mp4").toLowerCase();
+      const result = await uploadFile({
+        bucket: "promotion-public",
+        path: `${uploadScopeId}/video/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`,
+        file,
+      });
+      return result.url;
+    } catch (e) {
+      toast.error("Error al subir el vídeo", {
+        description: e instanceof Error ? e.message : "Inténtalo de nuevo",
+      });
+      return null;
+    } finally {
+      setUploadingVideo(false);
+    }
+  };
+
+  const triggerVideoPicker = () => {
+    if (!uploadScopeId) {
+      toast.error("Guarda el borrador antes de subir vídeos");
+      return;
+    }
+    videoInputRef.current?.click();
+  };
+
+  const handleVideoFile = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    const url = await uploadVideoFile(file);
+    if (videoInputRef.current) videoInputRef.current.value = "";
+    if (!url) return;
+    const newVideo: VideoItem = {
+      id: `video-${Date.now()}`,
+      tipo: "video",
+      url,
+      nombre: videoNombre || file.name.replace(/\.[^.]+$/, ""),
+    };
+    onVideosChange([...videos, newVideo]);
+    setVideoNombre("");
+    setVideoOpen(false);
+    toast.success("Vídeo subido");
+  };
+
+  /** Añadir vídeo via URL externa (YouTube / Vimeo). */
+  const addVideoFromUrl = () => {
+    if (!videoUrl) return;
     const newVideo: VideoItem = {
       id: `video-${Date.now()}`,
       tipo: videoType,
-      url: videoUrl || "[archivo local]",
-      nombre: videoNombre || (videoType === "youtube" ? "YouTube" : videoType === "vimeo360" ? "360° Vimeo" : "Video"),
+      url: videoUrl,
+      nombre: videoNombre || (videoType === "youtube" ? "YouTube" : "360° Vimeo"),
     };
     onVideosChange([...videos, newVideo]);
     setVideoUrl("");
     setVideoNombre("");
     setVideoOpen(false);
+    toast.success("Vídeo añadido");
   };
 
   const removeVideo = (id: string) => onVideosChange(videos.filter((v) => v.id !== id));
@@ -327,6 +429,17 @@ export function MultimediaEditor({
         )}
       </div>
 
+      {/* Input file oculto · disparado desde el dropzone y desde el
+          botón "Subir imágenes". Múltiple para soportar selección masiva. */}
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        className="hidden"
+        onChange={(e) => handlePhotoFiles(e.target.files)}
+      />
+
       {/* Modal subir fotos */}
       <ModalShell open={uploadOpen} onClose={() => setUploadOpen(false)} title="Subir fotografías">
         <div className="flex flex-col gap-3">
@@ -336,12 +449,24 @@ export function MultimediaEditor({
           </div>
           <button
             type="button"
-            onClick={addMockPhotos}
-            className="rounded-xl border-2 border-dashed border-border bg-muted/30 px-6 py-10 flex flex-col items-center gap-2 text-center hover:border-primary/40 hover:bg-muted/50 transition-colors"
+            onClick={triggerPhotoPicker}
+            disabled={uploadingPhotos || !uploadScopeId}
+            className="rounded-xl border-2 border-dashed border-border bg-muted/30 px-6 py-10 flex flex-col items-center gap-2 text-center hover:border-primary/40 hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <ImageIcon className="h-10 w-10 text-muted-foreground/40" strokeWidth={1} />
-            <p className="text-sm font-medium text-muted-foreground">Arrastra fotos aquí o haz clic para seleccionar</p>
-            <p className="text-xs text-muted-foreground/60">JPG, PNG o WEBP · Máximo 10 MB por imagen</p>
+            {uploadingPhotos ? (
+              <>
+                <Loader2 className="h-10 w-10 text-primary animate-spin" strokeWidth={1.5} />
+                <p className="text-sm font-medium text-primary">Subiendo imágenes…</p>
+              </>
+            ) : (
+              <>
+                <ImageIcon className="h-10 w-10 text-muted-foreground/40" strokeWidth={1} />
+                <p className="text-sm font-medium text-muted-foreground">
+                  {uploadScopeId ? "Haz clic para seleccionar imágenes" : "Guarda el borrador para empezar a subir"}
+                </p>
+                <p className="text-xs text-muted-foreground/60">JPG, PNG o WEBP · selección múltiple</p>
+              </>
+            )}
           </button>
         </div>
       </ModalShell>
@@ -373,11 +498,36 @@ export function MultimediaEditor({
           </div>
 
           {videoType === "video" ? (
-            <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 px-6 py-8 flex flex-col items-center gap-2 text-center">
-              <Video className="h-8 w-8 text-muted-foreground/40" strokeWidth={1} />
-              <p className="text-xs font-medium text-muted-foreground">Arrastra un video o haz clic</p>
-              <p className="text-[10px] text-muted-foreground/60">MP4 · Máximo 300 MB</p>
-            </div>
+            <>
+              <input
+                ref={videoInputRef}
+                type="file"
+                accept="video/mp4,video/webm,video/quicktime"
+                className="hidden"
+                onChange={(e) => handleVideoFile(e.target.files)}
+              />
+              <button
+                type="button"
+                onClick={triggerVideoPicker}
+                disabled={uploadingVideo || !uploadScopeId}
+                className="rounded-xl border-2 border-dashed border-border bg-muted/30 px-6 py-8 flex flex-col items-center gap-2 text-center hover:border-primary/40 hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {uploadingVideo ? (
+                  <>
+                    <Loader2 className="h-8 w-8 text-primary animate-spin" strokeWidth={1.5} />
+                    <p className="text-xs font-medium text-primary">Subiendo vídeo…</p>
+                  </>
+                ) : (
+                  <>
+                    <Video className="h-8 w-8 text-muted-foreground/40" strokeWidth={1} />
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {uploadScopeId ? "Haz clic para seleccionar un vídeo" : "Guarda el borrador para empezar a subir"}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/60">MP4, WebM o MOV · subida directa a Storage</p>
+                  </>
+                )}
+              </button>
+            </>
           ) : (
             <input
               value={videoUrl}
@@ -394,14 +544,18 @@ export function MultimediaEditor({
             className={cn(inputBase, "h-9 px-3")}
           />
 
-          <button
-            type="button"
-            onClick={addVideo}
-            disabled={videoType !== "video" && !videoUrl}
-            className="inline-flex items-center justify-center h-9 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Añadir
-          </button>
+          {/* CTA "Añadir" SOLO para los modos URL (youtube / vimeo). El
+              modo "video" ya añade automáticamente al subir el archivo. */}
+          {videoType !== "video" && (
+            <button
+              type="button"
+              onClick={addVideoFromUrl}
+              disabled={!videoUrl}
+              className="inline-flex items-center justify-center h-9 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Añadir
+            </button>
+          )}
         </div>
       </ModalShell>
     </div>

@@ -4,7 +4,7 @@ import { useTabParam } from "@/lib/useTabParam";
 import { getDraft, saveDraft as persistDraft, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { WizardState, FotoItem, FotoCategoria } from "@/components/crear-promocion/types";
-import { faseConstruccionOptions } from "@/components/crear-promocion/options";
+import { faseConstruccionOptions, constructionPhaseLabelFromProgress } from "@/components/crear-promocion/options";
 import { unitDataToUnit, mergeUnitIntoUnitData } from "@/lib/unitDataAdapter";
 import type { Unit } from "@/data/units";
 import { promotions, getBuildingTypeLabel } from "@/data/promotions";
@@ -654,9 +654,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const returnPath = `/developer-promotions/${p.id}`;
   const website = `${p.name.toLowerCase().replace(/\s+/g, "-")}.byvaro.com`;
 
-  const constructionPhaseLabel = p.constructionProgress !== undefined
-    ? p.constructionProgress >= 100 ? "Terminada" : p.constructionProgress >= 80 ? "Acabados" : p.constructionProgress >= 50 ? "Instalaciones" : p.constructionProgress >= 20 ? "Estructura" : "Inicio"
-    : "Fase de proyecto";
+  /* Label canónico de la fase de obra · derivado del % real de la promo
+   *  vía buckets definidos en `options.ts::constructionPhaseFromProgress`.
+   *  Lleva incrustado el rango (ej. "Acabados · 75–90%") para que sea
+   *  coherente con el wizard donde el usuario seleccionó la fase. */
+  const constructionPhaseLabel = constructionPhaseLabelFromProgress(p.constructionProgress)
+    ?? "Fase de proyecto";
 
   const galleryImages = [
     p.image || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=1600&h=1000&fit=crop",
@@ -2362,6 +2365,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         open={editOpen === "multimedia"}
         onOpenChange={(v) => setEditOpen(v ? "multimedia" : null)}
         images={galleryImages}
+        promotionId={p.id}
         onSave={(imgs) => {
           if (!isDraft || !draftState) return;
           const prev = draftState.fotos ?? [];
