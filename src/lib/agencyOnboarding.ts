@@ -115,20 +115,22 @@ export async function hydrateAgencyOnboardingFromSupabase(): Promise<void> {
 }
 
 /** ¿Hay un setup pendiente para esta agencia? · usado por el gate
- *  visual del AppLayout para decidir si pintar el modal. */
+ *  visual del AppLayout para decidir si pintar el modal.
+ *
+ *  Una agencia necesita setup hasta que el flag de onboarding tenga
+ *  `completedAt`. Esto cubre 3 casos:
+ *    1. Signup vía `/register` (caso 1 alta nueva).
+ *    2. Aceptación de invitación vía `/invite/:token` (caso 2 legacy).
+ *    3. Agencias seed (mock) · si nunca se han completado.
+ *
+ *  Antes el check exigía que la agencia estuviese en
+ *  `byvaro.agencies.created.v1` (legacy de la rama /invite) · eso
+ *  dejaba a las agencias creadas via /register sin disparar el
+ *  modal aunque el user hubiera puesto sub_role="employee" y
+ *  necesitase invitar al Responsable real. */
 export function needsResponsibleSetup(agencyId: string): boolean {
   if (typeof window === "undefined") return false;
-  /* Solo agencias creadas vía invitación (storage created.v1) tienen
-   * setup pendiente · las del seed son fixtures siempre completas. */
-  const createdRaw = memCache.getItem("byvaro.agencies.created.v1");
-  if (!createdRaw) return false;
-  try {
-    const arr = JSON.parse(createdRaw) as Array<{ id: string }>;
-    if (!arr.some((a) => a.id === agencyId)) return false;
-  } catch {
-    return false;
-  }
-  /* Y el flag de onboarding NO está marcado como completed. */
+  if (!agencyId) return false;
   const state = readAll().find((s) => s.agencyId === agencyId);
   return !state?.completedAt;
 }

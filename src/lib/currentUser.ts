@@ -64,22 +64,51 @@ const DEVELOPER_USER: CurrentUser = {
  *  localStorage, derivamos su rol (admin/member) y datos personales ·
  *  permite probar admin vs member dentro de la misma agencia. */
 function buildAgencyUser(agencyId: string, agencyEmail?: string): CurrentUser {
-  /* Resolver agencia · seed primero, luego storage local de creadas
-   * (alta vía invitación). Solo si ninguna existe, caemos a la primera
-   * del seed (compat). */
-  let a = agencies.find((x) => x.id === agencyId);
+  /* `agencyId` puede venir en dos formatos según origen:
+   *   · seed legacy ("ag-1", "ag-2", …) · sin prefijo · loginAs
+   *     antiguo lo guardó así.
+   *   · UUID DB real ("agency-89bcd…") · signup vía /register · ya
+   *     contiene el prefijo `agency-`.
+   *  Para construir el `organizationId` (clave de cache + queries
+   *  RLS), prepender `agency-` SOLO si no lo tiene ya · si no
+   *  obtenemos `agency-agency-…` y la hidratación nunca encuentra
+   *  los datos reales → el AccountSwitcher cae al fallback "Tu
+   *  empresa". */
+  const fullOrgId = agencyId.startsWith("agency-") ? agencyId : `agency-${agencyId}`;
+
+  /* Resolver agencia · seed primero (busca por id seed Y por id
+   *  full org id por si vino con prefijo), luego storage local de
+   *  creadas (alta vía invitación). */
+  let a = agencies.find((x) => x.id === agencyId)
+    ?? agencies.find((x) => `agency-${x.id}` === agencyId);
   if (!a && typeof window !== "undefined") {
     try {
       const raw = memCache.getItem("byvaro.agencies.created.v1");
       if (raw) {
         const arr = JSON.parse(raw);
         if (Array.isArray(arr)) {
-          a = arr.find((x: { id: string }) => x.id === agencyId);
+          a = arr.find((x: { id: string }) => x.id === agencyId)
+            ?? arr.find((x: { id: string }) => `agency-${x.id}` === agencyId);
         }
       }
     } catch { /* noop */ }
   }
-  if (!a) a = agencies[0];
+  if (!a) {
+    /* Fallback defensivo · sin seed (agencies=[]) y sin agencias
+     * creadas localmente · devolvemos un user con datos vacíos
+     * "anonymous" para que la UI no crashee. La hidratación
+     * posterior poblará el resto cuando llegue el JWT/profile. */
+    return {
+      id: `u-agency-${agencyId}`,
+      name: "",
+      email: agencyEmail ?? "",
+      role: "admin",
+      organizationId: fullOrgId,
+      accountType: "agency",
+      agencyId,
+      agencyName: "",
+    };
+  }
 
   /* Resolver mockUser · seed primero, luego created users. */
   let mock = agencyEmail
@@ -114,7 +143,9 @@ function buildAgencyUser(agencyId: string, agencyEmail?: string): CurrentUser {
     name: mock?.name ?? a.contactoPrincipal?.nombre ?? "Sin nombre",
     email: mock?.email ?? a.contactoPrincipal?.email ?? "",
     role: mock?.role ?? "admin",
-    organizationId: `agency-${a.id}`,
+    /* Misma normalización del prefijo · si `a.id` ya viene como
+     *  `agency-…` (UUID DB), no lo doblamos. */
+    organizationId: a.id.startsWith("agency-") ? a.id : `agency-${a.id}`,
     accountType: "agency",
     agencyId: a.id,
     agencyName: a.name,

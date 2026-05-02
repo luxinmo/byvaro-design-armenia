@@ -17,10 +17,12 @@ import {
   Home, Building, FileText, CircleDollarSign, CalendarDays,
   Handshake, Contact, Globe, Mail, Settings, ChevronsUpDown, FileSignature,
   Building2, Inbox, User as UserIcon, LogOut, Users, Activity, Sparkles,
-  KeyRound, LayoutGrid, Crown,
+  KeyRound, LayoutGrid, Crown, Lock,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useEmpresa } from "@/lib/empresa";
+import { usePlanState } from "@/lib/plan";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useCurrentUser } from "@/lib/currentUser";
 import { currentOrgIdentity } from "@/lib/orgCollabRequests";
@@ -35,7 +37,31 @@ import { promotions } from "@/data/promotions";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { sales as seedSales } from "@/data/sales";
 
-type NavItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }>; badge?: string | number; accent?: boolean; accentColor?: "primary" | "destructive" };
+/** Audiences del item · array con los packs que lo desbloquean.
+ *  · `undefined` o `[]` · siempre visible · CRM general (Inicio,
+ *    Calendario, Contactos, Emails, etc.).
+ *  · `["promoter"]` · solo visible si `promoter_pack !== 'none'`
+ *    (Microsites, Actividad, Sugerencias, /colaboradores).
+ *  · `["agency"]` · solo visible si `agency_pack !== 'none'`
+ *    (/promotores).
+ *  · `["promoter", "agency"]` · visible si CUALQUIERA de los 2
+ *    packs está activo (Promociones, Inmuebles, etc. · útil para
+ *    el promotor con sus promos Y para la agencia con su catálogo).
+ *
+ *  Si el item está locked (ningún pack del audiences activo), se
+ *  renderiza con candado y click muestra toast:
+ *   · admin → "Activa el módulo X" + link a /planes.
+ *   · member → "Pídele al admin que active el módulo X". */
+type NavAudience = "promoter" | "agency";
+type NavItem = {
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge?: string | number;
+  accent?: boolean;
+  accentColor?: "primary" | "destructive";
+  audiences?: NavAudience[];
+};
 type NavGroup = { label: string; items: NavItem[] };
 
 /** Rutas donde la sidebar se colapsa automáticamente a icon-only. */
@@ -46,18 +72,24 @@ const groups: NavGroup[] = [
     label: "General",
     items: [
       { title: "Inicio", url: "/inicio", icon: Home },
-      { title: "Actividad", url: "/actividad", icon: Activity },
-      { title: "Sugerencias", url: "/sugerencias", icon: Sparkles },
+      /* Actividad y Sugerencias · dashboards del lado promotor ·
+       *  KPIs sobre SUS promociones / agencias · no aplican al
+       *  pack agencia. */
+      { title: "Actividad", url: "/actividad", icon: Activity, audiences: ["promoter"] },
+      { title: "Sugerencias", url: "/sugerencias", icon: Sparkles, audiences: ["promoter"] },
     ],
   },
   {
     label: "Comercial",
     items: [
-      /* Sin badges hardcoded · cada uno se rellena dinámicamente abajo
-       * en `visibleGroups` con el conteo real (promotor vs agencia). */
-      { title: "Promociones", url: "/promociones", icon: Building },
-      { title: "Inmuebles", url: "/inmuebles", icon: KeyRound },
-      { title: "Inmuebles · cuadrícula", url: "/inmuebles/cuadricula", icon: LayoutGrid },
+      /* Promociones · Inmuebles · Inmuebles cuadrícula · visibles si
+       *  CUALQUIERA de los 2 packs está activo (promotor ve sus
+       *  promociones · agencia ve el catálogo donde colabora).
+       *  Sin ningún pack activo (Plan Básico puro post-trial), se
+       *  bloquean. */
+      { title: "Promociones", url: "/promociones", icon: Building, audiences: ["promoter", "agency"] },
+      { title: "Inmuebles", url: "/inmuebles", icon: KeyRound, audiences: ["promoter", "agency"] },
+      { title: "Inmuebles · cuadrícula", url: "/inmuebles/cuadricula", icon: LayoutGrid, audiences: ["promoter", "agency"] },
       { title: "Oportunidades", url: "/oportunidades", icon: Inbox },
       { title: "Registros", url: "/registros", icon: FileText },
       { title: "Ventas", url: "/ventas", icon: CircleDollarSign },
@@ -67,15 +99,16 @@ const groups: NavGroup[] = [
   {
     label: "Red",
     items: [
-      /* Promotores & comercializadores · workspaces externos con los que
-       *  colaboramos como comercializador (lado developer). El label se
-       *  muestra completo en sidebar ancho · si la columna se estrecha,
-       *  Tailwind `truncate` recorta con elipsis · NUNCA salta de línea. */
-      { title: "Promotores & comercializadores", url: "/promotores", icon: Building },
-      { title: "Inmobiliarias", url: "/colaboradores", icon: Handshake },
-      /* A/B · ruta temporal con la card antigua del listado
-       *  (`FeatureCardV3`) · borrar cuando se elija una variante. */
-      { title: "Inmobiliarias test", url: "/colaboradores-test", icon: Handshake },
+      /* Promotores & comercializadores · directorio que la INMOBILIARIA
+       *  consume desde el pack agencia · permite buscar y solicitar
+       *  colaboración con promotores externos. Sin pack agencia activo,
+       *  no tiene sentido. */
+      { title: "Promotores & comercializadores", url: "/promotores", icon: Building, audiences: ["agency"] },
+      /* Inmobiliarias · lado promotor · gestión de las agencias que
+       *  colaboran con SUS promociones. Sin pack promotor (no hay
+       *  promociones propias), no aplica. */
+      { title: "Inmobiliarias", url: "/colaboradores", icon: Handshake, audiences: ["promoter"] },
+      { title: "Inmobiliarias test", url: "/colaboradores-test", icon: Handshake, audiences: ["promoter"] },
       { title: "Contratos", url: "/contratos", icon: FileSignature },
       { title: "Contactos", url: "/contactos", icon: Contact },
     ],
@@ -83,7 +116,9 @@ const groups: NavGroup[] = [
   {
     label: "Contenido",
     items: [
-      { title: "Microsites", url: "/microsites", icon: Globe },
+      /* Microsites · solo aplica al promotor (microsite POR promoción
+       *  propia). Sin pack promotor, no hay nada que renderizar. */
+      { title: "Microsites", url: "/microsites", icon: Globe, audiences: ["promoter"] },
       { title: "Emails", url: "/emails", icon: Mail },
     ],
   },
@@ -95,6 +130,52 @@ export function AppSidebar() {
   const { empresa } = useEmpresa();
   const currentUser = useCurrentUser();
   const isAgencyUser = currentUser.accountType === "agency";
+
+  /* Plan packs activos · usado para resolver `isLockedItem(item)`.
+   *  Un item se bloquea si su `audiences` no incluye ningún pack
+   *  activo. Member ve el item con candado pero no puede activar
+   *  nada · admin click → toast con CTA "Ver planes". */
+  const planState = usePlanState();
+  const promoterActive = planState.promoterPack !== "none";
+  const agencyActive = planState.agencyPack !== "none";
+  const isAdmin = currentUser.role === "admin";
+
+  const isLockedItem = (audiences?: NavAudience[]): boolean => {
+    if (!audiences || audiences.length === 0) return false;
+    /* Visible si alguno de sus audiences está activo. */
+    return !audiences.some((a) =>
+      (a === "promoter" && promoterActive) ||
+      (a === "agency" && agencyActive),
+    );
+  };
+
+  /* Etiqueta humana del módulo bloqueante · primer audience del
+   *  array · típicamente "promoter" o "agency". */
+  const audienceLabel = (audiences?: NavAudience[]): string => {
+    if (!audiences || audiences.length === 0) return "";
+    /* Si el item necesita CUALQUIERA de los 2, mostramos los dos
+     *  para que el user sepa con qué se desbloquea. */
+    if (audiences.length === 2) return "Promotor o Agencia Inmobiliaria";
+    return audiences[0] === "agency" ? "Agencia Inmobiliaria" : "Promotor";
+  };
+
+  const handleLockedClick = (e: React.MouseEvent, audiences?: NavAudience[]) => {
+    e.preventDefault();
+    const moduleLabel = audienceLabel(audiences);
+    if (isAdmin) {
+      toast.info(`Activa el módulo ${moduleLabel}`, {
+        description: "Necesitas activarlo para acceder a esta sección.",
+        action: {
+          label: "Ver planes",
+          onClick: () => navigate("/planes"),
+        },
+      });
+    } else {
+      toast.info(`Pídele al admin que active el módulo ${moduleLabel}`, {
+        description: "Solo el administrador de la cuenta puede activar módulos del plan.",
+      });
+    }
+  };
   /* Empresa / Equipo / Ajustes · solo admin del workspace · datos
    *  fiscales, miembros, billing, integraciones, plan. El member NO
    *  los ve.
@@ -349,6 +430,45 @@ export function AppSidebar() {
             {group.items.map((item) => {
               const isActive = location.pathname === item.url;
               const Icon = item.icon;
+              const locked = isLockedItem(item.audiences);
+              const moduleLabel = audienceLabel(item.audiences);
+
+              /* Item bloqueado · NO navega · click muestra toast.
+               *  Member solo "ve", admin tiene CTA hacia /planes. */
+              if (locked) {
+                return (
+                  <button
+                    key={item.url}
+                    type="button"
+                    onClick={(e) => handleLockedClick(e, item.audiences)}
+                    title={collapsed
+                      ? `${item.title} · módulo ${moduleLabel} sin activar`
+                      : `Módulo ${moduleLabel} sin activar`}
+                    className={cn(
+                      "relative flex items-center transition-colors w-full text-left",
+                      collapsed
+                        ? "justify-center h-10 mx-2 rounded-lg"
+                        : "gap-3 px-5 py-2 text-sm",
+                      "text-sidebar-foreground/40 hover:text-sidebar-foreground/60 hover:bg-sidebar-accent/20 cursor-pointer",
+                    )}
+                  >
+                    <Icon className="h-[18px] w-[18px] shrink-0" />
+                    {!collapsed && (
+                      <>
+                        <span className="truncate min-w-0">{item.title}</span>
+                        <Lock className="ml-auto h-3 w-3 shrink-0 text-sidebar-foreground/40" strokeWidth={2} />
+                      </>
+                    )}
+                    {collapsed && (
+                      <span
+                        className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-sidebar-foreground/30"
+                        aria-hidden
+                      />
+                    )}
+                  </button>
+                );
+              }
+
               return (
                 <NavLink
                   key={item.url}

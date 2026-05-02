@@ -95,10 +95,33 @@ type FeatureBlock = {
    ══════════════════════════════════════════════════════════════════ */
 
 const PLANS: Plan[] = [
+  /* Plan Gratis del promotor · base canónica de la filosofía Byvaro.
+   * Acceso a sus datos siempre · sin crear promociones nuevas.
+   * Los nuevos signups arrancan aquí con 180 días de prueba completa
+   * encima · ver `src/lib/plan.ts::TRIAL_DURATION_DAYS`. */
+  {
+    id: "promoter-free",
+    audience: "promotor",
+    name: "Básico",
+    price: "0 €",
+    priceNote: "para siempre",
+    trialNote: "180 días de prueba completa al darte de alta",
+    blurb:
+      "Tu plan permanente · pensado para los ciclos del negocio inmobiliario. Conserva tus datos siempre, paga solo cuando produces.",
+    features: [
+      "Acceso a tus contactos, ventas y contratos firmados",
+      "Microsites archivados accesibles",
+      "Lectura completa del histórico (registros, visitas, emails)",
+      "180 días de prueba completa al darte de alta",
+      "Sin tarjeta requerida",
+      "Vuelve al plan de pago cuando tengas una promoción nueva",
+    ],
+    ctaLabel: "Empezar gratis",
+  },
   {
     id: "agency-free",
     audience: "agencia",
-    name: "Agencia · Gratis",
+    name: "Básico",
     price: "0 €",
     priceNote: "para siempre",
     trialNote: "Si te invita un promotor · TODO gratis sin gastar solicitudes",
@@ -125,7 +148,7 @@ const PLANS: Plan[] = [
   {
     id: "agency-marketplace",
     audience: "agencia",
-    name: "Agencia · Marketplace",
+    name: "Plus",
     price: "99 €",
     priceNote: "/ mes · IVA excluido",
     blurb:
@@ -163,22 +186,24 @@ const PLANS: Plan[] = [
       },
       "Sin permanencia · si cancelas conservas tus ventas y datos",
     ],
-    ctaLabel: "Activar Marketplace",
+    ctaLabel: "Activar Plus",
   },
   {
     id: "promoter-249",
     audience: "promotor",
-    name: "Promotor / Comercializador",
+    name: "Plus",
     price: "249 €",
     priceNote: "/ mes · IVA excluido",
-    trialNote: "6 meses gratis al empezar",
+    /* trialNote vacío · los 180 días viven en el plan Free
+     *  según la filosofía nueva (Free es la base · trial es una
+     *  ventana encima del Free). El plan Pro arranca cuando el
+     *  user lo activa explícitamente · sin "regalo" embebido. */
     highlight: true,
     blurb:
-      "Para promotores y comercializadores · gestiona tu cartera y trabaja con agencias en toda España.",
+      "Para cuando estás vendiendo activamente · gestiona tu cartera y trabaja con agencias en toda España.",
     features: [
       "Hasta 5 promociones activas",
-      "Invitaciones a agencias · alcance nacional",
-      "10 colaboraciones cross-empresa gratis",
+      "Invitaciones a agencias ilimitadas · alcance nacional",
       "Reconocimiento de registros por IA · evita duplicados",
       "Microsite por promoción · página pública lista para vender",
       "Landing pages ilimitadas",
@@ -204,18 +229,16 @@ const PLANS: Plan[] = [
       },
       "Sin permanencia · si cancelas conservas tus ventas y datos",
     ],
-    ctaLabel: "Empezar 6 meses gratis",
+    ctaLabel: "Activar Plus",
   },
   {
     id: "promoter-329",
     audience: "promotor",
-    name: "Promotor · Volumen · TODO incluido",
+    name: "Ultra",
     price: "329 €",
     priceNote: "/ mes · IVA excluido",
     blurb:
-      "El pack completo · funcionalidad de Promotor + Agencia · "
-      + "ideal si gestionas tus propias promociones Y comercializas "
-      + "promociones de terceros.",
+      "Pack completo · gestionas tus promociones Y comercializas las de otros · incluye Marketplace de Inmobiliaria.",
     features: [
       "Hasta 10 promociones activas propias",
       {
@@ -240,7 +263,7 @@ const PLANS: Plan[] = [
       "Landing pages ilimitadas",
       "Sin permanencia · si cancelas conservas tus ventas y datos",
     ],
-    ctaLabel: "Activar Volumen",
+    ctaLabel: "Activar Ultra",
   },
 ];
 
@@ -352,15 +375,14 @@ const FEATURES: FeatureBlock[] = [
    ══════════════════════════════════════════════════════════════════ */
 
 /* Mapeo de `PlanTier` → `Plan.id` del catálogo de cards · usado para
- *  resaltar la card del plan actual. trial/promoter_249 cuentan ambos
- *  como "promoter-249" en el grid (la card incluye los 6 meses gratis
- *  como trial note). */
+ *  resaltar la card del plan actual. tier=trial mapea a "promoter-free"
+ *  (Plan Gratis es el base · trial es solo una ventana). */
 function planIdFromTier(tier: PlanTier): string {
   switch (tier) {
     case "agency_free":         return "agency-free";
     case "agency_marketplace":  return "agency-marketplace";
     case "promoter_329":        return "promoter-329";
-    case "trial":
+    case "trial":               return "promoter-free";
     case "promoter_249":        return "promoter-249";
     case "enterprise":          return "enterprise";
     default:                    return "";
@@ -372,6 +394,7 @@ function tierFromPlanId(planId: string): PlanTier | null {
   switch (planId) {
     case "agency-free":         return "agency_free";
     case "agency-marketplace":  return "agency_marketplace";
+    case "promoter-free":       return "trial"; // Gratis activa el "trial" base
     case "promoter-249":        return "promoter_249";
     case "promoter-329":        return "promoter_329";
     case "enterprise":          return "enterprise";
@@ -385,19 +408,27 @@ export default function Planes() {
   const counters = useUsageCounters();
   const limits = PLAN_LIMITS[tier];
   const user = useCurrentUser();
-  /* `activePlanIds` · Set con los planes que están activos AHORA ·
-   *  con el modelo de packs split puede haber 0, 1 o 2 cards
-   *  marcadas (un workspace dual con agency_free + promoter_249
-   *  marca AMBAS). NO usamos `tier` legacy que solo tiene 1. */
+  /* `activePlanIds` · Set con los planes que están activos AHORA.
+   *
+   *  Filosofía Plan Gratis · ver `src/lib/plan.ts`:
+   *  - `promoter_pack='trial'` → el plan ACTIVO es "promoter-free"
+   *    (Plan Gratis es el plan base · trial es solo una ventana
+   *    de 180 días encima).
+   *  - `promoter_pack='promoter_249'` o `promoter_329'` → activo
+   *    el plan de pago correspondiente.
+   *  - `agency_pack='free'/'marketplace'` → activo el card de
+   *    inmobiliaria correspondiente.
+   *
+   *  Un workspace dual (developer + agency_pack) marca AMBAS cards. */
   const activePlanIds = useMemo(() => {
     const ids = new Set<string>();
     if (planState.agencyPack === "free") ids.add("agency-free");
     else if (planState.agencyPack === "marketplace") ids.add("agency-marketplace");
-    if (planState.promoterPack === "trial" || planState.promoterPack === "promoter_249") {
-      ids.add("promoter-249");
-    } else if (planState.promoterPack === "promoter_329") {
-      ids.add("promoter-329");
-    }
+    /* Promotor en trial → plan ACTIVO es Gratis (no 249) · el
+     * trial es una ventana de bonus, no un plan. */
+    if (planState.promoterPack === "trial") ids.add("promoter-free");
+    else if (planState.promoterPack === "promoter_249") ids.add("promoter-249");
+    else if (planState.promoterPack === "promoter_329") ids.add("promoter-329");
     return ids;
   }, [planState]);
 
@@ -444,78 +475,45 @@ export default function Planes() {
           <p className="text-[14.5px] sm:text-base text-muted-foreground mt-4 leading-relaxed">
             {user.accountType === "agency"
               ? "CRM, microsites, WhatsApp, IA de duplicados · todo incluido. Si te invita un promotor, gratis para siempre."
-              : "CRM, ventas, microsites, IA de duplicados, WhatsApp y emails · todo en una sola plataforma. 6 meses de prueba sin tarjeta."}
+              : "CRM, ventas, microsites, IA de duplicados, WhatsApp y emails · todo en una sola plataforma. 180 días de prueba sin tarjeta."}
           </p>
         </header>
 
 
-        {/* ═══════════ JERARQUÍA POR TIPO DE CUENTA ═══════════
+        {/* ═══════════ DOS SECCIONES POR AUDIENCIA ═══════════
           *
-          * Antes había DOS secciones equiparables (Pack Inmobiliaria
-          * + Pack Promotor) que confundían · el usuario veía planes
-          * que no aplicaban a su signup_kind y avisos negativos del
-          * tipo "esta opción te da 0 solicitudes".
+          * Sección 1 · "Para Promotores y Comercializadores":
+          *   - Plan Básico (gratis para siempre · 180 días prueba al
+          *     darte de alta) + Plus (249€) + Ultra (329€).
+          *   - Description explica la diferencia: cuándo conviene
+          *     Básico y cuándo conviene pagar.
           *
-          * Ahora · 1 sección PRINCIPAL grande con SUS planes y, debajo,
-          * 1 banner-addon discreto para el otro pack (solo el plan de
-          * pago aplicable · sin "Gratis"/"Trial" cross-pack que no
-          * sirven). Si el usuario no quiere el addon, simplemente lo
-          * ignora · si lo quiere, click y activa.
+          * Sección 2 · "Para Agencias Inmobiliarias":
+          *   - Plan Básico (gratis para siempre si te invitan · 10
+          *     solicitudes propias) + Plus (99€ marketplace).
+          *   - Description explica la diferencia.
           *
-          * Mapping:
-          *   developer → primary "Pack Promotor" · addon "Marketplace 99€"
-          *   agency    → primary "Pack Inmobiliaria" · addon "Promotor 249€"  */}
-        {(() => {
-          const isAgencyAccount = user.accountType === "agency";
-          const primaryAudience: "agencia" | "promotor" = isAgencyAccount ? "agencia" : "promotor";
-          const primaryTitle = isAgencyAccount
-            ? "Tu plan · Inmobiliaria"
-            : "Tu plan · Promotor / Comercializador";
-          const primaryEyebrow = isAgencyAccount
-            ? "Trabajas con promotores · cobras comisiones"
-            : "Creas y publicas promociones de obra nueva";
-          const primaryDescription = isAgencyAccount
-            ? "Empieza gratis · si te invita un promotor el plan se mantiene gratuito para siempre."
-            : "6 meses de prueba sin tarjeta · luego 249€/mes (IVA excl.) · sin permanencia.";
-          const primaryPlans = PLANS.filter((p) => p.audience === primaryAudience);
+          * El plan ACTIVO del usuario se resalta automáticamente vía
+          * `activePlanIds` · sea cual sea su signup_kind. */}
+        <PackSection
+          title="Para Promotores y Comercializadores"
+          eyebrow="Crea y publica tus promociones"
+          description="El plan Básico es tu base permanente · 180 días de prueba completa al darte de alta · al terminar, conserva tus datos siempre. Pasa al plan Plus solo cuando estés vendiendo activamente · sin permanencia."
+          plans={PLANS.filter((p) => p.audience === "promotor")}
+          activePlanIds={activePlanIds}
+          onSelect={(p) => setCheckoutPlan(p)}
+          crossPackNote={null}
+        />
 
-          /* Addon · plan de pago del OTRO pack · agency_free y trial
-           * son específicos del signup_kind original así que no
-           * aplican aquí. */
-          const addonPlan = isAgencyAccount
-            ? PLANS.find((p) => p.id === "promoter-249")
-            : PLANS.find((p) => p.id === "agency-marketplace");
-          const addonTitle = isAgencyAccount
-            ? "¿También quieres crear tus propias promociones?"
-            : "¿También quieres acceder al directorio de inmobiliarias?";
-          const addonHint = isAgencyAccount
-            ? "Activa el pack Promotor · facturación desde el día 1 (los 6 meses gratis son solo para altas nuevas de promotor)."
-            : "Activa el pack Inmobiliaria · directorio nacional · co-listings con otras agencias.";
-
-          return (
-            <>
-              <PackSection
-                title={primaryTitle}
-                eyebrow={primaryEyebrow}
-                description={primaryDescription}
-                plans={primaryPlans}
-                activePlanIds={activePlanIds}
-                onSelect={(p) => setCheckoutPlan(p)}
-                crossPackNote={null}
-              />
-
-              {addonPlan && (
-                <AddonSection
-                  title={addonTitle}
-                  hint={addonHint}
-                  plan={addonPlan}
-                  isActive={activePlanIds.has(addonPlan.id)}
-                  onSelect={() => setCheckoutPlan(addonPlan)}
-                />
-              )}
-            </>
-          );
-        })()}
+        <PackSection
+          title="Para Agencias Inmobiliarias"
+          eyebrow="Trabaja con promotores · cobra comisiones"
+          description="El plan Básico es gratis para siempre si un promotor te invita a colaborar · además incluye 10 solicitudes propias en tu provincia. Pasa al plan Plus para acceso al directorio nacional, solicitudes ilimitadas y aparición prioritaria."
+          plans={PLANS.filter((p) => p.audience === "agencia")}
+          activePlanIds={activePlanIds}
+          onSelect={(p) => setCheckoutPlan(p)}
+          crossPackNote={null}
+        />
 
         {/* Dialog de pago · se abre al pulsar la CTA de una card */}
         <PlanCheckoutDialog
@@ -917,7 +915,14 @@ function PackSection({
           </div>
         )}
       </header>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+      <div className={cn(
+        "grid grid-cols-1 gap-4 sm:gap-5",
+        /* 3 cards (Plan Gratis + 249 + 329) en línea desde sm para
+         * que la 3ª NO se baje · el usuario lo pidió explícitamente. */
+        plans.length === 3
+          ? "sm:grid-cols-3"
+          : "md:grid-cols-2",
+      )}>
         {plans.map((plan) => (
           <PlanCard
             key={plan.id}

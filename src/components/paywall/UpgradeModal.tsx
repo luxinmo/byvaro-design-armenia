@@ -51,25 +51,25 @@ const COPY: Record<PaywallTrigger, Copy> = {
     icon: Building2,
     title: "Has llegado al límite de promociones",
     subtitle: (u, l) =>
-      `La versión gratuita permite ${l} promoción${l === 1 ? "" : "es"} activa${l === 1 ? "" : "s"} (${u}/${l} en uso). Suscríbete y publica hasta 5.`,
+      `El plan Básico permite ${l} promoción${l === 1 ? "" : "es"} activa${l === 1 ? "" : "s"} (${u}/${l} en uso). Pasa al plan Plus y publica hasta 5.`,
   },
   inviteAgency: {
     icon: Users,
     title: "Has llegado al límite de agencias",
     subtitle: (u, l) =>
-      `Has invitado ${u} agencia${u === 1 ? "" : "s"} de ${l} permitidas en gratis. Con el plan promotor invitas sin límite.`,
+      `Has invitado ${u} agencia${u === 1 ? "" : "s"} de ${l} permitidas en el plan Básico. Con el plan Plus invitas sin límite.`,
   },
   acceptRegistro: {
     icon: FileCheck2,
     title: "Has llegado al límite de registros",
     subtitle: (u, l) =>
-      `Tu workspace ha recibido ${u} registros (límite ${l} en gratis). Suscríbete para aprobar registros sin tope.`,
+      `Tu workspace ha recibido ${u} registros (límite ${l} en el plan Básico). Pasa al plan Plus para aprobar registros sin tope.`,
   },
   collabRequest: {
     icon: Users,
     title: "Has llegado al límite de solicitudes",
     subtitle: (u, l) =>
-      `Has enviado ${u} de ${l} solicitudes de colaboración del plan gratis. Cuando los promotores respondan se libera el cupo · o pasa al plan Marketplace para enviar sin límite.`,
+      `Has enviado ${u} de ${l} solicitudes de colaboración del plan Básico. Cuando los promotores respondan se libera el cupo · o pasa al plan Plus para enviar sin límite.`,
   },
   near_limit: {
     icon: Info,
@@ -135,7 +135,7 @@ export function UpgradeModal() {
     subscribeToPromoter249(currentUser);
     closeUpgradeModal();
     toast.success("¡Suscripción activada!", {
-      description: "Plan Promotor 249€/mes · cuenta sin límites.",
+      description: "Plan Plus · 249€/mes · cuenta sin límites.",
       icon: <Crown className="h-4 w-4" />,
     });
   };
@@ -221,7 +221,7 @@ export function UpgradeModal() {
             className="rounded-full bg-foreground text-background hover:bg-foreground/90 sm:order-2"
           >
             <Crown className="h-3.5 w-3.5" />
-            Suscribirme · 249€/mes
+            Activar Plus · 249€/mes
           </Button>
         </div>
       </DialogContent>

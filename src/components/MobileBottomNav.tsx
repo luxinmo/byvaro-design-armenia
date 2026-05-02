@@ -12,11 +12,15 @@
  *   2) "Actividades" es un placeholder sin ruta destino por ahora
  *      (navega a # y muestra toast de "próximamente").
  */
-import { NavLink, useLocation } from "react-router-dom";
-import { Home, Building, Activity, Handshake, FileText, Mail, Contact } from "lucide-react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Home, Building, Activity, Handshake, FileText, Mail, Contact, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/currentUser";
+import { usePlanState } from "@/lib/plan";
+
+/** Mismo modelo que `AppSidebar.NavAudience` · ver doc allí. */
+type NavAudience = "promoter" | "agency";
 
 type Tab = {
   label: string;
@@ -28,20 +32,20 @@ type Tab = {
   avatar?: boolean;
   /** Ruta aún no implementada → toast informativo. */
   pending?: boolean;
-  /** Solo para cuenta promotor. */
-  promotorOnly?: boolean;
-  /** Solo para cuenta agencia. */
-  agencyOnly?: boolean;
+  /** Packs que desbloquean la tab · si todos están inactivos, la
+   *  tab aparece bloqueada con candado · click muestra toast
+   *  ("admin activa el módulo X" / "pídele al admin"). */
+  audiences?: NavAudience[];
 };
 
 const tabs: Tab[] = [
   { label: "Inicio", url: "/inicio", icon: Home },
-  { label: "Promociones", url: "/promociones", icon: Building },
+  { label: "Promociones", url: "/promociones", icon: Building, audiences: ["promoter", "agency"] },
   { label: "Registros", url: "/registros", icon: FileText, tabletOnly: true },
   { label: "Actividades", url: "#actividades", icon: Activity, pending: true },
-  { label: "Red", url: "/colaboradores", icon: Handshake, promotorOnly: true },
-  { label: "Contactos", url: "/contactos", icon: Contact, agencyOnly: true },
-  { label: "Emails", url: "/emails", icon: Mail, tabletOnly: true, promotorOnly: true },
+  { label: "Red", url: "/colaboradores", icon: Handshake, audiences: ["promoter"] },
+  { label: "Contactos", url: "/contactos", icon: Contact },
+  { label: "Emails", url: "/emails", icon: Mail, tabletOnly: true },
   { label: "Perfil", url: "/empresa", avatar: true },
 ];
 
@@ -50,17 +54,53 @@ const AVATAR_URL =
 
 export function MobileBottomNav() {
   const location = useLocation();
-  const isAgencyUser = useCurrentUser().accountType === "agency";
+  const navigate = useNavigate();
+  const currentUser = useCurrentUser();
+  const isAgencyUser = currentUser.accountType === "agency";
+  const isAdmin = currentUser.role === "admin";
+
+  /* Plan packs activos · usados para resolver el lock por audiences.
+   *  Un tab se bloquea si su array `audiences` no incluye ningún
+   *  pack activo · click muestra toast (admin → /planes, member →
+   *  pídele al admin). */
+  const planState = usePlanState();
+  const promoterActive = planState.promoterPack !== "none";
+  const agencyActive = planState.agencyPack !== "none";
+
+  const isLocked = (audiences?: NavAudience[]): boolean => {
+    if (!audiences || audiences.length === 0) return false;
+    return !audiences.some((a) =>
+      (a === "promoter" && promoterActive) ||
+      (a === "agency" && agencyActive),
+    );
+  };
+
+  const audienceLabel = (audiences?: NavAudience[]): string => {
+    if (!audiences || audiences.length === 0) return "";
+    if (audiences.length === 2) return "Promotor o Agencia Inmobiliaria";
+    return audiences[0] === "agency" ? "Agencia Inmobiliaria" : "Promotor";
+  };
+
+  const handleLockedClick = (audiences?: NavAudience[]) => {
+    const moduleLabel = audienceLabel(audiences);
+    if (isAdmin) {
+      toast.info(`Activa el módulo ${moduleLabel}`, {
+        description: "Necesitas activarlo para acceder.",
+        action: {
+          label: "Ver planes",
+          onClick: () => navigate("/planes"),
+        },
+      });
+    } else {
+      toast.info(`Pídele al admin que active el módulo ${moduleLabel}`, {
+        description: "Solo el administrador puede activar módulos del plan.",
+      });
+    }
+  };
+
   const visibleTabs = tabs
-    .filter((t) => {
-      if (t.promotorOnly && isAgencyUser) return false;
-      if (t.agencyOnly && !isAgencyUser) return false;
-      return true;
-    })
     /* Label dinámico para /promociones · developer ve "Mis Promociones",
-     *  agency ve "Promociones". Ver REGLA en sidebar.
-     *  TODO(hybrid · pack activation) · cuando un workspace tenga ambos
-     *  roles, mostrar 2 tabs distintas (Promociones + Mis Promociones). */
+     *  agency ve "Promociones". Ver REGLA en sidebar. */
     .map((t) =>
       t.url === "/promociones" && !isAgencyUser
         ? { ...t, label: "Mis Promociones" }
@@ -137,6 +177,30 @@ export function MobileBottomNav() {
                 {indicator}
                 {content}
                 {label}
+              </button>
+            );
+          }
+
+          /* Tab bloqueado · pack inactivo · greyed + candado · click
+           *  dispara toast con guidance (admin → /planes, member →
+           *  ask admin). */
+          const locked = isLocked(tab.audiences);
+          if (locked) {
+            return (
+              <button
+                key={tab.url}
+                onClick={() => handleLockedClick(tab.audiences)}
+                className={cn(
+                  cls,
+                  "text-muted-foreground/40 hover:text-muted-foreground/60",
+                )}
+              >
+                {content}
+                {label}
+                <Lock
+                  className="absolute top-1 right-1 h-2.5 w-2.5 text-muted-foreground/40"
+                  strokeWidth={2.25}
+                />
               </button>
             );
           }

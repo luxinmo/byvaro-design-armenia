@@ -81,11 +81,23 @@ export const DEFAULT_PLAN_STATE_AGENCY: PlanState = {
   promoterPack: "none",
 };
 
-export const DEFAULT_PLAN_STATE_PROMOTER: PlanState = {
-  signupKind: "promoter",
-  agencyPack: "none",
-  promoterPack: "trial",
-};
+/** Genera el state default del promotor con trialEndsAt sintético
+ *  basado en la hora actual · usado para que la primera pintura
+ *  ANTES de que la hidratación termine ya muestre el contador
+ *  correcto en `/ajustes/facturacion/plan`. La hidratación
+ *  posterior reemplaza con la fecha real del DB. */
+function buildDefaultPromoterState(): PlanState {
+  const now = Date.now();
+  return {
+    signupKind: "promoter",
+    agencyPack: "none",
+    promoterPack: "trial",
+    trialStartedAt: new Date(now).toISOString(),
+    trialEndsAt: new Date(now + 180 * 24 * 60 * 60 * 1000).toISOString(),
+  };
+}
+
+export const DEFAULT_PLAN_STATE_PROMOTER: PlanState = buildDefaultPromoterState();
 
 /** Computa los límites efectivos a partir de la combinación de packs.
  *  Suma capabilities · si solo tiene agency_pack, no puede crear
@@ -135,19 +147,21 @@ export function deriveLimits(state: PlanState): PlanLimits {
 
 export const AGENCY_PACK_LABEL: Record<AgencyPack, string> = {
   none: "Sin pack agencia",
-  free: "Agencia · Gratis",
-  marketplace: "Agencia · Marketplace · 99€/mes",
+  free: "Inmobiliaria · Básico",
+  marketplace: "Inmobiliaria · Plus · 99€/mes",
 };
 
 export const PROMOTER_PACK_LABEL: Record<PromoterPack, string> = {
   none: "Sin pack promotor",
-  /* Trial · etiqueta visible NO menciona el precio · el usuario que
-   *  acaba de registrarse no debe ver "249€" como label principal · el
-   *  precio futuro va en un sub-card discreto y en `/planes`.
-   *  Ver `/ajustes/facturacion/plan` · subtitle del card principal. */
-  trial: "Plan gratuito · prueba",
-  promoter_249: "Promotor · 249€/mes",
-  promoter_329: "Promotor · 329€/mes",
+  /* FILOSOFÍA · "trial" en DB se traduce visualmente a "Básico"
+   *  porque el trial NO es un plan distinto · es una ventana de
+   *  180 días de bonus encima del plan Básico. Cuando se acaba la
+   *  ventana, el promotor sigue en Básico (acceso a sus datos ·
+   *  sin crear promociones nuevas) o decide pasar al de pago.
+   *  Ver `/ajustes/facturacion/plan` · explicación de las 3 cajas. */
+  trial: "Básico",
+  promoter_249: "Plus · 249€/mes",
+  promoter_329: "Ultra · 329€/mes",
 };
 
 /** Etiqueta humana del estado total (paquete principal). */
@@ -209,25 +223,48 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
 };
 
 export const PLAN_LABEL: Record<PlanTier, string> = {
-  trial: "Plan gratuito · prueba",
-  promoter_249: "Promotor · 249€/mes",
-  promoter_329: "Promotor · 329€/mes",
-  agency_free: "Agencia · Gratis",
-  agency_marketplace: "Agencia · Marketplace · 99€/mes",
+  trial: "Básico",
+  promoter_249: "Plus · 249€/mes",
+  promoter_329: "Ultra · 329€/mes",
+  agency_free: "Inmobiliaria · Básico",
+  agency_marketplace: "Inmobiliaria · Plus · 99€/mes",
   enterprise: "Enterprise",
 };
+
+/** Duración total del trial · constante canónica · cambiar aquí
+ *  refleja en el counter de días, en el trigger DB y en la copy. */
+export const TRIAL_DURATION_DAYS = 180;
 
 /* ══════ Trial helpers ════════════════════════════════════════════ */
 
 /** Días restantes del trial · usado en el subtítulo de
  *  `/ajustes/facturacion/plan` y en banners. Devuelve null si no hay
  *  trial activo o no hay `trialEndsAt` en el state.
- *  Negativo si el trial ya expiró (Stripe debería haber convertido). */
+ *  Negativo si el trial ya expiró (el promotor sigue en plan Gratis
+ *  pero ya no tiene los privilegios "alta nueva"). */
 export function trialDaysRemaining(state: PlanState): number | null {
   if (state.promoterPack !== "trial" || !state.trialEndsAt) return null;
   const end = new Date(state.trialEndsAt).getTime();
   const now = Date.now();
   return Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+}
+
+/** ¿Está el promotor dentro de la ventana de 180 días con acceso
+ *  completo? Si false, está en plan Gratis "puro" (acceso a sus
+ *  datos · sin crear promociones nuevas hasta upgrade).
+ *  Una agencia (`promoterPack !== 'trial'`) NO está en trial · su
+ *  plan Gratis ya es el estable, sin contador. */
+export function isInTrialWindow(state: PlanState): boolean {
+  const days = trialDaysRemaining(state);
+  return days !== null && days > 0;
+}
+
+/** Días consumidos del trial · útil para barras de progreso. */
+export function trialDaysConsumed(state: PlanState): number | null {
+  if (state.promoterPack !== "trial" || !state.trialStartedAt) return null;
+  const start = new Date(state.trialStartedAt).getTime();
+  const now = Date.now();
+  return Math.max(0, Math.floor((now - start) / (1000 * 60 * 60 * 24)));
 }
 
 /** Fecha legible del fin del trial · "2 de noviembre de 2026". */
@@ -246,7 +283,10 @@ export function formatTrialEndDate(state: PlanState): string | null {
 
 /* ══════ Cache local · render-only ════════════════════════════════ */
 
-const KEY_PREFIX = "byvaro.plan.v2::";
+/* Bump v3 · invalida cualquier cache previo que no tenía
+ *  trialStartedAt/trialEndsAt · evita estados inconsistentes
+ *  durante la primera pintura post-deploy. */
+const KEY_PREFIX = "byvaro.plan.v3::";
 const CHANGE_EVENT = "byvaro:plan-change";
 
 function keyFor(workspaceKey: string): string {

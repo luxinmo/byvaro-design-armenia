@@ -156,21 +156,26 @@ export function removePromotionFromCartera(agencyId: string, promotionId: string
   })();
 }
 
-/** Set efectivo de promociones en cartera = seed + overrides. */
-export function getCarteraSet(agency: Agency): Set<string> {
+/** Set efectivo de promociones en cartera = seed + overrides.
+ *  Defensivo · si la agencia no existe (DB-only · seed vacío tras
+ *  signup real), devuelve set vacío sin crashear. */
+export function getCarteraSet(agency: Agency | null | undefined): Set<string> {
+  if (!agency) return new Set();
   const seed = new Set(agency.promotionsCollaborating ?? []);
   for (const id of readCache()[agency.id] ?? []) seed.add(id);
   return seed;
 }
 
-/** Hook reactivo · hidrata desde DB en mount si el cache está vacío. */
-export function useAgencyCartera(agency: Agency): Set<string> {
+/** Hook reactivo · hidrata desde DB en mount si el cache está vacío.
+ *  Acepta `agency=null|undefined` (caso agency real DB-only sin seed)
+ *  · devuelve Set vacío sin tirar TypeError. */
+export function useAgencyCartera(agency: Agency | null | undefined): Set<string> {
   const [set, setSet] = useState<Set<string>>(() => getCarteraSet(agency));
   useEffect(() => {
     const cb = () => setSet(getCarteraSet(agency));
     cb();
-    /* Hidratación lazy. */
-    if (Object.keys(readCache()).length === 0) {
+    /* Hidratación lazy · solo si tenemos agencia. */
+    if (agency && Object.keys(readCache()).length === 0) {
       void hydrateCarteraFromSupabase().then(() => cb());
     }
     window.addEventListener(CHANGE, cb);
@@ -184,6 +189,6 @@ export function useAgencyCartera(agency: Agency): Set<string> {
 }
 
 /** Versión pura · útil para rutas sync (sin hook). */
-export function isInCartera(agency: Agency, promotionId: string): boolean {
+export function isInCartera(agency: Agency | null | undefined, promotionId: string): boolean {
   return getCarteraSet(agency).has(promotionId);
 }
