@@ -973,7 +973,11 @@ export default function CrearPromocion() {
                   <div className="flex flex-col gap-3">
                     <SectionLabel>Anejos por vivienda</SectionLabel>
 
-                    {/* Trasteros */}
+                    {/* Trasteros · si NO está incluido en el precio se pide
+                         el precio que se cobra por cada uno. La opción de
+                         añadir "trasteros adicionales sueltos" se ha movido
+                         a la sección Anejos sueltos del paso "Crear unidades"
+                         · ahí se nombran y se les pone precio individual. */}
                     <ExtraBox
                       icon={Archive}
                       title="Trastero incluido"
@@ -1002,13 +1006,17 @@ export default function CrearPromocion() {
                         onCheckedChange={(v) => update("trasterosIncluidosPrecio", v)}
                         label="Incluido en el precio de la vivienda"
                       />
-                      <ExtraRow label="Trasteros adicionales"
-                        value={Math.max(0, state.trasteros - totalViviendas * state.trasterosIncluidosPorVivienda)}
-                        min={0}
-                        onChange={(extra) => update("trasteros", totalViviendas * state.trasterosIncluidosPorVivienda + extra)} />
+                      {!state.trasterosIncluidosPrecio && (
+                        <PriceRow
+                          label="Precio por trastero"
+                          value={state.trasteroPrecio}
+                          onChange={(v) => update("trasteroPrecio", v)}
+                        />
+                      )}
                     </ExtraBox>
 
-                    {/* Parking */}
+                    {/* Parking · mismo patrón. Plazas adicionales sueltas
+                         viven en Anejos sueltos del paso "Crear unidades". */}
                     <ExtraBox
                       icon={Car}
                       title="Plaza de parking"
@@ -1037,16 +1045,47 @@ export default function CrearPromocion() {
                         onCheckedChange={(v) => update("parkingsIncluidosPrecio", v)}
                         label="Incluido en el precio de la vivienda"
                       />
-                      <ExtraRow label="Plazas adicionales"
-                        value={Math.max(0, state.parkings - totalViviendas * state.parkingsIncluidosPorVivienda)}
-                        min={0}
-                        onChange={(extra) => update("parkings", totalViviendas * state.parkingsIncluidosPorVivienda + extra)} />
+                      {!state.parkingsIncluidosPrecio && (
+                        <PriceRow
+                          label="Precio por plaza"
+                          value={state.parkingPrecio}
+                          onChange={(v) => update("parkingPrecio", v)}
+                        />
+                      )}
                     </ExtraBox>
 
-                    {/* Zonas y amenidades · booleanos explícitos de la promoción.
-                         La ficha de unidad los consulta para mostrar iconos reales
-                         (no inventados). La "piscina privada" por defecto solo
-                         aplica a unifamiliar. */}
+                    {/* Piscina privada · solo aplica a unifamiliar. Mismo
+                         patrón que trastero/parking · si no está incluida
+                         en el precio, se pide el importe. */}
+                    {state.tipo === "unifamiliar" && (
+                      <ExtraBox
+                        icon={Waves}
+                        title="Piscina privada"
+                        desc="Cada villa incluye piscina propia"
+                        active={state.piscinaPrivadaPorDefecto}
+                        onToggle={(v) => update("piscinaPrivadaPorDefecto", v)}
+                      >
+                        <Checkbox
+                          id="piscina-precio"
+                          checked={state.piscinaIncluidaPrecio}
+                          onCheckedChange={(v) => update("piscinaIncluidaPrecio", v)}
+                          label="Incluida en el precio de la vivienda"
+                        />
+                        {!state.piscinaIncluidaPrecio && (
+                          <PriceRow
+                            label="Precio por piscina privada"
+                            value={state.piscinaPrecio}
+                            onChange={(v) => update("piscinaPrecio", v)}
+                          />
+                        )}
+                      </ExtraBox>
+                    )}
+
+                    {/* Zonas y amenidades · booleanos explícitos de la
+                         promoción. La ficha de unidad los consulta para
+                         mostrar iconos reales. La piscina privada vive
+                         arriba en su propia ExtraBox · aquí solo zonas
+                         compartidas de la promoción. */}
                     <div className="rounded-2xl border border-border bg-card p-4">
                       <div className="flex items-center gap-2.5 mb-3">
                         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-muted-foreground">
@@ -1074,38 +1113,7 @@ export default function CrearPromocion() {
                         <AmenityToggle label="Urbanización cerrada"
                           checked={state.urbanizacionCerrada}
                           onCheckedChange={(v) => update("urbanizacionCerrada", v)} />
-                        {state.tipo === "unifamiliar" && (
-                          <AmenityToggle label="Piscina privada por defecto"
-                            checked={state.piscinaPrivadaPorDefecto}
-                            onCheckedChange={(v) => update("piscinaPrivadaPorDefecto", v)} />
-                        )}
                       </div>
-
-                      {state.tipo === "unifamiliar" && state.piscinaPrivadaPorDefecto && (
-                        <div className="mt-3 pt-3 border-t border-border flex flex-col gap-2.5">
-                          <Checkbox
-                            id="piscina-privada-precio"
-                            checked={state.piscinaIncluidaPrecio}
-                            onCheckedChange={(v) => update("piscinaIncluidaPrecio", v)}
-                            label="Piscina privada incluida en el precio de la villa"
-                          />
-                          {!state.piscinaIncluidaPrecio && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs text-muted-foreground">Precio por piscina privada</span>
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={state.piscinaPrecio}
-                                  onChange={(e) => update("piscinaPrecio", Math.max(0, Number(e.target.value) || 0))}
-                                  className="h-8 w-28 rounded-lg border border-border bg-card text-sm tnum px-2 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
-                                />
-                                <span className="text-xs text-muted-foreground">€</span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
                     </div>
 
                     <TotalSummary items={summaryItems} />
@@ -1481,6 +1489,29 @@ function ExtraRow({
     <div className="flex items-center justify-between">
       <span className="text-xs text-muted-foreground">{label}</span>
       <InlineStepper value={value} min={min} onChange={onChange} />
+    </div>
+  );
+}
+
+/** Input de precio · usado cuando un anejo (trastero / parking / piscina
+ *  privada) NO está incluido en el precio de la vivienda y hay que
+ *  cobrarlo aparte. Mismo styling que ExtraRow para coherencia visual. */
+function PriceRow({
+  label, value, onChange,
+}: { label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <div className="flex items-center gap-1">
+        <input
+          type="number"
+          min={0}
+          value={value}
+          onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
+          className="h-8 w-28 rounded-lg border border-border bg-card text-sm tnum px-2 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+        />
+        <span className="text-xs text-muted-foreground">€</span>
+      </div>
     </div>
   );
 }
