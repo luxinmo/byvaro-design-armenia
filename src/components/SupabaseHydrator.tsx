@@ -23,10 +23,61 @@ import { hydrateTwoFactorFromSupabase } from "@/lib/twoFactor";
 import { hydrateDeveloperPacksFromSupabase } from "@/lib/empresaCategories";
 import { hydrateUserPublicRefs } from "@/lib/userPublicRef";
 import { clearMemCache } from "@/lib/memCache";
+import { loginAs } from "@/lib/accountType";
+
+/** Si hay sesión Supabase activa pero el sessionStorage NO tiene los
+ *  datos del user (puede pasar tras un reload, o si el user logueó
+ *  con un build viejo de la app que no los seteaba), los pulla del
+ *  JWT + organization_members y los rellena. Resuelve el caso del
+ *  user que ve "arman" (split email) en vez de "Arman Yeghiazaryan"
+ *  porque sessionStorage está vacío. */
+async function ensureSessionStorageHydrated(): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const hasName = sessionStorage.getItem("byvaro.accountType.userName.v1");
+    const hasOrgId = sessionStorage.getItem("byvaro.accountType.organizationId.v1");
+    if (hasName && hasOrgId) return; // ya está poblado
+
+    const { data: members } = await supabase
+      .from("organization_members")
+      .select("organization_id, role, organizations(kind)")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .order("created_at", { ascending: true })
+      .limit(1);
+    const m = members?.[0] as
+      | { organization_id: string; role: string; organizations: { kind: string } | { kind: string }[] }
+      | undefined;
+    if (!m) return;
+
+    const orgKind = Array.isArray(m.organizations) ? m.organizations[0]?.kind : m.organizations?.kind;
+    const accountType: "developer" | "agency" = orgKind === "agency" ? "agency" : "developer";
+    const userName = (user.user_metadata?.name as string | undefined)
+      ?? user.email?.split("@")[0]
+      ?? "";
+    loginAs(
+      accountType,
+      accountType === "agency" ? m.organization_id : user.email!,
+      accountType === "agency" ? user.email! : undefined,
+      m.organization_id,
+      userName,
+    );
+  } catch (e) {
+    console.warn("[SupabaseHydrator] ensure session skipped:", e);
+  }
+}
 
 /** Pulla TODOS los stores · devuelve cuando termina la primera carga.
  *  Llamado on-mount + on-auth-change. */
 async function hydrateAll(): Promise<void> {
+  /* Primero · garantizar que sessionStorage tiene name + orgId del
+   *  JWT activo · sin esto useCurrentUser/useEmpresa rinden con
+   *  fallbacks vacíos hasta que el user haga logout+login. */
+  await ensureSessionStorageHydrated();
+
   await Promise.all([
     hydrateFromSupabase(),
     hydrateSeedsFromSupabase(),
