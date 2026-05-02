@@ -86,14 +86,12 @@ interface ExistingCompany {
 /**
  * Mock de empresas ya registradas en el sistema. En producción lo
  * sustituye un lookup: GET /api/v1/companies/lookup?domain=<x>.
- * Los logos usan dicebear initials · clearbit.com está dead desde 2024.
+ * Vacío hasta que el primer signup real cree organizaciones reales ·
+ * la lógica `getCompanyFromEmail` retorna null y el flujo de "ya
+ * existe esta empresa" no se activa hasta que tengamos data viva.
  */
 const dicebearLogo = (name) => `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundColor=1D74E7&textColor=ffffff`;
-const existingCompanies: ExistingCompany[] = [
-  { name: "Luxinmo Real Estate", domain: "luxinmo.com",     logo: dicebearLogo("Luxinmo Real Estate"), adminEmail: "a*****n@luxinmo.com" },
-  { name: "Kronos Homes",        domain: "kronoshomes.com", logo: dicebearLogo("Kronos Homes"),        adminEmail: "a*****n@kronoshomes.com" },
-  { name: "Metrovacesa",         domain: "metrovacesa.com", logo: dicebearLogo("Metrovacesa"),         adminEmail: "a*****n@metrovacesa.com" },
-];
+const existingCompanies: ExistingCompany[] = [];
 
 function getCompanyFromEmail(email: string): ExistingCompany | null {
   const domain = email.split("@")[1]?.toLowerCase().trim();
@@ -209,15 +207,98 @@ export default function Register() {
     if (!acceptTos)            return setError("Debes aceptar los términos para continuar.");
 
     setSubmitting(true);
-    // TODO(backend): POST /api/v1/auth/register
-    await new Promise((r) => setTimeout(r, 700));
-    setSubmitting(false);
 
-    toast.success("Cuenta creada", {
-      description: "Te hemos enviado un email de verificación.",
-    });
-    // TODO(onboarding): navigate("/onboarding") cuando exista
-    navigate("/inicio", { replace: true });
+    /* Registro real contra Supabase Auth · si Supabase no está
+     *  configurado, fallback al mock (sessionStorage). */
+    const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");
+    if (!isSupabaseConfigured) {
+      setSubmitting(false);
+      setError("Supabase no está configurado · revisa VITE_SUPABASE_* en env.");
+      return;
+    }
+
+    try {
+      /* 1. Crear el user en auth.users con metadata. Supabase enviará
+       *  email de confirmación automáticamente si el setting
+       *  `mailer_autoconfirm` está OFF (default). */
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: {
+          data: { name: name.trim(), phone: phone.trim() },
+          emailRedirectTo: `${window.location.origin}/login`,
+        },
+      });
+      if (signUpError) {
+        setSubmitting(false);
+        setError(signUpError.message.includes("already registered")
+          ? "Ya existe una cuenta con este email · ve a iniciar sesión."
+          : signUpError.message);
+        return;
+      }
+      if (!signUpData.user) {
+        setSubmitting(false);
+        setError("No se pudo crear la cuenta · reintenta.");
+        return;
+      }
+
+      /* 2. Crear la organización con kind correspondiente al role.
+       *  El role "owner" (propietario individual) lo mapeamos a
+       *  "developer" en Phase 1 · refinar cuando exista persona owner. */
+      const orgKind: "developer" | "agency" =
+        role === "agency" ? "agency" : "developer";
+      const orgId = `${orgKind}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+      const { error: orgErr } = await supabase.from("organizations").insert({
+        id: orgId,
+        kind: orgKind,
+        legal_name: companyName.trim(),
+        display_name: companyName.trim(),
+        country: "ES",
+        status: "active",
+      });
+      if (orgErr) {
+        console.warn("[register] org insert:", orgErr.message);
+        setSubmitting(false);
+        setError(`No se pudo crear la organización: ${orgErr.message}`);
+        return;
+      }
+
+      /* 3. Crear membership con role=admin (el primer user es admin
+       *  de su workspace por construcción). */
+      const memberRole: "admin" | "member" =
+        subRole === "director" ? "admin" : "admin"; // Phase 1 · cualquier alta es admin
+      const { error: memErr } = await supabase.from("organization_members").insert({
+        organization_id: orgId,
+        user_id: signUpData.user.id,
+        role: memberRole,
+        status: "active",
+      });
+      if (memErr) console.warn("[register] member insert:", memErr.message);
+
+      setSubmitting(false);
+
+      /* Si Supabase requiere confirmación email, signUpData.session
+       *  será null. Mostramos pantalla de "verifica tu email". */
+      if (!signUpData.session) {
+        toast.success("Cuenta creada", {
+          description: `Te hemos enviado un email de verificación a ${email}. Revisa tu bandeja de entrada (y spam).`,
+          duration: 8000,
+        });
+        navigate("/login", { replace: true });
+        return;
+      }
+
+      /* Si autoconfirm está ON, ya hay session · entramos directo. */
+      toast.success(`Bienvenido, ${name.split(" ")[0]}`, {
+        description: "Tu cuenta está lista.",
+      });
+      navigate("/inicio", { replace: true });
+    } catch (err) {
+      setSubmitting(false);
+      console.warn("[register] unexpected:", err);
+      setError(err instanceof Error ? err.message : "Error inesperado al registrar.");
+    }
   }
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -359,7 +440,7 @@ export default function Register() {
                         autoComplete="organization"
                         value={companyName}
                         onChange={(e) => setCompanyName(e.target.value)}
-                        placeholder="Ej. Luxinmo Real Estate"
+                        placeholder="Nombre comercial de tu empresa"
                         className={inputClass}
                       />
                     </Field>
