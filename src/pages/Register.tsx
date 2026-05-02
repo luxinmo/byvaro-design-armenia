@@ -218,14 +218,31 @@ export default function Register() {
     }
 
     try {
-      /* 1. Crear el user en auth.users con metadata. Supabase enviará
-       *  email de confirmación automáticamente si el setting
-       *  `mailer_autoconfirm` está OFF (default). */
+      /* signUp con TODA la metadata necesaria para que el trigger
+       *  `handle_new_user_signup` (server-side, security definer)
+       *  cree automáticamente la organization + member admin +
+       *  user_profile.
+       *
+       *  Por qué trigger en lugar de INSERT directo desde frontend:
+       *  con `mailer_autoconfirm: false`, signUp() NO devuelve session
+       *  hasta que el user confirme su email. Sin session, las queries
+       *  del cliente NO llevan JWT · auth.uid() es NULL · las RLS
+       *  rechazan los INSERTs en organizations/organization_members.
+       *  El trigger corre con privilegios elevados y no necesita JWT. */
+      const orgKind: "developer" | "agency" =
+        role === "agency" ? "agency" : "developer";
+
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
         options: {
-          data: { name: name.trim(), phone: phone.trim() },
+          data: {
+            name: name.trim(),
+            phone: phone.trim(),
+            org_kind: orgKind,
+            org_name: companyName.trim(),
+            sub_role: subRole, // "director" | "employee" · puede afectar role en futuro
+          },
           emailRedirectTo: `${window.location.origin}/login`,
         },
       });
@@ -242,47 +259,15 @@ export default function Register() {
         return;
       }
 
-      /* 2. Crear la organización con kind correspondiente al role.
-       *  El role "owner" (propietario individual) lo mapeamos a
-       *  "developer" en Phase 1 · refinar cuando exista persona owner. */
-      const orgKind: "developer" | "agency" =
-        role === "agency" ? "agency" : "developer";
-      const orgId = `${orgKind}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-
-      const { error: orgErr } = await supabase.from("organizations").insert({
-        id: orgId,
-        kind: orgKind,
-        legal_name: companyName.trim(),
-        display_name: companyName.trim(),
-        country: "ES",
-        status: "active",
-      });
-      if (orgErr) {
-        console.warn("[register] org insert:", orgErr.message);
-        setSubmitting(false);
-        setError(`No se pudo crear la organización: ${orgErr.message}`);
-        return;
-      }
-
-      /* 3. Crear membership con role=admin (el primer user es admin
-       *  de su workspace por construcción). */
-      const memberRole: "admin" | "member" =
-        subRole === "director" ? "admin" : "admin"; // Phase 1 · cualquier alta es admin
-      const { error: memErr } = await supabase.from("organization_members").insert({
-        organization_id: orgId,
-        user_id: signUpData.user.id,
-        role: memberRole,
-        status: "active",
-      });
-      if (memErr) console.warn("[register] member insert:", memErr.message);
-
       setSubmitting(false);
 
       /* Si Supabase requiere confirmación email, signUpData.session
-       *  será null. Mostramos pantalla de "verifica tu email". */
+       *  será null. La organization + member ya se creó vía trigger
+       *  cuando se insertó el user en auth.users. Mostramos pantalla
+       *  de "verifica tu email". */
       if (!signUpData.session) {
         toast.success("Cuenta creada", {
-          description: `Te hemos enviado un email de verificación a ${email}. Revisa tu bandeja de entrada (y spam).`,
+          description: `Te hemos enviado un email de verificación a ${email}. Revisa tu bandeja (y spam).`,
           duration: 8000,
         });
         navigate("/login", { replace: true });
