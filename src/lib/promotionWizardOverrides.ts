@@ -49,6 +49,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 import type { WizardState } from "@/components/crear-promocion/types";
 import { wizardStateToPromotion } from "./wizardStateToPromotion";
 import type { Promotion } from "@/data/promotions";
@@ -67,7 +68,7 @@ function keyFor(promotionId: string): string {
 function readCache(promotionId: string): WizardState | null {
   if (typeof window === "undefined" || !promotionId) return null;
   try {
-    const raw = window.localStorage.getItem(keyFor(promotionId));
+    const raw = memCache.getItem(keyFor(promotionId));
     if (!raw) return null;
     return JSON.parse(raw) as WizardState;
   } catch {
@@ -77,13 +78,13 @@ function readCache(promotionId: string): WizardState | null {
 
 function writeCache(promotionId: string, state: WizardState): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(keyFor(promotionId), JSON.stringify(state));
+  memCache.setItem(keyFor(promotionId), JSON.stringify(state));
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { promotionId } }));
 }
 
 function clearCache(promotionId: string): void {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(keyFor(promotionId));
+  memCache.removeItem(keyFor(promotionId));
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { promotionId } }));
 }
 

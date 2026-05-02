@@ -30,6 +30,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 import { anejosByPromotion, type Anejo } from "@/data/anejos";
 
 const STORAGE_KEY = "byvaro.anejos.v1";
@@ -40,7 +41,7 @@ type Store = Record<string, Anejo[]>;
 function readStore(): Store {
   if (typeof window === "undefined") return {};
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = memCache.getItem(STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Store;
     return parsed && typeof parsed === "object" ? parsed : {};
@@ -50,7 +51,7 @@ function readStore(): Store {
 }
 
 function writeStore(store: Store) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+  memCache.setItem(STORAGE_KEY, JSON.stringify(store));
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
 

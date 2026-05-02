@@ -1,3 +1,4 @@
+import { memCache } from "@/lib/memCache";
 /**
  * labels.ts — Etiquetas personalizadas de emails.
  *
@@ -21,7 +22,7 @@ function keyFor(orgId: string): string { return `${KEY_PREFIX}${orgId}`; }
 function readCache(orgId: string): Label[] | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(keyFor(orgId));
+    const raw = memCache.getItem(keyFor(orgId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Label[];
     return Array.isArray(parsed) ? parsed : null;
@@ -30,7 +31,7 @@ function readCache(orgId: string): Label[] | null {
 
 function writeCache(orgId: string, labels: Label[]): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(keyFor(orgId), JSON.stringify(labels));
+  memCache.setItem(keyFor(orgId), JSON.stringify(labels));
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { orgId } }));
 }
 
@@ -82,8 +83,8 @@ export async function hydrateLabelsFromSupabase(): Promise<Label[] | null> {
 
 export function loadLabels(fallback: Label[]): Label[] {
   if (typeof window === "undefined") return fallback;
-  for (let i = 0; i < window.localStorage.length; i++) {
-    const k = window.localStorage.key(i);
+  for (let i = 0; i < memCache.length; i++) {
+    const k = memCache.key(i);
     if (k && k.startsWith(KEY_PREFIX)) {
       const cached = readCache(k.slice(KEY_PREFIX.length));
       if (cached) return cached;

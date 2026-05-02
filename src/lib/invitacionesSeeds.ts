@@ -9,6 +9,7 @@
  */
 
 import type { Invitacion } from "./invitaciones";
+import { memCache } from "./memCache";
 
 const STORAGE_KEY = "byvaro-invitaciones";
 const SEED_DONE_KEY = "byvaro.invitaciones.seeded.v3";
@@ -133,9 +134,9 @@ const seeds: Invitacion[] = [
 
 export function seedInvitacionesIfEmpty() {
   if (typeof window === "undefined") return;
-  if (localStorage.getItem(SEED_DONE_KEY)) return;
+  if (memCache.getItem(SEED_DONE_KEY)) return;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = memCache.getItem(STORAGE_KEY);
     const current: Invitacion[] = raw ? JSON.parse(raw) : [];
     /* Merge idempotente · preservamos invitaciones del usuario y
        reemplazamos cualquiera con id "inv-seed-*" por la versión
@@ -145,9 +146,9 @@ export function seedInvitacionesIfEmpty() {
     const isSeed = (id: string) => id.startsWith("inv-seed-");
     const userInvs = Array.isArray(current) ? current.filter((i) => !isSeed(i.id)) : [];
     const merged = [...userInvs, ...seeds];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    memCache.setItem(STORAGE_KEY, JSON.stringify(merged));
     window.dispatchEvent(new CustomEvent("byvaro:invitaciones-changed"));
-    localStorage.setItem(SEED_DONE_KEY, "1");
+    memCache.setItem(SEED_DONE_KEY, "1");
   } catch {
     /* storage bloqueado */
   }

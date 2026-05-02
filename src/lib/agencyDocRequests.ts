@@ -20,6 +20,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { memCache } from "./memCache";
 
 export type DocRequestType =
   | "invoice"          // factura emitida por la agencia
@@ -63,14 +64,14 @@ const CHANGE_EVENT = "byvaro:agency-doc-requests-changed";
 function readStore(): AgencyDocRequest[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = memCache.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
 
 function writeStore(list: AgencyDocRequest[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  memCache.setItem(STORAGE_KEY, JSON.stringify(list));
   window.dispatchEvent(new CustomEvent(CHANGE_EVENT));
   void (async () => {
     try {
@@ -104,7 +105,7 @@ function daysAgo(n: number) { return Date.now() - n * 24 * 60 * 60 * 1000; }
 
 export function seedDocRequestsIfEmpty() {
   if (typeof window === "undefined") return;
-  if (localStorage.getItem(SEED_KEY)) return;
+  if (memCache.getItem(SEED_KEY)) return;
   const seeds: AgencyDocRequest[] = [
     {
       id: "doc-req-ag1-invoice-101",
@@ -144,7 +145,7 @@ export function seedDocRequestsIfEmpty() {
     },
   ];
   writeStore(seeds);
-  localStorage.setItem(SEED_KEY, "1");
+  memCache.setItem(SEED_KEY, "1");
 }
 
 export function getDocRequestsForAgency(agencyId: string): AgencyDocRequest[] {

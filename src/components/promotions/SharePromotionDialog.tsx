@@ -24,6 +24,7 @@
  *   - POST /api/promociones/:id/invitaciones  { email, agencyId?, comision, duracionMeses, ... }
  */
 import { useEffect, useMemo, useState } from "react";
+import { memCache } from "@/lib/memCache";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1351,7 +1352,7 @@ function RejectedSolicitudBanner({
    *  `GET /api/colaboraciones-solicitadas?status=rechazada&promotionId=...`. */
   const detalles = useMemo(() => {
     try {
-      const raw = localStorage.getItem("byvaro.agency.collab-requests.v1");
+      const raw = memCache.getItem("byvaro.agency.collab-requests.v1");
       const list = raw ? JSON.parse(raw) : [];
       return agencies.map((ag) => {
         const s = list.find((x: { agencyId: string; promotionId: string; status: string }) =>

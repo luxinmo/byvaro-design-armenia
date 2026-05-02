@@ -28,6 +28,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 import { TEAM_MEMBERS, type TeamMember } from "@/lib/team";
 
 /* Key compartida con Equipo.tsx y /ajustes/usuarios/miembros.
@@ -49,7 +50,7 @@ const MY_ID = "u1";
 function readAll(): TeamMember[] {
   if (typeof window === "undefined") return TEAM_MEMBERS;
   try {
-    const raw = window.localStorage.getItem(MEMBERS_KEY);
+    const raw = memCache.getItem(MEMBERS_KEY);
     return raw ? (JSON.parse(raw) as TeamMember[]) : TEAM_MEMBERS;
   } catch {
     return TEAM_MEMBERS;
@@ -58,7 +59,7 @@ function readAll(): TeamMember[] {
 
 function writeAll(list: TeamMember[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(MEMBERS_KEY, JSON.stringify(list));
+  memCache.setItem(MEMBERS_KEY, JSON.stringify(list));
   /* Notificamos a AMBAS audiencias: listados de miembros y consumers
    * del usuario actual. Así /equipo se refresca al editar el perfil y
    * el sidebar se refresca al editar desde /equipo. */
@@ -112,12 +113,12 @@ const LEGACY_PROFILE_KEY = "byvaro.user.profile.v1";
  */
 function migrateLegacyProfile() {
   if (typeof window === "undefined") return;
-  const already = window.localStorage.getItem("byvaro.me-migration.v1");
+  const already = memCache.getItem("byvaro.me-migration.v1");
   if (already === "done") return;
 
-  const raw = window.localStorage.getItem(LEGACY_PROFILE_KEY);
+  const raw = memCache.getItem(LEGACY_PROFILE_KEY);
   if (!raw) {
-    window.localStorage.setItem("byvaro.me-migration.v1", "done");
+    memCache.setItem("byvaro.me-migration.v1", "done");
     return;
   }
   try {
@@ -138,10 +139,10 @@ function migrateLegacyProfile() {
     if (legacy.avatar)     patch.avatarUrl = legacy.avatar;
     if (legacy.languages)  patch.languages = legacy.languages;
     if (Object.keys(patch).length > 0) updateMe(patch);
-    window.localStorage.setItem("byvaro.me-migration.v1", "done");
+    memCache.setItem("byvaro.me-migration.v1", "done");
   } catch {
     /* Si falla, no reintentamos para no entrar en loop. */
-    window.localStorage.setItem("byvaro.me-migration.v1", "failed");
+    memCache.setItem("byvaro.me-migration.v1", "failed");
   }
 }
 

@@ -22,6 +22,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
+import { memCache } from "./memCache";
 import { defaultEmpresa, type Empresa, type Oficina } from "./empresa";
 
 /* ─── Mappers · DB row → Empresa/Oficina shape ──────────────────────── */
@@ -234,7 +235,7 @@ export function hydrateFromSupabase(): Promise<void> {
         const p = profileByOrg.get(o.id) ?? null;
         const empresa = rowToEmpresa(o, p);
         try {
-          localStorage.setItem(
+          memCache.setItem(
             `byvaro-empresa:${o.id}`,
             JSON.stringify({ ...empresa, updatedAt: Date.now() }),
           );
@@ -245,7 +246,7 @@ export function hydrateFromSupabase(): Promise<void> {
        * NO escribimos array vacío para no pisar seeds locales. */
       for (const [orgId, list] of officesByOrg.entries()) {
         try {
-          localStorage.setItem(
+          memCache.setItem(
             `byvaro-oficinas:${orgId}`,
             JSON.stringify(list.map(rowToOficina)),
           );
@@ -258,7 +259,7 @@ export function hydrateFromSupabase(): Promise<void> {
       if (luxinmoOrg) {
         const empresa = rowToEmpresa(luxinmoOrg, profileByOrg.get("developer-default") ?? null);
         try {
-          localStorage.setItem(
+          memCache.setItem(
             "byvaro-empresa",
             JSON.stringify({ ...empresa, updatedAt: Date.now() }),
           );
@@ -266,7 +267,7 @@ export function hydrateFromSupabase(): Promise<void> {
         const luxOffices = officesByOrg.get("developer-default");
         if (luxOffices) {
           try {
-            localStorage.setItem("byvaro-oficinas", JSON.stringify(luxOffices.map(rowToOficina)));
+            memCache.setItem("byvaro-oficinas", JSON.stringify(luxOffices.map(rowToOficina)));
           } catch { /* skip */ }
         }
       }
@@ -355,9 +356,9 @@ export function hydrateFromSupabase(): Promise<void> {
             }
           }
           try {
-            localStorage.setItem("byvaro.org-collab-requests.v1", JSON.stringify(orgRequests));
-            localStorage.setItem("byvaro.agency.collab-requests.v1", JSON.stringify(promoRequests));
-            localStorage.setItem("byvaro-invitaciones", JSON.stringify(invitations));
+            memCache.setItem("byvaro.org-collab-requests.v1", JSON.stringify(orgRequests));
+            memCache.setItem("byvaro.agency.collab-requests.v1", JSON.stringify(promoRequests));
+            memCache.setItem("byvaro-invitaciones", JSON.stringify(invitations));
           } catch { /* skip */ }
           window.dispatchEvent(new CustomEvent("byvaro:org-collab-requests-changed"));
           window.dispatchEvent(new CustomEvent("byvaro:collab-requests-changed"));
@@ -433,7 +434,7 @@ export function hydrateFromSupabase(): Promise<void> {
             fecha: r.fecha,
           }));
           try {
-            localStorage.setItem("byvaro.registros.created.v1", JSON.stringify(mapped));
+            memCache.setItem("byvaro.registros.created.v1", JSON.stringify(mapped));
           } catch { /* skip */ }
         }
 
@@ -486,7 +487,7 @@ export function hydrateFromSupabase(): Promise<void> {
             })),
           }));
           try {
-            localStorage.setItem("byvaro.sales.created.v1", JSON.stringify(mapped));
+            memCache.setItem("byvaro.sales.created.v1", JSON.stringify(mapped));
           } catch { /* skip */ }
         }
 
@@ -512,7 +513,7 @@ export function hydrateFromSupabase(): Promise<void> {
             assigneeUserId: c.assignee_user_id ?? undefined,
           }));
           try {
-            localStorage.setItem("byvaro.calendar.created.v1", JSON.stringify(mapped));
+            memCache.setItem("byvaro.calendar.created.v1", JSON.stringify(mapped));
           } catch { /* skip */ }
         }
 
@@ -536,14 +537,14 @@ export function hydrateFromSupabase(): Promise<void> {
             metadata: n.metadata ?? undefined,
           }));
           try {
-            localStorage.setItem("byvaro.notifications.v1", JSON.stringify(mapped));
+            memCache.setItem("byvaro.notifications.v1", JSON.stringify(mapped));
           } catch { /* skip */ }
         }
 
         if (favsR.data) {
           const ids = (favsR.data as Array<{ target_id: string }>).map((f) => f.target_id);
           try {
-            localStorage.setItem("byvaro-favoritos-agencias", JSON.stringify(ids));
+            memCache.setItem("byvaro-favoritos-agencias", JSON.stringify(ids));
           } catch { /* skip */ }
         }
 
@@ -604,7 +605,7 @@ export function hydrateFromSupabase(): Promise<void> {
           }
           for (const [ws, list] of Object.entries(byOrg)) {
             try {
-              localStorage.setItem(`byvaro.inmuebles.v1:${ws}`, JSON.stringify(list));
+              memCache.setItem(`byvaro.inmuebles.v1:${ws}`, JSON.stringify(list));
             } catch { /* skip */ }
           }
           window.dispatchEvent(new CustomEvent("byvaro:inmuebles-changed"));
@@ -648,7 +649,7 @@ export function hydrateFromSupabase(): Promise<void> {
             lastActivity: "",
           }));
           try {
-            localStorage.setItem("byvaro.contacts.created.v1", JSON.stringify(mapped));
+            memCache.setItem("byvaro.contacts.created.v1", JSON.stringify(mapped));
           } catch { /* skip */ }
           window.dispatchEvent(new CustomEvent("byvaro:contacts-changed"));
         }
@@ -687,7 +688,7 @@ export function hydrateFromSupabase(): Promise<void> {
             createdAt: "",
           }));
           try {
-            localStorage.setItem("byvaro.promotions.created.v1", JSON.stringify(mapped));
+            memCache.setItem("byvaro.promotions.created.v1", JSON.stringify(mapped));
           } catch { /* skip */ }
           window.dispatchEvent(new CustomEvent("byvaro:promotions-changed"));
         }
@@ -710,15 +711,15 @@ export function hydrateFromSupabase(): Promise<void> {
 export function clearSupabaseCache() {
   if (typeof localStorage === "undefined") return;
   const keysToRemove: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
+  for (let i = 0; i < memCache.length; i++) {
+    const k = memCache.key(i);
     if (!k) continue;
     if (k.startsWith("byvaro-empresa:") || k.startsWith("byvaro-oficinas:")) {
       keysToRemove.push(k);
     }
   }
-  for (const k of keysToRemove) localStorage.removeItem(k);
+  for (const k of keysToRemove) memCache.removeItem(k);
   /* También las legacy single-tenant. */
-  localStorage.removeItem("byvaro-empresa");
-  localStorage.removeItem("byvaro-oficinas");
+  memCache.removeItem("byvaro-empresa");
+  memCache.removeItem("byvaro-oficinas");
 }

@@ -1,3 +1,4 @@
+import { memCache } from "./memCache";
 /**
  * Helper único para leer el estado del 2FA del usuario.
  *
@@ -31,7 +32,7 @@ export type TwoFactorState = {
 export function loadTwoFactorState(): TwoFactorState {
   if (typeof window === "undefined") return { enabled: false };
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = memCache.getItem(KEY);
     if (!raw) return { enabled: false };
     const parsed = JSON.parse(raw) as TwoFactorState;
     return {
@@ -46,12 +47,65 @@ export function loadTwoFactorState(): TwoFactorState {
 
 export function saveTwoFactorState(s: TwoFactorState) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY, JSON.stringify(s));
+  memCache.setItem(KEY, JSON.stringify(s));
+  void syncTwoFactorToSupabase(s);
 }
 
 export function clearTwoFactorState() {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(KEY);
+  memCache.removeItem(KEY);
+  void syncTwoFactorToSupabase({ enabled: false });
+}
+
+/* ── Write-through · `user_2fa` table. */
+async function syncTwoFactorToSupabase(s: TwoFactorState) {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { error } = await supabase.from("user_2fa").upsert({
+      user_id: user.id,
+      enabled: s.enabled,
+      method: s.method === "app" ? "totp" : (s.method ?? null),
+      secret_encrypted: s.secret ?? null,
+      recovery_codes_hashed: s.backupCodes ?? null,
+      enrolled_at: s.enabledAt ?? null,
+      metadata: { rawMethod: s.method },
+    }, { onConflict: "user_id" });
+    if (error) console.warn("[twoFactor] sync:", error.message);
+  } catch (e) {
+    console.warn("[twoFactor] sync skipped:", e);
+  }
+}
+
+/** Pull desde `user_2fa` a localStorage. */
+export async function hydrateTwoFactorFromSupabase(): Promise<void> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data, error } = await supabase
+      .from("user_2fa")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (error || !data) return;
+    const meta = (data.metadata ?? {}) as { rawMethod?: TwoFactorMethod };
+    const state: TwoFactorState = {
+      enabled: !!data.enabled,
+      method: meta.rawMethod ?? (data.method === "totp" ? "app" : (data.method as TwoFactorMethod | undefined)),
+      backupCodes: data.recovery_codes_hashed as string[] | undefined,
+      secret: data.secret_encrypted as string | undefined,
+      enabledAt: data.enrolled_at as string | undefined,
+    };
+    if (typeof window !== "undefined") {
+      memCache.setItem(KEY, JSON.stringify(state));
+    }
+  } catch (e) {
+    console.warn("[twoFactor] hydrate skipped:", e);
+  }
 }
 
 /**

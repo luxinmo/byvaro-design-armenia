@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { memCache } from "@/lib/memCache";
 import { SettingsScreen, SettingsCard } from "./SettingsScreen";
 import { SettingsRowGroup, SettingsToggle } from "./fields";
 import { Button } from "@/components/ui/button";
@@ -36,7 +37,7 @@ function loadValues(storageKey: string, toggles: ToggleDef[]): Record<string, bo
     return Object.fromEntries(toggles.map((t) => [t.key, t.defaultValue ?? false]));
   }
   try {
-    const raw = window.localStorage.getItem(`byvaro.settings.${storageKey}.v1`);
+    const raw = memCache.getItem(`byvaro.settings.${storageKey}.v1`);
     const stored = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
     return Object.fromEntries(
       toggles.map((t) => [t.key, stored[t.key] ?? t.defaultValue ?? false]),
@@ -72,7 +73,7 @@ export function SettingsTogglesPage({
 
   const save = () => {
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(
+      memCache.setItem(
         `byvaro.settings.${storageKey}.v1`,
         JSON.stringify(values),
       );

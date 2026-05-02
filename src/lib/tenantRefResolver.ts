@@ -38,6 +38,7 @@
  */
 
 import { isValidTenantRef } from "./tenantRef";
+import { memCache } from "./memCache";
 import { agencies } from "@/data/agencies";
 import { promotores } from "@/data/promotores";
 
@@ -49,12 +50,12 @@ const EMPRESA_KEY_PREFIX = "byvaro-empresa:";
 function buildIdToRefMap(): Map<string, string> {
   const map = new Map<string, string>();
   if (typeof window === "undefined") return map;
-  for (let i = 0; i < window.localStorage.length; i++) {
-    const k = window.localStorage.key(i);
+  for (let i = 0; i < memCache.length; i++) {
+    const k = memCache.key(i);
     if (!k?.startsWith(EMPRESA_KEY_PREFIX)) continue;
     const orgId = k.slice(EMPRESA_KEY_PREFIX.length);
     try {
-      const raw = window.localStorage.getItem(k);
+      const raw = memCache.getItem(k);
       if (!raw) continue;
       const e = JSON.parse(raw) as { publicRef?: string };
       if (e?.publicRef) map.set(orgId, e.publicRef);

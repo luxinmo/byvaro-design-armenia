@@ -10,6 +10,7 @@
  */
 
 import { recordCompanyEvent } from "./companyEvents";
+import { memCache } from "./memCache";
 
 const SEED_DONE_KEY = "byvaro.companyEvents.seeded.v1";
 
@@ -77,7 +78,7 @@ const seeds: Seed[] = [
 
 export function seedCompanyEventsIfEmpty() {
   if (typeof window === "undefined") return;
-  if (localStorage.getItem(SEED_DONE_KEY)) return;
+  if (memCache.getItem(SEED_DONE_KEY)) return;
   try {
     /* Los insertamos en orden inverso para que, al quedar ordenados
      * por fecha descendente, el más reciente (contract_sent) aparezca
@@ -85,7 +86,7 @@ export function seedCompanyEventsIfEmpty() {
     for (const [id, type, title, opts] of [...seeds].reverse()) {
       recordCompanyEvent(id, type, title, opts ?? {});
     }
-    localStorage.setItem(SEED_DONE_KEY, "1");
+    memCache.setItem(SEED_DONE_KEY, "1");
   } catch {
     /* storage bloqueado: seguimos sin fallar */
   }

@@ -13,6 +13,7 @@
  */
 
 import type { WizardState } from "@/components/crear-promocion/types";
+import { memCache } from "./memCache";
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
 
 const CREATED_KEY = "byvaro.promotions.created.v1";
@@ -40,7 +41,7 @@ interface CreatedPromotion {
 function readCreated(): CreatedPromotion[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(CREATED_KEY);
+    const raw = memCache.getItem(CREATED_KEY);
     if (!raw) return [];
     return JSON.parse(raw) as CreatedPromotion[];
   } catch { return []; }
@@ -48,7 +49,7 @@ function readCreated(): CreatedPromotion[] {
 
 function writeCreated(list: CreatedPromotion[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(CREATED_KEY, JSON.stringify(list));
+  memCache.setItem(CREATED_KEY, JSON.stringify(list));
   window.dispatchEvent(new CustomEvent("byvaro:promotions-changed"));
 }
 

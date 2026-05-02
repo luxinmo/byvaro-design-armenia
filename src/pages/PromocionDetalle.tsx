@@ -18,7 +18,7 @@ import {
   ArrowLeft, Pencil, Share2, Users, AlertTriangle, CheckCircle2,
   MapPin, Calendar, Euro, Home, Banknote, TrendingUp, Camera,
   FileText, Layers, Handshake, CreditCard, ChevronRight,
-  Settings, Eye, Building2, HardHat, Car, Archive,
+  Settings, Eye, EyeOff, Building2, HardHat, Car, Archive,
   Globe, Shield, ClipboardList, Image, Video, Play,
   Plus, Phone, Mail, MailPlus, MessageCircle, Store, UserPlus,
   Check, X, ExternalLink, Zap, Star, Search, ChevronDown, Info,
@@ -266,6 +266,9 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const [priceListOpen, setPriceListOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [activateSharingOpen, setActivateSharingOpen] = useState(false);
+  /** Modal "Configura X antes de compartir" · se abre cuando el user
+   *  intenta invitar agencias pero faltan campos obligatorios. */
+  const [shareGuardOpen, setShareGuardOpen] = useState(false);
   const [marketingRulesOpen, setMarketingRulesOpen] = useState(false);
   /** El brochure puede eliminarse desde su card. Al eliminarlo, la sección
    *  se oculta y la acción rápida "Brochure" queda deshabilitada. */
@@ -476,6 +479,29 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
    *  desactivada. undefined cuenta como activada (legacy). El override local
    *  gana cuando el promotor la activa desde el popup. */
   const sharingEnabledForPromo = canShareOverride ?? (p.canShareWithAgencies !== false);
+
+  /** ¿La estructura de comisiones está configurada y publicable?
+   *  Sin esto la agencia no puede calcular su liquidación · es el
+   *  mínimo que falta antes de poder invitar. */
+  const collaborationConfigured = useMemo(() => {
+    const collab = (p as DevPromotion).collaboration;
+    return !!collab
+      && !!collab.formaPagoComision
+      && !!collab.comisionInternacional
+      && collab.comisionInternacional > 0;
+  }, [p]);
+
+  /** Intent de invitar agencias · gate antes de abrir el dialog.
+   *  Si faltan comisiones (único campo obligatorio para compartir),
+   *  abrimos el modal "Configura comisiones primero". Cualquier otro
+   *  missing → mismo modal pero con CTA al wizard completo. */
+  const tryInvite = () => {
+    if (!collaborationConfigured) {
+      setShareGuardOpen(true);
+      return;
+    }
+    setShareOpen(true);
+  };
   /** Condición global para permitir compartir: publicada + activada. */
   const canShare = !isIncomplete && p.status === "active" && sharingEnabledForPromo;
   const canPublish = !isIncomplete && p.status !== "active";
@@ -494,7 +520,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           icon: Users,
           label: "Invitar agencias",
           hint: canShare ? "Invitar colaboradores" : "Activa compartir en la tab Comisiones",
-          onClick: canShare ? () => setShareOpen(true) : undefined,
+          onClick: canShare ? () => tryInvite() : undefined,
           disabled: !canShare,
         },
         // Visible solo en el dock compacto (md/lg) · en 2xl+ la
@@ -674,7 +700,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         value: `${realAgencies}`,
         detail: realAgencies > 0 ? "Colaborando" : "Ninguna aún",
         color: "text-primary bg-primary/10",
-        onClick: () => setShareOpen(true),
+        onClick: () => tryInvite(),
         empty: realAgencies === 0,
       }];
     })() : []),
@@ -785,61 +811,25 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   return (
                     <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-warning/30 bg-warning/10 text-warning text-[11px] font-semibold">
                       <span className="h-1.5 w-1.5 rounded-full bg-warning" />
-                      Sin publicar · {publishMissing.length} campo{publishMissing.length === 1 ? "" : "s"} obligatorio{publishMissing.length === 1 ? "" : "s"} por rellenar
+                      Sin activar · {publishMissing.length} campo{publishMissing.length === 1 ? "" : "s"} obligatorio{publishMissing.length === 1 ? "" : "s"} por rellenar
                     </span>
                   );
                 }
                 if (p.status === "active") {
-                  /* "Solo uso interno" · promoción completa pero con
-                   *  canShareWithAgencies=false. No se publica al
-                   *  marketplace de agencias; solo el equipo la ve. */
-                  if (!sharingEnabledForPromo) {
-                    return (
-                      <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-border bg-muted/50 text-muted-foreground text-[11px] font-semibold">
-                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
-                        Solo uso interno
-                      </span>
-                    );
-                  }
-                  /* Badge "Publicada" clicable · al pulsar permite al
-                     promotor retirar la publicación (convertir en "Solo
-                     uso interno"). Las agencias dejan de verla, pero
-                     las que tengan ventas/visitas en curso mantienen
-                     acceso hasta cerrarlas. */
+                  /* Modelo simplificado · todo active es "Activa".
+                   *  El atributo "se está compartiendo o no" es info
+                   *  separada · ya no es un estado distinto. */
                   return (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const ok = await confirm({
-                          title: "¿Despublicar la promoción?",
-                          description:
-                            "Los colaboradores dejarán de verla en su listado y no podrán crear nuevos registros ni visitas. " +
-                            "Los que ya tengan ventas o visitas en curso mantendrán acceso a la ficha hasta cerrarlas. " +
-                            "Podrás volver a publicarla en cualquier momento.",
-                          confirmLabel: "Despublicar",
-                          cancelLabel: "Cancelar",
-                          variant: "destructive",
-                        });
-                        if (!ok) return;
-                        setCanShareOverride(false);
-                        toast.success("Promoción despublicada", {
-                          description: `${p.name} ya no es visible para nuevos colaboradores.`,
-                        });
-                        // TODO(backend): PATCH /api/promociones/:id { canShareWithAgencies: false }
-                      }}
-                      className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-success/30 bg-success/10 text-success text-[11px] font-semibold hover:bg-success/20 hover:border-success/50 transition-colors cursor-pointer"
-                      title="Click para despublicar la promoción"
-                    >
+                    <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-success/30 bg-success/10 text-success text-[11px] font-semibold">
                       <span className="h-1.5 w-1.5 rounded-full bg-success" />
-                      Publicada
-                      <ChevronDown className="h-3 w-3 opacity-60" strokeWidth={2} />
-                    </button>
+                      Activa
+                    </span>
                   );
                 }
                 return (
                   <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-border bg-muted/40 text-muted-foreground text-[11px] font-semibold">
                     <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
-                    Sin publicar
+                    Sin activar
                   </span>
                 );
               })()}
@@ -883,6 +873,61 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     <Calendar className="h-3.5 w-3.5 shrink-0" />
                     Entrega {p.delivery}
                   </span>
+                </>
+              )}
+              {/* Chip · "Visible para colaboradores" / "No visible".
+                * Visible en móvil y desktop · en móvil usamos label
+                * corto para no romper el layout. Click cambia el
+                * estado · al pasar visible → no visible pedimos
+                * confirmación porque afecta a agencias que ya operan
+                * con la promoción (mantienen acceso pero no pueden
+                * crear nuevos registros). */}
+              {!viewAsCollaborator && p.status !== "incomplete" && (
+                <>
+                  <span className="text-border">·</span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (sharingEnabledForPromo) {
+                        const ok = await confirm({
+                          title: "¿Marcar como No visible para colaboradores?",
+                          description:
+                            "Las agencias dejarán de ver esta promoción y no podrán crear nuevos registros, visitas ni reservas. " +
+                            "Los colaboradores que ya tengan registros, ventas o visitas en curso seguirán viendo la promoción pero NO podrán hacer registros nuevos hasta que la vuelvas a marcar como visible. " +
+                            "Puedes revertirlo en cualquier momento.",
+                          confirmLabel: "Marcar No visible",
+                          cancelLabel: "Cancelar",
+                          variant: "destructive",
+                        });
+                        if (!ok) return;
+                        setCanShareOverride(false);
+                        toast.success("Promoción marcada como No visible", {
+                          description: `${p.name} ya no es visible para nuevos colaboradores.`,
+                        });
+                        return;
+                      }
+                      setCanShareOverride(true);
+                      toast.success("Promoción marcada como Visible", {
+                        description: `${p.name} ya es visible para colaboradores.`,
+                      });
+                    }}
+                    className="inline-flex items-center gap-1 hover:text-foreground transition-colors shrink-0"
+                    title={sharingEnabledForPromo
+                      ? "Click para marcar como No visible (las agencias dejarán de verla)"
+                      : "Click para marcar como Visible (las agencias podrán verla)"}
+                  >
+                    {sharingEnabledForPromo ? (
+                      <Eye className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+                    ) : (
+                      <EyeOff className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+                    )}
+                    <span className="hidden md:inline">
+                      {sharingEnabledForPromo ? "Visible para colaboradores" : "No visible para colaboradores"}
+                    </span>
+                    <span className="md:hidden">
+                      {sharingEnabledForPromo ? "Visible" : "No visible"}
+                    </span>
+                  </button>
                 </>
               )}
             </div>
@@ -935,54 +980,33 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 </Button>
               )}
 
-              {/* Botón Publicar · aparece si la promoción aún no está activa
-                  O si está activa pero le faltan requisitos (estado real de
-                  "incompleta"). Se deshabilita mientras haya requisitos
-                  pendientes y muestra el listado en el tooltip.
+              {/* Botón Activar · solo aparece si la promoción puede
+                  activarse YA (sin campos pendientes). Si hay campos
+                  obligatorios pendientes, el banner del cuerpo
+                  ("Debes rellenar X campos obligatorios") guía al
+                  user · el botón aquí sería redundante.
                   TODO(backend): POST /api/promociones/:id/publish */}
-              {(p.status !== "active" || isIncomplete) && (
-                <TooltipProvider delayDuration={120}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span>
-                        <Button
-                          size="sm"
-                          variant={isIncomplete ? "outline" : "default"}
-                          disabled={!canPublish}
-                          onClick={() => {
-                            if (!canPublish) return;
-                            // Si estamos publicando un borrador, lo sacamos
-                            // de la lista de incompletas y volvemos al
-                            // listado (la URL draft:xxx deja de existir).
-                            if (isDraft && rawDraftId) {
-                              deleteDraft(rawDraftId);
-                              toast.success("Promoción publicada", {
-                                description: `${p.name} ya es visible en el catálogo.`,
-                              });
-                              navigate("/promociones");
-                              return;
-                            }
-                            toast.success("Promoción publicada", {
-                              description: `${p.name} ya es visible en el catálogo.`,
-                            });
-                            // TODO(backend): actualizar p.status = "active" tras confirmación del backend.
-                          }}
-                          className="gap-1.5"
-                        >
-                          <Rocket className="h-3.5 w-3.5" strokeWidth={1.5} /> Publicar
-                        </Button>
-                      </span>
-                    </TooltipTrigger>
-                    {isIncomplete && (
-                      <TooltipContent side="bottom" align="end" className="max-w-xs">
-                        <p className="text-xs font-semibold mb-1">Debes rellenar los campos obligatorios</p>
-                        <ul className="text-[11px] space-y-0.5 list-disc pl-3.5">
-                          {publishMissing.map(m => <li key={m.key}>{m.label}</li>)}
-                        </ul>
-                      </TooltipContent>
-                    )}
-                  </Tooltip>
-                </TooltipProvider>
+              {canPublish && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (isDraft && rawDraftId) {
+                      deleteDraft(rawDraftId);
+                      toast.success("Promoción activada", {
+                        description: `${p.name} ya es visible en el catálogo.`,
+                      });
+                      navigate("/promociones");
+                      return;
+                    }
+                    toast.success("Promoción activada", {
+                      description: `${p.name} ya es visible en el catálogo.`,
+                    });
+                    // TODO(backend): actualizar p.status = "active" tras confirmación del backend.
+                  }}
+                  className="gap-1.5"
+                >
+                  <Rocket className="h-3.5 w-3.5" strokeWidth={1.5} /> Activar
+                </Button>
               )}
 
               {/* Pill "Solo uso interno" · cuando la promoción está activa
@@ -1125,7 +1149,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                       <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" strokeWidth={1.5} />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-foreground">
-                          Debes rellenar los campos obligatorios para publicar
+                          Debes rellenar los campos obligatorios para activar
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {publishMissing.length} campo{publishMissing.length === 1 ? "" : "s"} obligatorio{publishMissing.length === 1 ? "" : "s"} pendiente{publishMissing.length === 1 ? "" : "s"} · toca cada uno para completarlo:
@@ -1189,6 +1213,40 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                       >
                         Configurar comisiones para colaborar →
                       </Link>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Aviso "Activa sin agencias" · la promoción está completa,
+                activa y configurada para compartir · pero ninguna agencia
+                la tiene en su cartera todavía. CTA · invitar agencias.
+                Per REGLA DE ORO en CLAUDE.md · "Publicada" requiere ≥1
+                agencia · mientras tanto sigue siendo "Activa". */}
+            {!viewAsCollaborator
+              && p.status === "active"
+              && !isIncomplete
+              && sharingEnabledForPromo
+              && countAgenciesForPromotion(p.id) === 0 && (
+              <div className="mb-5 rounded-2xl border border-warning/30 bg-warning/5 p-5">
+                <div className="flex items-start gap-3">
+                  <Users className="h-5 w-5 text-warning shrink-0 mt-0.5" strokeWidth={1.5} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">
+                      Esta promoción aún no se está compartiendo
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                      Está activa y lista para colaborar · pero ninguna agencia la tiene
+                      en su cartera todavía.{" "}
+                      <button
+                        type="button"
+                        onClick={() => tryInvite()}
+                        className="inline-flex items-center gap-1 font-semibold text-foreground hover:underline underline-offset-2"
+                      >
+                        Invitar agencias
+                        <ArrowRight className="h-3 w-3" strokeWidth={2} />
+                      </button>
                     </p>
                   </div>
                 </div>
@@ -1859,7 +1917,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             sharingEnabled={sharingEnabledForPromo}
             isIncomplete={isIncomplete}
             isDraft={isDraft}
-            onInvitar={() => setShareOpen(true)}
+            onInvitar={() => tryInvite()}
             onOpenStats={() => setStatsOverlayOpen(true)}
             onActivateSharing={() => setActivateSharingOpen(true)}
             activateSharingHref={getWizardUrl("Collaborators", returnPath, rawDraftId, promoIdForWizard)}
@@ -2150,6 +2208,43 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         promotionId={p.id}
         promotionName={p.name}
       />
+
+      {/* Guard · al intentar invitar agencias sin comisiones configuradas.
+        * El CTA lleva al paso de Colaboradores del wizard con
+        * `singleSave=1` · ahí el botón footer es "Guardar" en vez de
+        * "Siguiente" porque solo hace falta este campo en este momento. */}
+      <Dialog open={shareGuardOpen} onOpenChange={setShareGuardOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Configura las comisiones primero</DialogTitle>
+            <DialogDescription className="leading-relaxed pt-2">
+              Para poder compartir esta promoción con agencias, necesitas
+              configurar la <strong>estructura de comisiones</strong> ·
+              cuánto cobrarán los colaboradores y cuándo se les paga.
+              Sin eso las agencias no pueden calcular su liquidación.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShareGuardOpen(false)}
+              className="rounded-full"
+            >
+              Más tarde
+            </Button>
+            <Button
+              onClick={() => {
+                setShareGuardOpen(false);
+                navigate(getWizardUrl("Collaborators", returnPath, rawDraftId, promoIdForWizard) + "&singleSave=1");
+              }}
+              className="rounded-full"
+            >
+              <Pencil className="h-3.5 w-3.5 mr-1.5" strokeWidth={1.75} />
+              Configurar comisiones
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Reglas de marketing · qué canales NO pueden usar las agencias */}
       <MarketingRulesDialog

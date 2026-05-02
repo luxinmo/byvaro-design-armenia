@@ -13,6 +13,7 @@
  */
 
 import { useEffect } from "react";
+import { memCache } from "./memCache";
 import { useCurrentUser, isAdmin, currentWorkspaceKey } from "@/lib/currentUser";
 import type { CurrentUser } from "@/lib/currentUser";
 
@@ -72,7 +73,7 @@ function keyFor(orgId: string): string { return `${KEY_PREFIX}${orgId}`; }
 function readCache(orgId: string): RolePermissions | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(keyFor(orgId));
+    const raw = memCache.getItem(keyFor(orgId));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return { ...DEFAULT_ROLE_PERMISSIONS, ...parsed };
@@ -81,7 +82,7 @@ function readCache(orgId: string): RolePermissions | null {
 
 function writeCache(orgId: string, perms: RolePermissions): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(keyFor(orgId), JSON.stringify(perms));
+  memCache.setItem(keyFor(orgId), JSON.stringify(perms));
   window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: { orgId } }));
 }
 

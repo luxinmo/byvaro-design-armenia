@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 
 const KEY_PREFIX = "byvaro.workspace.departments.v1::";
 const EVENT = "byvaro:departments-change";
@@ -27,7 +28,7 @@ function keyFor(orgId: string): string { return `${KEY_PREFIX}${orgId}`; }
 function readCache(orgId: string): string[] | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(keyFor(orgId));
+    const raw = memCache.getItem(keyFor(orgId));
     if (!raw) return null;
     const arr = JSON.parse(raw);
     if (Array.isArray(arr) && arr.every((x) => typeof x === "string")) return arr;
@@ -37,7 +38,7 @@ function readCache(orgId: string): string[] | null {
 
 function writeCache(orgId: string, list: string[]): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(keyFor(orgId), JSON.stringify(list));
+  memCache.setItem(keyFor(orgId), JSON.stringify(list));
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { orgId } }));
 }
 
@@ -87,8 +88,8 @@ export async function hydrateDepartmentsFromSupabase(): Promise<string[] | null>
 export function getDepartments(): string[] {
   if (typeof window === "undefined") return [...DEFAULT_DEPARTMENTS];
   /* Lookup pragmático · iteramos las claves scoped por orgId. */
-  for (let i = 0; i < window.localStorage.length; i++) {
-    const k = window.localStorage.key(i);
+  for (let i = 0; i < memCache.length; i++) {
+    const k = memCache.key(i);
     if (k && k.startsWith(KEY_PREFIX)) {
       const cached = readCache(k.slice(KEY_PREFIX.length));
       if (cached && cached.length > 0) return cached;

@@ -1,3 +1,4 @@
+import { memCache } from "./memCache";
 /**
  * sentEmails.ts · Log local de emails "enviados" (mock).
  *
@@ -31,7 +32,7 @@ export type SentEmail = {
 function read(): SentEmail[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = memCache.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as SentEmail[];
     return Array.isArray(parsed) ? parsed : [];
@@ -43,7 +44,7 @@ function read(): SentEmail[] {
 function write(list: SentEmail[]) {
   /* Cap a MAX_LOG · descarta los más antiguos. */
   const trimmed = list.slice(0, MAX_LOG);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+  memCache.setItem(STORAGE_KEY, JSON.stringify(trimmed));
 }
 
 export function recordSentEmail(input: Omit<SentEmail, "id" | "sentAt">): SentEmail {
@@ -102,6 +103,36 @@ export function recordSentInvitationEmail(input: {
 
 export function listSentEmails(): SentEmail[] {
   return read();
+}
+
+/** Pull desde `emails_sent` a localStorage · llamar al iniciar. */
+export async function hydrateSentEmailsFromSupabase(): Promise<void> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { data, error } = await supabase
+      .from("emails_sent")
+      .select("*")
+      .order("sent_at", { ascending: false })
+      .limit(MAX_LOG);
+    if (error || !data) return;
+    const list: SentEmail[] = data.map((r: Record<string, unknown>) => {
+      const meta = (r.metadata ?? {}) as { kind?: SentEmail["kind"]; refId?: string };
+      const recipients = (r.recipients ?? []) as Array<{ email?: string }>;
+      return {
+        id: r.id as string,
+        to: recipients[0]?.email ?? "",
+        subject: (r.subject as string) ?? "",
+        html: (r.body_html as string) ?? "",
+        kind: meta.kind ?? "other",
+        refId: meta.refId,
+        sentAt: (r.sent_at as string) ?? new Date().toISOString(),
+      };
+    });
+    write(list);
+  } catch (e) {
+    console.warn("[sentEmails] hydrate skipped:", e);
+  }
 }
 
 /**

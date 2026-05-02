@@ -16,6 +16,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memCache } from "@/lib/memCache";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, X, Sparkles, Rocket, SkipForward } from "lucide-react";
@@ -75,9 +76,9 @@ const LEGACY_DRAFT_KEY = "byvaro-crear-promocion-draft";
 /** Lee el legacy single-draft una única vez; después se borra. */
 const loadLegacyDraft = (): WizardState | null => {
   try {
-    const r = localStorage.getItem(LEGACY_DRAFT_KEY);
+    const r = memCache.getItem(LEGACY_DRAFT_KEY);
     if (!r) return null;
-    localStorage.removeItem(LEGACY_DRAFT_KEY); // consumido
+    memCache.removeItem(LEGACY_DRAFT_KEY); // consumido
     return { ...defaultWizardState, ...JSON.parse(r) };
   } catch { return null; }
 };
@@ -168,6 +169,13 @@ export default function CrearPromocion() {
    *  arrancaba con `defaultWizardState` (vacío) aunque el `Promotion`
    *  estuviera 95% completo · inconsistencia que confundía al user. */
   const promotionIdParam = searchParams.get("promotionId");
+  /** `singleSave=1` · modo "guarda este paso y vuelve". Al activarse,
+   *  el footer "Siguiente" se sustituye por "Guardar" · al pulsar,
+   *  guarda el override del paso actual y navega a `returnTo`. Útil
+   *  cuando el user llega aquí desde un guard ("Configura comisiones
+   *  primero") · sólo necesita resolver ese campo concreto. */
+  const singleSaveMode = searchParams.get("singleSave") === "1";
+  const returnToParam = searchParams.get("returnTo");
   // Carga inicial · prioridad: draft > promotionId hydration > legacy > default
   const initialDraft = useMemo(() => {
     if (draftIdParam) {
@@ -612,11 +620,11 @@ export default function CrearPromocion() {
               <button
                 onClick={handleQuickPublish}
                 className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-primary text-primary-foreground text-[12px] font-semibold hover:bg-primary/90 transition-colors shadow-soft"
-                title="Publica ya con los datos mínimos. Podrás completar el resto después."
+                title="Activa la promoción con los datos mínimos. Podrás completar el resto después."
               >
                 <Rocket className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Publicar rápido</span>
-                <span className="sm:hidden">Publicar</span>
+                <span className="hidden sm:inline">Activar rápido</span>
+                <span className="sm:hidden">Activar</span>
               </button>
             )}
             <button
@@ -689,7 +697,7 @@ export default function CrearPromocion() {
                       <div className="flex items-start gap-2.5 mb-2.5">
                         <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" strokeWidth={1.75} />
                         <p className="text-sm font-semibold text-foreground">
-                          Falta{missing.length === 1 ? "" : "n"} {missing.length} campo{missing.length === 1 ? "" : "s"} para publicar
+                          Falta{missing.length === 1 ? "" : "n"} {missing.length} campo{missing.length === 1 ? "" : "s"} para activar
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
@@ -1280,21 +1288,44 @@ export default function CrearPromocion() {
               <button
                 onClick={handleSkip}
                 className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-full text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-colors"
-                title="Saltar este paso — podrás completarlo antes de publicar"
+                title="Saltar este paso — podrás completarlo antes de activar"
               >
                 <SkipForward className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Omitir</span>
               </button>
             )}
 
-            <button
-              onClick={handleContinue}
-              disabled={!canContinue()}
-              className="inline-flex items-center gap-1.5 h-9 px-4 sm:px-5 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {!getNext() ? "Publicar" : "Siguiente"}
-              <ChevronRight className="h-4 w-4" />
-            </button>
+            {singleSaveMode ? (
+              /* Modo "Guardar este paso y volver" · el user llegó aquí
+               *  para resolver UN campo concreto · al guardar, persiste
+               *  el override y navega de vuelta a `returnTo`. El
+               *  autosave ya está corriendo · forzamos un save inmediato
+               *  por seguridad y navegamos. */
+              <button
+                onClick={() => {
+                  if (resolvedPromotionId) {
+                    savePromoWizardOverride(resolvedPromotionId, state);
+                  }
+                  toast.success("Cambios guardados");
+                  if (returnToParam) navigate(returnToParam);
+                  else if (resolvedPromotionId) navigate(`/promociones/${resolvedPromotionId}`);
+                  else navigate("/promociones");
+                }}
+                disabled={!canContinue()}
+                className="inline-flex items-center gap-1.5 h-9 px-4 sm:px-5 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Guardar
+              </button>
+            ) : (
+              <button
+                onClick={handleContinue}
+                disabled={!canContinue()}
+                className="inline-flex items-center gap-1.5 h-9 px-4 sm:px-5 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {!getNext() ? "Activar" : "Siguiente"}
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </footer>
       </div>

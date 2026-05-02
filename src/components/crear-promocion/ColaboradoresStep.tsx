@@ -129,8 +129,8 @@ export function ColaboradoresStep({
             </p>
             <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
               {state.colaboracion
-                ? "Puedes publicar la promoción y compartirla con agencias colaboradoras."
-                : "La promoción puede seguir funcionando internamente, pero no podrás publicarla ni compartirla con colaboradores."}
+                ? "Puedes activar la promoción y compartirla con agencias colaboradoras."
+                : "La promoción puede seguir funcionando internamente, pero no podrás compartirla con colaboradores."}
             </p>
           </div>
           <Switch
@@ -151,8 +151,8 @@ export function ColaboradoresStep({
               <span className="font-medium">Solo uso interno.</span>
               <span className="text-muted-foreground"> La promoción puede
                 seguir funcionando para tu equipo (registros, visitas, ventas)
-                pero <strong>no podrás publicarla ni compartirla con
-                colaboradores</strong>. Activa el toggle para abrir colaboración.</span>
+                pero <strong>no podrás compartirla con colaboradores</strong>.
+                Activa el toggle para abrir colaboración.</span>
             </span>
           </div>
         )}

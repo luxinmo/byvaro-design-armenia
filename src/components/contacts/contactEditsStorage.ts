@@ -11,6 +11,7 @@
  */
 
 import type { ContactDetail, ContactPhone, ContactEmailAddress } from "./types";
+import { memCache } from "@/lib/memCache";
 
 /** Sub-conjunto editable de ContactDetail. Hoy: campos del Resumen. */
 export type ContactEdits = Partial<Pick<
@@ -33,7 +34,7 @@ const KEY = (contactId: string) => `byvaro.contact.${contactId}.edits.v1`;
 export function loadContactEdits(contactId: string): ContactEdits | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(KEY(contactId));
+    const raw = memCache.getItem(KEY(contactId));
     if (!raw) return null;
     return JSON.parse(raw) as ContactEdits;
   } catch { return null; }
@@ -41,7 +42,7 @@ export function loadContactEdits(contactId: string): ContactEdits | null {
 
 export function saveContactEdits(contactId: string, edits: ContactEdits): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY(contactId), JSON.stringify(edits));
+  memCache.setItem(KEY(contactId), JSON.stringify(edits));
   /* Write-through · update columnas canónicas + merge metadata (resto). */
   void (async () => {
     try {
@@ -81,7 +82,7 @@ export function saveContactEdits(contactId: string, edits: ContactEdits): void {
 
 export function clearContactEdits(contactId: string): void {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(KEY(contactId));
+  memCache.removeItem(KEY(contactId));
 }
 
 /** Aplica overrides sobre el detail original (no muta). */

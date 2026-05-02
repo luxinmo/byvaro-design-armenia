@@ -17,13 +17,14 @@
 import type {
   ContactTimelineEvent, ContactTimelineEventType,
 } from "./types";
+import { memCache } from "@/lib/memCache";
 
 const KEY = (contactId: string) => `byvaro.contact.${contactId}.events.v1`;
 
 export function loadEvents(contactId: string): ContactTimelineEvent[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(KEY(contactId));
+    const raw = memCache.getItem(KEY(contactId));
     if (!raw) return [];
     return JSON.parse(raw) as ContactTimelineEvent[];
   } catch { return []; }
@@ -34,7 +35,7 @@ function saveAll(contactId: string, events: ContactTimelineEvent[]): void {
   /* Cap a 500 eventos por contacto para no llenar localStorage. En
    * producción el backend pagina y trunca con políticas reales. */
   const trimmed = events.slice(0, 500);
-  window.localStorage.setItem(KEY(contactId), JSON.stringify(trimmed));
+  memCache.setItem(KEY(contactId), JSON.stringify(trimmed));
 }
 
 /**

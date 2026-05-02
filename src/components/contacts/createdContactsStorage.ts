@@ -11,6 +11,7 @@
  */
 
 import type { Contact } from "./types";
+import { memCache } from "@/lib/memCache";
 import { generatePublicRef } from "@/lib/publicRef";
 
 const KEY = "byvaro.contacts.created.v1";
@@ -18,7 +19,7 @@ const KEY = "byvaro.contacts.created.v1";
 export function loadCreatedContacts(): Contact[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = memCache.getItem(KEY);
     if (!raw) return [];
     return JSON.parse(raw) as Contact[];
   } catch { return []; }
@@ -27,7 +28,7 @@ export function loadCreatedContacts(): Contact[] {
 export function saveCreatedContact(contact: Contact): void {
   const all = loadCreatedContacts();
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(KEY, JSON.stringify([contact, ...all]));
+    memCache.setItem(KEY, JSON.stringify([contact, ...all]));
     window.dispatchEvent(new CustomEvent("byvaro:contacts-changed"));
   }
   void syncContactToSupabase(contact);
@@ -36,7 +37,7 @@ export function saveCreatedContact(contact: Contact): void {
 export function removeCreatedContact(id: string): void {
   const all = loadCreatedContacts();
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(KEY, JSON.stringify(all.filter((c) => c.id !== id)));
+    memCache.setItem(KEY, JSON.stringify(all.filter((c) => c.id !== id)));
     window.dispatchEvent(new CustomEvent("byvaro:contacts-changed"));
   }
   void deleteContactFromSupabase(id);
@@ -50,7 +51,7 @@ export function bulkSaveContacts(contacts: Contact[]): void {
   const newOnes = contacts.filter((c) => !existingIds.has(c.id));
   const merged = [...newOnes, ...all];
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(KEY, JSON.stringify(merged));
+    memCache.setItem(KEY, JSON.stringify(merged));
     window.dispatchEvent(new CustomEvent("byvaro:contacts-changed"));
   }
   /* Async write-through · uno a uno para evitar payload > 1MB. */

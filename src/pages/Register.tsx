@@ -86,12 +86,13 @@ interface ExistingCompany {
 /**
  * Mock de empresas ya registradas en el sistema. En producción lo
  * sustituye un lookup: GET /api/v1/companies/lookup?domain=<x>.
- * Los logos usan clearbit (API pública que devuelve el logo por dominio).
+ * Los logos usan dicebear initials · clearbit.com está dead desde 2024.
  */
+const dicebearLogo = (name) => `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundColor=1D74E7&textColor=ffffff`;
 const existingCompanies: ExistingCompany[] = [
-  { name: "Luxinmo Real Estate", domain: "luxinmo.com",     logo: "https://logo.clearbit.com/luxinmo.com",     adminEmail: "a*****n@luxinmo.com" },
-  { name: "Kronos Homes",        domain: "kronoshomes.com", logo: "https://logo.clearbit.com/kronoshomes.com", adminEmail: "a*****n@kronoshomes.com" },
-  { name: "Metrovacesa",         domain: "metrovacesa.com", logo: "https://logo.clearbit.com/metrovacesa.com", adminEmail: "a*****n@metrovacesa.com" },
+  { name: "Luxinmo Real Estate", domain: "luxinmo.com",     logo: dicebearLogo("Luxinmo Real Estate"), adminEmail: "a*****n@luxinmo.com" },
+  { name: "Kronos Homes",        domain: "kronoshomes.com", logo: dicebearLogo("Kronos Homes"),        adminEmail: "a*****n@kronoshomes.com" },
+  { name: "Metrovacesa",         domain: "metrovacesa.com", logo: dicebearLogo("Metrovacesa"),         adminEmail: "a*****n@metrovacesa.com" },
 ];
 
 function getCompanyFromEmail(email: string): ExistingCompany | null {

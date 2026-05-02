@@ -14,6 +14,7 @@
  */
 
 import type { ContactAssignedUser, ContactRelation } from "./types";
+import { memCache } from "@/lib/memCache";
 
 /* ── Asignados ── */
 
@@ -22,7 +23,7 @@ const ASSIGNED_KEY = (contactId: string) => `byvaro.contact.${contactId}.assigne
 export function loadAssignedOverride(contactId: string): ContactAssignedUser[] | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(ASSIGNED_KEY(contactId));
+    const raw = memCache.getItem(ASSIGNED_KEY(contactId));
     if (!raw) return null;
     return JSON.parse(raw) as ContactAssignedUser[];
   } catch { return null; }
@@ -30,7 +31,7 @@ export function loadAssignedOverride(contactId: string): ContactAssignedUser[] |
 
 export function saveAssignedOverride(contactId: string, users: ContactAssignedUser[]): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(ASSIGNED_KEY(contactId), JSON.stringify(users));
+  memCache.setItem(ASSIGNED_KEY(contactId), JSON.stringify(users));
   void (async () => {
     const { mergeContactMetadata } = await import("@/lib/contactMetadataSync");
     await mergeContactMetadata(contactId, { assignedUsers: users });
@@ -44,7 +45,7 @@ const REL_KEY = (contactId: string) => `byvaro.contact.${contactId}.related.v1`;
 export function loadRelationsOverride(contactId: string): ContactRelation[] | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(REL_KEY(contactId));
+    const raw = memCache.getItem(REL_KEY(contactId));
     if (!raw) return null;
     return JSON.parse(raw) as ContactRelation[];
   } catch { return null; }
@@ -52,7 +53,7 @@ export function loadRelationsOverride(contactId: string): ContactRelation[] | nu
 
 export function saveRelationsOverride(contactId: string, rels: ContactRelation[]): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(REL_KEY(contactId), JSON.stringify(rels));
+  memCache.setItem(REL_KEY(contactId), JSON.stringify(rels));
   void (async () => {
     const { mergeContactMetadata } = await import("@/lib/contactMetadataSync");
     await mergeContactMetadata(contactId, { relations: rels });
@@ -66,7 +67,7 @@ const DELETED_KEY = "byvaro.contacts.deleted.v1";
 export function loadDeletedContactIds(): Set<string> {
   if (typeof window === "undefined") return new Set();
   try {
-    const raw = window.localStorage.getItem(DELETED_KEY);
+    const raw = memCache.getItem(DELETED_KEY);
     if (!raw) return new Set();
     const arr = JSON.parse(raw);
     return new Set(Array.isArray(arr) ? arr : []);
@@ -77,7 +78,7 @@ export function markContactDeleted(id: string): void {
   if (typeof window === "undefined") return;
   const set = loadDeletedContactIds();
   set.add(id);
-  window.localStorage.setItem(DELETED_KEY, JSON.stringify([...set]));
+  memCache.setItem(DELETED_KEY, JSON.stringify([...set]));
   /* Hard delete · contacts table (RLS por org). */
   void (async () => {
     try {
@@ -95,5 +96,5 @@ export function unmarkContactDeleted(id: string): void {
   if (typeof window === "undefined") return;
   const set = loadDeletedContactIds();
   set.delete(id);
-  window.localStorage.setItem(DELETED_KEY, JSON.stringify([...set]));
+  memCache.setItem(DELETED_KEY, JSON.stringify([...set]));
 }

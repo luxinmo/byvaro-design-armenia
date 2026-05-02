@@ -57,7 +57,7 @@ export interface AgencyOnboardingState {
 function readAll(): AgencyOnboardingState[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(STATE_KEY);
+    const raw = memCache.getItem(STATE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
@@ -67,8 +67,51 @@ function readAll(): AgencyOnboardingState[] {
 }
 
 function writeAll(list: AgencyOnboardingState[]) {
-  localStorage.setItem(STATE_KEY, JSON.stringify(list));
+  memCache.setItem(STATE_KEY, JSON.stringify(list));
   window.dispatchEvent(new CustomEvent("byvaro:agency-onboarding-changed"));
+  void syncAgencyOnboardingToSupabase(list);
+}
+
+/* ── Write-through · cada agency_id tiene fila en `org_settings` con
+ *    key="agency_onboarding" y value=jsonb del estado. */
+async function syncAgencyOnboardingToSupabase(list: AgencyOnboardingState[]) {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    if (list.length === 0) return;
+    const rows = list.map((s) => ({
+      organization_id: s.agencyId,
+      key: "agency_onboarding",
+      value: s as unknown as Record<string, unknown>,
+      updated_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase.from("org_settings")
+      .upsert(rows, { onConflict: "organization_id,key" });
+    if (error) console.warn("[agencyOnboarding] sync:", error.message);
+  } catch (e) {
+    console.warn("[agencyOnboarding] sync skipped:", e);
+  }
+}
+
+/** Pull desde `org_settings.key=agency_onboarding`. */
+export async function hydrateAgencyOnboardingFromSupabase(): Promise<void> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { data, error } = await supabase.from("org_settings")
+      .select("organization_id, value")
+      .eq("key", "agency_onboarding");
+    if (error || !data) return;
+    const list = data
+      .map((r) => ({ ...(r.value as AgencyOnboardingState), agencyId: r.organization_id as string }))
+      .filter((s) => s.agencyId);
+    if (typeof window !== "undefined") {
+      memCache.setItem(STATE_KEY, JSON.stringify(list));
+      window.dispatchEvent(new CustomEvent("byvaro:agency-onboarding-changed"));
+    }
+  } catch (e) {
+    console.warn("[agencyOnboarding] hydrate skipped:", e);
+  }
 }
 
 /** ¿Hay un setup pendiente para esta agencia? · usado por el gate
@@ -77,7 +120,7 @@ export function needsResponsibleSetup(agencyId: string): boolean {
   if (typeof window === "undefined") return false;
   /* Solo agencias creadas vía invitación (storage created.v1) tienen
    * setup pendiente · las del seed son fixtures siempre completas. */
-  const createdRaw = localStorage.getItem("byvaro.agencies.created.v1");
+  const createdRaw = memCache.getItem("byvaro.agencies.created.v1");
   if (!createdRaw) return false;
   try {
     const arr = JSON.parse(createdRaw) as Array<{ id: string }>;
@@ -101,6 +144,7 @@ export function shouldAutoOpenResponsibleSetup(agencyId: string): boolean {
 }
 
 import { RESPONSIBLE_ACCEPTANCE_TERMS } from "./legalTerms";
+import { memCache } from "./memCache";
 
 /** Versión actual de los T&C del Responsable · derivada del catálogo
  *  canónico en `legalTerms.ts`. Cualquier cambio del texto debe subir

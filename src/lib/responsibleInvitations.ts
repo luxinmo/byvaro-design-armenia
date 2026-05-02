@@ -1,3 +1,4 @@
+import { memCache } from "./memCache";
 /**
  * responsibleInvitations.ts · Storage de invitaciones al Responsable
  * de una agencia (caso 1 · alta nueva donde el invitador declara que
@@ -58,7 +59,7 @@ const VALIDEZ_DIAS = 30;
 function readAll(): ResponsibleInvitation[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = memCache.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -75,7 +76,7 @@ function readAll(): ResponsibleInvitation[] {
 }
 
 function writeAll(list: ResponsibleInvitation[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  memCache.setItem(STORAGE_KEY, JSON.stringify(list));
   window.dispatchEvent(new CustomEvent("byvaro:responsible-invitations-changed"));
 }
 

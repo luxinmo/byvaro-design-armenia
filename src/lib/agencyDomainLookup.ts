@@ -27,6 +27,7 @@
  */
 
 import { agencies as SEED_AGENCIES, type Agency } from "@/data/agencies";
+import { memCache } from "./memCache";
 import { mockUsers, type MockUser } from "@/data/mockUsers";
 import { isPublicEmailDomain, getEmailDomain } from "@/data/emailDomains";
 
@@ -81,7 +82,7 @@ export function findAgencyByEmailDomain(
   /* 3. Y el storage local de usuarios creados via signup. */
   if (typeof window !== "undefined") {
     try {
-      const raw = window.localStorage.getItem("byvaro.users.created.v1");
+      const raw = memCache.getItem("byvaro.users.created.v1");
       if (raw) {
         const arr = JSON.parse(raw) as MockUser[];
         for (const u of arr) {
@@ -91,7 +92,7 @@ export function findAgencyByEmailDomain(
           let a = SEED_AGENCIES.find((x) => x.id === u.agencyId);
           if (!a) {
             try {
-              const rawA = window.localStorage.getItem("byvaro.agencies.created.v1");
+              const rawA = memCache.getItem("byvaro.agencies.created.v1");
               if (rawA) {
                 const arrA = JSON.parse(rawA) as Agency[];
                 a = arrA.find((x) => x.id === u.agencyId);
@@ -122,7 +123,7 @@ export function findAgencyByEmailDomain(
     adminUser = { email: seedAdmin.email, name: seedAdmin.name };
   } else if (typeof window !== "undefined") {
     try {
-      const raw = window.localStorage.getItem("byvaro.users.created.v1");
+      const raw = memCache.getItem("byvaro.users.created.v1");
       if (raw) {
         const arr = JSON.parse(raw) as MockUser[];
         const admin = arr.find(

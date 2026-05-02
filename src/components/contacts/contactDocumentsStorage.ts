@@ -13,6 +13,7 @@
  */
 
 import type { ContactDocumentEntry } from "./types";
+import { memCache } from "@/lib/memCache";
 
 /** Documento subido localmente — añade `dataUrl` para poder descargarlo. */
 export type StoredDocument = ContactDocumentEntry & {
@@ -24,7 +25,7 @@ const KEY = (contactId: string) => `byvaro.contact.${contactId}.documents.v1`;
 export function loadAddedDocuments(contactId: string): StoredDocument[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(KEY(contactId));
+    const raw = memCache.getItem(KEY(contactId));
     if (!raw) return [];
     return JSON.parse(raw) as StoredDocument[];
   } catch { return []; }
@@ -32,7 +33,7 @@ export function loadAddedDocuments(contactId: string): StoredDocument[] {
 
 function saveAll(contactId: string, docs: StoredDocument[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY(contactId), JSON.stringify(docs));
+  memCache.setItem(KEY(contactId), JSON.stringify(docs));
 }
 
 /* Sync metadata-only (sin dataUrl · el binario sigue en localStorage

@@ -29,6 +29,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { memCache } from "./memCache";
 import { agencies } from "@/data/agencies";
 import { promotores } from "@/data/promotores";
 import { agencyToEmpresa } from "./agencyEmpresaAdapter";
@@ -500,13 +501,13 @@ export function loadEmpresaForOrg(orgId: string): Empresa {
   if (typeof window === "undefined") return defaultEmpresa;
   // 1. Scoped key (canónica)
   try {
-    const raw = window.localStorage.getItem(empresaKeyFor(orgId));
+    const raw = memCache.getItem(empresaKeyFor(orgId));
     if (raw) return { ...defaultEmpresa, ...JSON.parse(raw) };
   } catch { /* fallthrough */ }
   // 2. Legacy fallback solo para developer-default (single-tenant histórico)
   if (orgId === DEFAULT_DEVELOPER_TENANT_ID) {
     try {
-      const raw = window.localStorage.getItem(EMPRESA_KEY_LEGACY);
+      const raw = memCache.getItem(EMPRESA_KEY_LEGACY);
       if (raw) return { ...defaultEmpresa, ...JSON.parse(raw) };
     } catch { /* fallthrough */ }
   }
@@ -536,9 +537,9 @@ function saveEmpresaForOrg(orgId: string, e: Empresa) {
   const payload = JSON.stringify({ ...e, updatedAt: Date.now() });
   /* Optimistic local write · UI refresca inmediato. Si Supabase
    * rechaza (RLS, network), revertimos y re-emitimos. */
-  window.localStorage.setItem(empresaKeyFor(orgId), payload);
+  memCache.setItem(empresaKeyFor(orgId), payload);
   if (orgId === DEFAULT_DEVELOPER_TENANT_ID) {
-    window.localStorage.setItem(EMPRESA_KEY_LEGACY, payload);
+    memCache.setItem(EMPRESA_KEY_LEGACY, payload);
   }
   window.dispatchEvent(new CustomEvent("byvaro:empresa-changed", { detail: { orgId } }));
 
@@ -637,13 +638,13 @@ export function loadOficinasForOrg(orgId: string): Oficina[] {
   if (typeof window === "undefined") return [];
   // 1. Scoped key (canónica)
   try {
-    const raw = window.localStorage.getItem(oficinasKeyFor(orgId));
+    const raw = memCache.getItem(oficinasKeyFor(orgId));
     if (raw !== null) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed as Oficina[];
       // Si scoped existe pero vacío para developer-default, re-seedea
       if (orgId === DEFAULT_DEVELOPER_TENANT_ID && Array.isArray(parsed) && parsed.length === 0) {
-        window.localStorage.setItem(oficinasKeyFor(orgId), JSON.stringify(OFICINAS_SEED));
+        memCache.setItem(oficinasKeyFor(orgId), JSON.stringify(OFICINAS_SEED));
         return [...OFICINAS_SEED];
       }
       if (Array.isArray(parsed)) return parsed as Oficina[];
@@ -652,19 +653,19 @@ export function loadOficinasForOrg(orgId: string): Oficina[] {
   // 2. Legacy fallback solo para developer-default
   if (orgId === DEFAULT_DEVELOPER_TENANT_ID) {
     try {
-      const raw = window.localStorage.getItem(OFICINAS_KEY_LEGACY);
+      const raw = memCache.getItem(OFICINAS_KEY_LEGACY);
       if (raw !== null) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
           // Migrar a scoped key automáticamente · la siguiente lectura ya
           // pasa por la canónica.
-          window.localStorage.setItem(oficinasKeyFor(orgId), JSON.stringify(parsed));
+          memCache.setItem(oficinasKeyFor(orgId), JSON.stringify(parsed));
           return parsed as Oficina[];
         }
       }
     } catch { /* fallthrough */ }
     // Primera carga developer-default · persiste seed
-    window.localStorage.setItem(oficinasKeyFor(orgId), JSON.stringify(OFICINAS_SEED));
+    memCache.setItem(oficinasKeyFor(orgId), JSON.stringify(OFICINAS_SEED));
     return [...OFICINAS_SEED];
   }
   // 3. Seed por tenant · agencias y promotores externos
@@ -681,9 +682,9 @@ function saveOficinasForOrg(orgId: string, list: Oficina[]) {
   if (typeof window === "undefined") return;
   const payload = JSON.stringify(list);
   /* Optimistic local write. */
-  window.localStorage.setItem(oficinasKeyFor(orgId), payload);
+  memCache.setItem(oficinasKeyFor(orgId), payload);
   if (orgId === DEFAULT_DEVELOPER_TENANT_ID) {
-    window.localStorage.setItem(OFICINAS_KEY_LEGACY, payload);
+    memCache.setItem(OFICINAS_KEY_LEGACY, payload);
   }
   window.dispatchEvent(new CustomEvent("byvaro:oficinas-changed", { detail: { orgId } }));
 

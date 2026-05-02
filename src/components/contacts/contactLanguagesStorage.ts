@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "@/lib/memCache";
 
 const EVENT = "byvaro:contact-languages-change";
 
@@ -22,7 +23,7 @@ function keyFor(contactId: string): string {
 export function getContactLanguages(contactId: string): string[] | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(keyFor(contactId));
+    const raw = memCache.getItem(keyFor(contactId));
     return raw ? (JSON.parse(raw) as string[]) : null;
   } catch {
     return null;
@@ -31,7 +32,7 @@ export function getContactLanguages(contactId: string): string[] | null {
 
 export function saveContactLanguages(contactId: string, languages: string[]): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(keyFor(contactId), JSON.stringify(languages));
+  memCache.setItem(keyFor(contactId), JSON.stringify(languages));
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { contactId } }));
   void (async () => {
     const { mergeContactMetadata } = await import("@/lib/contactMetadataSync");

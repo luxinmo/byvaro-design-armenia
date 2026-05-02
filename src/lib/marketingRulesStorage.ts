@@ -34,6 +34,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 
 const KEY_PREFIX = "byvaro.promotion.marketingProhibitions.v1:";
 const EVENT = "byvaro:marketing-rules-change";
@@ -45,7 +46,7 @@ function keyFor(promotionId: string): string {
 export function getMarketingProhibitions(promotionId: string): string[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(keyFor(promotionId));
+    const raw = memCache.getItem(keyFor(promotionId));
     if (!raw) return [];
     const arr = JSON.parse(raw);
     if (Array.isArray(arr) && arr.every((x) => typeof x === "string")) {
@@ -62,9 +63,9 @@ export function saveMarketingProhibitions(promotionId: string, ids: string[]): v
   // Deduplica y recorta · el orden no importa (la UI ordena por catálogo).
   const clean = Array.from(new Set(ids.map((s) => s.trim()).filter(Boolean)));
   if (clean.length === 0) {
-    window.localStorage.removeItem(keyFor(promotionId));
+    memCache.removeItem(keyFor(promotionId));
   } else {
-    window.localStorage.setItem(keyFor(promotionId), JSON.stringify(clean));
+    memCache.setItem(keyFor(promotionId), JSON.stringify(clean));
   }
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { promotionId } }));
   /* Write-through · escribir a `promotions.marketing_prohibitions text[]`. */
@@ -144,7 +145,7 @@ function configuredKeyFor(id: string): string {
 export function getMarketingConfigured(promotionId: string): boolean {
   if (typeof window === "undefined") return false;
   try {
-    return window.localStorage.getItem(configuredKeyFor(promotionId)) === "1";
+    return memCache.getItem(configuredKeyFor(promotionId)) === "1";
   } catch {
     return false;
   }
@@ -153,9 +154,9 @@ export function getMarketingConfigured(promotionId: string): boolean {
 export function setMarketingConfigured(promotionId: string, value: boolean = true): void {
   if (typeof window === "undefined") return;
   if (value) {
-    window.localStorage.setItem(configuredKeyFor(promotionId), "1");
+    memCache.setItem(configuredKeyFor(promotionId), "1");
   } else {
-    window.localStorage.removeItem(configuredKeyFor(promotionId));
+    memCache.removeItem(configuredKeyFor(promotionId));
   }
   window.dispatchEvent(new CustomEvent(CONFIGURED_EVENT, { detail: { promotionId } }));
 }

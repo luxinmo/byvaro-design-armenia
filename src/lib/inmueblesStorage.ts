@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 import { useCurrentUser, currentWorkspaceKey } from "@/lib/currentUser";
 import {
   seedInmueblesForWorkspace,
@@ -33,7 +34,7 @@ export function getInmueblesForWorkspace(workspaceKey: string): Inmueble[] {
   if (typeof window === "undefined") {
     return seedInmueblesForWorkspace(workspaceKey);
   }
-  const raw = window.localStorage.getItem(storageKey(workspaceKey));
+  const raw = memCache.getItem(storageKey(workspaceKey));
   if (!raw) return seedInmueblesForWorkspace(workspaceKey);
   try {
     const parsed = JSON.parse(raw) as Inmueble[];
@@ -45,7 +46,7 @@ export function getInmueblesForWorkspace(workspaceKey: string): Inmueble[] {
 }
 
 function persist(workspaceKey: string, list: Inmueble[]): void {
-  window.localStorage.setItem(storageKey(workspaceKey), JSON.stringify(list));
+  memCache.setItem(storageKey(workspaceKey), JSON.stringify(list));
   window.dispatchEvent(new CustomEvent(CHANNEL_EVENT, { detail: { workspaceKey } }));
 }
 

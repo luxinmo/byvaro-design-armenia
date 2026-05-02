@@ -13,6 +13,7 @@
  */
 
 import type { WizardState } from "@/components/crear-promocion/types";
+import { memCache } from "./memCache";
 
 const DRAFTS_KEY = "byvaro-promotion-drafts";
 /** Clave histórica (single-draft) · se migra la primera vez que se carga la lista. */
@@ -31,7 +32,7 @@ const genId = () => `d-${Date.now().toString(36)}-${Math.random().toString(36).s
 
 const readRaw = (): PromotionDraft[] => {
   try {
-    const r = localStorage.getItem(DRAFTS_KEY);
+    const r = memCache.getItem(DRAFTS_KEY);
     if (!r) return [];
     const parsed = JSON.parse(r);
     return Array.isArray(parsed) ? parsed : [];
@@ -41,7 +42,7 @@ const readRaw = (): PromotionDraft[] => {
 };
 
 const writeRaw = (drafts: PromotionDraft[]) => {
-  localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+  memCache.setItem(DRAFTS_KEY, JSON.stringify(drafts));
 };
 
 /** Estima el % de completitud según los campos rellenos. Es una
@@ -71,7 +72,7 @@ export function listDrafts(): PromotionDraft[] {
   // Migración puntual del borrador legacy.
   if (drafts.length === 0) {
     try {
-      const legacy = localStorage.getItem(LEGACY_KEY);
+      const legacy = memCache.getItem(LEGACY_KEY);
       if (legacy) {
         const state = JSON.parse(legacy) as WizardState;
         const d: PromotionDraft = {
