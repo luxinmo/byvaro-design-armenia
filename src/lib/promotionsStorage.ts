@@ -12,7 +12,9 @@
  * `/promociones` debería mergear ambas (TODO).
  */
 
-import type { WizardState, UnitData } from "@/components/crear-promocion/types";
+import type {
+  WizardState, UnitData, FotoItem, VideoItem, HitoPago,
+} from "@/components/crear-promocion/types";
 import { memCache } from "./memCache";
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
 
@@ -131,14 +133,28 @@ export function createPromotionFromWizard(
       console.warn("[promotions:create] insert failed:", error.message);
       return;
     }
-    /* Promo creada · ahora persistir las unidades a `promotion_units`.
-     *  Antes vivían SOLO en `promotions.metadata.wizardSnapshot` (JSONB)
-     *  y la tab Availability mostraba 0 unidades porque lee de la
-     *  tabla dedicada. Sin esto no había paridad local↔producción. */
-    const unidades = (state as unknown as { unidades?: UnitData[] }).unidades ?? [];
-    if (unidades.length > 0) {
-      await saveUnitsToSupabase(created.id, unidades);
-    }
+    /* Promo creada · ahora persistir las sub-entidades a sus tablas
+     *  dedicadas. Antes vivían SOLO en `promotions.metadata.wizardSnapshot`
+     *  y los componentes que las leen (Availability, Gallery, Plan de
+     *  pagos) las veían vacías porque consultan tablas, no JSONB.
+     *  Sin esto no había paridad local↔producción.
+     *
+     *  Anejos sueltos · NO se persisten aquí · el wizard solo trabaja
+     *  con counts agregados (state.parkings, state.trasteros). Los
+     *  anejos individuales se crean después desde la ficha de promoción
+     *  y `anejosStorage.ts` ya tiene write-through a `promotion_anejos`. */
+    const s = state as unknown as Record<string, unknown>;
+    const unidades = (s.unidades as UnitData[] | undefined) ?? [];
+    const fotos = (s.fotos as FotoItem[] | undefined) ?? [];
+    const videos = (s.videos as VideoItem[] | undefined) ?? [];
+    const hitosPago = (s.hitosPago as HitoPago[] | undefined) ?? [];
+
+    await Promise.all([
+      unidades.length > 0 ? saveUnitsToSupabase(created.id, unidades) : null,
+      (fotos.length > 0 || videos.length > 0)
+        ? saveGalleryToSupabase(created.id, fotos, videos) : null,
+      hitosPago.length > 0 ? savePaymentPlanToSupabase(created.id, hitosPago) : null,
+    ]);
   })();
 
   return created;
@@ -205,4 +221,98 @@ export async function saveUnitsToSupabase(
     .from("promotion_units")
     .upsert(rows, { onConflict: "id" });
   if (error) console.warn("[units:save] upsert failed:", error.message);
+}
+
+/** Maps las fotos + vídeos del wizard → filas de `promotion_gallery`.
+ *
+ *  Estrategia · borrar todas las filas existentes de la promo y
+ *  re-insertar (delete-then-insert) · simple, idempotente y evita
+ *  tener que rastrear ids individuales. La tabla usa `uuid` autogenerado
+ *  para `id` (no podemos reusar el FotoItem.id que es del frontend).
+ *
+ *  Mapping según el schema (ver migración 20260429100001):
+ *    - url       = FotoItem.url / VideoItem.url
+ *    - alt       = FotoItem.nombre / VideoItem.nombre
+ *    - position  = FotoItem.orden (vídeos van al final)
+ *    - kind      = 'photo' | 'video' (default 'photo' en la tabla)
+ *
+ *  Limitación · `promotion_gallery` no tiene columna `metadata` ·
+ *  perdemos `categoria`, `esPrincipal`, `bloqueada` y `tipo` (youtube
+ *  vs vimeo360). Si más adelante se necesitan, hace falta migración
+ *  añadiendo `metadata jsonb`. Out of scope ahora · la galería pública
+ *  funciona con url+alt+position+kind.
+ */
+export async function saveGalleryToSupabase(
+  promotionId: string,
+  fotos: FotoItem[],
+  videos: VideoItem[],
+): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  if (fotos.length === 0 && videos.length === 0) return;
+
+  /* Wipe-then-insert · delete cascade limpio antes de meter las nuevas. */
+  await supabase.from("promotion_gallery").delete().eq("promotion_id", promotionId);
+
+  const photoRows = fotos
+    .filter((f) => !!f.url)
+    .map((f) => ({
+      promotion_id: promotionId,
+      url: f.url,
+      alt: f.nombre || null,
+      position: f.orden,
+      kind: "photo",
+    }));
+
+  const videoRows = videos
+    .filter((v) => !!v.url)
+    .map((v, i) => ({
+      promotion_id: promotionId,
+      url: v.url,
+      alt: v.nombre || null,
+      /* Vídeos van DESPUÉS de las fotos · empiezan en `fotos.length + i`
+       * para no chocar con el orden. */
+      position: fotos.length + i,
+      kind: "video",
+    }));
+
+  const rows = [...photoRows, ...videoRows];
+  if (rows.length === 0) return;
+  const { error } = await supabase.from("promotion_gallery").insert(rows);
+  if (error) console.warn("[gallery:save] insert failed:", error.message);
+}
+
+/** Maps `HitoPago[]` del wizard → filas de `payment_plans`.
+ *
+ *  Cada hito = un tramo. `tramo` se asigna por orden (1-based). El
+ *  `metodoPago` (contrato | manual | certificaciones) es global de la
+ *  promoción · viaja en `promotions.metadata.wizardSnapshot.metodoPago`
+ *  · NO se replica por hito.
+ *
+ *  Mapping según el schema:
+ *    - tramo        = índice 1-based del hito en el array
+ *    - pct          = HitoPago.porcentaje
+ *    - label        = HitoPago.descripcion
+ *    - due_at_event = null (el wizard no captura un evento ligado todavía)
+ *    - metadata     = bundle JSONB con cualquier extra futuro
+ *
+ *  Estrategia delete-then-insert · idempotente.
+ */
+export async function savePaymentPlanToSupabase(
+  promotionId: string,
+  hitos: HitoPago[],
+): Promise<void> {
+  if (!isSupabaseConfigured || hitos.length === 0) return;
+
+  await supabase.from("payment_plans").delete().eq("promotion_id", promotionId);
+
+  const rows = hitos.map((h, i) => ({
+    promotion_id: promotionId,
+    tramo: i + 1,
+    label: h.descripcion || null,
+    pct: Number(h.porcentaje) || null,
+    due_at_event: null,
+    metadata: {},
+  }));
+  const { error } = await supabase.from("payment_plans").insert(rows);
+  if (error) console.warn("[payment_plans:save] insert failed:", error.message);
 }
