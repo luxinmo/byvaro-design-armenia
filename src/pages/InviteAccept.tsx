@@ -39,6 +39,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { memCache } from "@/lib/memCache";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Mail, Lock, Building2, Sparkles, ArrowRight, AlertTriangle, Check, Loader2, User as UserIcon,
@@ -138,13 +139,13 @@ function seedDemoInvitationIfNeeded(token: string): boolean {
   const seedFn = DEMO_INVITATIONS[token];
   if (!seedFn) return false;
   const STORAGE = "byvaro-invitaciones";
-  const raw = localStorage.getItem(STORAGE);
+  const raw = memCache.getItem(STORAGE);
   let list: Invitacion[] = [];
   try { list = raw ? JSON.parse(raw) : []; } catch { list = []; }
   if (list.some((i) => i.token === token)) return false;
   const inv = seedFn();
   list.push(inv);
-  localStorage.setItem(STORAGE, JSON.stringify(list));
+  memCache.setItem(STORAGE, JSON.stringify(list));
   window.dispatchEvent(new CustomEvent("byvaro:invitaciones-changed"));
   return true;
 }

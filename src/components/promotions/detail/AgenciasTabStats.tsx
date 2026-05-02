@@ -306,9 +306,9 @@ export function AgenciasTabStats({
     return (
       <EmptyStatePanel
         icon={FileText}
-        eyebrow="Borrador sin publicar"
-        title="Publica la promoción para empezar a colaborar"
-        description="Las agencias solo pueden colaborar en promociones activas. Completa el borrador y publícalo desde la Vista general."
+        eyebrow="Borrador sin activar"
+        title="Activa la promoción para empezar a colaborar"
+        description="Las agencias solo pueden colaborar en promociones activas. Completa el borrador y actívalo desde la Vista general."
         primaryCta={null}
       />
     );
@@ -356,7 +356,7 @@ export function AgenciasTabStats({
         icon={Share2}
         eyebrow="Lista para compartir"
         title="Invita a tu primera agencia colaboradora"
-        description="Esta promoción está publicada y compartida. Invita agencias para que empiecen a registrar clientes y programar visitas. Verás aquí métricas, solicitudes e invitaciones en cuanto haya actividad."
+        description="Esta promoción está activa y compartida. Invita agencias para que empiecen a registrar clientes y programar visitas. Verás aquí métricas, solicitudes e invitaciones en cuanto haya actividad."
         primaryCta={canShare ? {
           label: "Invitar agencia",
           icon: Plus,

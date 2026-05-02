@@ -12,12 +12,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Building2, Plus, MapPin, Users, Flame, SlidersHorizontal,
   X, AlertTriangle, Ban, Share2, TrendingUp, Check, ChevronDown,
-  List, Map as MapIcon, LayoutGrid, Mail, ArrowRight, type LucideIcon,
+  List, Map as MapIcon, LayoutGrid, Mail, ArrowRight, EyeOff,
+  type LucideIcon,
 } from "lucide-react";
 import { promotions, getBuildingTypeLabel, type Promotion } from "@/data/promotions";
 import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import { developerOnlyPromotions, type DevPromotion } from "@/data/developerPromotions";
 import { unitsByPromotion } from "@/data/units";
+import { subscribeToSeedHydrated } from "@/lib/seedHydrator";
 import { agencies, countAgenciesForPromotion, type Agency } from "@/data/agencies";
 import { Tag } from "@/components/ui/Tag";
 import { PromocionesMap } from "@/components/promociones/PromocionesMap";
@@ -29,7 +31,10 @@ import { Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
 import { useCurrentUser } from "@/lib/currentUser";
-import { useEmpresa } from "@/lib/empresa";
+import { useEmpresa, loadEmpresaForOrg } from "@/lib/empresa";
+import { promotores } from "@/data/promotores";
+import { TEAM_MEMBERS } from "@/lib/team";
+import { mockUsers } from "@/data/mockUsers";
 import { resolveDeveloperLogo, getDeveloperAvatar } from "@/lib/developerDirectory";
 import { getPromoterDisplayName } from "@/lib/promotionRole";
 import { getPromoStats } from "@/lib/promoStats";
@@ -40,7 +45,8 @@ import { sales as salesMock } from "@/data/sales";
 import { useCreatedRegistros } from "@/lib/registrosStorage";
 import { registros as SEED_REGISTROS } from "@/data/records";
 import { useInvitacionesForAgency } from "@/lib/invitaciones";
-import { canPublishPromotion } from "@/lib/publicationRequirements";
+import { canPublishPromotion, getMissingForPromotion } from "@/lib/publicationRequirements";
+import { promotionHref } from "@/lib/urls";
 
 /* ═══════════════════════════════════════════════════════════════════
    Opciones estáticas (las dinámicas se derivan de los datos en el componente)
@@ -260,34 +266,31 @@ function formatPrice(n: number) {
 function statusTag(
   p: { status: string; canShareWithAgencies?: boolean } & Promotion,
 ): { label: string; variant: "success" | "warning" | "muted" | "danger" } {
-  /* Modelo de estados · acordado 2026-05-01:
+  /* Modelo de estados · simplificado 2026-05-02:
    *
-   *    BORRADOR     · status === "incomplete"
-   *                   Faltan datos · no se puede activar.
+   *    BORRADOR · status === "incomplete" · status === "inactive" · O
+   *               status === "active" PERO con campos obligatorios
+   *               sin rellenar (incongruencia heredada del seed ·
+   *               se trata como borrador hasta que se complete).
    *
-   *    ACTIVA       · status === "active" Y (canShare === false O
-   *                   0 agencias colaborando todavía).
-   *                   Operativa para uso interno · las agencias NO
-   *                   la ven hasta que el promotor invite/comparta
-   *                   con al menos una.
+   *    ACTIVA   · status === "active" Y todos los campos obligatorios
+   *               OK · operativa. La diferenciación
+   *               "compartiéndose o no" es atributo informativo, no
+   *               estado distinto.
    *
-   *    PUBLICADA    · status === "active" + canShare !== false +
-   *                   ≥1 agencia en `promotionsCollaborating`.
-   *                   Visible al exterior · al menos una agencia
-   *                   está colaborando.
-   *
-   *    VENDIDA      · status === "sold-out"
-   *                   Todas las unidades vendidas · solo lectura. */
+   *    VENDIDA  · status === "sold-out"
+   *               Todas las unidades vendidas · solo lectura. */
   if (p.status === "sold-out")   return { label: "Vendida",  variant: "danger" };
   if (p.status === "incomplete") return { label: "Borrador", variant: "muted" };
   if (p.status === "inactive")   return { label: "Borrador", variant: "muted" }; // legacy
   if (p.status === "active") {
-    /* "Publicada" requiere ≥1 agencia colaborando · si nadie la ha
-     *  recibido todavía, sigue siendo "Activa" aunque canShare=true. */
-    const sharedWithAtLeastOne = p.canShareWithAgencies !== false
-      && countAgenciesForPromotion(p.id) > 0;
-    if (sharedWithAtLeastOne) return { label: "Publicada", variant: "success" };
-    return { label: "Activa", variant: "warning" };
+    /* Si tiene campos obligatorios pendientes · NO es realmente activa
+     *  · la tratamos como borrador a nivel visual para que sea coherente
+     *  con el detail page (banner "Debes rellenar X campos
+     *  obligatorios"). */
+    const missing = getMissingForPromotion(p);
+    if (missing.length > 0) return { label: "Borrador", variant: "muted" };
+    return { label: "Activa", variant: "success" };
   }
   return { label: "Borrador", variant: "muted" };
 }
@@ -304,8 +307,11 @@ type LastUnitDetail = {
   orientation: string;
 };
 
-function getAvailableData(promotionId: string) {
-  const units = unitsByPromotion[promotionId];
+function getAvailableData(
+  promotionId: string,
+  unitsMap: Record<string, Array<{ status: string; bedrooms: number; price: number; type: string; block: string; floor: number; door: string; orientation: string }>>,
+) {
+  const units = unitsMap[promotionId];
   if (!units) return { typologies: [], units: [], lastUnit: null as LastUnitDetail | null };
 
   const available = units.filter((u) => u.status === "available");
@@ -381,6 +387,15 @@ export default function Promociones() {
   const confirm = useConfirm();
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
+
+  /* Source of truth · `seedHydrator` muta in-place los arrays seed
+   *  con los datos vivos de Supabase (preservando campos no migrados
+   *  del seed). Aquí solo nos suscribimos al evento para forzar
+   *  re-render cuando llegan datos. */
+  const [, setHydrationTick] = useState(0);
+  useEffect(() => {
+    return subscribeToSeedHydrated(() => setHydrationTick((t) => t + 1));
+  }, []);
 
   // Filtros de gestión (específicos del promotor)
   const [activityFilter, setActivityFilter] = useState<string[]>([]);
@@ -676,7 +691,11 @@ export default function Promociones() {
    *  evita ruido visual cuando todo está completo. Mismo principio
    *  para "Vendidas". */
   const hasDraft = useMemo(
-    () => allPromotions.some((p) => p.status === "incomplete" || p.status === "inactive"),
+    () => allPromotions.some((p) =>
+      p.status === "incomplete"
+      || p.status === "inactive"
+      || (p.status === "active" && getMissingForPromotion(p).length > 0)
+    ),
     [allPromotions],
   );
   const hasSoldOut = useMemo(
@@ -701,11 +720,11 @@ export default function Promociones() {
       if (hasSoldOut) opts.push({ key: "sold-out", label: "Vendidas", mobile: true });
       return opts;
     }
-    /* Developer · orden: Todas → Activas → Publicadas → Borrador →
-     *  Vendidas. Borrador y Vendidas al final · son estados terminales
-     *  o pre-trabajo · el flujo principal son Activas y Publicadas. */
-    opts.push({ key: "active",     label: "Activas",    mobile: true });
-    opts.push({ key: "published",  label: "Publicadas", mobile: true });
+    /* Developer · orden: Todas → Activas → Borrador → Vendidas.
+     *  Modelo simplificado · "Publicada" eliminada · todo active es
+     *  "Activa". Borrador y Vendidas al final · estados pre-trabajo
+     *  o terminales. */
+    opts.push({ key: "active",     label: "Activas",  mobile: true });
     if (hasDraft)   opts.push({ key: "draft",    label: "Borrador", mobile: true });
     if (hasSoldOut) opts.push({ key: "sold-out", label: "Vendidas", mobile: true });
     return opts;
@@ -761,32 +780,77 @@ export default function Promociones() {
     const q = search.toLowerCase().trim();
     return allPromotions.filter(p => {
       /* Tabs (modelo 2026-05-01):
-       *  · draft     · incomplete / inactive (legacy).
-       *  · active    · active + (canShare=false O 0 agencias colaborando).
-       *  · published · active + canShare!=false + ≥1 agencia colaborando.
+       *  · draft     · incomplete / inactive (legacy) · O active con
+       *                campos obligatorios pendientes (incongruencia
+       *                heredada del seed · se trata como borrador para
+       *                ser coherente con el detail page).
+       *  · active    · status="active" Y sin missing fields.
+       *  · published · alias legacy de active.
        *  · sold-out  · sold-out.
        *  · all       · sin filtro. */
+      const incompleteByMissing = p.status === "active"
+        && getMissingForPromotion(p).length > 0;
       if (statusFilter === "draft") {
-        if (p.status !== "incomplete" && p.status !== "inactive") return false;
-      } else if (statusFilter === "active") {
-        if (p.status !== "active") return false;
-        const shared = (p as DevPromotion).canShareWithAgencies !== false
-          && countAgenciesForPromotion(p.id) > 0;
-        if (shared) return false; // está publicada · no es "activa pura"
-      } else if (statusFilter === "published") {
-        if (p.status !== "active") return false;
-        if ((p as DevPromotion).canShareWithAgencies === false) return false;
-        if (countAgenciesForPromotion(p.id) === 0) return false; // sin agencias = no publicada
+        if (p.status !== "incomplete" && p.status !== "inactive" && !incompleteByMissing) return false;
+      } else if (statusFilter === "active" || statusFilter === "published") {
+        if (p.status !== "active" || incompleteByMissing) return false;
       } else if (statusFilter === "sold-out") {
         if (p.status !== "sold-out") return false;
       }
 
-      // Búsqueda textual (nombre, ubicación, código, developer)
+      /* Búsqueda textual extendida · busca contra:
+       *  · Nombre de promoción (p.name)
+       *  · Ubicación (p.location)
+       *  · Referencia de promoción (p.code · "PR44444")
+       *  · Nombre de developer/comercializador
+       *  · CIF / NIF del promotor (Empresa.cif)
+       *  · ID interno de organization (developer-default, prom-1, ag-1)
+       *  · Public ref de organization (ID284615 · IDXXXXXX)
+       *  · Email de la empresa
+       *  · Email de cualquier miembro del workspace
+       *  · Referencia de cualquier unidad de la promoción */
       if (q) {
+        const ownerOrgId = (p as DevPromotion).ownerOrganizationId ?? "developer-default";
+        const ownerEmpresa = loadEmpresaForOrg(ownerOrgId);
+        const ownerSeed = promotores.find((x) => x.id === ownerOrgId);
+        const ownerName = (ownerEmpresa.nombreComercial?.trim()
+          || ownerEmpresa.razonSocial?.trim()
+          || ownerSeed?.name
+          || p.developer
+          || "").toLowerCase();
+        const cif = (ownerEmpresa.cif ?? "").toLowerCase();
+        const orgEmail = (ownerEmpresa.email ?? "").toLowerCase();
+        const publicRef = (ownerEmpresa.publicRef ?? ownerSeed?.publicRef ?? "").toLowerCase();
+        const orgIdLc = ownerOrgId.toLowerCase();
+
+        /* Emails de los miembros del workspace dueño · cruza
+         *  TEAM_MEMBERS (workspace developer) y mockUsers (multi-tenant). */
+        const memberEmails: string[] = [];
+        if (ownerOrgId === "developer-default") {
+          for (const m of TEAM_MEMBERS) memberEmails.push(m.email.toLowerCase());
+        }
+        for (const u of mockUsers) {
+          if (u.agencyId === ownerOrgId
+              || (u.accountType === "developer" && ownerOrgId === "developer-default")) {
+            memberEmails.push(u.email.toLowerCase());
+          }
+        }
+
+        /* Refs de unidades · solo importan si la query tiene formato
+         *  de referencia (no buscar por todas en cada keystroke). */
+        const units = unitsByPromotion[p.id] ?? [];
+        const unitRefs = units.map((u) => u.ref?.toLowerCase() ?? "").filter(Boolean);
+
         const hay = p.name.toLowerCase().includes(q)
           || p.location.toLowerCase().includes(q)
           || p.code.toLowerCase().includes(q)
-          || (p.developer?.toLowerCase().includes(q) ?? false);
+          || ownerName.includes(q)
+          || (cif && cif.includes(q))
+          || orgIdLc.includes(q)
+          || (publicRef && publicRef.includes(q))
+          || (orgEmail && orgEmail.includes(q))
+          || memberEmails.some((e) => e.includes(q))
+          || unitRefs.some((r) => r.includes(q));
         if (!hay) return false;
       }
 
@@ -1080,7 +1144,7 @@ export default function Promociones() {
                 : liveStats.badge === "last-units" ? "Últimas unidades"
                 : null;
               const status = statusTag(p);
-              const { typologies, units: availableUnits, lastUnit } = getAvailableData(p.id);
+              const { typologies, units: availableUnits, lastUnit } = getAvailableData(p.id, unitsByPromotion);
               const trending = isTrending(p);
               const hasMissing = p.missingSteps && p.missingSteps.length > 0;
 
@@ -1089,7 +1153,7 @@ export default function Promociones() {
               // promoción. En incompletas los bloques se pintan con borde
               // rojo (status="incomplete" + missingSteps) · el usuario
               // puede completar cada campo desde ahí.
-              const navigateTarget = () => navigate(`/promociones/${encodeURIComponent(p.code || p.id)}`);
+              const navigateTarget = () => navigate(promotionHref(p));
 
               return (
                 <article
@@ -1106,7 +1170,10 @@ export default function Promociones() {
                       : "border-border"
                   )}
                 >
-                  {/* Image */}
+                  {/* Image · gradient overlay + price superpuesto en
+                    * la esquina inferior izquierda (libera espacio en
+                    * el contenido). En desktop el bloque image ocupa
+                    * un panel lateral · misma técnica de superposición. */}
                   <div className="relative w-full xl:w-[580px] aspect-[4/3] xl:aspect-auto xl:h-[384px] shrink-0 overflow-hidden bg-muted">
                     {p.image ? (
                       <>
@@ -1116,6 +1183,25 @@ export default function Promociones() {
                           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
                           loading="lazy"
                         />
+                        {/* Degradado + precio · SOLO móvil/tablet
+                          * (<xl). En desktop el precio vuelve a su
+                          * posición debajo del contenido. */}
+                        <div className="xl:hidden pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
+                        <div className="xl:hidden absolute bottom-3 left-3 right-3 flex items-end justify-between gap-2">
+                          <p className="text-white text-lg sm:text-xl font-semibold tracking-tight drop-shadow-md">
+                            {lastUnit ? formatPrice(lastUnit.price) : (
+                              <>
+                                {formatPrice(p.priceMin)}
+                                {p.priceMax > p.priceMin && (
+                                  <>
+                                    <span className="text-white/80"> — </span>
+                                    {formatPrice(p.priceMax)}
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </p>
+                        </div>
                         {badgeLabel && (
                           <Tag variant="overlay" size="sm" shape="pill" className="absolute top-3 left-3 shadow-soft">
                             {badgeLabel}
@@ -1189,19 +1275,58 @@ export default function Promociones() {
                       )}
                     </div>
 
-                    {/* Name + developer + delivery */}
-                    <h3 className="text-lg lg:text-base font-bold text-foreground leading-snug mb-1">
-                      {p.name}
-                    </h3>
-                    <div className="flex flex-wrap items-center gap-x-2 text-sm xl:text-xs text-muted-foreground mb-2 lg:mb-3">
-                      {(() => { const n = getPromoterDisplayName(p); return n ? <span>{n}</span> : null; })()}
-                      {p.delivery && (
-                        <>
-                          <span className="text-border">·</span>
-                          <span>Entrega {p.delivery}</span>
-                        </>
-                      )}
-                    </div>
+                    {/* Avatar promotor (grande · cubre 2 líneas) +
+                      * nombre promoción + (promotor · entrega).
+                      * Logo · prioridad:
+                      *   1. logoUrl del Empresa real (Supabase via
+                      *      `loadEmpresaForOrg`) · refleja lo que el
+                      *      promotor edita en /empresa.
+                      *   2. resolveDeveloperLogo() · directorio
+                      *      hardcoded (clearbit caído desde 2024 · no
+                      *      hace ya casi nada útil aquí).
+                      *   3. dicebear initials · fallback final. */}
+                    {(() => {
+                      const promoterName = getPromoterDisplayName(p) ?? p.developer ?? "";
+                      const ownerId = (p as DevPromotion).ownerOrganizationId ?? "developer-default";
+                      const ownerEmpresa = loadEmpresaForOrg(ownerId);
+                      const seedLogo = ownerId.startsWith("prom-")
+                        ? promotores.find((x) => x.id === ownerId)?.logo
+                        : agencies.find((a) => a.id === ownerId)?.logo;
+                      const logoUrl = ownerEmpresa.logoUrl?.trim()
+                        || seedLogo
+                        || (promoterName
+                            ? `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(promoterName)}&backgroundColor=1D74E7&textColor=ffffff`
+                            : null);
+                      return (
+                        <div className="flex items-start gap-3 mb-2 lg:mb-3">
+                          {logoUrl && (
+                            <img
+                              src={logoUrl}
+                              alt={promoterName}
+                              className="h-11 w-11 rounded-full object-cover bg-muted shrink-0 border border-border/40 mt-0.5"
+                              loading="lazy"
+                              onError={(e) => {
+                                /* Si el logo elegido falla (URL muerta, CORS,
+                                 *  etc.), caemos al dicebear de iniciales. */
+                                const img = e.currentTarget;
+                                const fallback = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(promoterName || "?")}&backgroundColor=1D74E7&textColor=ffffff`;
+                                if (img.src !== fallback) img.src = fallback;
+                              }}
+                            />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <h3 className="text-lg lg:text-base font-bold text-foreground leading-snug truncate mb-0.5">
+                              {p.name}
+                            </h3>
+                            <div className="flex flex-wrap items-center gap-x-2 text-sm xl:text-xs text-muted-foreground">
+                              {promoterName && <span>{promoterName}</span>}
+                              {promoterName && p.delivery && <span className="text-border">·</span>}
+                              {p.delivery && <span>Entrega {p.delivery}</span>}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Solo developer · pasos pendientes informativos. El
                      *  aviso "Sin publicar" / "Sin compartir" se muestra
@@ -1212,17 +1337,20 @@ export default function Promociones() {
                         <AlertTriangle className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" strokeWidth={1.5} />
                         <div>
                           <p className="text-sm xl:text-xs font-semibold text-foreground mb-0.5">
-                            Pasos pendientes para publicar
+                            Pasos pendientes para activar
                           </p>
                           <p className="text-sm xl:text-xs text-muted-foreground">
-                            {p.missingSteps!.join(" · ")} · las agencias no pueden ver esta promoción hasta que la publiques.
+                            {p.missingSteps!.join(" · ")} · las agencias no pueden ver esta promoción hasta que la actives.
                           </p>
                         </div>
                       </div>
                     )}
 
-                    {/* Metrics row · counts en vivo desde unidades reales */}
-                    <div className="flex items-center gap-5 xl:gap-6 mb-2 xl:mb-3">
+                    {/* Metrics row · counts en vivo desde unidades reales.
+                      * Layout · Disponibles · Comisión · Obra con
+                      * separación generosa para no juntar todo.
+                      * Mobile gap-6 · sm gap-8 · xl gap-10. */}
+                    <div className="flex items-center gap-6 sm:gap-8 xl:gap-10 mb-3 xl:mb-4">
                       <Metric label="Disponibles" value={`${liveStats.availableUnits} / ${liveStats.totalUnits}`} />
                       <Metric label="Comisión" value={`${p.commission}%`} />
                       {p.constructionProgress !== undefined && (
@@ -1247,8 +1375,9 @@ export default function Promociones() {
                       );
                     })()}
 
-                    {/* Price */}
-                    <p className="text-lg font-bold text-foreground tracking-tight mb-1 xl:mb-3">
+                    {/* Precio · solo desktop (xl+) · en móvil/tablet
+                      * está sobre la imagen con degradado. */}
+                    <p className="hidden xl:block text-lg font-bold text-foreground tracking-tight mb-3">
                       {lastUnit ? formatPrice(lastUnit.price) : (
                         <>
                           {formatPrice(p.priceMin)}
@@ -1311,33 +1440,70 @@ export default function Promociones() {
                     {/* Footer */}
                     <div className="mt-auto pt-2 xl:pt-3 border-t border-border/30 flex items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground/60 min-w-0">
-                        {(() => {
-                          /* Developer · footer warning según estado:
-                           *    Borrador → "Completa para activar"
-                           *    Activa (sin agencias o sharing off) →
-                           *           "Comparte para publicar"
-                           *    Publicada / Vendida → contador real */
+                        {/* Lado AGENCIA · privacidad cross-tenant ·
+                          * NO mostramos el contador de agencias compartiendo
+                          * la promoción (es info privada del promotor · una
+                          * agencia no debe ver con quién más colabora). */}
+                        {!isAgencyUser && (() => {
+                          /* Developer · footer según estado:
+                           *    Borrador (incompleto / active+missing)
+                           *      → "Activa para compartir" (warning)
+                           *    No visible (canShare=false)
+                           *      → "No visible para colaboradores" (muted)
+                           *    Visible + 0 agencias
+                           *      → "Aún no compartido · 0 agencias" (muted)
+                           *    Visible + ≥1 agencia / Vendida
+                           *      → contador real */
                           const isDraft = !isAgencyUser
-                            && (p.status === "incomplete" || p.status === "inactive");
+                            && (p.status === "incomplete"
+                                || p.status === "inactive"
+                                || (p.status === "active" && getMissingForPromotion(p).length > 0));
                           const realAgenciesNow = countAgenciesForPromotion(p.id);
-                          const isActiveNotShared = !isAgencyUser
+                          const isNoVisible = !isAgencyUser
                             && p.status === "active"
-                            && (p.canShareWithAgencies === false || realAgenciesNow === 0);
-                          if (isDraft || isActiveNotShared) {
-                            const label = isDraft
-                              ? "Completa para activar"
-                              : "Publica para compartir";
-                            const tooltip = isDraft
-                              ? "Faltan datos · complétalos y actívala. Después publica la promoción para compartirla con agencias."
-                              : "Esta promoción está activa para uso interno. Publícala para que las agencias colaboradoras puedan verla y registrar clientes.";
+                            && p.canShareWithAgencies === false;
+                          const isVisibleSinCompartir = !isAgencyUser
+                            && p.status === "active"
+                            && p.canShareWithAgencies !== false
+                            && realAgenciesNow === 0;
+
+                          if (isDraft) {
                             return (
-                              <span className="flex items-center gap-1 text-warning" title={tooltip}>
+                              <span
+                                className="flex items-center gap-1 text-warning"
+                                title="Faltan datos · activa para compartir con agencias."
+                              >
                                 <AlertTriangle className="h-3.5 w-3.5 xl:h-3 xl:w-3" strokeWidth={2.5} />
-                                <span className="font-semibold">{label}</span>
+                                <span className="font-semibold">Activa para compartir</span>
                               </span>
                             );
                           }
-                          const realAgencies = countAgenciesForPromotion(p.id);
+
+                          if (isNoVisible) {
+                            return (
+                              <span
+                                className="flex items-center gap-1 text-muted-foreground/60"
+                                title="Las agencias no pueden ver esta promoción. Cámbiala a Visible desde la ficha."
+                              >
+                                <EyeOff className="h-3.5 w-3.5 xl:h-3 xl:w-3" />
+                                <span>No visible para colaboradores</span>
+                              </span>
+                            );
+                          }
+
+                          if (isVisibleSinCompartir) {
+                            return (
+                              <span
+                                className="flex items-center gap-1 text-muted-foreground/60"
+                                title="La promoción es visible pero ninguna agencia la tiene en su cartera todavía. Invítalas desde la ficha."
+                              >
+                                <Users className="h-3.5 w-3.5 xl:h-3 xl:w-3" />
+                                <span>Aún no compartido · 0 agencias</span>
+                              </span>
+                            );
+                          }
+
+                          const realAgencies = realAgenciesNow;
                           return (
                             <span className={cn(
                               "flex items-center gap-1",
@@ -1370,7 +1536,7 @@ export default function Promociones() {
                             title={
                               !shareEnabled
                                 ? (p.status !== "active"
-                                    ? "Publica la promoción para compartirla"
+                                    ? "Activa la promoción para compartirla"
                                     : !sharingEnabled
                                       ? "Activa compartir en Comisiones"
                                       : "Completa los pasos pendientes")
@@ -2031,10 +2197,10 @@ function PromoCardCompact({ promo: p, isTrending, isAgencyUser }: { promo: DevPr
               && p.status === "active"
               && (p.canShareWithAgencies === false || realAgenciesNow === 0);
             if (isDraft || isActiveNotShared) {
-              const label = isDraft ? "Borrador" : "Sin publicar";
+              const label = isDraft ? "Borrador" : "Sin compartir";
               const tooltip = isDraft
                 ? "Faltan datos · completa la promoción y actívala"
-                : "Publica la promoción para compartirla con agencias";
+                : "Activa compartir con agencias para empezar a recibir registros";
               return (
                 <span className="inline-flex items-center gap-1 text-warning" title={tooltip}>
                   <AlertTriangle className="h-3 w-3" strokeWidth={2.5} />
@@ -2061,9 +2227,9 @@ function PromoCardCompact({ promo: p, isTrending, isAgencyUser }: { promo: DevPr
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value, className }: { label: string; value: string; className?: string }) {
   return (
-    <div>
+    <div className={className}>
       <p className="text-xs lg:text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">{label}</p>
       <p className="text-sm font-semibold text-foreground">{value}</p>
     </div>

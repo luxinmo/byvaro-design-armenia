@@ -160,10 +160,10 @@ export function RevisionStep({ state, onEditStep }: Props) {
             <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" strokeWidth={1.5} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-foreground">
-                Faltan {missing.length} requisito{missing.length > 1 ? "s" : ""} para publicar
+                Faltan {missing.length} requisito{missing.length > 1 ? "s" : ""} para activar
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Revisa la checklist lateral para completarlos. El botón "Publicar" se habilitará cuando estén todos resueltos.
+                Revisa la checklist lateral para completarlos. El botón "Activar" se habilitará cuando estén todos resueltos.
               </p>
             </div>
           </div>
@@ -172,9 +172,9 @@ export function RevisionStep({ state, onEditStep }: Props) {
         <div className="rounded-xl border border-primary/30 bg-primary/5 px-5 py-4 flex items-start gap-3">
           <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" strokeWidth={1.8} />
           <div>
-            <p className="text-sm font-semibold text-foreground">Todo listo para publicar</p>
+            <p className="text-sm font-semibold text-foreground">Todo listo para activar</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Cumples los requisitos. Pulsa <span className="font-medium text-foreground">Publicar</span> abajo a la derecha para lanzar la promoción.
+              Cumples los requisitos. Pulsa <span className="font-medium text-foreground">Activar</span> abajo a la derecha para lanzar la promoción.
             </p>
           </div>
         </div>
@@ -198,12 +198,12 @@ export function RevisionStep({ state, onEditStep }: Props) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-foreground">
-            {percent === 100 ? "¡Todo listo!" : "Casi listo para publicar"}
+            {percent === 100 ? "¡Todo listo!" : "Casi listo para activar"}
           </p>
           <p className="text-xs text-muted-foreground">
             {percent === 100
-              ? "Puedes publicar la promoción cuando quieras. Podrás seguir editando después."
-              : `Faltan ${sections.length - completedCount} secciones por revisar antes de publicar.`}
+              ? "Puedes activar la promoción cuando quieras. Podrás seguir editando después."
+              : `Faltan ${sections.length - completedCount} secciones por revisar antes de activar.`}
           </p>
         </div>
       </div>
@@ -342,10 +342,10 @@ export function RevisionStep({ state, onEditStep }: Props) {
         </div>
       </SectionCard>
 
-      {/* ═════ Lo que se publicará ═════ */}
+      {/* ═════ Lo que se activará ═════ */}
       <div className="rounded-xl border border-primary/30 bg-primary/5 px-5 py-4">
         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary mb-2">
-          Lo que se publicará
+          Lo que se activará
         </p>
         <ul className="flex flex-col gap-1.5 text-xs text-foreground">
           <li className="flex items-start gap-2">
@@ -374,7 +374,7 @@ export function RevisionStep({ state, onEditStep }: Props) {
           </li>
         </ul>
         <p className="text-[11px] text-muted-foreground mt-3 italic">
-          Pulsa <span className="font-medium text-foreground">Publicar</span> abajo a la derecha para lanzar la promoción.
+          Pulsa <span className="font-medium text-foreground">Activar</span> abajo a la derecha para lanzar la promoción.
         </p>
       </div>
     </div>

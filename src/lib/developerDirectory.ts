@@ -17,23 +17,26 @@ export interface DeveloperDirectoryEntry {
   id?: string;
   /** Nombre comercial canónico · sirve de match contra `p.developer`. */
   name: string;
-  /** URL del logo · idealmente cuadrado / círculo, mínimo 64x64. */
-  logoUrl: string;
+  /** URL del logo · opcional. Cuando undefined, `resolveDeveloperLogo`
+   *  cae a `getDeveloperAvatar(name)` (dicebear). En backend este
+   *  campo lo lee de `organization_profiles.logo_url`. */
+  logoUrl?: string;
 }
 
-/* Logos REALES de los promotores presentes en el seed de marketplace.
- * Cuando un promotor no está aquí caemos a un avatar generado con
- * `getDeveloperAvatar(name)`. Los URLs de Clearbit están públicos · si
- * algún logo no carga se ve el fallback determinista. */
+/* Directorio mínimo · solo `id` y `name`. El logo se resuelve en
+ * runtime contra `organization_profiles.logo_url` (Supabase) cuando
+ * la org está en DB · si no, se usa `getDeveloperAvatar(name)` que
+ * genera un avatar determinista con dicebear. NUNCA usamos servicios
+ * de logo externos (clearbit.com está dead desde 2024). */
 export const DEVELOPER_DIRECTORY: DeveloperDirectoryEntry[] = [
-  { id: "developer-default", name: "Luxinmo",            logoUrl: "https://logo.clearbit.com/luxinmo.com" },
-  {                          name: "Kronos Homes",       logoUrl: "https://logo.clearbit.com/kronoshomes.com" },
-  {                          name: "Metrovacesa",        logoUrl: "https://logo.clearbit.com/metrovacesa.com" },
-  {                          name: "Taylor Wimpey",      logoUrl: "https://logo.clearbit.com/taylorwimpey.es" },
-  {                          name: "Neinor Homes",       logoUrl: "https://logo.clearbit.com/neinorhomes.com" },
-  {                          name: "Aedas Homes",        logoUrl: "https://logo.clearbit.com/aedashomes.com" },
-  {                          name: "Acciona Inmobiliaria", logoUrl: "https://logo.clearbit.com/acciona-inmobiliaria.com" },
-  {                          name: "Habitat Inmobiliaria", logoUrl: "https://logo.clearbit.com/habitatinmobiliaria.com" },
+  { id: "developer-default", name: "Luxinmo" },
+  {                          name: "Kronos Homes" },
+  {                          name: "Metrovacesa" },
+  {                          name: "Taylor Wimpey" },
+  {                          name: "Neinor Homes" },
+  {                          name: "Aedas Homes" },
+  {                          name: "Acciona Inmobiliaria" },
+  {                          name: "Habitat Inmobiliaria" },
 ];
 
 /* Avatar fallback determinista por nombre · dicebear initials. Garantiza
@@ -49,12 +52,13 @@ export function getDeveloperAvatar(name: string): string {
 export function resolveDeveloperLogo(opts: { id?: string; name?: string }): string {
   if (opts.id) {
     const byId = DEVELOPER_DIRECTORY.find((d) => d.id === opts.id);
-    if (byId) return byId.logoUrl;
+    if (byId?.logoUrl) return byId.logoUrl;
+    if (byId) return getDeveloperAvatar(byId.name);
   }
   if (opts.name) {
     const q = opts.name.trim().toLowerCase();
     const byName = DEVELOPER_DIRECTORY.find((d) => d.name.toLowerCase() === q);
-    if (byName) return byName.logoUrl;
+    if (byName?.logoUrl) return byName.logoUrl;
     return getDeveloperAvatar(opts.name);
   }
   return getDeveloperAvatar("?");

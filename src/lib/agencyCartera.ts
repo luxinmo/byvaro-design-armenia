@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 import type { Agency } from "@/data/agencies";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { promotions } from "@/data/promotions";
@@ -43,7 +44,7 @@ function shareablePromoIds(): Set<string> {
 function readCache(): Store {
   if (typeof window === "undefined") return {};
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = memCache.getItem(KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Store;
     const shareable = shareablePromoIds();
@@ -57,13 +58,13 @@ function readCache(): Store {
         parsed[agencyId] = filtered;
       }
     }
-    if (dirty) window.localStorage.setItem(KEY, JSON.stringify(parsed));
+    if (dirty) memCache.setItem(KEY, JSON.stringify(parsed));
     return parsed;
   } catch { return {}; }
 }
 function writeCache(store: Store) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY, JSON.stringify(store));
+  memCache.setItem(KEY, JSON.stringify(store));
   window.dispatchEvent(new CustomEvent(CHANGE));
 }
 

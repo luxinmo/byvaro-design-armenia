@@ -28,6 +28,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 
 const STORAGE_KEY = "byvaro.agency.collab-requests.v1";
 const EVENT = "byvaro:collab-requests-changed";
@@ -56,7 +57,7 @@ export interface SolicitudColaboracion {
 
 function read(): SolicitudColaboracion[] {
   try {
-    const raw = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
+    const raw = typeof window !== "undefined" ? memCache.getItem(STORAGE_KEY) : null;
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? (parsed as SolicitudColaboracion[]) : [];
@@ -67,7 +68,7 @@ function read(): SolicitudColaboracion[] {
 
 function write(list: SolicitudColaboracion[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  memCache.setItem(STORAGE_KEY, JSON.stringify(list));
   window.dispatchEvent(new CustomEvent(EVENT));
 }
 

@@ -24,6 +24,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 
 export type AccountType = "developer" | "agency";
 
@@ -133,8 +134,8 @@ export async function logout() {
   sessionStorage.removeItem(DEVELOPER_EMAIL_KEY);
   sessionStorage.removeItem(AGENCY_EMAIL_KEY);
   if (typeof window !== "undefined") {
-    localStorage.removeItem("byvaro.user.profile.v1");
-    localStorage.removeItem("byvaro.user.phones.v1");
+    memCache.removeItem("byvaro.user.profile.v1");
+    memCache.removeItem("byvaro.user.phones.v1");
     window.dispatchEvent(new Event("byvaro:profile-change"));
     /* Lazy-import para evitar ciclo · supabaseClient depende de env.
      * `signOut()` invalida la sesión + limpia su storage propio

@@ -17,6 +17,7 @@
  */
 
 import type { ContactTag } from "./types";
+import { memCache } from "@/lib/memCache";
 import { DEFAULT_ORG_TAGS } from "./tags";
 
 const ORG_KEY = "byvaro.contactTags.organization.v1";
@@ -27,7 +28,7 @@ const PERSONAL_KEY_PREFIX = "byvaro.contactTags.personal.";
 export function loadOrgTags(): ContactTag[] {
   if (typeof window === "undefined") return DEFAULT_ORG_TAGS;
   try {
-    const raw = window.localStorage.getItem(ORG_KEY);
+    const raw = memCache.getItem(ORG_KEY);
     if (!raw) return DEFAULT_ORG_TAGS;
     const parsed = JSON.parse(raw) as ContactTag[];
     return Array.isArray(parsed) ? parsed : DEFAULT_ORG_TAGS;
@@ -38,7 +39,7 @@ export function loadOrgTags(): ContactTag[] {
 
 export function saveOrgTags(tags: ContactTag[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(ORG_KEY, JSON.stringify(tags));
+  memCache.setItem(ORG_KEY, JSON.stringify(tags));
   void (async () => {
     const { mergeOrgMetadata } = await import("@/lib/orgMetadataSync");
     await mergeOrgMetadata({ contactTags: tags });
@@ -50,7 +51,7 @@ export function saveOrgTags(tags: ContactTag[]) {
 export function loadPersonalTags(userId: string): ContactTag[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(PERSONAL_KEY_PREFIX + userId);
+    const raw = memCache.getItem(PERSONAL_KEY_PREFIX + userId);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as ContactTag[];
     return Array.isArray(parsed) ? parsed : [];
@@ -61,7 +62,7 @@ export function loadPersonalTags(userId: string): ContactTag[] {
 
 export function savePersonalTags(userId: string, tags: ContactTag[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(PERSONAL_KEY_PREFIX + userId, JSON.stringify(tags));
+  memCache.setItem(PERSONAL_KEY_PREFIX + userId, JSON.stringify(tags));
 }
 
 /* ── Helpers comunes ── */

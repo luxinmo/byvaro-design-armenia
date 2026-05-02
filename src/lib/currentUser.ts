@@ -13,6 +13,7 @@
  */
 
 import { useMemo } from "react";
+import { memCache } from "./memCache";
 import { agencies } from "@/data/agencies";
 import { mockUsers } from "@/data/mockUsers";
 import { useAccountType, type AccountType } from "./accountType";
@@ -65,7 +66,7 @@ function buildAgencyUser(agencyId: string, agencyEmail?: string): CurrentUser {
   let a = agencies.find((x) => x.id === agencyId);
   if (!a && typeof window !== "undefined") {
     try {
-      const raw = window.localStorage.getItem("byvaro.agencies.created.v1");
+      const raw = memCache.getItem("byvaro.agencies.created.v1");
       if (raw) {
         const arr = JSON.parse(raw);
         if (Array.isArray(arr)) {
@@ -86,7 +87,7 @@ function buildAgencyUser(agencyId: string, agencyEmail?: string): CurrentUser {
     : undefined;
   if (!mock && agencyEmail && typeof window !== "undefined") {
     try {
-      const raw = window.localStorage.getItem("byvaro.users.created.v1");
+      const raw = memCache.getItem("byvaro.users.created.v1");
       if (raw) {
         const arr = JSON.parse(raw);
         if (Array.isArray(arr)) {

@@ -10,6 +10,7 @@
  */
 
 import type { Contact } from "./types";
+import { memCache } from "@/lib/memCache";
 
 const KEY = "byvaro.contacts.imported.v1";
 
@@ -19,7 +20,7 @@ export type ImportedRow = Record<string, string>;
 export function loadImportedContacts(): Contact[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = memCache.getItem(KEY);
     if (!raw) return [];
     return JSON.parse(raw) as Contact[];
   } catch {
@@ -29,12 +30,12 @@ export function loadImportedContacts(): Contact[] {
 
 export function saveImportedContacts(arr: Contact[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY, JSON.stringify(arr));
+  memCache.setItem(KEY, JSON.stringify(arr));
 }
 
 export function clearImportedContacts() {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(KEY);
+  memCache.removeItem(KEY);
 }
 
 /**

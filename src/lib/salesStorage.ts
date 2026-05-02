@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 import { sales as SEED_SALES, type Venta } from "@/data/sales";
 import { promotions } from "@/data/promotions";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
@@ -37,7 +38,7 @@ const EVENT = "byvaro:sales-change";
 function loadOverrides(): Record<string, Venta> {
   if (typeof window === "undefined") return {};
   try {
-    const raw = window.localStorage.getItem(KEY_OVERRIDES);
+    const raw = memCache.getItem(KEY_OVERRIDES);
     return raw ? (JSON.parse(raw) as Record<string, Venta>) : {};
   } catch { return {}; }
 }
@@ -45,7 +46,7 @@ function loadOverrides(): Record<string, Venta> {
 function loadCreated(): Venta[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(KEY_CREATED);
+    const raw = memCache.getItem(KEY_CREATED);
     return raw ? (JSON.parse(raw) as Venta[]) : [];
   } catch { return []; }
 }
@@ -53,7 +54,7 @@ function loadCreated(): Venta[] {
 function loadDeletedIds(): Set<string> {
   if (typeof window === "undefined") return new Set();
   try {
-    const raw = window.localStorage.getItem(KEY_DELETED);
+    const raw = memCache.getItem(KEY_DELETED);
     return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
   } catch { return new Set(); }
 }
@@ -80,19 +81,19 @@ export function getAllSales(): Venta[] {
 
 function saveOverrides(map: Record<string, Venta>) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY_OVERRIDES, JSON.stringify(map));
+  memCache.setItem(KEY_OVERRIDES, JSON.stringify(map));
   window.dispatchEvent(new CustomEvent(EVENT));
 }
 
 function saveCreated(list: Venta[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY_CREATED, JSON.stringify(list));
+  memCache.setItem(KEY_CREATED, JSON.stringify(list));
   window.dispatchEvent(new CustomEvent(EVENT));
 }
 
 function saveDeleted(set: Set<string>) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY_DELETED, JSON.stringify(Array.from(set)));
+  memCache.setItem(KEY_DELETED, JSON.stringify(Array.from(set)));
   window.dispatchEvent(new CustomEvent(EVENT));
 }
 

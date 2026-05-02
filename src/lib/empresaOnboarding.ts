@@ -24,6 +24,7 @@
  */
 
 import { loadEmpresa } from "./empresa";
+import { memCache } from "./memCache";
 import type { CurrentUser } from "./currentUser";
 
 const STORAGE_KEY = "byvaro.empresa.onboarding.v1";
@@ -36,7 +37,7 @@ interface EmpresaOnboardingState {
 function read(): EmpresaOnboardingState {
   if (typeof window === "undefined") return {};
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = memCache.getItem(STORAGE_KEY);
     if (!raw) return {};
     return JSON.parse(raw) as EmpresaOnboardingState;
   } catch {
@@ -45,7 +46,7 @@ function read(): EmpresaOnboardingState {
 }
 
 function write(s: EmpresaOnboardingState) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+  memCache.setItem(STORAGE_KEY, JSON.stringify(s));
   window.dispatchEvent(new CustomEvent("byvaro:empresa-onboarding-changed"));
 }
 
@@ -81,7 +82,7 @@ export function deferEmpresaSetup(): void {
 /** Limpia el flag · cuando ya no hace falta (datos rellenos). */
 export function clearEmpresaOnboardingDefer(): void {
   if (typeof window === "undefined") return;
-  localStorage.removeItem(STORAGE_KEY);
+  memCache.removeItem(STORAGE_KEY);
   window.dispatchEvent(new CustomEvent("byvaro:empresa-onboarding-changed"));
 }
 

@@ -25,6 +25,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { memCache } from "./memCache";
 
 const STORAGE_KEY = "byvaro-favoritos-agencias";
 const EVENT = "byvaro:favoritos-agencias-changed";
@@ -35,7 +36,7 @@ const DEFAULT_FAVORITES = ["ag-1", "ag-3"];
 
 function loadAll(): Set<string> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = memCache.getItem(STORAGE_KEY);
     if (!raw) return new Set(DEFAULT_FAVORITES);
     const arr = JSON.parse(raw);
     return new Set(Array.isArray(arr) ? arr : DEFAULT_FAVORITES);
@@ -46,7 +47,7 @@ function loadAll(): Set<string> {
 
 function saveAll(ids: Set<string>) {
   /* Optimistic local · write-through a Supabase async. */
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(ids)));
+  memCache.setItem(STORAGE_KEY, JSON.stringify(Array.from(ids)));
   window.dispatchEvent(new CustomEvent(EVENT));
   void syncFavoritesToSupabase(ids);
 }
@@ -85,6 +86,29 @@ async function syncFavoritesToSupabase(ids: Set<string>) {
     }
   } catch (e) {
     console.warn("[favoriteAgencies] supabase sync skipped:", e);
+  }
+}
+
+/** Pull desde `user_favorites` (kind=agency) a localStorage. */
+export async function hydrateFavoriteAgenciesFromSupabase(): Promise<void> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data, error } = await supabase
+      .from("user_favorites")
+      .select("target_id")
+      .eq("user_id", user.id)
+      .eq("kind", "agency");
+    if (error || !data) return;
+    const ids = data.map((r) => r.target_id as string);
+    if (typeof window !== "undefined") {
+      memCache.setItem(STORAGE_KEY, JSON.stringify(ids));
+      window.dispatchEvent(new CustomEvent(EVENT));
+    }
+  } catch (e) {
+    console.warn("[favoriteAgencies] hydrate skipped:", e);
   }
 }
 

@@ -26,6 +26,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 import { useCurrentUser, currentWorkspaceKey } from "@/lib/currentUser";
 import type { CurrentUser } from "@/lib/currentUser";
 
@@ -216,7 +217,7 @@ function keyFor(workspaceKey: string): string {
 function readCache(workspaceKey: string): PlanState | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(keyFor(workspaceKey));
+    const raw = memCache.getItem(keyFor(workspaceKey));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PlanState;
     if (parsed.signupKind && parsed.agencyPack && parsed.promoterPack) return parsed;
@@ -226,7 +227,7 @@ function readCache(workspaceKey: string): PlanState | null {
 
 function writeCache(workspaceKey: string, state: PlanState): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(keyFor(workspaceKey), JSON.stringify(state));
+  memCache.setItem(keyFor(workspaceKey), JSON.stringify(state));
   window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: { workspaceKey } }));
 }
 

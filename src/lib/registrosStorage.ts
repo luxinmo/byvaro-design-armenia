@@ -19,6 +19,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 import { registros as SEED_REGISTROS, type Registro } from "@/data/records";
 import { generatePublicRef } from "@/lib/publicRef";
 import { findBestMatch } from "@/lib/matchScore";
@@ -29,7 +30,7 @@ const CHANGE_EVENT = "byvaro:registros-change";
 function read(): Registro[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = memCache.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Registro[];
     return Array.isArray(parsed) ? parsed : [];
@@ -39,7 +40,7 @@ function read(): Registro[] {
 }
 
 function write(list: Registro[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  memCache.setItem(STORAGE_KEY, JSON.stringify(list));
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
 

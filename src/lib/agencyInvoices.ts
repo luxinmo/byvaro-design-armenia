@@ -21,6 +21,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { memCache } from "./memCache";
 
 export type InvoiceDirection = "emitida" | "recibida";
 export type InvoiceOrigin    = "upload" | "generate";
@@ -64,13 +65,13 @@ const CHANGE_EVENT = "byvaro:agency-invoices-change";
 function readStore(): Invoice[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = memCache.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
 function writeStore(list: Invoice[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  memCache.setItem(STORAGE_KEY, JSON.stringify(list));
   window.dispatchEvent(new CustomEvent(CHANGE_EVENT));
   /* Write-through · upsert masivo a `agency_invoices`. Mock single-tenant:
    *  developer_organization_id = developer-default. Skip pre-auth. */

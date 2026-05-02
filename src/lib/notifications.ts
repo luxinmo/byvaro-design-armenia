@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 
 const STORAGE_KEY = "byvaro.notifications.v1";
 const CHANGE_EVENT = "byvaro:notifications-change";
@@ -63,7 +64,7 @@ export type Notification = {
 function read(): Notification[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = memCache.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Notification[];
     return Array.isArray(parsed) ? parsed : [];
@@ -73,7 +74,7 @@ function read(): Notification[] {
 }
 
 function write(list: Notification[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  memCache.setItem(STORAGE_KEY, JSON.stringify(list));
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
 

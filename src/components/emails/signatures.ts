@@ -1,3 +1,4 @@
+import { memCache } from "@/lib/memCache";
 /**
  * signatures.ts — Almacenamiento + helpers para firmas de email.
  *
@@ -95,9 +96,9 @@ export async function hydrateSignaturesFromSupabase(): Promise<EmailSignature[] 
       accountId: ((r.metadata as { accountId?: string })?.accountId) ?? null,
     }));
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sigs));
+      memCache.setItem(STORAGE_KEY, JSON.stringify(sigs));
       const def = sigs.find((s) => s.isDefault);
-      if (def) window.localStorage.setItem(DEFAULT_ID_KEY, def.id);
+      if (def) memCache.setItem(DEFAULT_ID_KEY, def.id);
     }
     return sigs;
   } catch (e) {
@@ -109,7 +110,7 @@ export async function hydrateSignaturesFromSupabase(): Promise<EmailSignature[] 
 export function loadSignatures(): EmailSignature[] {
   if (typeof window === "undefined") return DEFAULT_SIGNATURES;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = memCache.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_SIGNATURES;
     const parsed = JSON.parse(raw) as EmailSignature[];
     return Array.isArray(parsed) && parsed.length ? parsed : DEFAULT_SIGNATURES;
@@ -121,7 +122,7 @@ export function loadSignatures(): EmailSignature[] {
 /** Replace-all del set de firmas del usuario actual. */
 export function saveSignatures(list: EmailSignature[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  memCache.setItem(STORAGE_KEY, JSON.stringify(list));
   void (async () => {
     try {
       const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");
@@ -156,13 +157,13 @@ export function saveSignatures(list: EmailSignature[]) {
 
 export function getDefaultSignatureId(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(DEFAULT_ID_KEY);
+  return memCache.getItem(DEFAULT_ID_KEY);
 }
 
 export function setDefaultSignatureId(id: string | null) {
   if (typeof window === "undefined") return;
-  if (id) window.localStorage.setItem(DEFAULT_ID_KEY, id);
-  else window.localStorage.removeItem(DEFAULT_ID_KEY);
+  if (id) memCache.setItem(DEFAULT_ID_KEY, id);
+  else memCache.removeItem(DEFAULT_ID_KEY);
   void (async () => {
     try {
       const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");

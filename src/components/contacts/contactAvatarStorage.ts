@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "@/lib/memCache";
 
 const EVENT = "byvaro:contact-avatar-change";
 
@@ -20,7 +21,7 @@ function keyFor(contactId: string): string {
 export function getContactAvatar(contactId: string): string | null {
   if (typeof window === "undefined") return null;
   try {
-    return window.localStorage.getItem(keyFor(contactId));
+    return memCache.getItem(keyFor(contactId));
   } catch {
     return null;
   }
@@ -30,9 +31,9 @@ export function saveContactAvatar(contactId: string, dataUrl: string | null): vo
   if (typeof window === "undefined") return;
   const key = keyFor(contactId);
   if (dataUrl) {
-    window.localStorage.setItem(key, dataUrl);
+    memCache.setItem(key, dataUrl);
   } else {
-    window.localStorage.removeItem(key);
+    memCache.removeItem(key);
   }
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { contactId } }));
   /* Write-through · contacts.metadata.avatarUrl */

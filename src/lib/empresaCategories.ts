@@ -30,6 +30,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 import type { AccountType } from "./accountType";
 import { promotions } from "@/data/promotions";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
@@ -74,7 +75,7 @@ interface PackState {
 export function loadDeveloperPack(workspaceKey: string): PackState {
   if (typeof window === "undefined") return { enabled: false };
   try {
-    const raw = window.localStorage.getItem(packStorageKey(workspaceKey));
+    const raw = memCache.getItem(packStorageKey(workspaceKey));
     if (!raw) return { enabled: false };
     const parsed = JSON.parse(raw);
     return { enabled: !!parsed?.enabled, activatedAt: parsed?.activatedAt };
@@ -87,8 +88,51 @@ export function setDeveloperPackEnabled(workspaceKey: string, enabled: boolean):
   const next: PackState = enabled
     ? { enabled: true, activatedAt: Date.now() }
     : { enabled: false };
-  window.localStorage.setItem(packStorageKey(workspaceKey), JSON.stringify(next));
+  memCache.setItem(packStorageKey(workspaceKey), JSON.stringify(next));
   window.dispatchEvent(new CustomEvent(PACK_EVENT, { detail: { workspaceKey } }));
+  void syncDeveloperPackToSupabase(workspaceKey, next);
+}
+
+/* ── Write-through · org_settings.key=developer_pack. workspaceKey
+ *    formato "agency-<id>" o "developer-default" · derivamos orgId. */
+async function syncDeveloperPackToSupabase(workspaceKey: string, state: PackState) {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const orgId = workspaceKey.startsWith("agency-")
+      ? workspaceKey.slice("agency-".length)
+      : workspaceKey;
+    const { error } = await supabase.from("org_settings").upsert({
+      organization_id: orgId,
+      key: "developer_pack",
+      value: state as unknown as Record<string, unknown>,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "organization_id,key" });
+    if (error) console.warn("[empresaCategories:pack] sync:", error.message);
+  } catch (e) {
+    console.warn("[empresaCategories:pack] sync skipped:", e);
+  }
+}
+
+/** Pull packs activos desde DB · cachea en localStorage scoped. */
+export async function hydrateDeveloperPacksFromSupabase(): Promise<void> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { data, error } = await supabase.from("org_settings")
+      .select("organization_id, value")
+      .eq("key", "developer_pack");
+    if (error || !data) return;
+    if (typeof window === "undefined") return;
+    for (const r of data) {
+      const orgId = r.organization_id as string;
+      const wkKey = orgId === "developer-default" ? orgId : `agency-${orgId}`;
+      memCache.setItem(packStorageKey(wkKey), JSON.stringify(r.value));
+    }
+    window.dispatchEvent(new CustomEvent(PACK_EVENT));
+  } catch (e) {
+    console.warn("[empresaCategories:pack] hydrate skipped:", e);
+  }
 }
 
 export function useDeveloperPack(workspaceKey: string): PackState {

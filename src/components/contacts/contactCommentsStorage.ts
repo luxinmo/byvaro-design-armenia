@@ -13,6 +13,7 @@
  */
 
 import type { ContactCommentEntry } from "./types";
+import { memCache } from "@/lib/memCache";
 import { mergeContactMetadata } from "@/lib/contactMetadataSync";
 
 /**
@@ -29,7 +30,7 @@ const KEY = (contactId: string) => `byvaro.contact.${contactId}.comments.v1`;
 export function loadAddedComments(contactId: string): ContactCommentEntry[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(KEY(contactId));
+    const raw = memCache.getItem(KEY(contactId));
     if (!raw) return [];
     return JSON.parse(raw) as ContactCommentEntry[];
   } catch { return []; }
@@ -37,7 +38,7 @@ export function loadAddedComments(contactId: string): ContactCommentEntry[] {
 
 function saveAll(contactId: string, comments: ContactCommentEntry[]): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY(contactId), JSON.stringify(comments));
+  memCache.setItem(KEY(contactId), JSON.stringify(comments));
   /* Write-through · merge en `contacts.metadata.comments` JSONB. */
   void mergeContactMetadata(contactId, { comments });
 }

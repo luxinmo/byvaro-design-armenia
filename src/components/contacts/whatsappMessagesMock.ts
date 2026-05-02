@@ -13,6 +13,7 @@
  */
 
 import type { Contact } from "./types";
+import { memCache } from "@/lib/memCache";
 
 export type WhatsAppMessageKind =
   | "text" | "voice" | "image" | "document" | "location" | "contact" | "template";
@@ -150,7 +151,7 @@ export function buildHistoricalMessages(contact: Contact): WhatsAppMessage[] {
 export function loadStoredMessages(contactId: string): WhatsAppMessage[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY(contactId));
+    const raw = memCache.getItem(STORAGE_KEY(contactId));
     if (!raw) return [];
     const arr = JSON.parse(raw);
     return Array.isArray(arr) ? arr : [];
@@ -182,7 +183,7 @@ export function appendOutgoingMessage(
   const existing = loadStoredMessages(contactId);
   const next = [...existing, message];
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(STORAGE_KEY(contactId), JSON.stringify(next));
+    memCache.setItem(STORAGE_KEY(contactId), JSON.stringify(next));
   }
   /* Write-through · contacts.metadata.whatsappMessages.
    *  Cuando el backend conecte Twilio/WhatsApp Business API real, esto

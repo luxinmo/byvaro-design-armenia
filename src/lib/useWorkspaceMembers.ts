@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 import { useCurrentUser, currentWorkspaceKey } from "./currentUser";
 import { getMembersForWorkspace, teamStorageKey, type TeamMember } from "./team";
 import { emitMembersChange } from "./meStorage";
@@ -79,7 +80,7 @@ export function useWorkspaceMembers(workspaceKeyOverride?: string): {
   const setMembers = (next: TeamMember[]) => {
     setMembersState(next);
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(teamStorageKey(workspaceKey), JSON.stringify(next));
+      memCache.setItem(teamStorageKey(workspaceKey), JSON.stringify(next));
       emitMembersChange();
     }
     /* Write-through · upsert a `organization_members`. Resuelve org_id

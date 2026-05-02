@@ -14,6 +14,7 @@
  */
 
 import type { Agency } from "@/data/agencies";
+import { memCache } from "./memCache";
 import type { MockUser } from "@/data/mockUsers";
 
 /* Cache local · cuando Supabase está configurado, la fuente de verdad
@@ -28,7 +29,7 @@ const USERS_KEY    = "byvaro.users.created.v1";
 export function loadCreatedAgencies(): Agency[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(AGENCIES_KEY);
+    const raw = memCache.getItem(AGENCIES_KEY);
     if (!raw) return [];
     const arr = JSON.parse(raw);
     return Array.isArray(arr) ? arr : [];
@@ -40,7 +41,7 @@ export function loadCreatedAgencies(): Agency[] {
 export function saveCreatedAgency(agency: Agency): void {
   const all = loadCreatedAgencies();
   const dedup = all.filter((a) => a.id !== agency.id);
-  localStorage.setItem(AGENCIES_KEY, JSON.stringify([agency, ...dedup]));
+  memCache.setItem(AGENCIES_KEY, JSON.stringify([agency, ...dedup]));
   window.dispatchEvent(new Event("byvaro:created-agencies-changed"));
 }
 
@@ -53,7 +54,7 @@ export function findAgencyById(id: string, seed: Agency[]): Agency | undefined {
 export function loadCreatedUsers(): MockUser[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(USERS_KEY);
+    const raw = memCache.getItem(USERS_KEY);
     if (!raw) return [];
     const arr = JSON.parse(raw);
     return Array.isArray(arr) ? arr : [];
@@ -66,7 +67,7 @@ export function saveCreatedUser(user: MockUser): void {
   const all = loadCreatedUsers();
   const norm = (s: string) => s.trim().toLowerCase();
   const dedup = all.filter((u) => norm(u.email) !== norm(user.email));
-  localStorage.setItem(USERS_KEY, JSON.stringify([user, ...dedup]));
+  memCache.setItem(USERS_KEY, JSON.stringify([user, ...dedup]));
 }
 
 /** Busca usuario creado por email + password. Retorna null si no matchea.

@@ -18,6 +18,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 import { agencies as SEED_AGENCIES, type Agency } from "@/data/agencies";
 import { promotores as SEED_PROMOTORES } from "@/data/promotores";
 import { defaultEmpresa, type Empresa } from "./empresa";
@@ -27,7 +28,7 @@ const EMPRESA_KEY_PREFIX = "byvaro-empresa:";
 function readCachedEmpresa(orgId: string): Empresa | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(EMPRESA_KEY_PREFIX + orgId);
+    const raw = memCache.getItem(EMPRESA_KEY_PREFIX + orgId);
     if (!raw) return null;
     return { ...defaultEmpresa, ...JSON.parse(raw) };
   } catch {

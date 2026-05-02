@@ -28,6 +28,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 import { useCurrentUser, isAdmin } from "./currentUser";
 
 const KEY = "byvaro.companyEvents.v1";
@@ -114,7 +115,7 @@ export type CompanyEvent = {
 function read(): CompanyEvent[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = memCache.getItem(KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as CompanyEvent[];
     return Array.isArray(parsed) ? parsed : [];
@@ -124,8 +125,53 @@ function read(): CompanyEvent[] {
 }
 
 function write(list: CompanyEvent[]) {
-  localStorage.setItem(KEY, JSON.stringify(list));
+  memCache.setItem(KEY, JSON.stringify(list));
   window.dispatchEvent(new Event(CHANGE));
+}
+
+/** Pull desde `audit_events` a localStorage. Trae los eventos donde
+ *  `entity_type=organization_collaboration` para el workspace activo y
+ *  los reconstruye al shape `CompanyEvent`. */
+export async function hydrateCompanyEventsFromSupabase(): Promise<void> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { data, error } = await supabase
+      .from("audit_events")
+      .select("*")
+      .eq("entity_type", "organization_collaboration")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error || !data) return;
+    /* `entity_id` para filas del developer es el agencyId y para filas
+     *  de la agencia es "developer-default". Quedémonos con las del
+     *  developer (agencyId-keyed) para no duplicar el timeline. */
+    const list: CompanyEvent[] = data
+      .filter((r) => r.entity_id !== "developer-default")
+      .map((r: Record<string, unknown>) => {
+        const after = (r.after ?? {}) as {
+          title?: string; description?: string;
+          related?: CompanyEvent["related"];
+          by?: CompanyEventActor;
+        };
+        return {
+          id: r.id as string,
+          agencyId: r.entity_id as string,
+          type: (r.action as CompanyEventType) ?? "custom",
+          title: after.title ?? "Evento",
+          description: after.description,
+          by: after.by,
+          related: after.related,
+          happenedAt: (r.created_at as string) ?? new Date().toISOString(),
+        };
+      });
+    if (typeof window !== "undefined") {
+      memCache.setItem(KEY, JSON.stringify(list));
+      window.dispatchEvent(new Event(CHANGE));
+    }
+  } catch (e) {
+    console.warn("[companyEvents] hydrate skipped:", e);
+  }
 }
 
 /** API genérica · el resto de helpers delegan aquí.

@@ -26,6 +26,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 
 const KEY_PREFIX = "byvaro.orgSettings.v1::";
 const EVENT = "byvaro:org-settings-change";
@@ -39,7 +40,7 @@ type Settings = Record<string, unknown>;
 function readCache(orgId: string): Settings {
   if (typeof window === "undefined") return {};
   try {
-    const raw = window.localStorage.getItem(keyFor(orgId));
+    const raw = memCache.getItem(keyFor(orgId));
     if (!raw) return {};
     return JSON.parse(raw) as Settings;
   } catch { return {}; }
@@ -47,7 +48,7 @@ function readCache(orgId: string): Settings {
 
 function writeCache(orgId: string, data: Settings): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(keyFor(orgId), JSON.stringify(data));
+  memCache.setItem(keyFor(orgId), JSON.stringify(data));
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { orgId } }));
 }
 
@@ -96,8 +97,8 @@ export async function hydrateOrgSettingsFromSupabase(): Promise<Settings | null>
 
 export function getOrgSetting<T = unknown>(key: string, defaultValue: T): T {
   if (typeof window === "undefined") return defaultValue;
-  for (let i = 0; i < window.localStorage.length; i++) {
-    const k = window.localStorage.key(i);
+  for (let i = 0; i < memCache.length; i++) {
+    const k = memCache.key(i);
     if (k && k.startsWith(KEY_PREFIX)) {
       const data = readCache(k.slice(KEY_PREFIX.length));
       if (key in data) return data[key] as T;

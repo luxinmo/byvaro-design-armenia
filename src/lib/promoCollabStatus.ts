@@ -34,6 +34,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 
 export type PromoCollabStatus = "activa" | "pausada" | "anulada";
 
@@ -52,14 +53,14 @@ const CHANGE_EVENT = "byvaro:promo-collab-status-changed";
 function readStore(): PromoCollabRecord[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = memCache.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
 
 function writeStore(list: PromoCollabRecord[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  memCache.setItem(STORAGE_KEY, JSON.stringify(list));
   window.dispatchEvent(new CustomEvent(CHANGE_EVENT));
 }
 
@@ -75,6 +76,32 @@ export function getPromoCollabStatus(agencyId: string, promotionId: string): Pro
 
 export function getPromoCollabRecord(agencyId: string, promotionId: string): PromoCollabRecord | undefined {
   return readStore().find((x) => x.agencyId === agencyId && x.promotionId === promotionId);
+}
+
+/** Pull desde `promotion_collaborations` a localStorage. */
+export async function hydratePromoCollabStatusFromSupabase(): Promise<void> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { data, error } = await supabase
+      .from("promotion_collaborations")
+      .select("promotion_id, agency_organization_id, status, paused_at, ended_at, updated_at");
+    if (error || !data) return;
+    const STATUS_MAP: Record<string, PromoCollabStatus> = {
+      active: "activa", paused: "pausada", ended: "anulada",
+    };
+    const list: PromoCollabRecord[] = data
+      .filter((r) => STATUS_MAP[r.status as string] && STATUS_MAP[r.status as string] !== "activa")
+      .map((r) => ({
+        agencyId: r.agency_organization_id as string,
+        promotionId: r.promotion_id as string,
+        status: STATUS_MAP[r.status as string]!,
+        changedAt: new Date((r.updated_at ?? r.paused_at ?? r.ended_at) as string).getTime(),
+      }));
+    writeStore(list);
+  } catch (e) {
+    console.warn("[promoCollabStatus] hydrate skipped:", e);
+  }
 }
 
 export function setPromoCollabStatus(

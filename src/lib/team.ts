@@ -1,3 +1,4 @@
+import { memCache } from "./memCache";
 /**
  * Catálogo único del equipo del workspace.
  *
@@ -213,14 +214,14 @@ export function getMembersForWorkspace(workspaceKey: string): TeamMember[] {
   const seed = seedMembersForWorkspace(workspaceKey);
   if (typeof window === "undefined") return seed;
   try {
-    const raw = window.localStorage.getItem(teamStorageKey(workspaceKey));
+    const raw = memCache.getItem(teamStorageKey(workspaceKey));
     if (raw) {
       const parsed = JSON.parse(raw) as TeamMember[];
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
     /* Migración legacy · solo developer. */
     if (workspaceKey === "developer-default") {
-      const legacyRaw = window.localStorage.getItem(TEAM_BASE_KEY);
+      const legacyRaw = memCache.getItem(TEAM_BASE_KEY);
       if (legacyRaw) {
         const parsed = JSON.parse(legacyRaw) as TeamMember[];
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;

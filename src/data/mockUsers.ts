@@ -16,6 +16,7 @@
  */
 
 import type { AccountType } from "@/lib/accountType";
+import { memCache } from "@/lib/memCache";
 import type { UserRole } from "@/lib/currentUser";
 
 export interface MockUser {
@@ -378,7 +379,7 @@ export function findMockUser(email: string, password: string): MockUser | null {
   /* Lazy require para evitar cycle (createdAgencies importa MockUser). */
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem("byvaro.users.created.v1");
+    const raw = memCache.getItem("byvaro.users.created.v1");
     if (!raw) return null;
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return null;

@@ -113,7 +113,7 @@ const PHASES: PhaseDef[] = [
   {
     id: "revision",
     label: "Revisión",
-    description: "Publicar promoción",
+    description: "Activar promoción",
     steps: ["revision"],
   },
 ];
@@ -244,7 +244,7 @@ export function PhaseTimeline({
     crear_unidades: "Crear unidades",
     colaboradores: "Colaboradores",
     plan_pagos: "Plan de pagos",
-    revision: "Publicar promoción",
+    revision: "Activar promoción",
   };
 
   return (

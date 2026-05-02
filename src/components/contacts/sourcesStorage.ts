@@ -8,6 +8,7 @@
  */
 
 import type { ContactSource } from "./sources";
+import { memCache } from "@/lib/memCache";
 import { DEFAULT_ORG_SOURCES } from "./sources";
 import type { SourceCategory } from "./sourceCategories";
 import { DEFAULT_ORG_SOURCE_CATEGORIES } from "./sourceCategories";
@@ -18,7 +19,7 @@ const CATEGORIES_KEY = "byvaro.contactSourceCategories.v1";
 export function loadSources(): ContactSource[] {
   if (typeof window === "undefined") return DEFAULT_ORG_SOURCES;
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = memCache.getItem(KEY);
     if (!raw) return DEFAULT_ORG_SOURCES;
     const parsed = JSON.parse(raw) as ContactSource[];
     return Array.isArray(parsed) ? parsed : DEFAULT_ORG_SOURCES;
@@ -29,7 +30,7 @@ export function loadSources(): ContactSource[] {
 
 export function saveSources(sources: ContactSource[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY, JSON.stringify(sources));
+  memCache.setItem(KEY, JSON.stringify(sources));
   void (async () => {
     const { mergeOrgMetadata } = await import("@/lib/orgMetadataSync");
     await mergeOrgMetadata({ contactSources: sources });

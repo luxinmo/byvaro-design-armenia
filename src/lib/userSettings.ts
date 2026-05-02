@@ -26,6 +26,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 
 const KEY_PREFIX = "byvaro.userSettings.v1::";
 const EVENT = "byvaro:user-settings-change";
@@ -39,7 +40,7 @@ type Settings = Record<string, unknown>;
 function readCache(userId: string): Settings {
   if (typeof window === "undefined") return {};
   try {
-    const raw = window.localStorage.getItem(keyFor(userId));
+    const raw = memCache.getItem(keyFor(userId));
     if (!raw) return {};
     return JSON.parse(raw) as Settings;
   } catch { return {}; }
@@ -47,7 +48,7 @@ function readCache(userId: string): Settings {
 
 function writeCache(userId: string, data: Settings): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(keyFor(userId), JSON.stringify(data));
+  memCache.setItem(keyFor(userId), JSON.stringify(data));
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { userId } }));
 }
 
@@ -92,8 +93,8 @@ export async function hydrateUserSettingsFromSupabase(): Promise<Settings | null
  *  Si la clave no existe devuelve `defaultValue`. */
 export function getUserSetting<T = unknown>(key: string, defaultValue: T): T {
   if (typeof window === "undefined") return defaultValue;
-  for (let i = 0; i < window.localStorage.length; i++) {
-    const k = window.localStorage.key(i);
+  for (let i = 0; i < memCache.length; i++) {
+    const k = memCache.key(i);
     if (k && k.startsWith(KEY_PREFIX)) {
       const data = readCache(k.slice(KEY_PREFIX.length));
       if (key in data) return data[key] as T;

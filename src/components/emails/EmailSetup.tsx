@@ -12,6 +12,7 @@
  */
 
 import { useState } from "react";
+import { memCache } from "@/lib/memCache";
 import { Info, Copy, Check, ChevronRight, Server, Shield, ArrowLeft, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,13 +66,13 @@ export default function EmailSetup({ onConfigured, onCancel }: Props) {
   const [copied, setCopied] = useState(false);
   const [systemNoticeHidden, setSystemNoticeHidden] = useState(() => {
     if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(SYSTEM_NOTICE_HIDDEN_KEY) === "1";
+    return memCache.getItem(SYSTEM_NOTICE_HIDDEN_KEY) === "1";
   });
 
   const dismissSystemNotice = () => {
     setSystemNoticeHidden(true);
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(SYSTEM_NOTICE_HIDDEN_KEY, "1");
+      memCache.setItem(SYSTEM_NOTICE_HIDDEN_KEY, "1");
     }
     toast.success("Email de sistema deshabilitado");
   };

@@ -118,10 +118,10 @@ export default function App() {
       {/* Resetea el scroll al top en cada cambio de pathname. Regla
        * global · ver docs/scroll-restoration.md y CLAUDE.md. */}
       <ScrollToTop />
-      {/* Hydrator · al login (o refresh con sesión activa) tira datos
-       *  de Supabase a localStorage scoped para que los hooks síncronos
-       *  (`useEmpresa`, `useOficinas`, etc.) sirvan datos reales. */}
-      <SupabaseHydrator />
+      {/* Hydrator · bloqueante en la primera carga · espera a que
+       *  todos los stores se hidraten desde Supabase a memoria antes
+       *  de pintar la app. localStorage NO es source-of-truth. */}
+      <SupabaseHydrator>
       {/* Toasts globales (sonner). Antes faltaba → todas las llamadas
        * a toast.success/info/error eran silenciosas. */}
       <Toaster position="top-right" richColors closeButton />
@@ -331,6 +331,7 @@ export default function App() {
           }
         />
       </Routes>
+      </SupabaseHydrator>
     </BrowserRouter>
   );
 }

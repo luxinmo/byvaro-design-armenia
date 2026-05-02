@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "@/lib/memCache";
 
 const EVENT = "byvaro:lead-assignee-change";
 
@@ -22,7 +23,7 @@ function keyFor(leadId: string): string {
 export function getLeadAssignee(leadId: string): string | null {
   if (typeof window === "undefined") return null;
   try {
-    return window.localStorage.getItem(keyFor(leadId));
+    return memCache.getItem(keyFor(leadId));
   } catch {
     return null;
   }
@@ -32,9 +33,9 @@ export function setLeadAssignee(leadId: string, memberId: string | null): void {
   if (typeof window === "undefined") return;
   const key = keyFor(leadId);
   if (memberId) {
-    window.localStorage.setItem(key, memberId);
+    memCache.setItem(key, memberId);
   } else {
-    window.localStorage.removeItem(key);
+    memCache.removeItem(key);
   }
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { leadId } }));
   /* Write-through · leads.metadata.assigneeMemberId. */

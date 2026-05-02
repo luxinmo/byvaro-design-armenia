@@ -14,6 +14,7 @@
  */
 
 import type { VisitEvaluation } from "./types";
+import { memCache } from "@/lib/memCache";
 
 const KEY = "byvaro.visits.evaluations.v1";
 
@@ -22,7 +23,7 @@ type Store = Record<string, VisitEvaluation>;
 function loadStore(): Store {
   if (typeof window === "undefined") return {};
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = memCache.getItem(KEY);
     if (!raw) return {};
     return JSON.parse(raw) as Store;
   } catch { return {}; }
@@ -30,7 +31,7 @@ function loadStore(): Store {
 
 function saveStore(s: Store) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY, JSON.stringify(s));
+  memCache.setItem(KEY, JSON.stringify(s));
 }
 
 export function getEvaluation(visitId: string): VisitEvaluation | undefined {

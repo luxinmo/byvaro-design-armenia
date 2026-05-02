@@ -1,3 +1,4 @@
+import { memCache } from "@/lib/memCache";
 /**
  * drafts.ts — Persistencia ligera de borradores en localStorage.
  *
@@ -50,7 +51,7 @@ async function getCurrentOrgUser(): Promise<{ orgId: string; userId: string } | 
 export function loadComposeDraft(): PersistedComposeDraft | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = memCache.getItem(KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PersistedComposeDraft;
     if (!parsed || typeof parsed !== "object") return null;
@@ -68,7 +69,7 @@ export function saveComposeDraft(draft: { to: string; subject: string; body: str
     body: draft.body,
     savedAt: new Date().toISOString(),
   };
-  window.localStorage.setItem(KEY, JSON.stringify(payload));
+  memCache.setItem(KEY, JSON.stringify(payload));
 
   void (async () => {
     try {
@@ -103,7 +104,7 @@ export function saveComposeDraft(draft: { to: string; subject: string; body: str
 
 export function clearComposeDraft() {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(KEY);
+  memCache.removeItem(KEY);
   void (async () => {
     try {
       const { supabase, isSupabaseConfigured } = await import("@/lib/supabaseClient");

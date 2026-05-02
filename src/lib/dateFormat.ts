@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 
 const KEY = "byvaro.userDateFormat.v1";
 const CHANGE_EVENT = "storage"; // cross-tab; también disparamos manualmente al guardar en settings
@@ -30,7 +31,7 @@ const MONTHS_LONG  = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "ju
 
 export function getDateFormat(): DateFormatPreset {
   if (typeof window === "undefined") return "DD/MM/YYYY";
-  const raw = window.localStorage.getItem(KEY);
+  const raw = memCache.getItem(KEY);
   if (raw && raw.length > 0) return raw as DateFormatPreset;
   return "DD/MM/YYYY";
 }

@@ -1,3 +1,4 @@
+import { memCache } from "@/lib/memCache";
 /**
  * Storage local de las tags asignadas a un contacto.
  *
@@ -15,7 +16,7 @@ const KEY = (contactId: string) => `byvaro.contact.${contactId}.tags.v1`;
 export function loadContactTags(contactId: string): string[] | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(KEY(contactId));
+    const raw = memCache.getItem(KEY(contactId));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.filter((t) => typeof t === "string") : null;
@@ -24,7 +25,7 @@ export function loadContactTags(contactId: string): string[] | null {
 
 export function saveContactTags(contactId: string, tags: string[]): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY(contactId), JSON.stringify(tags));
+  memCache.setItem(KEY(contactId), JSON.stringify(tags));
   void (async () => {
     const { mergeContactMetadata } = await import("@/lib/contactMetadataSync");
     await mergeContactMetadata(contactId, { tags });
@@ -33,7 +34,7 @@ export function saveContactTags(contactId: string, tags: string[]): void {
 
 export function clearContactTags(contactId: string): void {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(KEY(contactId));
+  memCache.removeItem(KEY(contactId));
   void (async () => {
     const { mergeContactMetadata } = await import("@/lib/contactMetadataSync");
     await mergeContactMetadata(contactId, { tags: [] });

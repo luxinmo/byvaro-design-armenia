@@ -183,7 +183,7 @@ export function WizardPreviewPanel({ state, className }: { state: WizardState; c
         {/* ═════ Nota ═════ */}
         <p className="text-[10.5px] text-muted-foreground/80 leading-relaxed px-1">
           La preview se actualiza automáticamente mientras rellenas los pasos.
-          Al publicar, el microsite se genera con tu branding real.
+          Al activar, el microsite se genera con tu branding real.
         </p>
       </div>
     </aside>

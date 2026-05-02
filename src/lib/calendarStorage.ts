@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { memCache } from "./memCache";
 import {
   calendarEvents as SEED,
   type CalendarEvent,
@@ -26,7 +27,7 @@ const EVENT = "byvaro:calendar-change";
 function loadOverrides(): Record<string, CalendarEvent> {
   if (typeof window === "undefined") return {};
   try {
-    const raw = window.localStorage.getItem(KEY_OVERRIDES);
+    const raw = memCache.getItem(KEY_OVERRIDES);
     return raw ? (JSON.parse(raw) as Record<string, CalendarEvent>) : {};
   } catch {
     return {};
@@ -36,7 +37,7 @@ function loadOverrides(): Record<string, CalendarEvent> {
 function loadDeletedIds(): Set<string> {
   if (typeof window === "undefined") return new Set();
   try {
-    const raw = window.localStorage.getItem(KEY_DELETED);
+    const raw = memCache.getItem(KEY_DELETED);
     return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
   } catch {
     return new Set();
@@ -74,13 +75,13 @@ export function getCalendarEvents(): CalendarEvent[] {
 
 function saveOverrides(map: Record<string, CalendarEvent>): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY_OVERRIDES, JSON.stringify(map));
+  memCache.setItem(KEY_OVERRIDES, JSON.stringify(map));
   window.dispatchEvent(new CustomEvent(EVENT));
 }
 
 function saveDeleted(ids: Set<string>): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY_DELETED, JSON.stringify([...ids]));
+  memCache.setItem(KEY_DELETED, JSON.stringify([...ids]));
   window.dispatchEvent(new CustomEvent(EVENT));
 }
 

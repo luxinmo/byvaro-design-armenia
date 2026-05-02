@@ -35,6 +35,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { memCache } from "./memCache";
 import type { CurrentUser } from "./currentUser";
 import { defaultEmpresa, loadEmpresaForOrg, type Empresa } from "./empresa";
 
@@ -66,7 +67,7 @@ export interface OrgCollabRequest {
 function read(): OrgCollabRequest[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = memCache.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? (parsed as OrgCollabRequest[]) : [];
@@ -77,7 +78,7 @@ function read(): OrgCollabRequest[] {
 
 function write(list: OrgCollabRequest[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  memCache.setItem(STORAGE_KEY, JSON.stringify(list));
   window.dispatchEvent(new CustomEvent(EVENT));
 }
 

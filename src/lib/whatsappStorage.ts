@@ -1,3 +1,4 @@
+import { memCache } from "./memCache";
 /**
  * Storage de la configuración de WhatsApp del workspace.
  *
@@ -35,7 +36,7 @@ function keyFor(orgId: string): string { return `${KEY_PREFIX}${orgId}`; }
 function readCache(orgId: string): WhatsAppSetup | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(keyFor(orgId));
+    const raw = memCache.getItem(keyFor(orgId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as WhatsAppSetup;
     if (!parsed.method) return null;
@@ -46,9 +47,9 @@ function readCache(orgId: string): WhatsAppSetup | null {
 function writeCache(orgId: string, setup: WhatsAppSetup | null): void {
   if (typeof window === "undefined") return;
   if (setup) {
-    window.localStorage.setItem(keyFor(orgId), JSON.stringify(setup));
+    memCache.setItem(keyFor(orgId), JSON.stringify(setup));
   } else {
-    window.localStorage.removeItem(keyFor(orgId));
+    memCache.removeItem(keyFor(orgId));
   }
   window.dispatchEvent(new CustomEvent(CHANGE, { detail: { orgId } }));
 }
@@ -112,11 +113,11 @@ export function loadWhatsAppSetup(): WhatsAppSetup | null {
   if (typeof window === "undefined") return null;
   /* Itera todas las claves · single-tenant lookup pragmático para
    *  call sites legacy que no tienen orgId. */
-  for (let i = 0; i < window.localStorage.length; i++) {
-    const k = window.localStorage.key(i);
+  for (let i = 0; i < memCache.length; i++) {
+    const k = memCache.key(i);
     if (k && k.startsWith(KEY_PREFIX)) {
       try {
-        const raw = window.localStorage.getItem(k);
+        const raw = memCache.getItem(k);
         if (raw) {
           const parsed = JSON.parse(raw) as WhatsAppSetup;
           if (parsed.method) return parsed;

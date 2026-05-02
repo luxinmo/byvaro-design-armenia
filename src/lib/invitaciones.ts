@@ -28,6 +28,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { memCache } from "./memCache";
 import type { Agency } from "@/data/agencies";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { promotions } from "@/data/promotions";
@@ -116,7 +117,7 @@ function shareablePromoIds(): Set<string> {
 
 function loadAll(): Invitacion[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = memCache.getItem(STORAGE_KEY);
     if (!raw) return [];
     const list = JSON.parse(raw);
     if (!Array.isArray(list)) return [];
@@ -140,7 +141,7 @@ function loadAll(): Invitacion[] {
     );
     if (dirty) {
       /* Persistimos la limpieza para que no se repita en cada load. */
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+      memCache.setItem(STORAGE_KEY, JSON.stringify(cleaned));
     }
     return cleaned;
   } catch {
@@ -149,8 +150,101 @@ function loadAll(): Invitacion[] {
 }
 
 function saveAll(list: Invitacion[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  memCache.setItem(STORAGE_KEY, JSON.stringify(list));
   window.dispatchEvent(new CustomEvent("byvaro:invitaciones-changed"));
+  void syncInvitationsToSupabase(list);
+}
+
+/* ── Write-through · cada save replica el set completo a la tabla
+ *    `invitations` (best-effort). Al ser low-volume (<200 invitations
+ *    típico por org), un upsert masivo es aceptable. */
+async function syncInvitationsToSupabase(list: Invitacion[]) {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { getCurrentOrgId } = await import("./dbWriteThrough");
+    const orgId = await getCurrentOrgId();
+    if (!orgId) return;
+    if (list.length === 0) return;
+    const rows = list.map((i) => ({
+      id: i.id,
+      from_organization_id: orgId,
+      to_organization_id: i.agencyId ?? null,
+      to_email: i.emailAgencia,
+      to_agency_name: i.nombreAgencia,
+      promotion_id: i.promocionId ?? null,
+      token: i.token,
+      status: ({ pendiente: "pending", aceptada: "accepted", rechazada: "rejected", caducada: "expired" } as const)[i.estado] ?? "pending",
+      comision_pct: i.comisionOfrecida,
+      duracion_meses: i.duracionMeses ?? null,
+      metadata: {
+        idiomaEmail: i.idiomaEmail,
+        mensajePersonalizado: i.mensajePersonalizado,
+        promocionNombre: i.promocionNombre,
+        formaPago: i.formaPago,
+        datosRequeridos: i.datosRequeridos,
+        createdBy: i.createdBy,
+        events: i.events,
+      },
+      created_at: new Date(i.createdAt).toISOString(),
+      responded_at: i.respondidoEn ? new Date(i.respondidoEn).toISOString() : null,
+      expires_at: new Date(i.expiraEn).toISOString(),
+    }));
+    const { error } = await supabase.from("invitations").upsert(rows, { onConflict: "id" });
+    if (error) console.warn("[invitaciones] write-through:", error.message);
+  } catch (e) {
+    console.warn("[invitaciones] sync skipped:", e);
+  }
+}
+
+/** Pull desde Supabase a localStorage. Llamar al iniciar sesión. */
+export async function hydrateInvitationsFromSupabase(): Promise<void> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return;
+    const { data, error } = await supabase.from("invitations").select("*");
+    if (error || !data) return;
+    const STATUS_MAP: Record<string, EstadoInvitacion> = {
+      pending: "pendiente", accepted: "aceptada", rejected: "rechazada",
+      expired: "caducada", cancelled: "rechazada",
+    };
+    const list: Invitacion[] = data.map((r: Record<string, unknown>) => {
+      const meta = (r.metadata ?? {}) as {
+        idiomaEmail?: Invitacion["idiomaEmail"];
+        mensajePersonalizado?: string;
+        promocionNombre?: string;
+        formaPago?: PagoTramo[];
+        datosRequeridos?: string[];
+        createdBy?: { name: string; email?: string };
+        events?: InvitacionEvent[];
+      };
+      return {
+        id: r.id as string,
+        token: r.token as string,
+        emailAgencia: (r.to_email as string) ?? "",
+        nombreAgencia: (r.to_agency_name as string) ?? "",
+        agencyId: (r.to_organization_id as string) ?? undefined,
+        mensajePersonalizado: meta.mensajePersonalizado ?? "",
+        comisionOfrecida: Number(r.comision_pct ?? 0),
+        idiomaEmail: meta.idiomaEmail ?? "es",
+        estado: STATUS_MAP[r.status as string] ?? "pendiente",
+        createdAt: new Date(r.created_at as string).getTime(),
+        expiraEn: new Date(r.expires_at as string).getTime(),
+        respondidoEn: r.responded_at ? new Date(r.responded_at as string).getTime() : undefined,
+        promocionId: (r.promotion_id as string) ?? undefined,
+        promocionNombre: meta.promocionNombre,
+        duracionMeses: (r.duracion_meses as number) ?? undefined,
+        formaPago: meta.formaPago,
+        datosRequeridos: meta.datosRequeridos,
+        createdBy: meta.createdBy,
+        events: meta.events,
+      };
+    });
+    memCache.setItem(STORAGE_KEY, JSON.stringify(list));
+    window.dispatchEvent(new CustomEvent("byvaro:invitaciones-changed"));
+  } catch (e) {
+    console.warn("[invitaciones] hydrate skipped:", e);
+  }
 }
 
 function generateToken(): string {

@@ -25,6 +25,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { memCache } from "./memCache";
 
 /**
  * Umbral canónico de "contrato próximo a vencer" · 60 días.
@@ -206,14 +207,14 @@ const CHANGE_EVENT = "byvaro:collab-contracts-changed";
 function readStore(): CollaborationContract[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = memCache.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
 
 function writeStore(list: CollaborationContract[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  memCache.setItem(STORAGE_KEY, JSON.stringify(list));
   window.dispatchEvent(new CustomEvent(CHANGE_EVENT));
   /* Write-through · sync entera a `collaboration_documents` table.
    *  Mock single-tenant: solo developer-default escribe (es Luxinmo).

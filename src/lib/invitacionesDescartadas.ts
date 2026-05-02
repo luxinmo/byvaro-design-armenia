@@ -26,6 +26,7 @@
  */
 
 import { currentOrgIdentity } from "./orgCollabRequests";
+import { memCache } from "./memCache";
 import { useCurrentUser } from "./currentUser";
 import type { CurrentUser } from "./currentUser";
 
@@ -56,12 +57,12 @@ function read(orgId?: string): string[] {
   try {
     /* Migración legacy · si existe la clave global y aún NO hay scoped,
      *  copiamos al workspace actual y borramos legacy. Idempotente. */
-    const scopedRaw = localStorage.getItem(keyFor(effectiveOrgId));
+    const scopedRaw = memCache.getItem(keyFor(effectiveOrgId));
     if (!scopedRaw) {
-      const legacyRaw = localStorage.getItem(LEGACY_KEY);
+      const legacyRaw = memCache.getItem(LEGACY_KEY);
       if (legacyRaw) {
-        localStorage.setItem(keyFor(effectiveOrgId), legacyRaw);
-        localStorage.removeItem(LEGACY_KEY);
+        memCache.setItem(keyFor(effectiveOrgId), legacyRaw);
+        memCache.removeItem(LEGACY_KEY);
         const legacyParsed = JSON.parse(legacyRaw);
         return Array.isArray(legacyParsed) ? legacyParsed : [];
       }
@@ -75,7 +76,7 @@ function read(orgId?: string): string[] {
 }
 
 function write(orgId: string, ids: string[]) {
-  localStorage.setItem(keyFor(orgId), JSON.stringify(ids));
+  memCache.setItem(keyFor(orgId), JSON.stringify(ids));
   window.dispatchEvent(new CustomEvent("byvaro:invitaciones-descartadas-changed", {
     detail: { orgId },
   }));
