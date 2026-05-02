@@ -11,6 +11,98 @@
 
 ---
 
+## 🥇 REGLA DE ORO · No localStorage como source-of-truth
+
+> **Desde 2026-05-02 · `localStorage` NO es source-of-truth de NADA en
+> Byvaro.** Toda persistencia vive en Supabase. El frontend usa
+> `memCache` (in-memory Map) que se hidrata al login y se vacía al
+> sign-out. Componentes JAMÁS llaman a `localStorage.*` directo · usan
+> el helper canónico (`memCache.X` o helpers como `useUserSetting`,
+> `useOrgSetting`).
+
+**Excepciones intencionales** (siguen usando navegador real):
+- `src/lib/supabaseClient.ts` · Supabase guarda tokens auth en
+  localStorage · necesario para no-relogin en reload.
+- `src/lib/accountType.ts` + `src/lib/currentUser.ts` · `sessionStorage`
+  para rol activo per-tab (multi-pestaña con roles distintos).
+
+**Patrón canónico** · ver `docs/backend/architecture/no-localStorage.md`:
+1. Read sync · `memCache.getItem(KEY)` con `JSON.parse`.
+2. Write · `memCache.setItem(KEY, ...)` + dispatch event +
+   `void syncXToSupabase()` async (best-effort).
+3. Hydrate · `hydrateXFromSupabase()` registrado en
+   `SupabaseHydrator.hydrateAll()` · pull DB → memCache · disparado
+   on-mount + on-auth-change.
+
+**Antes de cerrar PR**:
+- [ ] `grep -rE "localStorage\.(get|set|remove)" src/` devuelve 0
+  resultados (excepto los 3 archivos auth).
+- [ ] Cada nuevo store tiene `hydrateXFromSupabase` añadido al
+  `SupabaseHydrator`.
+- [ ] Sign-out vacía el state · verifica con devtools.
+
+---
+
+## 🥇 REGLA DE ORO · Tenant isolation · 4 capas
+
+> **Una empresa NUNCA accede a datos sensibles de otra empresa.** Ni
+> desde la UI, ni desde devtools, ni con queries directas a la API
+> REST de Supabase. 4 capas de defensa lo garantizan.
+
+1. **RLS por fila** · cada tabla con `organization_id` filtra por
+   `is_org_member()`. Tablas dual-tenant (sales, registros, leads)
+   filtran por `organization_id` OR `agency_organization_id`.
+
+2. **Column-level grants** · tablas con datos mixtos
+   (público/privado) usan `revoke select` + `grant select(cols_safe)`.
+   Las columnas privadas (ej. `promotions.private_metadata`) no se
+   pueden leer directamente desde anon/authenticated · solo via RPC.
+
+3. **Tabla privada `organization_private_data`** (1:1 con
+   organizations) · alberga `tax_id`, comisiones default, marketing
+   intel, `main_contact_*`. RLS = `is_org_member(organization_id)`.
+   Cross-tenant queries devuelven 0 rows.
+
+4. **RPCs SECURITY DEFINER** · cuando frontend necesita datos
+   privados condicionalmente (ej. owner OR colaborador activo),
+   llama a una RPC que internamente comprueba membership por fila.
+
+**Datos sensibles que NUNCA pueden leakear cross-tenant**:
+- Fiscales · tax_id (CIF/NIF), email/teléfono interno, dirección
+  fiscal completa.
+- Comerciales · comisiones default, plazos de pago.
+- Inteligencia competitiva · marketing_top_nationalities, portales,
+  tipos de producto, fuentes de cliente.
+- Contactos internos · main_contact_email/phone/name.
+- Operación interna · equipo del promotor (`comerciales`), oficinas
+  internas (`puntosDeVentaIds`), red comercial (`agencies` count +
+  `agencyAvatars`).
+- Negocio · ventas, registros, leads, contactos, emails, WhatsApp,
+  audit log, contratos firmados, facturas, pagos.
+
+**Spec completa** · `docs/backend/architecture/tenant-isolation.md`.
+
+**Test de verificación** (post migración):
+```sql
+SET ROLE anon;
+SELECT count(tax_id) FROM public.organizations;        -- 0 (NULL)
+SELECT count(*) FROM public.organization_private_data;  -- 0 (RLS)
+SELECT private_metadata FROM public.promotions LIMIT 1; -- permission denied
+SELECT * FROM api.list_promotion_private_metadata();    -- permission denied
+RESET ROLE;
+```
+
+**Anti-patterns prohibidos**:
+- ❌ Tabla nueva con `organization_id` SIN RLS habilitada
+- ❌ Policy `qual = true` en tabla con datos sensibles
+- ❌ Función SECURITY DEFINER sin `set search_path` (schema shadowing)
+- ❌ Función SECURITY DEFINER sin chequear `is_org_member`/`is_org_admin`
+- ❌ View `api.*` sin `security_invoker = on`
+- ❌ `grant all on function ... to public`
+- ❌ Pasar `service_role_key` al frontend (solo en scripts/server)
+
+---
+
 ## 🥇 REGLA DE ORO · Backend acoplado · helpers permanentes
 
 > **Desde 2026-04-29 · cada cambio en el producto que toque datos se
@@ -2751,5 +2843,5 @@ página documenta sus fetches esperados en su propio archivo de
 
 ---
 
-**Última actualización de estas reglas:** 19 abril 2026 · v2 (tras Fase 1 del
+**Última actualización de estas reglas:** 2 mayo 2026 · v3 (post no-localStorage + tenant isolation hardening · ADR-060 + ADR-061). Anteriores: 19 abril 2026 · v2 (tras Fase 1 del
 rediseño). Si añades una regla, anótala aquí y en `DECISIONS.md`.
