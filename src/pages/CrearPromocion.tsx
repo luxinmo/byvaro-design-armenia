@@ -179,7 +179,7 @@ export default function CrearPromocion() {
   const initialDraft = useMemo(() => {
     if (draftIdParam) {
       const d = getDraft(draftIdParam);
-      if (d) return { id: d.id, state: d.state };
+      if (d) return { id: d.id, state: d.state, currentStep: d.currentStep };
     }
     /* Hidratar desde Promotion existente · cubre marketplace seeds y
      *  developerOnlyPromotions. Buscamos por id O por code (PR44444…).
@@ -233,7 +233,18 @@ export default function CrearPromocion() {
   // la ficha (returnTo) en vez de ir al paso de revisión.
   const onlyMissing = searchParams.get("onlyMissing") === "1";
   const returnTo = searchParams.get("returnTo");
-  const initialStep = (searchParams.get("step") as StepId) || "role";
+  /* Step inicial · prioridad:
+   *  1. `?step=` explícito en URL (deep-link · `Continuar editando`
+   *     desde la ficha siempre lo pasa).
+   *  2. `currentStep` guardado en el draft (donde el user dejó el
+   *     wizard la última vez · "guardé y salí").
+   *  3. Default "role" (wizard nuevo).
+   *  Sin (2), un draft a medias siempre arrancaba en "role" obligando
+   *  al usuario a re-recorrer todo · regla nueva: respetar el último
+   *  step donde el user estaba al guardar. */
+  const initialStep = (searchParams.get("step") as StepId)
+    || initialDraft.currentStep
+    || "role";
   const [step, setStep] = useState<StepId>(initialStep);
 
   // Indicador de autoguardado
@@ -267,9 +278,11 @@ export default function CrearPromocion() {
       }
       /* Leemos el id del REF (síncrono) · si el primer autosave acaba
        * de generar uno, el ref ya lo refleja aunque el state aún no se
-       * haya commiteado · evitamos generar un segundo id duplicado. */
+       * haya commiteado · evitamos generar un segundo id duplicado.
+       * Pasamos también `step` para que al reabrir el draft volvamos
+       * justo donde estaba el user. */
       const currentId = draftIdRef.current;
-      const res = persistDraft(state, currentId ?? undefined);
+      const res = persistDraft(state, currentId ?? undefined, step);
       if (!currentId) setDraftId(res.id);
       if (!res.ok && res.error === "quota") {
         toast.error("No se pudo autoguardar", {
@@ -284,7 +297,11 @@ export default function CrearPromocion() {
     return () => {
       if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
     };
-  }, [state, resolvedPromotionId]);
+    /* Añadimos `step` a las deps · cambiar de paso es una mutación
+     * que SÍ queremos persistir aunque el state del wizard no haya
+     * cambiado. Sin esto, navegar entre pasos sin teclear nada NO
+     * actualizaba el currentStep guardado. */
+  }, [state, resolvedPromotionId, step]);
 
   /* Pasos visibles según ramificación (depende de tipo/subUni) */
   const visibleSteps = useMemo(() => getAllSteps(state).map(s => s.id), [state]);
@@ -547,9 +564,10 @@ export default function CrearPromocion() {
     }
     /* Igual que el autosave · leemos del REF síncrono · evita el race
      * cuando el manual save se llama justo después de un autosave que
-     * acaba de generar id pero React aún no commitó setDraftId. */
+     * acaba de generar id pero React aún no commitó setDraftId. Pasamos
+     * `step` para preservar el último paso al reabrir. */
     const currentId = draftIdRef.current;
-    const res = persistDraft(state, currentId ?? undefined);
+    const res = persistDraft(state, currentId ?? undefined, step);
     if (!currentId) setDraftId(res.id);
     if (!res.ok && res.error === "quota") {
       toast.error("No se pudo guardar", { description: "Espacio de almacenamiento lleno." });
