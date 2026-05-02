@@ -33,7 +33,7 @@ import { memCache } from "./memCache";
 import { agencies } from "@/data/agencies";
 import { promotores } from "@/data/promotores";
 import { agencyToEmpresa } from "./agencyEmpresaAdapter";
-import { useCurrentUser } from "./currentUser";
+import { useCurrentUser, isAdmin } from "./currentUser";
 
 /* ═══════════════════════════════════════════════════════════════════
    Tipos
@@ -532,6 +532,17 @@ export function loadEmpresa(): Empresa {
   return loadEmpresaForOrg(DEFAULT_DEVELOPER_TENANT_ID);
 }
 
+/* Throttle de toasts de error · evita spam en cada keystroke. Una
+ *  sola notificación por tipo cada 30s. */
+const TOAST_COOLDOWN_MS = 30_000;
+const lastToastAt: Record<string, number> = {};
+function shouldShowToast(key: string): boolean {
+  const now = Date.now();
+  if (lastToastAt[key] && now - lastToastAt[key] < TOAST_COOLDOWN_MS) return false;
+  lastToastAt[key] = now;
+  return true;
+}
+
 function saveEmpresaForOrg(orgId: string, e: Empresa) {
   if (typeof window === "undefined") return;
   const payload = JSON.stringify({ ...e, updatedAt: Date.now() });
@@ -552,6 +563,53 @@ function saveEmpresaForOrg(orgId: string, e: Empresa) {
       const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
       if (!isSupabaseConfigured) return;
 
+      /* PRE-CHECK · la sesión Supabase debe corresponder a un member
+       *  admin del orgId que estamos guardando. Si no, los UPDATEs
+       *  fallan con 42501 (RLS) y el toast genérico dice 'permisos'
+       *  · en realidad el problema es que el JWT no coincide con la
+       *  cuenta seleccionada en el AccountSwitcher.
+       *
+       *  Causas típicas: sesión Supabase caducada, AccountSwitcher
+       *  cambió sessionStorage sin re-auth (caso fixed en ADR pero
+       *  por si quedó algún residuo), o el user mock no tiene
+       *  password Supabase válida. */
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        if (shouldShowToast("session_missing")) {
+          const { toast } = await import("sonner");
+          toast.error("No tienes sesión Supabase activa", {
+            description: "Cierra sesión e inicia sesión de nuevo desde /login para que los cambios persistan.",
+          });
+        }
+        return;
+      }
+      const { data: ms, error: msErr } = await supabase
+        .from("organization_members")
+        .select("role,status")
+        .eq("user_id", user.id)
+        .eq("organization_id", orgId)
+        .eq("status", "active")
+        .maybeSingle();
+      if (msErr) console.warn("[saveEmpresa] members lookup:", msErr.message);
+      if (!ms) {
+        if (shouldShowToast("session_mismatch")) {
+          const { toast } = await import("sonner");
+          toast.error("Tu sesión está vinculada a otra cuenta", {
+            description: `El JWT activo (${user.email}) no es member de ${orgId}. Cierra sesión y entra con la cuenta correcta para guardar.`,
+          });
+        }
+        return;
+      }
+      if (ms.role !== "admin") {
+        if (shouldShowToast("session_not_admin")) {
+          const { toast } = await import("sonner");
+          toast.error("No eres admin de esta empresa", {
+            description: "Solo los admins pueden editar los datos de empresa. Contacta con el admin de tu workspace.",
+          });
+        }
+        return;
+      }
+
       /* Map Empresa shape → split entre `organizations` (campos core)
        * y `organization_profiles` (resto). Mantenemos la convención
        * de que el cliente nunca toca `kind` ni `id` del row. */
@@ -571,8 +629,14 @@ function saveEmpresaForOrg(orgId: string, e: Empresa) {
       };
       const { error: orgErr } = await supabase
         .from("organizations").update(orgPatch).eq("id", orgId);
-      if (orgErr) {
+      if (orgErr && shouldShowToast("organizations")) {
         console.warn("[saveEmpresa] organizations update failed:", orgErr.message);
+        const { toast } = await import("sonner");
+        toast.error("No se pudo guardar el directorio público", {
+          description: orgErr.message.includes("permission") || orgErr.message.includes("policy")
+            ? "Solo los admins de la empresa pueden editar estos datos."
+            : orgErr.message,
+        });
       }
 
       const profilePatch: Record<string, unknown> = {
@@ -600,8 +664,48 @@ function saveEmpresaForOrg(orgId: string, e: Empresa) {
       };
       const { error: profErr } = await supabase
         .from("organization_profiles").upsert(profilePatch, { onConflict: "organization_id" });
-      if (profErr) {
+      if (profErr && shouldShowToast("organization_profiles")) {
         console.warn("[saveEmpresa] organization_profiles upsert failed:", profErr.message);
+        const { toast } = await import("sonner");
+        toast.error("No se pudo guardar el perfil público", {
+          description: profErr.message.includes("permission") || profErr.message.includes("policy")
+            ? "Solo los admins de la empresa pueden editar el perfil."
+            : profErr.message,
+        });
+      }
+
+      /* Datos PRIVADOS · RLS member-only. Cross-tenant queries NUNCA
+       *  los ven · son la frontera de privacidad inter-empresa. */
+      const privatePatch: Record<string, unknown> = {
+        organization_id: orgId,
+        tax_id: e.cif || null,
+        internal_email: e.email || null,
+        internal_phone: e.telefono || null,
+        fiscal_street: e.direccionFiscal?.direccion || null,
+        fiscal_postal_code: e.direccionFiscal?.codigoPostal || null,
+        fiscal_address_line: e.direccionFiscalCompleta || null,
+        commission_national_default: e.comisionNacionalDefault,
+        commission_international_default: e.comisionInternacionalDefault,
+        commission_payment_term_days: e.plazoPagoComisionDias,
+        marketing_top_nationalities: e.marketingTopNacionalidades ?? null,
+        marketing_product_types: e.marketingTiposProducto ?? null,
+        marketing_client_sources: e.marketingFuentesClientes ?? null,
+        marketing_portals: e.marketingPortales ?? null,
+        main_contact_name: e.nombreComercial || null,
+        main_contact_email: e.email || null,
+        main_contact_phone: e.telefono || null,
+        updated_at: new Date().toISOString(),
+      };
+      const { error: privErr } = await supabase
+        .from("organization_private_data").upsert(privatePatch, { onConflict: "organization_id" });
+      if (privErr && shouldShowToast("organization_private_data")) {
+        console.warn("[saveEmpresa] organization_private_data upsert failed:", privErr.message);
+        const { toast } = await import("sonner");
+        toast.error("No se pudo guardar los datos privados (CIF, comisiones)", {
+          description: privErr.message.includes("permission") || privErr.message.includes("policy")
+            ? "Solo los admins de la empresa pueden editar el CIF, comisiones por defecto y datos de marketing."
+            : privErr.message,
+        });
       }
 
       /* Datos PRIVADOS · RLS member-only. Cross-tenant queries NUNCA
@@ -925,27 +1029,34 @@ export function useEmpresa(tenantId?: string) {
     };
   }, [effectiveOrgId, loadTenant]);
 
+  /* canEdit · solo admins del workspace propio pueden editar la
+   *  ficha de empresa. Members con `role=member` siguen viendo la
+   *  ficha como `viewer` aunque sea su propio workspace · la edición
+   *  de datos legales/fiscales/comisiones es responsabilidad del
+   *  admin (RLS también lo enforce). */
+  const canEdit = !isVisitor && isAdmin(user);
+
   const update = useCallback(<K extends keyof Empresa>(key: K, value: Empresa[K]) => {
-    if (isVisitor) return; // visitor no edita datos ajenos
+    if (!canEdit) return;
     setEmpresa(prev => {
       const next = { ...prev, [key]: value };
       next.onboardingCompleto = !!next.nombreComercial.trim() && !!next.razonSocial.trim() && !!next.cif.trim();
       saveEmpresaForOrg(effectiveOrgId, next);
       return next;
     });
-  }, [isVisitor, effectiveOrgId]);
+  }, [canEdit, effectiveOrgId]);
 
   const patch = useCallback((partial: Partial<Empresa>) => {
-    if (isVisitor) return;
+    if (!canEdit) return;
     setEmpresa(prev => {
       const next = { ...prev, ...partial };
       next.onboardingCompleto = !!next.nombreComercial.trim() && !!next.razonSocial.trim() && !!next.cif.trim();
       saveEmpresaForOrg(effectiveOrgId, next);
       return next;
     });
-  }, [isVisitor, effectiveOrgId]);
+  }, [canEdit, effectiveOrgId]);
 
-  return { empresa, update, patch, isVisitor };
+  return { empresa, update, patch, isVisitor, canEdit };
 }
 
 /* ═══════════════════════════════════════════════════════════════════

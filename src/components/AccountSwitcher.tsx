@@ -15,11 +15,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Building2, Check, ChevronDown, Handshake, LogOut } from "lucide-react";
+import { toast } from "sonner";
 import { agencies } from "@/data/agencies";
 import { isAgencyVerified } from "@/lib/licenses";
 import { getAgencyLicenses } from "@/lib/agencyLicenses";
 import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
 import { useEmpresa } from "@/lib/empresa";
+import { mockUsers, DEMO_PASSWORD } from "@/data/mockUsers";
+import { supabase, isSupabaseConfigured } from "@/lib/supabaseClient";
 import {
   useAccountType,
   setAccountType,
@@ -27,6 +30,30 @@ import {
   logout,
 } from "@/lib/accountType";
 import { cn } from "@/lib/utils";
+
+/** Re-autentica en Supabase con el email de la cuenta target.
+ *  Necesario porque cada cuenta mock tiene su propia row en
+ *  auth.users con DEMO_PASSWORD compartido · el JWT debe coincidir
+ *  con el `auth.uid()` del nuevo workspace para que las RLS no
+ *  rechacen los UPDATEs.
+ *
+ *  Sin este paso · el AccountSwitcher cambiaba sessionStorage pero
+ *  el JWT seguía siendo del user previo · al guardar /empresa, RLS
+ *  rechazaba con 42501 (row-level security violation). */
+async function reauthAs(email: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return true; // mock-only: skip
+  const { error } = await supabase.auth.signInWithPassword({
+    email: email.toLowerCase().trim(),
+    password: DEMO_PASSWORD,
+  });
+  if (error) {
+    toast.error("No se pudo cambiar de cuenta", {
+      description: error.message + " · ¿Cuenta sin password configurada?",
+    });
+    return false;
+  }
+  return true;
+}
 
 export function AccountSwitcher() {
   const [open, setOpen] = useState(false);
@@ -89,7 +116,12 @@ export function AccountSwitcher() {
             {/* Promotor */}
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
+                /* Re-auth con el email del primer developer mock ·
+                 *  el JWT cambia para que RLS acepte UPDATEs en
+                 *  developer-default. */
+                const dev = mockUsers.find((u) => u.accountType === "developer");
+                if (dev && !(await reauthAs(dev.email))) return;
                 setAccountType("developer");
                 setOpen(false);
               }}
@@ -123,7 +155,15 @@ export function AccountSwitcher() {
                   <button
                     key={a.id}
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
+                      /* Re-auth con el email del admin de esa agencia ·
+                       *  obligatorio para que el JWT coincida con
+                       *  auth.uid() y RLS deje pasar las escrituras de
+                       *  /empresa, /equipo, etc. dentro de su workspace. */
+                      const admin = mockUsers.find(
+                        (u) => u.accountType === "agency" && u.agencyId === a.id,
+                      );
+                      if (admin && !(await reauthAs(admin.email))) return;
                       setAccountAgencyId(a.id);
                       setAccountType("agency");
                       setOpen(false);
