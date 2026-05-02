@@ -1013,6 +1013,10 @@ export default function CrearPromocion() {
                           onChange={(v) => update("trasteroPrecio", v)}
                         />
                       )}
+                      <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
+                        Si hay trasteros adicionales sueltos, los podrás añadir
+                        más adelante en el paso <span className="font-medium text-foreground">Crear unidades · Anejos sueltos</span>.
+                      </p>
                     </ExtraBox>
 
                     {/* Parking · mismo patrón. Plazas adicionales sueltas
@@ -1052,6 +1056,10 @@ export default function CrearPromocion() {
                           onChange={(v) => update("parkingPrecio", v)}
                         />
                       )}
+                      <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
+                        Si hay plazas de parking adicionales sueltas, las podrás añadir
+                        más adelante en el paso <span className="font-medium text-foreground">Crear unidades · Anejos sueltos</span>.
+                      </p>
                     </ExtraBox>
 
                     {/* Piscina privada · solo aplica a unifamiliar. Mismo
@@ -1078,6 +1086,11 @@ export default function CrearPromocion() {
                             onChange={(v) => update("piscinaPrecio", v)}
                           />
                         )}
+                        <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
+                          Esto es el valor por defecto para todas las villas. Si
+                          alguna no tiene piscina, podrás desactivarla en esa villa
+                          concreta más adelante en el paso <span className="font-medium text-foreground">Crear unidades</span>.
+                        </p>
                       </ExtraBox>
                     )}
 
