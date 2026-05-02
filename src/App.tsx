@@ -192,7 +192,7 @@ export default function App() {
         <Route path="/responsible/:token" element={<ResponsibleAccept />} />
 
         {/* Wizard fullscreen (sin AppLayout) · auth obligatorio. */}
-        <Route path="/crear-promocion" element={<RequireAuth><CrearPromocion /></RequireAuth>} />
+        <Route path="/crear-promocion" element={<RequireAuth><PackGuard audiences={["promoter"]}><CrearPromocion /></PackGuard></RequireAuth>} />
 
         {/* Entrada al modo Agencia · picker + atajo directo · auth obligatorio.
          *   `/agencia`        → elige agencia.

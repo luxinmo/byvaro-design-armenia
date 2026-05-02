@@ -22,6 +22,8 @@ import {
 } from "@/lib/promotionsByOwner";
 import { EditableSection } from "./EditableSection";
 import { cn } from "@/lib/utils";
+import { useCurrentUser } from "@/lib/currentUser";
+import { usePlanState } from "@/lib/plan";
 
 /** Helper · selecciona las 3 promociones destacadas del tenant.
  *
@@ -158,6 +160,9 @@ export function PortfolioShowcase({
 }) {
   const navigate = useNavigate();
   const destacadas = useMemo(() => selectDestacadas(tenantId), [tenantId]);
+  const currentUser = useCurrentUser();
+  const planState = usePlanState();
+  const promoterActive = planState.promoterPack !== "none";
 
   /* Si la entidad es una agencia (id no es developer-* ni prom-*),
    *  no hay portfolio que mostrar · escondemos la sección entera.
@@ -167,6 +172,13 @@ export function PortfolioShowcase({
     || tenantId === "developer-default"
     || tenantId.startsWith("prom-");
   if (!isPromotorEntity) return null;
+
+  /* Gate adicional · si el viewer es una agencia (accountType=agency)
+   *  o NO tiene el módulo Promotor activo, no tiene sentido ofrecerle
+   *  "crear primera promoción" · debe activar el módulo primero. La
+   *  sección entera se oculta · no es portfolio relevante para él. */
+  const isAgencyViewer = currentUser.accountType === "agency";
+  if (isAgencyViewer || !promoterActive) return null;
 
   /* Si la ficha la mira un visitor (agencia o promotor mirando una
    * agencia), añadimos el filtro `?developer=<id>` al "Ver todas"
