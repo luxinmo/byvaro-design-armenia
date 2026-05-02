@@ -54,16 +54,67 @@ export const estadoOptions: CardOption<EstadoPromocion>[] = [
   { value: "terminado", label: "Terminado", description: "La promoción está finalizada", icon: CheckCircle2 },
 ];
 
+/* Etapas de construcción · cada una lleva su rango de % aproximado de
+ *  ejecución de obra · sirve al promotor / agencia para comunicar al
+ *  cliente "qué tan cerca está la entrega". Los rangos son de
+ *  referencia técnica habitual en obra nueva. Si cambian, mantenlos
+ *  coherentes con la copy del label (visible), la description (subline)
+ *  y los buckets del helper `constructionPhaseFromProgress` de abajo. */
 export const faseConstruccionOptions: CardOption<FaseConstruccion>[] = [
-  { value: "inicio_obra", label: "Inicio de obra", description: "Fase inicial de la construcción", icon: Hammer },
-  { value: "estructura", label: "Estructura", description: "Levantamiento de la estructura del edificio", icon: Columns3 },
-  { value: "cerramientos", label: "Cerramientos", description: "Fachada y cerramientos exteriores", icon: BrickWall },
-  { value: "instalaciones", label: "Instalaciones", description: "Instalaciones interiores y servicios", icon: Plug },
-  { value: "acabados", label: "Acabados", description: "Fase final de acabados interiores", icon: Paintbrush },
-  { value: "entrega_proxima", label: "Entrega próxima", description: "La obra está a punto de finalizarse", icon: PackageCheck },
-  { value: "llave_en_mano", label: "Llave en mano", description: "Terminada y disponible para entrega inmediata", icon: Key },
+  { value: "inicio_obra", label: "Inicio de obra · 0–10%", description: "Fase inicial de la construcción", icon: Hammer },
+  { value: "estructura", label: "Estructura · 20–40%", description: "Levantamiento de la estructura del edificio", icon: Columns3 },
+  { value: "cerramientos", label: "Cerramientos · 40–60%", description: "Fachada y cerramientos exteriores", icon: BrickWall },
+  { value: "instalaciones", label: "Instalaciones · 60–75%", description: "Instalaciones interiores y servicios", icon: Plug },
+  { value: "acabados", label: "Acabados · 75–90%", description: "Fase final de acabados interiores", icon: Paintbrush },
+  { value: "entrega_proxima", label: "Entrega próxima · 90–100%", description: "La obra está a punto de finalizarse", icon: PackageCheck },
+  { value: "llave_en_mano", label: "Llave en mano · 100%", description: "Terminada y disponible para entrega inmediata", icon: Key },
   { value: "definir_mas_tarde", label: "Lo añadiré más tarde", description: "Completa este dato cuando lo tengas claro", icon: Clock },
 ];
+
+/* Lista canónica de fases REALES (excluye 'definir_mas_tarde') · usada
+ *  por mapeos % → fase y por selectores de edición que necesitan
+ *  enumerar solo etapas de obra. */
+export const FASES_CONSTRUCCION_REALES: FaseConstruccion[] = [
+  "inicio_obra", "estructura", "cerramientos",
+  "instalaciones", "acabados", "entrega_proxima", "llave_en_mano",
+];
+
+/** Mapea un % de progreso de obra (0-100) a la fase canónica que
+ *  corresponde según los rangos definidos en `faseConstruccionOptions`.
+ *  Devuelve `null` para `progress === undefined` (sin configurar).
+ *
+ *  Buckets exactos · alineados con los rangos visibles:
+ *    100      → llave_en_mano
+ *    ≥ 90     → entrega_proxima  (90–100%)
+ *    ≥ 75     → acabados         (75–90%)
+ *    ≥ 60     → instalaciones    (60–75%)
+ *    ≥ 40     → cerramientos     (40–60%)
+ *    ≥ 20     → estructura       (20–40%)
+ *    else     → inicio_obra      (0–10%, gap 10–20% se redondea aquí) */
+export function constructionPhaseFromProgress(
+  progress: number | undefined,
+): FaseConstruccion | null {
+  if (progress === undefined || progress === null) return null;
+  if (progress >= 100) return "llave_en_mano";
+  if (progress >= 90) return "entrega_proxima";
+  if (progress >= 75) return "acabados";
+  if (progress >= 60) return "instalaciones";
+  if (progress >= 40) return "cerramientos";
+  if (progress >= 20) return "estructura";
+  return "inicio_obra";
+}
+
+/** Devuelve el label canónico (con su rango de %) de la fase de obra
+ *  que corresponde a un `progress` numérico. Útil para componentes que
+ *  solo tienen el progress y necesitan mostrar el nombre + rango.
+ *  Devuelve `null` si no hay progress definido. */
+export function constructionPhaseLabelFromProgress(
+  progress: number | undefined,
+): string | null {
+  const value = constructionPhaseFromProgress(progress);
+  if (!value) return null;
+  return faseConstruccionOptions.find((o) => o.value === value)?.label ?? null;
+}
 
 export const estadoComercializacionOptions: CardOption<EstadoComercializacion>[] = [
   { value: "nuevo_lanzamiento", label: "Nuevo lanzamiento", description: "La promoción se lanzará próximamente", icon: Rocket },

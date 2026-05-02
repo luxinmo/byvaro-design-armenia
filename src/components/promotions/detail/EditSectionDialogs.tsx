@@ -68,6 +68,7 @@
  *   - Feedback de éxito/fallo tras el onSave (toast).
  */
 import { useState, useRef } from "react";
+import { faseConstruccionOptions } from "@/components/crear-promocion/options";
 // Primitivas del dialog (shadcn wrapper de Radix)
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -129,8 +130,14 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 // Usa el componente compartido MultimediaEditor (misma UI que el wizard).
 // La ficha sigue pasando `images: string[]` como entrada simple; lo
 // convertimos a FotoItem[] internamente y devolvemos string[] al guardar.
-export function EditMultimediaDialog({ open, onOpenChange, images, onSave }: {
-  open: boolean; onOpenChange: (v: boolean) => void; images: string[]; onSave: (imgs: string[]) => void;
+export function EditMultimediaDialog({ open, onOpenChange, images, onSave, promotionId }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  images: string[];
+  onSave: (imgs: string[]) => void;
+  /* Id de la promo · namespacea el path en Storage. Sin él el editor
+   * deshabilita la subida real. */
+  promotionId?: string;
 }) {
   const [fotos, setFotos] = useState<import("@/components/crear-promocion/types").FotoItem[]>(
     () => urlsToFotoItems(images),
@@ -152,6 +159,7 @@ export function EditMultimediaDialog({ open, onOpenChange, images, onSave }: {
         videos={videos}
         onFotosChange={setFotos}
         onVideosChange={setVideos}
+        uploadScopeId={promotionId}
       />
     </EditDialogShell>
   );
@@ -232,7 +240,16 @@ export function EditBasicInfoDialog({ open, onOpenChange, propertyTypes, ameniti
 }
 
 // ═══ STRUCTURE & CONSTRUCTION (read-only summary + edit construction progress only) ═══
-const CONSTRUCTION_PHASES = ["Planificación", "Cimentación", "Estructura", "Acabados", "Finalizada"];
+/* Fases canónicas del wizard · ver `crear-promocion/options.ts`. Antes
+ *  estaban hardcoded ("Planificación", "Cimentación", ...) que NO
+ *  coincidían con las del wizard · al guardar fallaba el match en
+ *  PromocionDetalle.tsx y nunca se persistía la fase elegida. Ahora
+ *  reusamos los labels canónicos (con % incrustado) para coherencia
+ *  total con la pantalla de creación. Excluimos `definir_mas_tarde` ·
+ *  no aplica al editar (siempre se elige una fase real). */
+const CONSTRUCTION_PHASES = faseConstruccionOptions
+  .filter((o) => o.value !== "definir_mas_tarde")
+  .map((o) => o.label);
 
 export function EditStructureDialog({ open, onOpenChange, type, structure, phase, progress, onSave, onOpenWizard }: {
   open: boolean;

@@ -204,7 +204,21 @@ export default function CrearPromocion() {
   }, []);
 
   const [state, setState] = useState<WizardState>(initialDraft.state);
-  const [draftId, setDraftId] = useState<string | null>(initialDraft.id);
+  /* `draftId` vive en useState para que el UI pueda re-renderizar
+   *  cuando se asigne (ej. cambiar el href "Continuar más tarde"), pero
+   *  TAMBIÉN en useRef para que el autosave debounced lo lea
+   *  SINCRÓNICAMENTE. Sin el ref, había una race condition: el primer
+   *  autosave llamaba persistDraft(state, undefined) → genera id "X"
+   *  → setDraftId("X") (async). Si el usuario cambiaba state antes de
+   *  que React aplicara el set, el effect re-corría con `draftId` aún
+   *  null → otro persistDraft(state, undefined) → id "Y" → 2 borradores
+   *  duplicados en el listado de incompletas. */
+  const [draftId, setDraftIdState] = useState<string | null>(initialDraft.id);
+  const draftIdRef = useRef<string | null>(initialDraft.id);
+  const setDraftId = useCallback((id: string) => {
+    draftIdRef.current = id;
+    setDraftIdState(id);
+  }, []);
 
   /* Resuelve `?promotionId=X` al `id` interno · activa el flujo de
    *  override (save/load) en vez del flujo de drafts genérico. */
@@ -251,8 +265,12 @@ export default function CrearPromocion() {
         setSaving(false);
         return;
       }
-      const res = persistDraft(state, draftId ?? undefined);
-      if (!draftId) setDraftId(res.id);
+      /* Leemos el id del REF (síncrono) · si el primer autosave acaba
+       * de generar uno, el ref ya lo refleja aunque el state aún no se
+       * haya commiteado · evitamos generar un segundo id duplicado. */
+      const currentId = draftIdRef.current;
+      const res = persistDraft(state, currentId ?? undefined);
+      if (!currentId) setDraftId(res.id);
       if (!res.ok && res.error === "quota") {
         toast.error("No se pudo autoguardar", {
           description: "El navegador ha quedado sin espacio. Elimina algún borrador o reduce fotos para continuar.",
@@ -527,8 +545,12 @@ export default function CrearPromocion() {
       savePromoWizardOverride(resolvedPromotionId, state);
       return resolvedPromotionId;
     }
-    const res = persistDraft(state, draftId ?? undefined);
-    if (!draftId) setDraftId(res.id);
+    /* Igual que el autosave · leemos del REF síncrono · evita el race
+     * cuando el manual save se llama justo después de un autosave que
+     * acaba de generar id pero React aún no commitó setDraftId. */
+    const currentId = draftIdRef.current;
+    const res = persistDraft(state, currentId ?? undefined);
+    if (!currentId) setDraftId(res.id);
     if (!res.ok && res.error === "quota") {
       toast.error("No se pudo guardar", { description: "Espacio de almacenamiento lleno." });
     }
@@ -1251,7 +1273,15 @@ export default function CrearPromocion() {
 
                 {/* ─── Step: multimedia ─── */}
                 {step === "multimedia" && (
-                  <MultimediaStep state={state} update={update} />
+                  <MultimediaStep
+                    state={state}
+                    update={update}
+                    /* Namespace para los paths de Storage. Si edito una
+                       promo existente uso su id. Si es draft, el draftId
+                       (puede ser null si aún no se guardó · el editor
+                       muestra "Guarda el borrador para empezar a subir"). */
+                    uploadScopeId={resolvedPromotionId ?? draftId ?? undefined}
+                  />
                 )}
 
                 {/* ─── Step: colaboradores ───
