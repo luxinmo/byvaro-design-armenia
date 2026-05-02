@@ -104,6 +104,8 @@ import Privacidad from "@/pages/legal/Privacidad";
 import InviteAccept from "@/pages/InviteAccept";
 import ResponsibleAccept from "@/pages/ResponsibleAccept";
 import { useCurrentUser } from "@/lib/currentUser";
+import { usePlanState } from "@/lib/plan";
+import { toast } from "sonner";
 
 /** Rutas promotor-only · si una agencia entra por URL directa la
  *  redirigimos a /inicio (el sidebar ya las oculta, pero no podemos
@@ -112,6 +114,42 @@ function PromotorOnly({ children }: { children: JSX.Element }) {
   const isAgencyUser = useCurrentUser().accountType === "agency";
   if (isAgencyUser) return <Navigate to="/inicio" replace />;
   return children;
+}
+
+/** Guard por audiences · refleja la categorización del sidebar
+ *  (`AppSidebar.tsx`). Si NINGÚN pack del array está activo, el
+ *  user no puede entrar por URL directa · redirect a /inicio +
+ *  toast informativo (admin con CTA "Ver planes" / member con
+ *  "pídele al admin"). */
+function PackGuard({
+  audiences, children,
+}: {
+  audiences: Array<"promoter" | "agency">;
+  children: JSX.Element;
+}) {
+  const planState = usePlanState();
+  const user = useCurrentUser();
+  const promoterActive = planState.promoterPack !== "none";
+  const agencyActive = planState.agencyPack !== "none";
+  const allowed = audiences.some((a) =>
+    (a === "promoter" && promoterActive) ||
+    (a === "agency" && agencyActive),
+  );
+  if (allowed) return children;
+
+  const moduleLabel = audiences.length === 2
+    ? "Promotor o Agencia Inmobiliaria"
+    : audiences[0] === "agency" ? "Agencia Inmobiliaria" : "Promotor";
+  if (user.role === "admin") {
+    toast.info(`Activa el módulo ${moduleLabel} para acceder`, {
+      description: "Ve a /planes y actívalo para entrar a esta sección.",
+    });
+  } else {
+    toast.info(`El módulo ${moduleLabel} no está activo`, {
+      description: "Pídele al administrador de tu cuenta que lo active.",
+    });
+  }
+  return <Navigate to="/inicio" replace />;
 }
 
 export default function App() {
@@ -255,18 +293,18 @@ export default function App() {
                 <Route path="/" element={<Navigate to="/inicio" replace />} />
                 <Route path="/inicio" element={<Inicio />} />
                 <Route path="/notificaciones" element={<Notificaciones />} />
-                <Route path="/actividad" element={<PromotorOnly><Actividad /></PromotorOnly>} />
-                <Route path="/sugerencias" element={<PromotorOnly><Sugerencias /></PromotorOnly>} />
+                <Route path="/actividad" element={<PackGuard audiences={["promoter"]}><Actividad /></PackGuard>} />
+                <Route path="/sugerencias" element={<PackGuard audiences={["promoter"]}><Sugerencias /></PackGuard>} />
                 <Route path="/estadisticas" element={<Estadisticas />} />
-                <Route path="/promociones" element={<Promociones />} />
+                <Route path="/promociones" element={<PackGuard audiences={["promoter", "agency"]}><Promociones /></PackGuard>} />
                 <Route path="/promociones/:id" element={<PromocionDetalle />} />
                 <Route path="/planes" element={<Planes />} />
                 {/* Inmuebles · catálogo de unidades sueltas del workspace.
                  *  Accesible a developer Y agency · cada org ve sólo los
                  *  suyos (storage scopeado por workspace).
                  *  Dos rutas · misma página, distinta vista inicial. */}
-                <Route path="/inmuebles" element={<Inmuebles defaultView="list" />} />
-                <Route path="/inmuebles/cuadricula" element={<Inmuebles defaultView="grid" />} />
+                <Route path="/inmuebles" element={<PackGuard audiences={["promoter", "agency"]}><Inmuebles defaultView="list" /></PackGuard>} />
+                <Route path="/inmuebles/cuadricula" element={<PackGuard audiences={["promoter", "agency"]}><Inmuebles defaultView="grid" /></PackGuard>} />
                 {/* Oportunidades · agencia SÍ entra · la página debe
                  *  filtrar internamente por agencyId (TODO: si todavía
                  *  hay fuga en `Leads.tsx`, añadir filtro · verificar
@@ -283,7 +321,7 @@ export default function App() {
                     `estadisticas`) siguen `PromotorOnly` · son ficha y
                     panel del PROMOTOR mirando una agencia. La agencia
                     tiene su mirror en `/promotor/:id` y `/promotor/:id/panel`. */}
-                <Route path="/colaboradores" element={<Colaboradores />} />
+                <Route path="/colaboradores" element={<PackGuard audiences={["promoter"]}><Colaboradores /></PackGuard>} />
                 {/* Variante "test" · misma maquinaria de filtros + sort,
                  *  pero con la card antigua `FeatureCardV3` para A/B
                  *  comparar con la nueva `AgencyGridCard`. */}
@@ -292,7 +330,7 @@ export default function App() {
                  *  Y agency · cada rol ve la lista que le corresponde.
                  *  Developer: empresas con las que colabora como
                  *  comercializador. Agency: promotores cuya cartera tiene. */}
-                <Route path="/promotores" element={<Promotores />} />
+                <Route path="/promotores" element={<PackGuard audiences={["agency"]}><Promotores /></PackGuard>} />
                 {/* Contratos · solo promotor por ahora · la agencia no
                  *  lo tiene en su menú. Si en el futuro hace falta, se
                  *  hace una versión filtrada por `agencyId`. */}
@@ -312,7 +350,7 @@ export default function App() {
                 {/* Equipo · solo admin · gestión de miembros + roles. */}
                 <Route path="/equipo" element={<AdminOnlyRoute><CriticalActionGuard><Equipo /></CriticalActionGuard></AdminOnlyRoute>} />
                 <Route path="/equipo/:id/estadisticas" element={<AdminOnlyRoute><EquipoMiembroEstadisticas /></AdminOnlyRoute>} />
-                <Route path="/microsites" element={<PromotorOnly><Microsites /></PromotorOnly>} />
+                <Route path="/microsites" element={<PackGuard audiences={["promoter"]}><Microsites /></PackGuard>} />
                 {/* Emails · agencia SÍ entra · cuenta nativa
                  *  `<localpart>@mail.byvaro.com` filtrada por user. */}
                 <Route path="/emails" element={<Emails />} />
