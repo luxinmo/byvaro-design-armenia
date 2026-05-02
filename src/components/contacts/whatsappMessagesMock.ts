@@ -63,12 +63,7 @@ function mulberry32(seed: number) {
   };
 }
 
-const TEAM = [
-  { id: "u1", name: "Arman Rahmanov" },
-  { id: "u2", name: "Laura Gómez" },
-  { id: "u3", name: "Diego Sánchez" },
-  { id: "u4", name: "Marta Jiménez" },
-];
+const TEAM: Array<{ id: string; name: string }> = [];
 
 const INCOMING_SAMPLES = [
   "Hola, ¿podríamos visitar el ático mañana por la mañana?",

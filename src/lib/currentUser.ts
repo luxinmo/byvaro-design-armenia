@@ -44,12 +44,16 @@ export type CurrentUser = {
   phone?: string;
 };
 
+/* Fallback NEUTRO · NUNCA un nombre/email demo concreto. Solo se
+ *  usa si el SupabaseHydrator no ha resuelto la sesión real todavía.
+ *  En cuanto llega `auth.getUser()`, el `useCurrentUser()` real lo
+ *  reemplaza con los datos del JWT. */
 const DEVELOPER_USER: CurrentUser = {
-  id: "u1",
-  name: "Arman Rahmanov",
-  email: "arman@byvaro.com",
+  id: "anonymous",
+  name: "",
+  email: "",
   role: "admin",
-  organizationId: "org1",
+  organizationId: "",
   accountType: "developer",
 };
 

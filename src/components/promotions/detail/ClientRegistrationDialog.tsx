@@ -145,22 +145,11 @@ const existingRegistrationsByClient: Record<string, {
   agentName: string;
   daysAgo: number;
   expiresInDays: number | null;
-}> = {
-  "2": { agencyName: "Prime Properties Costa del Sol", agentName: "Laura Sánchez", daysAgo: 4, expiresInDays: 26 },
-  "4": { agencyName: "Meridian Real Estate", agentName: "James Whitfield", daysAgo: 120, expiresInDays: -30 },
-};
+}> = {};
 
 type SystemAgent = { id: string; name: string; email: string; agencyId: string };
 
-const systemAgents: SystemAgent[] = [
-  { id: "ag1-a1", name: "Laura Sánchez", email: "laura@primeproperties.com", agencyId: "ag-1" },
-  { id: "ag1-a2", name: "Tom Brennan", email: "tom@primeproperties.com", agencyId: "ag-1" },
-  { id: "ag2-a1", name: "Erik Lindqvist", email: "erik@nordichomefinders.com", agencyId: "ag-2" },
-  { id: "ag2-a2", name: "Anna Bergström", email: "anna@nordichomefinders.com", agencyId: "ag-2" },
-  { id: "ag3-a1", name: "Pieter De Vries", email: "pieter@dutchbelgianrealty.com", agencyId: "ag-3" },
-  { id: "ag4-a1", name: "James Whitfield", email: "james@meridianrealestate.co.uk", agencyId: "ag-4" },
-  { id: "ag5-a1", name: "João Almeida", email: "joao@iberialuxuryhomes.pt", agencyId: "ag-5" },
-];
+const systemAgents: SystemAgent[] = [];
 
 /* ─────────────────── TYPES ─────────────────── */
 

@@ -235,7 +235,7 @@ export default function EmailSetup({ onConfigured, onCancel }: Props) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Nombre visible" className="sm:col-span-2">
                 <Input
-                  placeholder="Aparecerá como remitente · Ej. Arman Rahmanov"
+                  placeholder="Aparecerá como remitente · Tu nombre"
                   value={imapForm.name}
                   onChange={(e) => setImapForm({ ...imapForm, name: e.target.value })}
                   className="h-9 rounded-full"

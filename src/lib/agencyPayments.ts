@@ -122,56 +122,7 @@ function daysAgo(n: number)   { return Date.now() - n * 24 * 60 * 60 * 1000; }
 export function seedAgencyPaymentsIfEmpty() {
   if (typeof window === "undefined") return;
   if (memCache.getItem(SEED_KEY)) return;
-  const seeds: AgencyPayment[] = [
-    {
-      id: "pay-seed-1", agencyId: "ag-1", saleId: "mock-s-101",
-      promotionId: "dev-1", promotionName: "Villa Serena",
-      unitLabel: "Villa 12-B", clientName: "María García",
-      concept: "Comisión tramo 1 · firma de arras (30%)",
-      amount: 7800, dueDate: daysAgo(5),
-      status: "on-hold",
-      onHoldReason: "Falta factura de la agencia con IVA desglosado",
-      requiredDocumentIds: ["doc-req-ag1-invoice-101"],
-      createdAt: daysAgo(12),
-    },
-    {
-      id: "pay-seed-2", agencyId: "ag-1", saleId: "mock-s-101",
-      promotionId: "dev-1", promotionName: "Villa Serena",
-      unitLabel: "Villa 12-B", clientName: "María García",
-      concept: "Comisión tramo 2 · contrato privado (30%)",
-      amount: 7800, dueDate: daysAhead(18),
-      status: "scheduled",
-      createdAt: daysAgo(12),
-    },
-    {
-      id: "pay-seed-3", agencyId: "ag-1", saleId: "mock-s-101",
-      promotionId: "dev-1", promotionName: "Villa Serena",
-      unitLabel: "Villa 12-B", clientName: "María García",
-      concept: "Comisión tramo 3 · escritura (40%)",
-      amount: 10400, dueDate: daysAhead(95),
-      status: "scheduled",
-      createdAt: daysAgo(12),
-    },
-    {
-      id: "pay-seed-4", agencyId: "ag-1", saleId: "mock-s-087",
-      promotionId: "dev-2", promotionName: "Villas del Pinar",
-      unitLabel: "Apt. 04-2", clientName: "Pedro Sánchez",
-      concept: "Comisión completa · pago único al escriturar",
-      amount: 12500, dueDate: daysAgo(25), paidAt: daysAgo(20),
-      status: "paid",
-      invoiceDocumentId: "doc-inv-ag1-087",
-      createdAt: daysAgo(60),
-    },
-    {
-      id: "pay-seed-5", agencyId: "ag-1", saleId: "mock-s-092",
-      promotionId: "dev-1", promotionName: "Villa Serena",
-      unitLabel: "Villa 08-C", clientName: "Carlos López",
-      concept: "Comisión tramo 1 · firma de arras (30%)",
-      amount: 6300, dueDate: daysAhead(3),
-      status: "due",
-      createdAt: daysAgo(20),
-    },
-  ];
+  const seeds: AgencyPayment[] = [];
   writeStore(seeds);
   memCache.setItem(SEED_KEY, "1");
 }

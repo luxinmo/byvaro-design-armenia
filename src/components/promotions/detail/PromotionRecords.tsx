@@ -69,74 +69,9 @@ interface RegistrationRecord {
 }
 
 /* ── Mock data ── */
-const pendingRecords: RegistrationRecord[] = [
-  {
-    id: "p1",
-    type: "registration",
-    contactName: "TestCliente",
-    contactCountryIso: "ES",
-    promotion: "Villa Azahar",
-    company: "Luximno Real Estate",
-    status: "pending",
-    date: "21/01/26",
-    relativeDate: "Hace 1 mes",
-    matchPercentage: 100,
-    matchDetails: [
-      { label: "Posible coincidencia con contacto", match: true, value: "TestCliente" },
-      { label: "Origen", match: true, value: "registered_agency" },
-      { label: "Coincidencia de las últimas 4 cifras del teléfono", match: true, value: "6666" },
-      { label: "Porcentaje de coincidencia del nombre", match: true, value: "100%" },
-      { label: "Coincidencia de nacionalidad", match: true, value: "No" },
-    ],
-    recommendation: "No registrar, es muy probable que este contacto ya esté registrado.",
-    comment: "Sin comentarios",
-    registeredBy: "Arman Yeghiazaryan",
-  },
-  {
-    id: "p2",
-    type: "registration_visit",
-    contactName: "TestCliente n234",
-    contactCountryIso: "GB",
-    promotion: "new promotion",
-    company: "Luximno Real Estate",
-    status: "pending",
-    date: "12/01/26",
-    relativeDate: "Hace 1 mes",
-    matchPercentage: 30,
-    matchDetails: [
-      { label: "Posible coincidencia con contacto", match: true, value: "Lucas Test" },
-      { label: "Origen", match: true, value: "unknown" },
-      { label: "Coincidencia de las últimas 4 cifras del teléfono", match: false, value: "6666" },
-      { label: "Porcentaje de coincidencia del nombre", match: true, value: "30%" },
-      { label: "Coincidencia de nacionalidad", match: true, value: "No" },
-    ],
-    recommendation: "Antes de registrar, asegúrate de que el contacto no sea un duplicado.",
-    comment: "dfsdf",
-    registeredBy: "Arman Yeghiazaryan",
-  },
-  {
-    id: "p3",
-    type: "registration",
-    contactName: "'N/A'",
-    promotion: "Villa Azahar",
-    company: "Urban Level Master Agent",
-    status: "pending",
-    date: "09/01/26",
-    relativeDate: "Hace 2 meses",
-  },
-];
+const pendingRecords: RegistrationRecord[] = [];
 
-const processedRecords: RegistrationRecord[] = [
-  { id: "h1", type: "registration", contactName: "TestArman", contactCountryIso: "ES", promotion: "Villa Azahar", company: "JustRent - Spain Rentales", status: "approved", date: "15/01/26", relativeDate: "" },
-  { id: "h2", type: "registration_visit", contactName: "Arman 6789", contactCountryIso: "GB", promotion: "new promotion", company: "Luximno Real Estate", status: "approved", date: "12/01/26", relativeDate: "" },
-  { id: "h3", type: "registration_visit", contactName: "TestCliente 78901233", contactCountryIso: "FR", promotion: "new promotion 3", company: "Luximno Real Estate", status: "approved", date: "12/01/26", relativeDate: "" },
-  { id: "h4", type: "registration_visit", contactName: "TestCliente", contactCountryIso: "ES", promotion: "Villa Azahar", company: "Luximno Real Estate", status: "approved", date: "12/01/26", relativeDate: "" },
-  { id: "h5", type: "registration", contactName: "'N/A'", promotion: "new promotion test 432", company: "", status: "declined", date: "12/01/26", relativeDate: "" },
-  { id: "h6", type: "registration", contactName: "'N/A'", promotion: "Villa Azahar", company: "", status: "declined", date: "09/01/26", relativeDate: "" },
-  { id: "h7", type: "registration", contactName: "'N/A'", promotion: "Villa Azahar", company: "", status: "declined", date: "16/11/25", relativeDate: "" },
-  { id: "h8", type: "registration", contactName: "'N/A'", promotion: "Villa Azahar", company: "", status: "approved", date: "13/09/25", relativeDate: "" },
-  { id: "h9", type: "registration", contactName: "Florence Fernandez", contactCountryIso: "ES", promotion: "Villa Azahar", company: "", status: "approved", date: "13/09/25", relativeDate: "" },
-];
+const processedRecords: RegistrationRecord[] = [];
 
 /* ── Status badge ── */
 function StatusBadge({ status }: { status: RegistrationRecord["status"] }) {

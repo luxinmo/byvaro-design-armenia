@@ -25,9 +25,7 @@ type PayMethod = {
   primary: boolean;
 };
 
-const DEFAULT: PayMethod[] = [
-  { id: "pm1", type: "card", brand: "visa", last4: "4242", expiry: "08/27", holderName: "Arman Rahmanov", primary: true },
-];
+const DEFAULT: PayMethod[] = [];
 
 const BRAND_LABELS = { visa: "Visa", mastercard: "MasterCard", amex: "Amex" } as const;
 

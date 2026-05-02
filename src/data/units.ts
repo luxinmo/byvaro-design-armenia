@@ -69,8 +69,8 @@ function generateUnits(promotionId: string, totalUnits: number, availableUnits: 
   const blocks = totalUnits > 20 ? ["11A", "11B"] : ["11A"];
   const types = ["Apartamento", "Ático", "Dúplex", "Estudio"];
   const orientations = ["Norte", "Sur", "Este", "Oeste", "Sureste", "Suroeste"];
-  const clientNames = ["María García", "Carlos López", "Ana Martín", "Pedro Sánchez", "Laura Fernández", "Miguel Torres", "Isabel Ruiz", "David Moreno"];
-  const agencyNames = ["RE/MAX Costa", "Engel & Völkers", "Keller Williams", "Century 21"];
+  const clientNames: string[] = [];
+  const agencyNames: string[] = [];
 
   const units: Unit[] = [];
   let unitIndex = 0;

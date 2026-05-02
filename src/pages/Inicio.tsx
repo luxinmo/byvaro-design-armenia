@@ -382,7 +382,7 @@ function Novedades() {
               Nuevos comercializadores del equipo
             </p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Laura Sánchez · Pedro Sánchez · Ana Martín. Incorporados este mes.
+              
             </p>
           </div>
           <Link

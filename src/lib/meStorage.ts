@@ -85,8 +85,8 @@ export function updateMe(patch: Partial<TeamMember>): void {
     const seed = TEAM_MEMBERS.find((m) => m.id === MY_ID);
     const newMember: TeamMember = {
       id: MY_ID,
-      name: seed?.name ?? "Arman Rahmanov",
-      email: seed?.email ?? "arman@byvaro.com",
+      name: seed?.name ?? "",
+      email: seed?.email ?? "",
       role: seed?.role ?? "admin",
       ...seed,
       ...patch,

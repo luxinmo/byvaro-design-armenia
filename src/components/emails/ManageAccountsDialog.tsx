@@ -260,7 +260,7 @@ export default function ManageAccountsDialog({
                     <Input
                       value={imapNameDraft}
                       onChange={(e) => setImapNameDraft(e.target.value)}
-                      placeholder="Ej. Arman Rahmanov"
+                      placeholder="Tu nombre"
                       className="h-9 rounded-full"
                     />
                   </div>
@@ -592,7 +592,7 @@ export default function ManageAccountsDialog({
                       Nombre del usuario
                     </label>
                     <Input
-                      placeholder="Ej. Laura Gómez"
+                      placeholder="Tu nombre"
                       value={newDelegateName}
                       onChange={(e) => setNewDelegateName(e.target.value)}
                       className="h-9 rounded-full"

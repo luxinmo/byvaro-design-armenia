@@ -139,7 +139,7 @@ export function seedDocRequestsIfEmpty() {
       requestedAt: daysAgo(90),
       uploadedAt: daysAgo(88),
       reviewedAt: daysAgo(86),
-      reviewedBy: { name: "Arman Yeghiazaryan", email: "arman@luxinmo.com" },
+      reviewedBy: { name: '', email: '' },
       fileName: "iban-prime-properties.pdf",
       fileSize: 82_000,
     },
