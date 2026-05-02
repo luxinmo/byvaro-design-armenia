@@ -707,34 +707,6 @@ function saveEmpresaForOrg(orgId: string, e: Empresa) {
             : privErr.message,
         });
       }
-
-      /* Datos PRIVADOS · RLS member-only. Cross-tenant queries NUNCA
-       *  los ven · son la frontera de privacidad inter-empresa. */
-      const privatePatch: Record<string, unknown> = {
-        organization_id: orgId,
-        tax_id: e.cif || null,
-        internal_email: e.email || null,
-        internal_phone: e.telefono || null,
-        fiscal_street: e.direccionFiscal?.direccion || null,
-        fiscal_postal_code: e.direccionFiscal?.codigoPostal || null,
-        fiscal_address_line: e.direccionFiscalCompleta || null,
-        commission_national_default: e.comisionNacionalDefault,
-        commission_international_default: e.comisionInternacionalDefault,
-        commission_payment_term_days: e.plazoPagoComisionDias,
-        marketing_top_nationalities: e.marketingTopNacionalidades ?? null,
-        marketing_product_types: e.marketingTiposProducto ?? null,
-        marketing_client_sources: e.marketingFuentesClientes ?? null,
-        marketing_portals: e.marketingPortales ?? null,
-        main_contact_name: e.nombreComercial || null,
-        main_contact_email: e.email || null,
-        main_contact_phone: e.telefono || null,
-        updated_at: new Date().toISOString(),
-      };
-      const { error: privErr } = await supabase
-        .from("organization_private_data").upsert(privatePatch, { onConflict: "organization_id" });
-      if (privErr) {
-        console.warn("[saveEmpresa] organization_private_data upsert failed:", privErr.message);
-      }
     } catch (err) {
       console.warn("[saveEmpresa] supabase write skipped:", err);
     }

@@ -22,6 +22,7 @@ import {
   Eye, CheckCircle2, Camera, Image as ImageIcon,
 } from "lucide-react";
 import { useEmpresa, useOficinas } from "@/lib/empresa";
+import { uploadOrgLogo, uploadOrgCover } from "@/lib/storage";
 import { useEmpresaStats } from "@/lib/empresaStats";
 import { useCurrentUser } from "@/lib/currentUser";
 import { agencies } from "@/data/agencies";
@@ -284,21 +285,52 @@ export default function Empresa({
    *     el editor con el material completo y reajustar.
    *   · `*Crop`    → zoom + posX + posY usados al recortar · al
    *     reabrir, restauramos el encuadre exacto. */
-  const handleApplyImage = (
+  const handleApplyImage = async (
     dataUrl: string,
     sourceDataUrl: string,
     crop: { zoom: number; posX: number; posY: number },
   ) => {
-    if (editingImage === "logo") {
+    /* Upload a Supabase Storage bucket org-public · NO guardamos
+     *  base64 en DB. dataUrl/sourceDataUrl pasan por fetch+blob para
+     *  convertir a Blob y subir. La columna logo_url/cover_url queda
+     *  con la URL pública del bucket · cross-device + cacheable por
+     *  CDN de Supabase. */
+    const which = editingImage;
+    if (!which) return;
+    setEditingImage(null);
+
+    /* Optimistic local · mostramos el dataUrl inmediato mientras
+     *  sube al bucket. Cuando llega la URL pública, sobreescribimos. */
+    if (which === "logo") {
       update("logoUrl", dataUrl);
       update("logoSourceUrl", sourceDataUrl);
       update("logoCrop", crop);
-    } else if (editingImage === "cover") {
+    } else {
       update("coverUrl", dataUrl);
       update("coverSourceUrl", sourceDataUrl);
       update("coverCrop", crop);
     }
-    setEditingImage(null);
+
+    /* Convertir dataUrl → Blob y subir. Si falla (ej. RLS), el toast
+     *  de saveEmpresaForOrg se mostrará con la URL local · al recargar
+     *  el dato no persistirá hasta que se solucione la causa. */
+    try {
+      const orgId = effectiveTenantId ?? "developer-default";
+      const blob = await (await fetch(dataUrl)).blob();
+      const publicUrl = which === "logo"
+        ? await uploadOrgLogo(orgId, blob)
+        : await uploadOrgCover(orgId, blob);
+      /* Reemplazar dataUrl por URL pública · esto es lo que persiste
+       *  en DB. */
+      if (which === "logo") update("logoUrl", publicUrl);
+      else update("coverUrl", publicUrl);
+    } catch (e) {
+      console.warn("[Empresa] image upload failed:", e);
+      const { toast } = await import("sonner");
+      toast.error("No se pudo subir la imagen", {
+        description: e instanceof Error ? e.message : "Reintenta · si persiste, contacta soporte",
+      });
+    }
   };
   const handleRemoveImage = () => {
     if (editingImage === "logo") {

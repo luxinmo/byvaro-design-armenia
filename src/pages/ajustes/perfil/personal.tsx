@@ -28,6 +28,9 @@ import { Flag } from "@/components/ui/Flag";
 import { JobTitlePicker } from "@/components/team/JobTitlePicker";
 import { useDirty } from "@/components/settings/SettingsDirtyContext";
 import { useMe, updateMe } from "@/lib/meStorage";
+import { uploadUserAvatar } from "@/lib/storage";
+import { supabase, isSupabaseConfigured } from "@/lib/supabaseClient";
+import { toast } from "sonner";
 import { LANGUAGES, findLanguageByCode } from "@/lib/languages";
 import {
   parseJobTitle, encodeJobTitle, derivedDepartment,
@@ -370,7 +373,28 @@ export default function AjustesPerfilPersonal() {
       <PhotoCropModal
         open={photoOpen}
         onClose={() => setPhotoOpen(false)}
-        onSave={(url) => onChange({ avatar: url || undefined })}
+        onSave={async (dataUrl) => {
+          if (!dataUrl) {
+            onChange({ avatar: undefined });
+            return;
+          }
+          /* Optimistic local · preview con dataUrl. Después subo a
+           *  bucket user-avatars y reemplazo por URL pública. */
+          onChange({ avatar: dataUrl });
+          if (!isSupabaseConfigured) return;
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+            const blob = await (await fetch(dataUrl)).blob();
+            const publicUrl = await uploadUserAvatar(user.id, blob);
+            onChange({ avatar: publicUrl });
+          } catch (e) {
+            console.warn("[personal:avatar] upload failed:", e);
+            toast.error("No se pudo subir el avatar", {
+              description: e instanceof Error ? e.message : "Reintenta",
+            });
+          }
+        }}
         currentImage={profile.avatar}
       />
     </SettingsScreen>

@@ -24,6 +24,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOficinas, type Oficina } from "@/lib/empresa";
+import { uploadOfficeLogo } from "@/lib/storage";
+import { useCurrentUser } from "@/lib/currentUser";
+import { toast } from "sonner";
 import { Switch } from "@/components/ui/Switch";
 
 /* ─── Input helpers ───────────────────────────────────────────────── */
@@ -106,12 +109,29 @@ function OfficeEditRow({
   onMakePrincipal: () => void;
 }) {
   const set = <K extends keyof Oficina>(key: K, val: Oficina[K]) => onChange({ ...office, [key]: val });
+  const user = useCurrentUser();
 
-  const handleCoverUpload = (file: File) => {
-    if (file.size > 2 * 1024 * 1024) return;
-    const reader = new FileReader();
-    reader.onload = () => set("coverUrl", reader.result as string);
-    reader.readAsDataURL(file);
+  const handleCoverUpload = async (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Imagen demasiado grande", { description: "Máximo 5 MB" });
+      return;
+    }
+    /* Optimistic local · preview con object URL hasta que termine
+     *  el upload. Después reemplazamos por la URL pública del bucket. */
+    const localPreview = URL.createObjectURL(file);
+    set("coverUrl", localPreview);
+    try {
+      const orgId = user.organizationId ?? "developer-default";
+      const publicUrl = await uploadOfficeLogo(orgId, office.id, file);
+      URL.revokeObjectURL(localPreview);
+      set("coverUrl", publicUrl);
+    } catch (e) {
+      URL.revokeObjectURL(localPreview);
+      set("coverUrl", "");
+      toast.error("No se pudo subir la imagen", {
+        description: e instanceof Error ? e.message : "Reintenta",
+      });
+    }
   };
 
   return (
