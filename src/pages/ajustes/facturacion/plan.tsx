@@ -370,6 +370,7 @@ export default function AjustesFacturacionPlan() {
     if (tier === "agency_marketplace" || tier === "promoter_249" || tier === "promoter_329") {
       return <Crown className="h-6 w-6" />;
     }
+    if (tier === "trial") return <Clock className="h-6 w-6" />;
     if (tier === "agency_free") return <Handshake className="h-6 w-6" />;
     return <Sparkles className="h-6 w-6" />;
   })();
@@ -407,6 +408,31 @@ export default function AjustesFacturacionPlan() {
           )}
         </div>
       </SettingsCard>
+
+      {/* Mini-card discreto · solo trial · informa del precio futuro
+       *  sin mencionarlo en el header principal · transparencia legal
+       *  sin marketing agresivo. */}
+      {tier === "trial" && (
+        <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 flex items-start gap-3">
+          <div className="h-7 w-7 rounded-lg bg-card border border-border grid place-items-center shrink-0 mt-0.5 text-muted-foreground">
+            <Clock className="h-3.5 w-3.5" strokeWidth={1.8} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[12.5px] font-medium text-foreground">
+              Tras los 6 meses · 249€/mes (IVA excluido)
+            </p>
+            <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-relaxed">
+              Sin permanencia · cancela cuando quieras · si decides no continuar, mantienes tus datos en lectura.
+            </p>
+          </div>
+          <Link
+            to="/planes"
+            className="text-[11.5px] font-semibold text-primary hover:underline shrink-0 self-center"
+          >
+            Más detalles
+          </Link>
+        </div>
+      )}
 
       <SettingsCard
         title="Uso del workspace"
