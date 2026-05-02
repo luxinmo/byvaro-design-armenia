@@ -123,12 +123,30 @@ interface PrivateData {
   main_contact_name: string | null;
   main_contact_email: string | null;
   main_contact_phone: string | null;
+  /* Escape hatch JSONB · alberga payloads que aún no justifican
+   * columnas dedicadas. Hoy: `verification` (estado del KYC ·
+   * representante, autorizados, docs, fechas). RLS scoped al
+   * propio workspace · cross-tenant queries devuelven {}. */
+  private_metadata: Record<string, unknown> | null;
 }
 
 function rowToEmpresa(o: OrgRow, p: ProfileRow | null, priv: PrivateData | null): Empresa {
   /* `priv` solo está poblado para el propio workspace (RLS). Para
    *  workspaces ajenos (directorio), tax_id / comisiones / marketing
    *  vuelven a sus defaults · NO se exponen datos sensibles. */
+  /* Bundle de verificación · vive en `private_metadata.verification`.
+   *  Sin esto, el form de "Verificar empresa" perdía estado en cada
+   *  reload (memCache se sobrescribía al hidratar y la DB no tenía
+   *  columna). Ahora persistimos el form completo (representante,
+   *  autorizados, firma única, docs, estado, fecha de envío). */
+  const verification = (priv?.private_metadata?.verification ?? null) as null | {
+    estado?: Empresa["verificacionEstado"];
+    representante?: Empresa["verificacionRepresentante"];
+    firmaUnica?: boolean;
+    autorizados?: Empresa["verificacionAutorizados"];
+    docs?: Empresa["verificacionDocs"];
+    solicitadaEl?: string;
+  };
   return {
     ...defaultEmpresa,
     publicRef: o.public_ref ?? undefined,
@@ -185,6 +203,14 @@ function rowToEmpresa(o: OrgRow, p: ProfileRow | null, priv: PrivateData | null)
     googleFetchedAt: p?.google_fetched_at ?? "",
     googleMapsUrl: p?.google_maps_url ?? "",
     onboardingCompleto: !!(o.legal_name && priv?.tax_id && o.address_city),
+    /* Verificación KYC · solo aparece poblado en el propio workspace
+     *  (RLS de organization_private_data). Cross-tenant queda undefined. */
+    verificacionEstado: verification?.estado ?? "no-iniciada",
+    verificacionRepresentante: verification?.representante,
+    verificacionFirmaUnica: verification?.firmaUnica,
+    verificacionAutorizados: verification?.autorizados,
+    verificacionDocs: verification?.docs,
+    verificacionSolicitadaEl: verification?.solicitadaEl,
     updatedAt: 0,
   };
 }
@@ -247,25 +273,9 @@ export function hydrateFromSupabase(): Promise<void> {
       const orgs = (orgsRes.data ?? []) as OrgRow[];
       const profiles = (profilesRes.data ?? []) as ProfileRow[];
       const offices = (officesRes.data ?? []) as OfficeRow[];
-      const privateData = (privateRes.data ?? []) as Array<{
+      const privateData = (privateRes.data ?? []) as Array<PrivateData & {
         organization_id: string;
-        tax_id: string | null;
-        internal_email: string | null;
-        internal_phone: string | null;
         internal_phone_prefix: string | null;
-        fiscal_street: string | null;
-        fiscal_postal_code: string | null;
-        fiscal_address_line: string | null;
-        commission_national_default: number | null;
-        commission_international_default: number | null;
-        commission_payment_term_days: number | null;
-        marketing_top_nationalities: unknown;
-        marketing_product_types: unknown;
-        marketing_client_sources: unknown;
-        marketing_portals: string[] | null;
-        main_contact_name: string | null;
-        main_contact_email: string | null;
-        main_contact_phone: string | null;
       }>;
 
       const profileByOrg = new Map<string, ProfileRow>();

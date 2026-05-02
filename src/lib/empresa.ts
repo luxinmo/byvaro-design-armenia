@@ -616,6 +616,24 @@ function saveEmpresaForOrg(orgId: string, e: Empresa) {
 
       /* Datos PRIVADOS · RLS member-only. Cross-tenant queries NUNCA
        *  los ven · son la frontera de privacidad inter-empresa. */
+      /* Bundle de verificación KYC · viaja en `private_metadata.verification`.
+       *  No tiene columnas dedicadas porque el flujo es transitorio (se
+       *  conserva como histórico tras `verificada=true` pero no requiere
+       *  queries propias). Ver `docs/screens/empresa.md §Verificación`.
+       *
+       *  TODO(backend): los `verificacionDocs` son base64 dataUrl ·
+       *  migrar a Supabase Storage (`bucket: 'verification-docs'`) y
+       *  guardar solo `{ name, fileId, mime }` en la JSONB. Mientras
+       *  tanto persisten en JSONB · funciona para demo / testing. */
+      const verificationBundle = {
+        estado: e.verificacionEstado,
+        representante: e.verificacionRepresentante,
+        firmaUnica: e.verificacionFirmaUnica,
+        autorizados: e.verificacionAutorizados,
+        docs: e.verificacionDocs,
+        solicitadaEl: e.verificacionSolicitadaEl,
+      };
+
       const privatePatch: Record<string, unknown> = {
         organization_id: orgId,
         tax_id: e.cif || null,
@@ -634,6 +652,10 @@ function saveEmpresaForOrg(orgId: string, e: Empresa) {
         main_contact_name: e.nombreComercial || null,
         main_contact_email: e.email || null,
         main_contact_phone: e.telefono || null,
+        /* Persistencia del flujo de verificación · sin esto el botón
+         *  "Enviar solicitud" no se guardaba (UI cambiaba via memCache
+         *  pero hidratar pisaba con vacío). */
+        private_metadata: { verification: verificationBundle },
         updated_at: new Date().toISOString(),
       };
       const { error: privErr } = await supabase
