@@ -448,13 +448,28 @@ export function loadEmpresaForOrg(orgId: string): Empresa {
   return defaultEmpresa;
 }
 
-/** Wrapper legacy · sigue pidiendo el perfil de `developer-default`.
+/** Devuelve el perfil empresa del workspace del USER LOGUEADO actual.
+ *
+ *  Resuelve el orgId desde sessionStorage (mismo origen que
+ *  `useCurrentUser` / `accountType.ts`) en lugar de tirar siempre del
+ *  sentinel `developer-default` legacy.
+ *
+ *  Cadena de resolución (igual que `userOrgId(user)`):
+ *    1. `sessionStorage["byvaro.accountType.organizationId.v1"]`
+ *       (se setea en login + signup vía `loginAs(...)` con el id real
+ *       de la DB).
+ *    2. `agencyId` si el accountType es `agency`.
+ *    3. `developer-default` (último recurso para mocks legacy).
+ *
  *  Helpers no-React (`promotionRole`, `publicationRequirements`,
- *  `empresaOnboarding`) lo siguen llamando. NO usar en componentes
- *  nuevos · usa `useEmpresa(tenantId)` o `loadEmpresaForOrg(orgId)`
- *  con el orgId resuelto del usuario. */
+ *  `empresaOnboarding`) lo siguen llamando · ahora resuelven contra
+ *  el workspace correcto y no contra el sentinel vacío. */
 export function loadEmpresa(): Empresa {
-  return loadEmpresaForOrg(DEFAULT_DEVELOPER_TENANT_ID);
+  if (typeof window === "undefined") return loadEmpresaForOrg(DEFAULT_DEVELOPER_TENANT_ID);
+  const orgId = sessionStorage.getItem("byvaro.accountType.organizationId.v1")
+    ?? sessionStorage.getItem("byvaro.accountType.agencyId.v1")
+    ?? DEFAULT_DEVELOPER_TENANT_ID;
+  return loadEmpresaForOrg(orgId);
 }
 
 /* Throttle de toasts de error · evita spam en cada keystroke. Una
