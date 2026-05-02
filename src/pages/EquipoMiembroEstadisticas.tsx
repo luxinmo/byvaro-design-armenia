@@ -38,6 +38,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { ViewToggle } from "@/components/ui/ViewToggle";
 import { Flag } from "@/components/ui/Flag";
+import { UserRefBadge } from "@/components/ui/UserRefBadge";
+import { isValidUserRef, findUserByRef } from "@/lib/userPublicRef";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -52,8 +54,25 @@ export default function EquipoMiembroEstadisticas() {
    *  `organization_members` (Supabase) con fallback al seed. */
   const { members: wsMembers } = useWorkspaceMembers();
   const members: TeamMember[] = wsMembers.length > 0 ? wsMembers : TEAM_MEMBERS;
-  const member = members.find((m) => m.id === id);
-  const stats = id ? getMemberStats(id, window) : null;
+
+  /* La URL acepta tanto el id interno (UUID o "u1"/"u2"...) como el
+   *  publicRef canónico `USXXXXXXX`. Si es publicRef, resolvemos via
+   *  RPC `find_user_by_ref` y redirigimos al UUID interno. Esto
+   *  garantiza que `/equipo/US1234567/estadisticas` funcione tanto
+   *  para enlaces compartidos como para navegación interna. */
+  const [resolvedId, setResolvedId] = useState<string | undefined>(
+    id && !isValidUserRef(id) ? id : undefined,
+  );
+  useEffect(() => {
+    if (!id) return;
+    if (!isValidUserRef(id)) { setResolvedId(id); return; }
+    void findUserByRef(id).then((u) => {
+      if (u) setResolvedId(u.user_id);
+    });
+  }, [id]);
+
+  const member = members.find((m) => m.id === resolvedId);
+  const stats = resolvedId ? getMemberStats(resolvedId, window) : null;
   const teamAvg = useMemo(() => getTeamAverages(window), [window]);
 
   if (!member) {
@@ -96,9 +115,14 @@ export default function EquipoMiembroEstadisticas() {
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground leading-none">
                 Estadísticas
               </p>
-              <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight leading-tight mt-1">
-                {member.name}
-              </h1>
+              <div className="flex items-center gap-2 flex-wrap mt-1">
+                <h1 className="text-[19px] sm:text-[22px] font-bold tracking-tight leading-tight">
+                  {member.name}
+                </h1>
+                {/* Referencia pública del usuario · canónica + copiar.
+                 *  Visible junto al nombre como handle externo. */}
+                <UserRefBadge userId={member.id} size="sm" />
+              </div>
               <p className="text-xs text-muted-foreground mt-1">
                 {member.jobTitle && <span>{member.jobTitle}</span>}
                 {member.jobTitle && member.department && <span className="text-muted-foreground/50 mx-1.5">·</span>}

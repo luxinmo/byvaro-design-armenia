@@ -21,6 +21,7 @@ import { hydrateAgencyOnboardingFromSupabase } from "@/lib/agencyOnboarding";
 import { hydrateAgencyProfilesFromSupabase } from "@/lib/agencyProfile";
 import { hydrateTwoFactorFromSupabase } from "@/lib/twoFactor";
 import { hydrateDeveloperPacksFromSupabase } from "@/lib/empresaCategories";
+import { hydrateUserPublicRefs } from "@/lib/userPublicRef";
 import { clearMemCache } from "@/lib/memCache";
 
 /** Pulla TODOS los stores · devuelve cuando termina la primera carga.
@@ -39,6 +40,7 @@ async function hydrateAll(): Promise<void> {
     hydrateAgencyProfilesFromSupabase(),
     hydrateTwoFactorFromSupabase(),
     hydrateDeveloperPacksFromSupabase(),
+    hydrateUserPublicRefs(),
   ]);
 }
 
