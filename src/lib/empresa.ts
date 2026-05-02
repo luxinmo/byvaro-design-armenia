@@ -755,87 +755,11 @@ const DEVELOPER_TENANT_PREFIX = "developer-";
 
    TODO(backend): borrar este fixture y resolver vía fetch real.
    ═══════════════════════════════════════════════════════════════════ */
-export const LUXINMO_PROFILE: Empresa = {
-  ...defaultEmpresa,
-  publicRef: "ID384729",
-  nombreComercial: "Luxinmo",
-  razonSocial: "Luxinmo Inversiones SL",
-  cif: "B98765432",
-  logoUrl: "https://api.dicebear.com/9.x/shapes/svg?seed=luxinmo&backgroundColor=1d4ed8&size=120",
-  logoShape: "circle",
-  coverUrl: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1600&q=80",
-  colorCorporativo: "#1D74E7",
-  fundadaEn: "2012",
-  subtitle: "Alicante, España · Fundada en 2012",
-  tagline: "Inversión segura en la Costa Blanca",
-  overview:
-    "Promotor inmobiliario especializado en obra nueva premium en la Costa Blanca. Más de una década entregando proyectos a clientes nacionales e internacionales.",
-  aboutOverview:
-    "Desde 2012 hemos entregado más de 800 viviendas en Alicante, Valencia y Murcia. Trabajamos con un equipo internacional que atiende a compradores en cinco idiomas y colaboramos con agencias verificadas en toda Europa.",
-  quote: "Construimos lo que firmaríamos.",
-  quoteDescription:
-    "Cada promoción se diseña pensando en cómo viviríamos nosotros allí · materiales nobles, ubicaciones estratégicas y atención post-venta de por vida.",
-  email: "info@luxinmo.com",
-  telefono: "+34 965 123 456",
-  horario: "L-V 9:30-19:00",
-  sitioWeb: "www.luxinmo.com",
-  linkedin: "luxinmo",
-  instagram: "luxinmo.es",
-  facebook: "",
-  youtube: "",
-  tiktok: "",
-  zonasOperacion: ["Costa Blanca", "Costa del Sol", "Comunitat Valenciana"],
-  especialidades: ["Obra nueva premium", "Costa", "Inversores extranjeros"],
-  idiomasAtencion: ["es", "en", "fr", "de", "ru"],
-  comisionNacionalDefault: 3,
-  comisionInternacionalDefault: 5,
-  plazoPagoComisionDias: 30,
-  certificaciones: [],
-  licencias: [
-    { tipo: "RAICV", numero: "RAICV-V-2345", verificada: true },
-  ],
-  marketingTopNacionalidades: [
-    { countryIso: "ES", pct: 35 },
-    { countryIso: "GB", pct: 20 },
-    { countryIso: "DE", pct: 12 },
-    { countryIso: "FR", pct: 10 },
-    { countryIso: "BE", pct: 8 },
-    { countryIso: "NL", pct: 8 },
-    { countryIso: "OTROS", pct: 7 },
-  ],
-  marketingTiposProducto: [
-    { tipo: "obra-nueva", precioDesde: 350000 },
-    { tipo: "villa-lujo", precioDesde: 1500000 },
-  ],
-  marketingFuentesClientes: [
-    { fuente: "portales", pct: 40 },
-    { fuente: "colab-int", pct: 30 },
-    { fuente: "colab-nac", pct: 15 },
-    { fuente: "referidos", pct: 10 },
-    { fuente: "cartera-propia", pct: 5 },
-  ],
-  marketingPortales: ["idealista", "fotocasa", "thinkspain", "kyero"],
-  direccionFiscal: {
-    pais: "España",
-    provincia: "Alicante",
-    ciudad: "Alicante",
-    direccion: "Av. de la Estación 5",
-    codigoPostal: "03001",
-  },
-  direccionFiscalCompleta: "Av. de la Estación 5, 03001 Alicante, España",
-  moneda: "EUR",
-  idiomaDefault: "es",
-  zonaHoraria: "Europe/Madrid",
-  verificada: true,
-  verificadaEl: "2025-09-10",
-  googlePlaceId: "ChIJ_LuxinmoDemoPlaceId",
-  googleRating: 4.7,
-  googleRatingsTotal: 312,
-  googleFetchedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-  googleMapsUrl: "https://maps.app.goo.gl/luxinmo",
-  onboardingCompleto: true,
-  updatedAt: 0,
-};
+/* LUXINMO_PROFILE · vacío. Se mantiene el nombre del export por
+ *  retrocompat de imports · pero ya NO contiene datos demo. La
+ *  empresa real del workspace se carga desde Supabase via
+ *  `loadEmpresaForOrg(orgId)`. */
+export const LUXINMO_PROFILE: Empresa = { ...defaultEmpresa };
 
 /** Resuelve el perfil público del workspace developer mock · alias de
  *  `GET /api/promotor/:id/profile` cuando aterrice backend. Devuelve

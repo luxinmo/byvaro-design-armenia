@@ -20,17 +20,19 @@ import { cn } from "@/lib/utils";
 interface Props {
   /** Si tienes el userId (UUID), pulla la ref del cache. */
   userId?: string | null;
-  /** Si ya tienes la ref pública, pásala directamente. */
-  ref?: string | null;
+  /** Si ya tienes la ref pública, pásala directamente.
+   *  IMPORTANTE · NO usar el nombre `ref` (es palabra reservada de
+   *  React · genera error #290). Usar `publicRef`. */
+  publicRef?: string | null;
   /** Clases adicionales al wrapper. */
   className?: string;
   /** "sm" más compacto · "md" default. */
   size?: "sm" | "md";
 }
 
-export function UserRefBadge({ userId, ref, className, size = "md" }: Props) {
+export function UserRefBadge({ userId, publicRef, className, size = "md" }: Props) {
   const fromHook = useUserPublicRef(userId ?? null);
-  const value = ref ?? fromHook;
+  const value = publicRef ?? fromHook;
   const [copied, setCopied] = useState(false);
 
   if (!value) return null;

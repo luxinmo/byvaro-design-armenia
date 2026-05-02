@@ -181,7 +181,7 @@ export default function AjustesPerfilPersonal() {
             Es <strong>inmutable</strong> · no se puede modificar.
           </p>
           <div className="flex items-center gap-2 flex-wrap">
-            <UserRefBadge ref={myPublicRef} size="md" />
+            <UserRefBadge publicRef={myPublicRef} size="md" />
             <button
               type="button"
               onClick={async () => {
