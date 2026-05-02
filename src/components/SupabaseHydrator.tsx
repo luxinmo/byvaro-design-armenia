@@ -23,6 +23,7 @@ import { hydrateTwoFactorFromSupabase } from "@/lib/twoFactor";
 import { hydrateDeveloperPacksFromSupabase } from "@/lib/empresaCategories";
 import { hydrateUserPublicRefs } from "@/lib/userPublicRef";
 import { hydratePlanForCurrentUser } from "@/lib/plan";
+import { hydrateTeamFromSupabase } from "@/lib/teamHydrator";
 import { clearMemCache } from "@/lib/memCache";
 import { loginAs } from "@/lib/accountType";
 
@@ -94,6 +95,10 @@ async function hydrateAll(): Promise<void> {
     hydrateDeveloperPacksFromSupabase(),
     hydrateUserPublicRefs(),
     hydratePlanForCurrentUser(),
+    /* Equipo del workspace · sin esto los users registrados via
+     *  /register no aparecen en /equipo, /ajustes/usuarios/miembros
+     *  ni en los selectores de asignación (UserSelect, calendario). */
+    hydrateTeamFromSupabase(),
   ]);
 }
 
