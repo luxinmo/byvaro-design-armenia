@@ -113,7 +113,7 @@ export default function Empresa({
    *  del tenantId contra el del usuario · NO lo decidamos aquí en
    *  función de accountType. */
   const effectiveTenantId = tenantId;
-  const { empresa, update, isVisitor } = useEmpresa(effectiveTenantId);
+  const { empresa, update, isVisitor, canEdit } = useEmpresa(effectiveTenantId);
   /* Oficinas scoped al tenant que se está mostrando · evita fuga
    *  de las oficinas del workspace logueado (Luxinmo) en la ficha
    *  de otra empresa. */
@@ -258,7 +258,10 @@ export default function Empresa({
   );
 
   const [tab, setTab] = useTabParam<Tab>(TAB_KEYS, "home");
-  const [viewMode, setViewMode] = useState<"edit" | "preview">(isVisitor ? "preview" : "edit");
+  /* canEdit=false (member del propio workspace) → forzar preview ·
+   *  members ven igual que un visitor pero SIN los chips de "ficha
+   *  pública" porque siguen estando dentro de su propio workspace. */
+  const [viewMode, setViewMode] = useState<"edit" | "preview">(canEdit ? "edit" : "preview");
   const [editingImage, setEditingImage] = useState<"logo" | "cover" | null>(null);
 
   /* ─── % de completitud ─── */
@@ -416,7 +419,10 @@ export default function Empresa({
            *  porque la agencia no tenía perfil editable · con storage
            *  scoped por orgId, agencia también edita su /empresa y
            *  necesita el toggle para ver cómo lo ve un visitante. */}
-          {!isVisitor && (
+          {/* Toggle de preview · solo admin del propio workspace.
+           *  Members no editan · su pantalla siempre está en preview
+           *  · sin toggle. */}
+          {canEdit && (
             <button
               type="button"
               onClick={() => setViewMode(viewMode === "edit" ? "preview" : "edit")}

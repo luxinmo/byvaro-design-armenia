@@ -33,7 +33,7 @@ import { memCache } from "./memCache";
 import { agencies } from "@/data/agencies";
 import { promotores } from "@/data/promotores";
 import { agencyToEmpresa } from "./agencyEmpresaAdapter";
-import { useCurrentUser } from "./currentUser";
+import { useCurrentUser, isAdmin } from "./currentUser";
 
 /* ═══════════════════════════════════════════════════════════════════
    Tipos
@@ -954,27 +954,34 @@ export function useEmpresa(tenantId?: string) {
     };
   }, [effectiveOrgId, loadTenant]);
 
+  /* canEdit · solo admins del workspace propio pueden editar la
+   *  ficha de empresa. Members con `role=member` siguen viendo la
+   *  ficha como `viewer` aunque sea su propio workspace · la edición
+   *  de datos legales/fiscales/comisiones es responsabilidad del
+   *  admin (RLS también lo enforce). */
+  const canEdit = !isVisitor && isAdmin(user);
+
   const update = useCallback(<K extends keyof Empresa>(key: K, value: Empresa[K]) => {
-    if (isVisitor) return; // visitor no edita datos ajenos
+    if (!canEdit) return;
     setEmpresa(prev => {
       const next = { ...prev, [key]: value };
       next.onboardingCompleto = !!next.nombreComercial.trim() && !!next.razonSocial.trim() && !!next.cif.trim();
       saveEmpresaForOrg(effectiveOrgId, next);
       return next;
     });
-  }, [isVisitor, effectiveOrgId]);
+  }, [canEdit, effectiveOrgId]);
 
   const patch = useCallback((partial: Partial<Empresa>) => {
-    if (isVisitor) return;
+    if (!canEdit) return;
     setEmpresa(prev => {
       const next = { ...prev, ...partial };
       next.onboardingCompleto = !!next.nombreComercial.trim() && !!next.razonSocial.trim() && !!next.cif.trim();
       saveEmpresaForOrg(effectiveOrgId, next);
       return next;
     });
-  }, [isVisitor, effectiveOrgId]);
+  }, [canEdit, effectiveOrgId]);
 
-  return { empresa, update, patch, isVisitor };
+  return { empresa, update, patch, isVisitor, canEdit };
 }
 
 /* ═══════════════════════════════════════════════════════════════════
