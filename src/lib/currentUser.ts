@@ -65,8 +65,11 @@ const DEVELOPER_USER: CurrentUser = {
  *  permite probar admin vs member dentro de la misma agencia. */
 function buildAgencyUser(agencyId: string, agencyEmail?: string): CurrentUser {
   /* Resolver agencia · seed primero, luego storage local de creadas
-   * (alta vía invitación). Solo si ninguna existe, caemos a la primera
-   * del seed (compat). */
+   * (alta vía invitación). Si no existe en ningún sitio (caso post-
+   * limpieza · seeds vacíos · agencia nueva sin hidratar todavía),
+   * devolvemos un user "agency" sintético con el agencyId solo · sin
+   * crashear cuando el render de UpgradeModal/SupabaseHydrator se
+   * dispara antes de que la hidratación cargue las agencias. */
   let a = agencies.find((x) => x.id === agencyId);
   if (!a && typeof window !== "undefined") {
     try {
@@ -79,7 +82,22 @@ function buildAgencyUser(agencyId: string, agencyEmail?: string): CurrentUser {
       }
     } catch { /* noop */ }
   }
-  if (!a) a = agencies[0];
+  if (!a) {
+    /* Fallback defensivo · sin seed (agencies=[]) y sin agencias
+     * creadas localmente · devolvemos un user con datos vacíos
+     * "anonymous" para que la UI no crashee. La hidratación
+     * posterior poblará el resto cuando llegue el JWT/profile. */
+    return {
+      id: `u-agency-${agencyId}`,
+      name: "",
+      email: agencyEmail ?? "",
+      role: "admin",
+      organizationId: `agency-${agencyId}`,
+      accountType: "agency",
+      agencyId,
+      agencyName: "",
+    };
+  }
 
   /* Resolver mockUser · seed primero, luego created users. */
   let mock = agencyEmail

@@ -141,11 +141,13 @@ export const AGENCY_PACK_LABEL: Record<AgencyPack, string> = {
 
 export const PROMOTER_PACK_LABEL: Record<PromoterPack, string> = {
   none: "Sin pack promotor",
-  /* Trial · etiqueta visible NO menciona el precio · el usuario que
-   *  acaba de registrarse no debe ver "249€" como label principal · el
-   *  precio futuro va en un sub-card discreto y en `/planes`.
-   *  Ver `/ajustes/facturacion/plan` · subtitle del card principal. */
-  trial: "Plan gratuito · prueba",
+  /* FILOSOFÍA · "trial" en DB se traduce visualmente a "Plan Gratis"
+   *  porque el trial NO es un plan distinto · es una ventana de
+   *  180 días de bonus encima del plan Gratis. Cuando se acaba la
+   *  ventana, el promotor sigue en el plan Gratis (acceso a sus
+   *  datos · sin crear promociones nuevas) o decide pasar al de pago.
+   *  Ver `/ajustes/facturacion/plan` · explicación de las 3 cajas. */
+  trial: "Plan Gratis",
   promoter_249: "Promotor · 249€/mes",
   promoter_329: "Promotor · 329€/mes",
 };
@@ -209,7 +211,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
 };
 
 export const PLAN_LABEL: Record<PlanTier, string> = {
-  trial: "Plan gratuito · prueba",
+  trial: "Plan Gratis",
   promoter_249: "Promotor · 249€/mes",
   promoter_329: "Promotor · 329€/mes",
   agency_free: "Agencia · Gratis",
@@ -217,17 +219,40 @@ export const PLAN_LABEL: Record<PlanTier, string> = {
   enterprise: "Enterprise",
 };
 
+/** Duración total del trial · constante canónica · cambiar aquí
+ *  refleja en el counter de días, en el trigger DB y en la copy. */
+export const TRIAL_DURATION_DAYS = 180;
+
 /* ══════ Trial helpers ════════════════════════════════════════════ */
 
 /** Días restantes del trial · usado en el subtítulo de
  *  `/ajustes/facturacion/plan` y en banners. Devuelve null si no hay
  *  trial activo o no hay `trialEndsAt` en el state.
- *  Negativo si el trial ya expiró (Stripe debería haber convertido). */
+ *  Negativo si el trial ya expiró (el promotor sigue en plan Gratis
+ *  pero ya no tiene los privilegios "alta nueva"). */
 export function trialDaysRemaining(state: PlanState): number | null {
   if (state.promoterPack !== "trial" || !state.trialEndsAt) return null;
   const end = new Date(state.trialEndsAt).getTime();
   const now = Date.now();
   return Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+}
+
+/** ¿Está el promotor dentro de la ventana de 180 días con acceso
+ *  completo? Si false, está en plan Gratis "puro" (acceso a sus
+ *  datos · sin crear promociones nuevas hasta upgrade).
+ *  Una agencia (`promoterPack !== 'trial'`) NO está en trial · su
+ *  plan Gratis ya es el estable, sin contador. */
+export function isInTrialWindow(state: PlanState): boolean {
+  const days = trialDaysRemaining(state);
+  return days !== null && days > 0;
+}
+
+/** Días consumidos del trial · útil para barras de progreso. */
+export function trialDaysConsumed(state: PlanState): number | null {
+  if (state.promoterPack !== "trial" || !state.trialStartedAt) return null;
+  const start = new Date(state.trialStartedAt).getTime();
+  const now = Date.now();
+  return Math.max(0, Math.floor((now - start) / (1000 * 60 * 60 * 24)));
 }
 
 /** Fecha legible del fin del trial · "2 de noviembre de 2026". */
