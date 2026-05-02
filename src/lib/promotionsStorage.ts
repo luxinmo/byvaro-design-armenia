@@ -12,7 +12,7 @@
  * `/promociones` debería mergear ambas (TODO).
  */
 
-import type { WizardState } from "@/components/crear-promocion/types";
+import type { WizardState, UnitData } from "@/components/crear-promocion/types";
 import { memCache } from "./memCache";
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
 
@@ -127,8 +127,82 @@ export function createPromotionFromWizard(
       can_share_with_agencies: true,
       metadata: created.metadata,
     });
-    if (error) console.warn("[promotions:create] insert failed:", error.message);
+    if (error) {
+      console.warn("[promotions:create] insert failed:", error.message);
+      return;
+    }
+    /* Promo creada · ahora persistir las unidades a `promotion_units`.
+     *  Antes vivían SOLO en `promotions.metadata.wizardSnapshot` (JSONB)
+     *  y la tab Availability mostraba 0 unidades porque lee de la
+     *  tabla dedicada. Sin esto no había paridad local↔producción. */
+    const unidades = (state as unknown as { unidades?: UnitData[] }).unidades ?? [];
+    if (unidades.length > 0) {
+      await saveUnitsToSupabase(created.id, unidades);
+    }
   })();
 
   return created;
+}
+
+/** Maps `UnitData[]` del wizard → filas de `promotion_units` y hace
+ *  upsert (idempotente por id). Usado en createPromotionFromWizard
+ *  y disponible para futuras ediciones de unidades sin recrear la
+ *  promoción.
+ *
+ *  Mapping según el schema real (migración `20260429100001_phase2_schema`):
+ *    - label = `nombre` del wizard ("Villa 1", "1ºA"…)
+ *    - rooms = dormitorios · bathrooms = baños
+ *    - surface_m2 = superficieConstruida
+ *    - terrace_m2 = superficieTerraza
+ *    - price = precio · floor = planta (text)
+ *    - status: si el wizard trae status custom (reservada/vendida) lo
+ *      respetamos · default 'available'.
+ *    - metadata: bundle JSONB con todo el resto (ref, parking, trastero,
+ *      vistas, fotos, planos, overrides…) para no perder info.
+ */
+export async function saveUnitsToSupabase(
+  promotionId: string,
+  unidades: UnitData[],
+): Promise<void> {
+  if (!isSupabaseConfigured || unidades.length === 0) return;
+  const rows = unidades.map((u) => ({
+    id: u.id,
+    promotion_id: promotionId,
+    label: u.nombre || u.ref || u.id,
+    rooms: Number(u.dormitorios) || null,
+    bathrooms: Number(u.banos) || null,
+    surface_m2: Number(u.superficieConstruida) || null,
+    terrace_m2: Number(u.superficieTerraza) || null,
+    price: Number(u.precio) || null,
+    status: (u.status as string) || "available",
+    floor: u.planta != null ? String(u.planta) : null,
+    orientation: u.orientacion || null,
+    /* Todo lo que no encaja en columnas dedicadas viaja en metadata ·
+     * el hidrator lo recompone en `rowToUnit`. */
+    metadata: {
+      ref: u.ref,
+      superficieUtil: u.superficieUtil,
+      parcela: u.parcela,
+      parking: u.parking,
+      trastero: u.trastero,
+      piscinaPrivada: u.piscinaPrivada,
+      vistas: u.vistas,
+      subtipo: u.subtipo,
+      caracteristicas: u.caracteristicas,
+      planoUrls: u.planoUrls,
+      fotosUnidad: u.fotosUnidad,
+      videosUnidad: u.videosUnidad,
+      usarFotosPromocion: u.usarFotosPromocion,
+      descripcionOverride: u.descripcionOverride,
+      caracteristicasOverride: u.caracteristicasOverride,
+      hitosPagoOverride: u.hitosPagoOverride,
+      deliveryYearOverride: u.deliveryYearOverride,
+      energyCertOverride: u.energyCertOverride,
+      faseConstruccionOverride: u.faseConstruccionOverride,
+    },
+  }));
+  const { error } = await supabase
+    .from("promotion_units")
+    .upsert(rows, { onConflict: "id" });
+  if (error) console.warn("[units:save] upsert failed:", error.message);
 }
