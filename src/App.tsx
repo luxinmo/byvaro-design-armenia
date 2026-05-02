@@ -99,6 +99,8 @@ import PromocionDetalle from "@/pages/PromocionDetalle";
 import PromocionesCardsV1 from "@/pages/design-previews/PromocionesCardsV1";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
+import Terminos from "@/pages/legal/Terminos";
+import Privacidad from "@/pages/legal/Privacidad";
 import InviteAccept from "@/pages/InviteAccept";
 import ResponsibleAccept from "@/pages/ResponsibleAccept";
 import { useCurrentUser } from "@/lib/currentUser";
@@ -133,6 +135,11 @@ export default function App() {
         {/* Auth · fullscreen (sin AppLayout) — ver docs/screens/auth.md */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+
+        {/* Páginas legales públicas · accesibles sin sesión.
+         *  Linkadas desde el checkbox de aceptación en /register. */}
+        <Route path="/legal/terminos" element={<Terminos />} />
+        <Route path="/legal/privacidad" element={<Privacidad />} />
 
         {/* Aceptación de invitación pública (caso 1 alta nueva, caso 2b
          *  workspace existente sin sesión, caso 2a redirect tras login).
