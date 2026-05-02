@@ -206,10 +206,18 @@ export function ImageCropModal({
 
     const img = new Image();
     img.onload = () => {
-      /* Escala efectiva (image source → display): cover relativo al
-       * CONTENEDOR (la imagen llena el espacio visible) por el zoom. */
-      const scaleCover = Math.max(containerWidth / img.width, containerHeight / img.height);
-      const scale = scaleCover * zoom;
+      /* Escala base · "contain" relativo al contenedor a zoom=1 ·
+       * la imagen ENTERA cabe sin recortarse y queda letterboxed
+       * (con margen transparente) si el aspect ratio no coincide.
+       * Cover (Math.max) era el bug original: forzaba la imagen a
+       * llenar el recuadro y recortaba siempre los bordes a zoom=1,
+       * sin posibilidad de "reducir" para ver el logo entero.
+       *
+       * Para logos rectangulares horizontales (típico KINNI REAL
+       * ESTATE) cover obligaba a recortar la mitad derecha · contain
+       * deja todo el logo visible y el usuario decide si zooma. */
+      const scaleContain = Math.min(containerWidth / img.width, containerHeight / img.height);
+      const scale = scaleContain * zoom;
       const drawW = img.width * scale;
       const drawH = img.height * scale;
       const imgLeft = (containerWidth - drawW) / 2 + position.x;
@@ -229,6 +237,10 @@ export function ImageCropModal({
         ctx.closePath();
         ctx.clip();
       }
+      /* Si el recorte cae fuera de la imagen (zoom=1 con logo
+       * letterboxed), `drawImage` deja el área excedente
+       * transparente · perfecto para PNG, conserva la transparencia
+       * original del logo. */
       ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, outW, outH);
       if (currentShape === "circle") ctx.restore();
 
@@ -334,16 +346,14 @@ export function ImageCropModal({
               onTouchMove={onTouchMove}
               onTouchEnd={onMouseUp}
             >
-              {/* Imagen · CRÍTICO: w-full h-full + object-cover.
-                  Antes era `minWidth/minHeight: 100%` con `max: none`
-                  · eso renderiza la imagen a su tamaño natural cuando
-                  era más grande que el contenedor, NO a cover.
-                  Resultado: lo visible en el modal NO coincidía con
-                  lo que el canvas en `handleApply` sampleaba (que
-                  asume cover-scaling). Con `w-full h-full
-                  object-cover` el box siempre mide igual que el
-                  contenedor y el contenido se cover-escala dentro,
-                  igual que el canvas · WYSIWYG. */}
+              {/* Imagen · `object-fit: contain` + `scale=zoom`.
+                  Contain a zoom=1 → la imagen entera cabe en el
+                  contenedor (letterboxed si el aspect ratio difiere).
+                  Esto coincide con el `scaleContain` del canvas en
+                  `handleApply` · WYSIWYG.
+                  Antes era `cover` (Math.max) · forzaba a llenar el
+                  recuadro recortando los bordes en zoom=1, sin opción
+                  de ver el logo entero. */}
               <img
                 src={imgSrc}
                 alt=""
@@ -352,7 +362,7 @@ export function ImageCropModal({
                 style={{
                   transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
                   transformOrigin: "center center",
-                  objectFit: "cover",
+                  objectFit: "contain",
                 }}
               />
               {/* Overlay oscurece las zonas FUERA del recorte. Para
@@ -398,18 +408,18 @@ export function ImageCropModal({
           )}
         </div>
 
-        {/* Zoom slider · zoom mínimo = 1 (cover · la imagen siempre
-            llena el recorte sin huecos transparentes). Zoom máximo 3.
-            Para "ver menos zoom" el usuario reposiciona arrastrando ·
-            con cover el recorte siempre captura algo, no hay zonas
-            vacías. */}
+        {/* Zoom slider · zoom=1 muestra la imagen ENTERA encajada
+            (contain) · zoom>1 amplía recortando hasta 5×. El usuario
+            reposiciona arrastrando para encuadrar la zona deseada.
+            No hay zoom<1 porque a 1 ya se ve todo el logo · ir más
+            abajo solo añadiría margen vacío inútil. */}
         {imgSrc && (
           <div className="px-6 py-3 flex items-center gap-3">
             <ZoomOut className="h-4 w-4 text-muted-foreground shrink-0" />
             <input
               type="range"
               min={1}
-              max={3}
+              max={5}
               step={0.01}
               value={zoom}
               onChange={(e) => setZoom(Number(e.target.value))}

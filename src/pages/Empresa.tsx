@@ -368,23 +368,46 @@ export default function Empresa({
         return `${label} ${cleaned || rawNum}`;
       })()
     : "";
-  /* Dirección fiscal · prioriza `direccionFiscalCompleta` (línea
-   * única que rellenará Google Places Autocomplete). Si está vacía,
-   * compone desde los campos estructurados como fallback. */
-  let direccionFiscalTxt = empresa.direccionFiscalCompleta?.trim() ?? "";
-  if (!direccionFiscalTxt) {
-    const direccionParts: string[] = [];
-    const calle = empresa.direccionFiscal.direccion?.trim();
-    if (calle) direccionParts.push(calle);
-    const cpCiudad = [
-      empresa.direccionFiscal.codigoPostal?.trim(),
-      empresa.direccionFiscal.ciudad?.trim(),
-    ].filter(Boolean).join(" ");
-    if (cpCiudad) direccionParts.push(cpCiudad);
-    if (empresa.direccionFiscal.provincia?.trim()) direccionParts.push(empresa.direccionFiscal.provincia);
-    if (empresa.direccionFiscal.pais?.trim()) direccionParts.push(empresa.direccionFiscal.pais);
-    direccionFiscalTxt = direccionParts.join(", ");
-  }
+  /* Ubicación bajo el nombre · SOLO ciudad, provincia, país.
+   *
+   * NUNCA mostrar la dirección completa (calle + nº + CP) en el hero ·
+   * eso pertenece al tab "Sobre nosotros · Detalles" como dato
+   * fiscal. Aquí el visitante ve la ubicación a nivel de mercado.
+   *
+   * Si los campos estructurados están vacíos pero hay una línea
+   * libre `direccionFiscalCompleta` (rellenada por Google Places o a
+   * mano), extraemos los últimos 2-3 segmentos separados por coma ·
+   * convención Google Places: la cola de la línea es siempre
+   * `..., ciudad, provincia, país`. Se ignoran segmentos que parezcan
+   * código postal o números de calle. */
+  const direccionFiscalTxt = (() => {
+    const ciudad = empresa.direccionFiscal?.ciudad?.trim();
+    const provincia = empresa.direccionFiscal?.provincia?.trim();
+    const pais = empresa.direccionFiscal?.pais?.trim();
+    if (ciudad || provincia || pais) {
+      const parts = [ciudad, provincia, pais].filter(Boolean) as string[];
+      /* Quitar duplicados (ej. ciudad y provincia coinciden en
+       * municipios pequeños como Madrid · Madrid · España). */
+      return [...new Set(parts)].join(", ");
+    }
+    const linea = empresa.direccionFiscalCompleta?.trim();
+    if (!linea) return "";
+    /* Google Places entrega la cola como `..., CP ciudad, provincia,
+     * país`. Tomamos las últimas 3 piezas y a cada una le quitamos un
+     * eventual código postal de cabeza (5 dígitos). Ejemplo:
+     *   "Av. del Mar 15, 29602 Marbella, Málaga, España"
+     *     → segments ["Av. del Mar 15", "29602 Marbella", "Málaga", "España"]
+     *     → tail (-3)   ["29602 Marbella", "Málaga", "España"]
+     *     → strip CP    ["Marbella", "Málaga", "España"] */
+    const tail = linea
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(-3)
+      .map((s) => s.replace(/^\d{4,5}\s+/, "").trim())
+      .filter(Boolean);
+    return [...new Set(tail)].join(", ");
+  })();
 
   /* La licencia se renderiza ahora en el slot del slogan (debajo del
    * nombre), no en el subtitle · evitamos duplicarla en ambos sitios. */

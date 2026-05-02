@@ -120,9 +120,15 @@ export function PhotoCropModal({ open, onClose, onSave, currentImage }: Props) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    /* La imagen del preview está a `object-fit: cover` dentro del viewport,
-     * escalada por `zoom` y trasladada por `pos`. Reproducimos la misma
-     * transform en el canvas de salida, luego clippeamos con un círculo. */
+    /* La imagen del preview está a `object-fit: contain` dentro del
+     * viewport, escalada por `zoom` y trasladada por `pos`. Reproducimos
+     * la misma transform en el canvas de salida, luego clippeamos con
+     * un círculo.
+     *
+     * Antes `cover` (Math.max) recortaba siempre los bordes de fotos
+     * con aspect ratio distinto al cuadrado · el usuario no veía la
+     * foto entera al abrir el modal. Con `contain` (Math.min) la foto
+     * cabe entera a zoom=1 · zoom>1 amplía y permite recortar. */
     const scale = OUTPUT_SIZE / VIEWPORT_SIZE;
     ctx.save();
     /* Máscara circular */
@@ -130,10 +136,10 @@ export function PhotoCropModal({ open, onClose, onSave, currentImage }: Props) {
     ctx.arc(OUTPUT_SIZE / 2, OUTPUT_SIZE / 2, OUTPUT_SIZE / 2, 0, Math.PI * 2);
     ctx.closePath();
     ctx.clip();
-    /* Calcular el rect de object-fit: cover para luego aplicar pan/zoom */
+    /* Calcular el rect de object-fit: contain para luego aplicar pan/zoom */
     const iw = img.naturalWidth;
     const ih = img.naturalHeight;
-    const ratio = Math.max(VIEWPORT_SIZE / iw, VIEWPORT_SIZE / ih);
+    const ratio = Math.min(VIEWPORT_SIZE / iw, VIEWPORT_SIZE / ih);
     const drawW = iw * ratio * zoom;
     const drawH = ih * ratio * zoom;
     const drawX = (VIEWPORT_SIZE - drawW) / 2 + pos.x;
@@ -191,7 +197,10 @@ export function PhotoCropModal({ open, onClose, onSave, currentImage }: Props) {
                   transform: `translate(${pos.x}px, ${pos.y}px) scale(${zoom})`,
                   width: "100%",
                   height: "100%",
-                  objectFit: "cover",
+                  /* contain · la foto entera cabe a zoom=1 ·
+                   * el usuario decide si quiere zoom in para
+                   * recortar más (cara grande) o dejarlo así. */
+                  objectFit: "contain",
                 }}
                 draggable={false}
               />
@@ -215,8 +224,8 @@ export function PhotoCropModal({ open, onClose, onSave, currentImage }: Props) {
               <ZoomOut className="h-4 w-4 text-muted-foreground shrink-0" />
               <input
                 type="range"
-                min={0.5}
-                max={3}
+                min={1}
+                max={5}
                 step={0.05}
                 value={zoom}
                 onChange={(e) => setZoom(Number(e.target.value))}

@@ -13,7 +13,7 @@ import {
 import { toast } from "sonner";
 import { useWorkspaceMembers } from "@/lib/useWorkspaceMembers";
 import { memberInitials, type TeamMember } from "@/lib/team";
-import type { Empresa } from "@/lib/empresa";
+import { tieneDatosBasicosEmpresa, type Empresa } from "@/lib/empresa";
 import {
   type LicenciaInmobiliaria, type LicenciaTipo, LICENCIA_META,
 } from "@/lib/licenses";
@@ -74,11 +74,18 @@ export function EmpresaAboutTab({
       {/* ═════ Verificación de empresa ═════
           Primera sección del About · una vez verificada desaparece
           para siempre (el sello queda en el hero junto al nombre).
-          Sin verificar, vale 30% de la "Fuerza del perfil". */}
+          Sin verificar, vale 30% de la "Fuerza del perfil".
+
+          Pre-requisito · `tieneDatosBasicosEmpresa(empresa)` · hasta
+          que el owner no rellene razón social, CIF, dirección, email
+          y teléfono, NO mostramos ni la sección ni el banner de
+          verificación · pedir documentación legal antes de tener
+          identidad básica de la empresa es prematuro y confunde. */}
       {/* `viewMode === "preview"` (toggle "Previsualizar como
           usuario") cuenta como visitor · ver REGLA DE ORO "Preview =
           Visitor" en CLAUDE.md. */}
-      {!isVisitor && viewMode !== "preview" && !empresa.verificada && (
+      {!isVisitor && viewMode !== "preview" && !empresa.verificada
+        && tieneDatosBasicosEmpresa(empresa) && (
         <VerificationSection empresa={empresa} update={update} />
       )}
 

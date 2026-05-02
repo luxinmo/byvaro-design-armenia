@@ -335,6 +335,34 @@ export function isValidCifBasico(cif: string): boolean {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   Datos básicos de la empresa · prerequisito para verificación
+   ═══════════════════════════════════════════════════════════════════ */
+
+/** Devuelve true cuando los datos identitarios mínimos de la empresa
+ *  están rellenos · razón social, CIF, dirección fiscal completa,
+ *  email y teléfono. Hasta que esto sea cierto, la sección y el banner
+ *  de "Verifica tu empresa" se ocultan · no tiene sentido pedir al
+ *  usuario que adjunte documentación si todavía no ha rellenado quién
+ *  es la empresa.
+ *
+ *  Patrón canónico · siempre que añadas un nuevo punto en la UI que
+ *  invite a verificar, gateálo con este helper. NO dupliques la lógica
+ *  ni inventes campos extra · si el producto necesita más campos en el
+ *  futuro, amplía aquí y se aplica a todos los call sites a la vez. */
+export function tieneDatosBasicosEmpresa(e: Empresa): boolean {
+  if (!e.razonSocial?.trim()) return false;
+  if (!e.cif?.trim()) return false;
+  if (!e.email?.trim()) return false;
+  if (!e.telefono?.trim()) return false;
+  /* Acepta dirección en una línea (campo nuevo) o estructurada. */
+  const direccionOk = !!(
+    e.direccionFiscalCompleta?.trim()
+    || (e.direccionFiscal?.direccion?.trim() && e.direccionFiscal?.ciudad?.trim())
+  );
+  return direccionOk;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    Persistencia low-level · multi-tenant (mock)
 
    REGLA · cada org tiene su propio perfil editable. Las claves
