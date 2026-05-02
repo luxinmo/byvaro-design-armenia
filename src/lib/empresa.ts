@@ -532,6 +532,17 @@ export function loadEmpresa(): Empresa {
   return loadEmpresaForOrg(DEFAULT_DEVELOPER_TENANT_ID);
 }
 
+/* Throttle de toasts de error · evita spam en cada keystroke. Una
+ *  sola notificación por tipo cada 30s. */
+const TOAST_COOLDOWN_MS = 30_000;
+const lastToastAt: Record<string, number> = {};
+function shouldShowToast(key: string): boolean {
+  const now = Date.now();
+  if (lastToastAt[key] && now - lastToastAt[key] < TOAST_COOLDOWN_MS) return false;
+  lastToastAt[key] = now;
+  return true;
+}
+
 function saveEmpresaForOrg(orgId: string, e: Empresa) {
   if (typeof window === "undefined") return;
   const payload = JSON.stringify({ ...e, updatedAt: Date.now() });
@@ -571,8 +582,14 @@ function saveEmpresaForOrg(orgId: string, e: Empresa) {
       };
       const { error: orgErr } = await supabase
         .from("organizations").update(orgPatch).eq("id", orgId);
-      if (orgErr) {
+      if (orgErr && shouldShowToast("organizations")) {
         console.warn("[saveEmpresa] organizations update failed:", orgErr.message);
+        const { toast } = await import("sonner");
+        toast.error("No se pudo guardar el directorio público", {
+          description: orgErr.message.includes("permission") || orgErr.message.includes("policy")
+            ? "Solo los admins de la empresa pueden editar estos datos."
+            : orgErr.message,
+        });
       }
 
       const profilePatch: Record<string, unknown> = {
@@ -600,8 +617,14 @@ function saveEmpresaForOrg(orgId: string, e: Empresa) {
       };
       const { error: profErr } = await supabase
         .from("organization_profiles").upsert(profilePatch, { onConflict: "organization_id" });
-      if (profErr) {
+      if (profErr && shouldShowToast("organization_profiles")) {
         console.warn("[saveEmpresa] organization_profiles upsert failed:", profErr.message);
+        const { toast } = await import("sonner");
+        toast.error("No se pudo guardar el perfil público", {
+          description: profErr.message.includes("permission") || profErr.message.includes("policy")
+            ? "Solo los admins de la empresa pueden editar el perfil."
+            : profErr.message,
+        });
       }
 
       /* Datos PRIVADOS · RLS member-only. Cross-tenant queries NUNCA
@@ -628,8 +651,14 @@ function saveEmpresaForOrg(orgId: string, e: Empresa) {
       };
       const { error: privErr } = await supabase
         .from("organization_private_data").upsert(privatePatch, { onConflict: "organization_id" });
-      if (privErr) {
+      if (privErr && shouldShowToast("organization_private_data")) {
         console.warn("[saveEmpresa] organization_private_data upsert failed:", privErr.message);
+        const { toast } = await import("sonner");
+        toast.error("No se pudo guardar los datos privados (CIF, comisiones)", {
+          description: privErr.message.includes("permission") || privErr.message.includes("policy")
+            ? "Solo los admins de la empresa pueden editar el CIF, comisiones por defecto y datos de marketing."
+            : privErr.message,
+        });
       }
     } catch (err) {
       console.warn("[saveEmpresa] supabase write skipped:", err);
