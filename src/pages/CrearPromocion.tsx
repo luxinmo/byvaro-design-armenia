@@ -35,8 +35,7 @@ import {
   getOverride as getPromoWizardOverride,
   saveOverride as savePromoWizardOverride,
 } from "@/lib/promotionWizardOverrides";
-import { canPublishWizard, getMissingForWizard } from "@/lib/publicationRequirements";
-import { AlertTriangle } from "lucide-react";
+import { canPublishWizard } from "@/lib/publicationRequirements";
 import { saveDraft as persistDraft, getDraft, deleteDraft } from "@/lib/promotionDrafts";
 import { createPromotionFromWizard } from "@/lib/promotionsStorage";
 import { currentOrgIdentity } from "@/lib/orgCollabRequests";
@@ -674,53 +673,13 @@ export default function CrearPromocion() {
                   <p className="text-sm text-muted-foreground mt-1.5">{meta.subtitle}</p>
                 </div>
 
-                {/* Banner de campos pendientes · solo si quedan
-                 *  obligatorios pendientes para publicar. Click en el
-                 *  chip salta al step correspondiente. Visible en TODOS
-                 *  los steps · refuerza la sensación de progreso y
-                 *  enseña dónde están los huecos. */}
-                {(() => {
-                  const missing = getMissingForWizard(state);
-                  if (missing.length === 0) return null;
-                  /* Mapeo `jumpTo` (key del wizard) ↔ StepId del wizard. */
-                  const jumpToStepId: Record<string, StepId> = {
-                    multimedia: "multimedia",
-                    crear_unidades: "crear_unidades",
-                    colaboradores: "colaboradores",
-                    plan_pagos: "plan_pagos",
-                    info_basica: "info_basica",
-                    detalles: "detalles",
-                    estado: "estado",
-                  };
-                  return (
-                    <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4">
-                      <div className="flex items-start gap-2.5 mb-2.5">
-                        <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" strokeWidth={1.75} />
-                        <p className="text-sm font-semibold text-foreground">
-                          Falta{missing.length === 1 ? "" : "n"} {missing.length} campo{missing.length === 1 ? "" : "s"} para activar
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {missing.map((m) => {
-                          const target = m.jumpTo ? jumpToStepId[m.jumpTo] : undefined;
-                          const clickable = !!target && target !== step;
-                          return (
-                            <button
-                              key={m.key}
-                              type="button"
-                              disabled={!clickable}
-                              onClick={() => target && setStep(target)}
-                              className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-background hover:bg-destructive/10 hover:border-destructive/60 px-2.5 py-0.5 text-[11.5px] font-medium text-destructive transition-colors disabled:cursor-default disabled:opacity-60"
-                              title={clickable ? "Ir a este paso" : "Estás en este paso · complétalo abajo"}
-                            >
-                              {m.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
+                {/* Banner de campos pendientes intencionalmente OMITIDO en
+                 *  los pasos intermedios · el wizard es un borrador
+                 *  guiado, NO un formulario validado. Mostrar 'Faltan N
+                 *  campos para activar' en cada paso es agresivo y rompe
+                 *  el flujo de creación. La validación pre-publicación
+                 *  vive en el paso "Revisión" (`RevisionStep.tsx`) ·
+                 *  ahí sí se enumera todo lo que falta antes de activar. */}
 
                 {/* ─── Step: role ─── */}
                 {step === "role" && (
