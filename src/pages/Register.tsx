@@ -67,6 +67,7 @@ import {
 } from "lucide-react"; // iconos para roles, subRoles, inputs, estados
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/BrandLogo"; // isotipo + wordmark oficiales
+import { LEGAL_VERSION } from "@/lib/legalVersion";
 
 /* ═════════════════════════════════════════════════════════════════════
    Tipos y datos
@@ -247,6 +248,12 @@ export default function Register() {
             org_kind: orgKind,
             org_name: companyName.trim(),
             sub_role: subRole, // "director" | "employee" · puede afectar role en futuro
+            /* Snapshot legal · el trigger `handle_new_user_signup` lo
+             *  persiste en `user_profiles.metadata.terms_accepted`. */
+            terms_accepted: {
+              version: LEGAL_VERSION,
+              accepted_at: new Date().toISOString(),
+            },
           },
           emailRedirectTo: `${window.location.origin}/login`,
         },
@@ -769,19 +776,38 @@ export default function Register() {
                       />
                     </Field>
 
-                    {/* ToS */}
+                    {/* ToS · checkbox obligatorio · enlaza a páginas
+                     *   legales públicas. La versión `LEGAL_VERSION` se
+                     *   guarda en `user_profiles.metadata.terms_accepted`
+                     *   junto al timestamp para auditoría legal. */}
                     <label className="flex items-start gap-2 cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={acceptTos}
                         onChange={(e) => setAcceptTos(e.target.checked)}
                         className="mt-0.5 h-4 w-4 rounded border-border accent-[hsl(var(--primary))]"
+                        aria-describedby="reg-tos-help"
                       />
-                      <span className="text-xs text-muted-foreground leading-relaxed">
-                        Acepto los{" "}
-                        <a href="#" className="text-primary font-medium hover:underline">Términos de uso</a>{" "}
+                      <span id="reg-tos-help" className="text-xs text-muted-foreground leading-relaxed">
+                        He leído y acepto los{" "}
+                        <Link
+                          to="/legal/terminos"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary font-medium hover:underline"
+                        >
+                          Términos y Condiciones
+                        </Link>{" "}
                         y la{" "}
-                        <a href="#" className="text-primary font-medium hover:underline">Política de privacidad</a>.
+                        <Link
+                          to="/legal/privacidad"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary font-medium hover:underline"
+                        >
+                          Política de Privacidad
+                        </Link>{" "}
+                        de Byvaro (v{LEGAL_VERSION}).
                       </span>
                     </label>
 
