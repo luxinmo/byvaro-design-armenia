@@ -53,30 +53,10 @@ function isStepComplete(s: WizardState, sid: StepId): boolean {
   }
 }
 
-/** ¿El paso es OBLIGATORIO para publicar? Usado para pintar en rojo
- *  los pendientes críticos en la sidebar (vs tono neutro para opcionales). */
-function isStepRequired(s: WizardState, sid: StepId): boolean {
-  switch (sid) {
-    case "role":
-    case "tipo":
-    case "sub_uni":
-    case "sub_varias":
-    case "config_edificio":
-    case "estado":
-    case "info_basica":
-    case "multimedia":
-    case "crear_unidades":
-    case "plan_pagos":
-    case "detalles":
-      return true;
-    case "colaboradores":
-      return !!s.colaboracion; // solo si colabora
-    case "extras":
-    case "descripcion":
-    case "revision":
-      return false;
-  }
-}
+/* `isStepRequired` removed · el sidebar ya no diferencia visualmente
+ *  entre obligatorios y opcionales en pasos intermedios. La validación
+ *  de qué falta para activar vive solo en `RevisionStep.tsx` ·
+ *  consume `getMissingForWizard()` directamente. */
 
 /* ─── Definición de fases ─────────────────────────────────────────── */
 const PHASES: PhaseDef[] = [
@@ -180,24 +160,14 @@ export function PhaseTimeline({
     }))
     .filter(phase => phase.steps.length > 0);
 
-  /** Una fase tiene "pendientes obligatorios" si alguno de sus pasos
-   *  es requerido y aún no está completo. Pintamos la fase en rojo
-   *  aunque esté colapsada para que el usuario vea a golpe de vista
-   *  dónde le falta rellenar datos. */
-  const phaseHasPending = (phaseId: string): boolean => {
-    const phase = activePhases.find(p => p.id === phaseId);
-    if (!phase) return false;
-    return phase.steps.some((s) => isStepRequired(state, s) && !isStepComplete(state, s));
-  };
-
   // Estado de fases colapsadas: por defecto colapsadas todas excepto la
-  // actual y las que tengan pendientes obligatorios (para que el rojo
-  // sea visible al entrar sin tener que expandir cada una).
+  // actual. Antes auto-expandíamos las fases con "pendientes obligatorios"
+  // para hacer visibles los rojos · ahora el wizard es borrador-guiado y
+  // no grita errores · el usuario navega por los pasos a su ritmo.
   const currentPhase = activePhases.find(p => p.steps.includes(currentStep));
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(() => {
     const initial = new Set<string>();
     if (currentPhase) initial.add(currentPhase.id);
-    activePhases.forEach((p) => { if (phaseHasPending(p.id)) initial.add(p.id); });
     return initial;
   });
 
@@ -255,12 +225,12 @@ export function PhaseTimeline({
         const expanded = expandedPhases.has(phase.id) || status === "current";
         const doneCount = phase.steps.filter(s => doneSteps.has(s)).length;
         const total = phase.steps.length;
-        const hasPendingRequired = phase.steps.some((s) => isStepRequired(state, s) && !isStepComplete(state, s));
-        const pendingRequiredCount = phase.steps.filter((s) => isStepRequired(state, s) && !isStepComplete(state, s)).length;
 
         return (
           <div key={phase.id} className="flex flex-col">
-            {/* Fila de fase */}
+            {/* Fila de fase · estilo neutro · el wizard es un borrador
+                guiado · NO mostramos errores rojos en pasos intermedios.
+                La validación pre-publicación vive en el paso "Revisión". */}
             <button
               type="button"
               onClick={() => togglePhase(phase.id)}
@@ -268,13 +238,11 @@ export function PhaseTimeline({
                 "group flex items-center gap-2.5 rounded-xl px-2.5 py-2 transition-colors text-left relative",
                 status === "current"
                   ? "bg-primary/5 border border-primary/20"
-                  : hasPendingRequired
-                    ? "border border-destructive/30 bg-destructive/5 hover:bg-destructive/10"
-                    : "border border-transparent hover:bg-muted/60",
+                  : "border border-transparent hover:bg-muted/60",
               )}
               aria-expanded={expanded}
             >
-              {/* Icono fase · dot rojo encima si hay pendientes obligatorios. */}
+              {/* Icono fase */}
               <div className="relative shrink-0">
                 <div
                   className={cn(
@@ -283,17 +251,11 @@ export function PhaseTimeline({
                       ? "bg-primary text-primary-foreground"
                       : status === "current"
                         ? "bg-primary/15 text-primary"
-                        : hasPendingRequired
-                          ? "bg-destructive/10 text-destructive"
-                          : "bg-muted text-muted-foreground",
+                        : "bg-muted text-muted-foreground",
                   )}
                 >
                   {status === "done" ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : <Icon className="h-3.5 w-3.5" />}
                 </div>
-                {/* Dot rojo · indicador claro aunque la fase esté colapsada */}
-                {hasPendingRequired && status !== "done" && (
-                  <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-background" />
-                )}
               </div>
 
               {/* Texto */}
@@ -306,15 +268,13 @@ export function PhaseTimeline({
                         ? "text-primary"
                         : status === "done"
                           ? "text-foreground"
-                          : hasPendingRequired
-                            ? "text-destructive"
-                            : "text-muted-foreground",
+                          : "text-muted-foreground",
                     )}
                   >
                     <span className="text-[10px] text-muted-foreground font-medium mr-1.5 tnum">{phaseIdx + 1}</span>
                     {phase.label}
                   </p>
-                  {/* Badge contador · rojo si hay obligatorios pendientes. */}
+                  {/* Badge contador · neutro siempre · solo informa progreso. */}
                   <span
                     className={cn(
                       "shrink-0 tnum text-[10px] font-semibold rounded-full px-1.5 py-0.5 min-w-[28px] text-center",
@@ -322,22 +282,14 @@ export function PhaseTimeline({
                         ? "bg-primary/10 text-primary"
                         : status === "current"
                           ? "bg-primary text-primary-foreground"
-                          : hasPendingRequired
-                            ? "bg-destructive/10 text-destructive"
-                            : "bg-muted text-muted-foreground",
+                          : "bg-muted text-muted-foreground",
                     )}
-                    title={hasPendingRequired ? `${pendingRequiredCount} obligatorio${pendingRequiredCount > 1 ? "s" : ""} pendiente${pendingRequiredCount > 1 ? "s" : ""}` : undefined}
                   >
                     {doneCount}/{total}
                   </span>
                 </div>
-                <p className={cn(
-                  "text-[10.5px] truncate mt-0.5",
-                  hasPendingRequired && status !== "current" ? "text-destructive/80" : "text-muted-foreground",
-                )}>
-                  {hasPendingRequired && status !== "current"
-                    ? `${pendingRequiredCount} pendiente${pendingRequiredCount > 1 ? "s" : ""} obligatorio${pendingRequiredCount > 1 ? "s" : ""}`
-                    : phase.description}
+                <p className="text-[10.5px] truncate mt-0.5 text-muted-foreground">
+                  {phase.description}
                 </p>
               </div>
 
@@ -356,8 +308,6 @@ export function PhaseTimeline({
                 {phase.steps.map((stepId) => {
                   const isCurrent = stepId === currentStep;
                   const isDone = doneSteps.has(stepId);
-                  const required = isStepRequired(state, stepId);
-                  const isPendingRequired = !isDone && !isCurrent && required;
                   const summary = stepSummaries.get(stepId) ?? null;
 
                   return (
@@ -370,7 +320,11 @@ export function PhaseTimeline({
                         isCurrent ? "bg-primary/5" : "hover:bg-muted/50",
                       )}
                     >
-                      {/* Bullet · verde check si done, rojo si pendiente obligatorio, neutro si opcional */}
+                      {/* Bullet · check verde si done, dot azul si current,
+                          círculo neutro vacío en el resto. Antes pintábamos
+                          rojo "obligatorio pendiente" · era agresivo en
+                          medio del flujo · el wizard es borrador, no
+                          formulario validado. */}
                       <div className="mt-0.5 shrink-0">
                         {isDone ? (
                           <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -379,10 +333,6 @@ export function PhaseTimeline({
                         ) : isCurrent ? (
                           <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary/15">
                             <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                          </span>
-                        ) : isPendingRequired ? (
-                          <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border-[1.5px] border-destructive">
-                            <span className="h-1 w-1 rounded-full bg-destructive" />
                           </span>
                         ) : (
                           <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-muted-foreground/30" />
@@ -396,9 +346,7 @@ export function PhaseTimeline({
                               ? "text-primary font-semibold"
                               : isDone
                                 ? "text-foreground font-medium"
-                                : isPendingRequired
-                                  ? "text-destructive font-medium"
-                                  : "text-muted-foreground",
+                                : "text-muted-foreground",
                           )}
                         >
                           {stepLabels[stepId]}
