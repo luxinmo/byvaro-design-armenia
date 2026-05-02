@@ -142,10 +142,18 @@ interface TeamMember {
 y capacidad. Un `member` puede tener `canAcceptRegistrations = true` sin
 ser `admin`. Ver §6 de `docs/permissions.md` y ADR-048.
 
-**Mock inicial:** `TEAM_MEMBERS` en `src/lib/team.ts` (8 miembros que
-cubren todos los estados). Se persisten cambios de admin en
-`byvaro.organization.members.v4` (bump tras catálogo de jobTitles +
-avatars SVG).
+**Hidratación desde Supabase (real)** · `src/lib/teamHydrator.ts` ·
+`hydrateTeamFromSupabase()` se invoca en `SupabaseHydrator.hydrateAll()`
+al login y on-auth-change. Pulla `organization_members` + `users` del
+workspace activo y rellena el cache de equipo (memCache). Sin esto, los
+usuarios registrados vía `/register` no aparecen en `/equipo`,
+`/ajustes/usuarios/miembros`, ni en los selectores de asignación
+(UserSelect, calendario).
+
+**Mock seed (para entornos sin Supabase configurado):** `TEAM_MEMBERS`
+en `src/lib/team.ts`. Persistencia legacy en
+`byvaro.organization.members.v4`. Cuando hay Supabase configurado, el
+hidrator sobreescribe el mock con los datos reales del workspace.
 
 **Campos añadidos en abril 2026 (ver ADR-048 y ADR-049):**
 
@@ -998,7 +1006,168 @@ Indices recomendados:
 - `units(promotion_id, status)` — disponibilidad
 - `contacts(company_id, phone_hash)` — dedup del CRM
 
-Migraciones: carpeta pendiente `supabase/migrations/` o `prisma/migrations/`.
+Migraciones: `supabase/migrations/` (real, en uso desde abril 2026).
+
+---
+
+## Schema implementado en Supabase (real · 2026-05)
+
+Lo que efectivamente está creado en Postgres (vía migraciones en
+`supabase/migrations/`). Cuando este apartado y el "Schema SQL
+sugerido" diverjan, **manda este**.
+
+### Auth · `users` + `organizations` + `organization_members`
+
+```sql
+-- supabase.auth.users · gestionado por Supabase Auth (no se toca)
+
+-- public.organization_profiles + public.organizations
+-- multi-tenancy + datos de la empresa
+CREATE TABLE public.organizations (
+  id uuid PRIMARY KEY,
+  kind text CHECK (kind IN ('developer','agency')),
+  public_ref text UNIQUE NOT NULL,    -- "ID·123·456" formato
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE public.organization_members (
+  user_id uuid REFERENCES auth.users(id),
+  organization_id uuid REFERENCES public.organizations(id),
+  role text CHECK (role IN ('admin','member')),
+  status text DEFAULT 'active',
+  created_at timestamptz DEFAULT now(),
+  PRIMARY KEY (user_id, organization_id)
+);
+
+-- public.users · espejo de auth.users con name + terms_accepted
+CREATE TABLE public.users (
+  id uuid PRIMARY KEY REFERENCES auth.users(id),
+  name text,
+  email text,
+  public_ref text UNIQUE,            -- "US·1234567"
+  terms_accepted_at timestamptz,     -- timestamp de aceptación T&C+Privacidad
+  created_at timestamptz DEFAULT now()
+);
+```
+
+**Trigger DB · auto-create org + member en signup**
+
+Cuando un usuario completa `/register`, no tiene sesión válida aún
+(email sin verificar) y por tanto no puede insertar nada por sí mismo
+(RLS lo bloquearía). El trigger DB resuelve el catch-22:
+
+```sql
+-- Migración: 20260502190000_signup_auto_create_org.sql
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+DECLARE
+  org_id uuid;
+BEGIN
+  -- crea la organization
+  INSERT INTO public.organizations (kind, public_ref)
+  VALUES (
+    COALESCE(new.raw_user_meta_data->>'kind', 'developer'),
+    public.gen_org_public_ref()
+  )
+  RETURNING id INTO org_id;
+
+  -- añade al user como admin
+  INSERT INTO public.organization_members (user_id, organization_id, role)
+  VALUES (new.id, org_id, 'admin');
+
+  -- crea el espejo en public.users con terms_accepted
+  INSERT INTO public.users (id, name, email, terms_accepted_at)
+  VALUES (
+    new.id,
+    new.raw_user_meta_data->>'name',
+    new.email,
+    CASE WHEN (new.raw_user_meta_data->>'terms_accepted')::boolean
+         THEN now() ELSE NULL END
+  );
+
+  -- crea el plan inicial (trial 180 días para developer / agency_free para agency)
+  PERFORM public.init_workspace_plan(org_id, COALESCE(new.raw_user_meta_data->>'kind', 'developer'));
+
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+CREATE TRIGGER on_auth_user_created
+AFTER INSERT ON auth.users
+FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+```
+
+**RLS bootstrap policies** · `users` y `organizations` necesitan
+políticas que permitan el primer insert sin sesión (vía SECURITY
+DEFINER del trigger). Ver migraciones `20260502_signup_*` para el
+detalle.
+
+### Plan · `workspace_plans`
+
+Source of truth de la suscripción del workspace · vive a nivel
+`organization`, NUNCA a nivel `user`.
+
+```sql
+CREATE TABLE public.workspace_plans (
+  organization_id uuid PRIMARY KEY REFERENCES public.organizations(id),
+  /* Tipo de signup original · NO cambia · gobierna los beneficios "alta nueva" */
+  signup_kind text CHECK (signup_kind IN ('agency','promoter')),
+  /* Pack agencia · activable por cualquier workspace */
+  agency_pack text DEFAULT 'none' CHECK (agency_pack IN ('none','free','marketplace')),
+  /* Pack promotor · activable por cualquier workspace */
+  promoter_pack text DEFAULT 'none' CHECK (promoter_pack IN ('none','trial','promoter_249','promoter_329')),
+  /* Trial · 180 días encima del Básico · solo si signup=promoter */
+  trial_started_at timestamptz,
+  trial_ends_at timestamptz,         -- now() + interval '180 days'
+  /* Legacy single-tier · derivado · mantenido para queries pendientes de migrar */
+  tier text,
+  activated_at timestamptz,
+  cancelled_at timestamptz,
+  updated_at timestamptz DEFAULT now()
+);
+```
+
+**Init al signup** · función `init_workspace_plan(org_id, kind)`:
+- `kind='developer'` → `signup_kind='promoter'`, `promoter_pack='trial'`,
+  `trial_started_at=now()`, `trial_ends_at=now() + interval '180 days'`.
+- `kind='agency'` → `signup_kind='agency'`, `agency_pack='free'` (sin
+  trial · agencias gratis perpetuamente).
+
+**Beneficios "alta nueva" no heredables:**
+- Las **10 solicitudes de colaboración** del `agency_pack='free'` solo
+  aplican si `signup_kind='agency'`. Un promotor que activa
+  `agency_pack='free'` paga 0€ pero recibe 0 solicitudes.
+- Los **180 días de trial** del `promoter_pack='trial'` solo aplican si
+  `signup_kind='promoter'`. Una agencia que quiere actuar como promotor
+  paga 249€/mes desde el día 1.
+
+**Helpers TypeScript** · `src/lib/plan.ts`:
+- `usePlanState()` · hook reactivo · `PlanState` completo.
+- `usePlanLimits()` · derivado de `deriveLimits(state)`.
+- `setAgencyPack(user, pack)`, `setPromoterPack(user, pack)` ·
+  upsert atómico que respeta el otro pack.
+- Trial helpers · `trialDaysRemaining()`, `isInTrialWindow()`,
+  `trialDaysConsumed()`, `formatTrialEndDate()`,
+  `TRIAL_DURATION_DAYS = 180`.
+- Hidratación · `hydratePlanForCurrentUser()` invocada en
+  `SupabaseHydrator.hydrateAll()`.
+
+**Stripe (TODO)** · webhook `customer.subscription.*` actualiza
+`promoter_pack` o `agency_pack` server-side · tabla
+`stripe_events_processed` para idempotencia.
+
+### Términos legales · `terms_accepted_at`
+
+Persistido en `public.users.terms_accepted_at` por el trigger de
+signup cuando el checkbox está marcado en `/register`. NULL si el user
+nunca aceptó (caso edge · signup pre-2026-05). UI futura pedirá
+re-aceptación si se actualiza el contenido legal (versionar T&C).
+
+Páginas legales · `/legal/terminos` (`pages/legal/Terminos.tsx`) y
+`/legal/privacidad` (`pages/legal/Privacidad.tsx`) · enlazadas desde
+el checkbox de `/register`.
+
+---
 
 ## Multi-tenancy
 

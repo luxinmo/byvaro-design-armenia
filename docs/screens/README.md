@@ -41,14 +41,19 @@ contract, permisos, estados, enlaces salientes.
 
 ### Auth & Onboarding
 
-| Pantalla | Ruta | Archivo |
-|---|---|---|
-| Login | `/login` | [`auth.md`](auth.md) |
-| Registro | `/register` | [`auth.md`](auth.md) |
-| Forgot password | `/forgot-password` | (pendiente) |
-| Reset password | `/reset-password` | (pendiente) |
-| Verify code | `/verify-code` | (pendiente) |
-| Onboarding | `/onboarding` | (pendiente) |
+| Pantalla | Ruta | Archivo | Estado |
+|---|---|---|---|
+| Login | `/login` | [`auth.md`](auth.md) | ✅ implementada (Supabase Auth) |
+| Registro | `/register` | [`auth.md`](auth.md) | ✅ implementada (signup real · trigger DB crea org+member) |
+| Email enviado tras signup | `/register/email-sent` | (inline en `Register.tsx`) | ✅ implementada (botón reenviar) |
+| Términos y condiciones | `/legal/terminos` | (inline en `pages/legal/Terminos.tsx`) | ✅ implementada · linkado desde checkbox de `/register` |
+| Política de privacidad | `/legal/privacidad` | (inline en `pages/legal/Privacidad.tsx`) | ✅ implementada · linkado desde checkbox de `/register` |
+| Aceptar invitación | `/invite/:token` | (pendiente doc) | ✅ implementada (`InviteAccept.tsx`) |
+| Aceptar responsable | `/responsible/:token` | (pendiente doc) | ✅ implementada (`ResponsibleAccept.tsx`) |
+| Forgot password | `/forgot-password` | (pendiente) | 🎨 placeholder |
+| Reset password | `/reset-password` | (pendiente) | 🎨 placeholder |
+| Verify code | `/verify-code` | (pendiente) | 🎨 placeholder |
+| Onboarding | `/onboarding` | (pendiente) | 🎨 placeholder |
 
 ### Vista Agencia (pendiente de diseño)
 

@@ -274,19 +274,35 @@ se implemente.
 
 ### 2 · Modelo de negocio · SOURCE OF TRUTH
 
-- **Promotores (developers) pagan 249€/mes + IVA** · postpago · sin permanencia.
-- **Agencias gratis en Fase 1** · ningún gate aplica a `kind='agency'`.
+- **Filosofía Plan Básico permanente** · el plan Básico es la base
+  perpetua del workspace. El promotor recién registrado tiene una
+  ventana de **180 días de trial** encima del Básico (acceso completo).
+  Cuando expira, sigue en Básico (acceso a sus datos · sin crear
+  promociones nuevas) hasta que active el plan de pago.
+- **Promotores pagan 249€/mes + IVA** (plan Plus) · postpago · sin
+  permanencia. Plan Ultra a 329€/mes para >5 promociones activas.
+- **Agencias** · plan Básico gratis para siempre si las invita un
+  promotor + 10 solicitudes propias en su provincia. Plan Plus 99€/mes
+  · directorio nacional + solicitudes ilimitadas (marketplace).
+- **Naming canónico de UI** · Básico / Plus / Ultra. Nunca "trial",
+  "freemium", "starter", "pro" en copy visible.
 - **Plan vive a nivel `organization` (workspace)** · nunca por `user`.
-- **Solo developers se monetizan** en Fase 1.
+  Modelo dual de packs · `signup_kind` + `agency_pack` + `promoter_pack`
+  (cada workspace puede activar ambos packs · ver
+  `docs/screens/ajustes-plan.md`).
 - **El counter `acceptRegistro` cuenta SOLO registros con `origen: "collaborator"`** (de agencias). Walk-ins del promotor, portales (Idealista, Fotocasa…) y registros directos NO consumen cupo · son leads del propio promotor. Ver `docs/portal-leads-integration.md`.
 
 | Tier | Promociones activas | Agencias invitadas | Registros recibidos |
 |---|---:|---:|---:|
-| `trial` | 2 | 5 | 40 |
-| `promoter_249` | 5 (cap producto) | ∞ | ∞ |
+| `trial` (180 días) | 5 | ∞ | ∞ |
+| `promoter_249` (Plus) | 5 (cap producto) | ∞ | ∞ |
+| `promoter_329` (Ultra) | 10 | ∞ | ∞ |
 
-**Stripe es la única autoridad que activa `promoter_249`** (vía webhook
-`customer.subscription.created`). Ningún path de aplicación lo activa.
+**Stripe es la única autoridad que activa `promoter_249/329`** (vía
+webhook `customer.subscription.created`). Ningún path de aplicación lo
+activa. Constante canónica `TRIAL_DURATION_DAYS = 180` en
+`src/lib/plan.ts` · cambia ahí + en el trigger DB
+`init_workspace_plan()`.
 
 ### 3 · Frontend vs Backend · responsabilidades
 
@@ -391,31 +407,35 @@ Si una decisión es ambigua, stop y pregunta. Añádela a
   webhook Stripe.
 - ❌ Aplicar gates a agencias.
 
-### 8 · Backend status
+### 8 · Backend status (2026-05)
 
-**El backend NO está implementado.** Solo existe el prototipo frontend.
+**Auth + multi-tenancy + plan inicial · ✅ implementado.**
+**Paywall enforcement (Stripe + 402 server-side) · ⬜ pendiente.**
 
 La spec completa está en:
-- `docs/backend-integration.md §12` — DDL, endpoints, webhooks, enforcement,
-  migration plan.
+- `docs/data-model.md §"Schema implementado en Supabase (real)"` —
+  DDL real ya en producción (auth, organizations, workspace_plans,
+  trigger DB, RLS bootstrap).
+- `docs/backend-integration.md §12` — DDL legacy + endpoints
+  pendientes de Stripe.
 - `docs/screens/ajustes-plan.md` — contrato UI de `/ajustes/facturacion/plan`.
 - `DECISIONS.md` ADR-058 — razones del diseño.
 
-El backend debe incluir:
+| Componente | Estado | Notas |
+|---|---|---|
+| `organizations`, `public.users`, `organization_members` | ✅ implementado | Trigger `handle_new_user` auto-crea org+member en signup |
+| `workspace_plans` (signup_kind + packs + trial_*) | ✅ implementado | `init_workspace_plan()` rellena `trial_ends_at = now() + 180 días` |
+| RLS bootstrap policies | ✅ implementado | Permite primer insert vía SECURITY DEFINER del trigger |
+| `terms_accepted_at` en `public.users` | ✅ implementado | Persistido por trigger desde checkbox de `/register` |
+| `teamHydrator` · pull `organization_members` | ✅ implementado | `src/lib/teamHydrator.ts` invocado en SupabaseHydrator |
+| `promotions`, `agency_invitations`, `registrations` | 🟡 parcial | Tablas existen · mutations write-through · falta enforcement |
+| `workspace_usage()` SQL function | ⬜ pendiente | Counters server-side on-demand |
+| `assertWithinLimit()` middleware | ⬜ pendiente | Enforcement 402 en los 3 mutantes |
+| Stripe Checkout + Customer Portal + webhook | ⬜ pendiente | `setPromoterPack`/`setAgencyPack` mock activan el pack en frontend |
+| `paywall_events` | 🟡 parcial | Tracking en `src/lib/analytics.ts` (console.info + PostHog) |
+| `stripe_events_processed` | ⬜ pendiente | Idempotencia webhook |
 
-| Componente | Propósito |
-|---|---|
-| `organizations`, `users`, `memberships` | Multi-tenancy + auth |
-| `workspace_plans` | Estado del plan |
-| `promotions`, `agency_invitations`, `registrations` | Entidades counted |
-| `workspace_usage()` SQL function | Única fuente de los counters |
-| `assertWithinLimit()` middleware | Enforcement en los 3 mutantes |
-| Stripe Checkout + Customer Portal + webhook | Billing |
-| `paywall_events` | Tracking de validación |
-| `stripe_events_processed` | Webhook idempotency |
-| RLS en cada tabla multi-tenant | Aislamiento de datos |
-
-Estimado: ~6 días de un backend engineer hasta production-ready.
+Resta · ~3-4 días de backend para Stripe + enforcement 402.
 
 ### 9 · Validation first · IMPORTANT
 
@@ -1455,6 +1475,76 @@ como `Qnueva` en `docs/open-questions.md` en el mismo PR.
 - [ ] El sidebar / botones / datos tienen sentido en ambos roles?
 - [ ] Si escondí algo por rol, hay `TODO(backend)` junto al check de
       permiso anotando la key de la matriz (ver `docs/permissions.md`)?
+
+---
+
+## 🚪 REGLA DE ORO · Audiencias y PackGuard de rutas
+
+> **Cada ruta y cada item del sidebar/MobileBottomNav declara qué pack
+> necesita el workspace para usarla** (ej. `agency-only`, `promoter-only`,
+> `both`). Si el workspace no tiene el pack activo, la ruta queda
+> bloqueada por `<PackGuard>` y el item se renderiza con candado +
+> toast informativo al click.
+
+**Por qué.** El modelo dual de packs (`signup_kind` + `agency_pack` +
+`promoter_pack`) significa que un mismo usuario puede tener UNA pestaña
+con todas las features y otra con solo el subset que su pack permite.
+Sin un guard centralizado, las rutas leakean (un agency con
+`promoter_pack='none'` podría entrar a `/promociones/nueva` por URL
+directa). Sin un display claro en el sidebar, el usuario hace click
+en algo que no está activo y le sale un error genérico.
+
+**Cómo se aplica.**
+
+1. **Items del sidebar y MobileBottomNav** declaran `audiences` ·
+   array con los packs que tienen acceso. Ejemplo:
+   ```ts
+   { label: "Promociones", to: "/promociones",
+     audiences: ["promoter_*", "agency_marketplace"] }
+   ```
+   Si el workspace activo no encaja con ninguna audience, el item
+   muestra icono de candado + tooltip "Activa el plan {X} para
+   usar". Click → toast Sonner explicando qué pack falta + link a
+   `/planes`.
+
+2. **Rutas en `App.tsx`** envueltas en `<PackGuard>` con la misma
+   lista de audiences. Si el guard falla:
+   - Redirige a `/planes` con un query param `?from=<ruta>` para
+     contexto.
+   - Muestra toast explicando qué pack hace falta.
+   - El "back" del browser recuerda de dónde venía.
+
+3. **Componentes individuales** (botones que disparan acciones de
+   un pack que no está) · usar `useUsageGuard()` con la trigger
+   correspondiente · ver "Paywall enforcement · NON-NEGOTIABLE".
+
+**Definición de audiences canónicas:**
+
+| Audience | Significa |
+|---|---|
+| `promoter_trial` | `promoter_pack === 'trial'` |
+| `promoter_paid` | `promoter_pack === 'promoter_249' \|\| 'promoter_329'` |
+| `promoter_*` | cualquier `promoter_pack !== 'none'` |
+| `agency_free` | `agency_pack === 'free'` |
+| `agency_marketplace` | `agency_pack === 'marketplace'` |
+| `agency_*` | cualquier `agency_pack !== 'none'` |
+| `any` | siempre disponible (perfil, ajustes, planes) |
+
+**Checklist al añadir una ruta o un item de menú:**
+- [ ] ¿La ruta requiere un pack concreto? Si sí, envuelve en
+      `<PackGuard audiences={[...]}>`.
+- [ ] ¿El item correspondiente del sidebar/MobileBottomNav declara
+      `audiences`? Si no aplica a alguien, ese alguien debe verlo
+      con candado.
+- [ ] ¿El toast de bloqueo es accionable? Debe mencionar qué pack
+      activar y linkear a `/planes`.
+
+**Archivos clave:**
+- `src/App.tsx` · `<PackGuard>` envuelve rutas.
+- `src/components/AppSidebar.tsx` · items con `audiences`.
+- `src/components/MobileBottomNav.tsx` · idem.
+- `src/lib/plan.ts` · helpers `isPromoterActive`, `isAgencyActive`,
+  `isPromoterPaid`, `isAgencyPaid`.
 
 ---
 

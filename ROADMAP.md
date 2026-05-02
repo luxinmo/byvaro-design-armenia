@@ -57,8 +57,13 @@ Por diseñar después de clavar la vista Promotor completa.
 
 | Estado | Pantalla | Ruta | Notas |
 |---|---|---|---|
-| ⬜ | Login | `/login` | Email + password + Google |
-| ⬜ | Registro | `/register` | Crear cuenta + empresa |
+| ✅ | Login | `/login` | Supabase Auth · email + password · hidrata sessionStorage con name + organizationId desde JWT |
+| ✅ | Registro | `/register` | Signup real · trigger DB crea `org + organization_member` automático · `terms_accepted` persistido |
+| ✅ | Email enviado tras signup | `/register/email-sent` | Inline en `Register.tsx` · botón reenviar |
+| ✅ | Términos y condiciones | `/legal/terminos` | `pages/legal/Terminos.tsx` · linkado desde checkbox de `/register` |
+| ✅ | Política de privacidad | `/legal/privacidad` | `pages/legal/Privacidad.tsx` · linkado desde checkbox de `/register` |
+| ✅ | Aceptar invitación de equipo | `/invite/:token` | `InviteAccept.tsx` |
+| ✅ | Aceptar designación de responsable | `/responsible/:token` | `ResponsibleAccept.tsx` |
 | ⬜ | Forgot password | `/forgot-password` | Envío de link |
 | ⬜ | Reset password | `/reset-password` | Nuevo password con token |
 | ⬜ | Verify code | `/verify-code` | 2FA |
@@ -245,7 +250,28 @@ Dependencias y plan detallado en [`docs/screens/emails.md`](docs/screens/emails.
 
 ### ⬜ Fase 14 — Ajustes · Empresa, Equipo, Facturación
 
-### ⬜ Fase 15 — Auth completo (Login, Register, Forgot, Verify, Reset, Onboarding promotor)
+### 🟢 Fase 15 — Auth completo
+
+- ✅ Login (Supabase Auth · hidrata `sessionStorage.name + organizationId` desde JWT al login y al detectar sesión activa)
+- ✅ Register (signup real · trigger DB `signup_auto_create_org` · RLS bootstrap policies para crear org + primer admin sin sesión)
+- ✅ Pantalla "Email enviado" tras signup + botón reenviar
+- ✅ Páginas legales `/legal/terminos` + `/legal/privacidad` + checkbox `terms_accepted` persistido
+- ✅ Aceptar invitaciones (`/invite/:token`, `/responsible/:token`)
+- ⬜ Forgot password / Reset password
+- ⬜ Verify code (2FA)
+- ⬜ Onboarding wizard post-registro
+
+### 🟢 Fase 16 — Plan & paywall · filosofía Plan Básico permanente
+
+- ✅ Modelo dual de packs (`signup_kind`, `agency_pack`, `promoter_pack`) en `workspace_plans`
+- ✅ Trial = ventana de **180 días** encima de Básico (`TRIAL_DURATION_DAYS = 180`) · trigger DB rellena `trial_ends_at`
+- ✅ Naming canónico **Básico/Plus/Ultra** en UI
+- ✅ `/ajustes/facturacion/plan` rediseñada · 3 cajas (plan actual · prueba restante · plan de pago)
+- ✅ `/planes` con 2 secciones por audiencia (Promotores/Comercializadores · Inmobiliarias)
+- ✅ Helpers reactivos · `usePlanState`, `usePlanLimits`, `isInTrialWindow`, `trialDaysRemaining`, `trialDaysConsumed`, `formatTrialEndDate`
+- ✅ `PackGuard` de rutas + `audiences` en items de sidebar / MobileBottomNav (lock + toast si pack inactivo)
+- ⬜ Stripe Checkout + webhooks `customer.subscription.*` (mock activa el pack vía `setPromoterPack` / `setAgencyPack`)
+- ⬜ Server-side `assertWithinLimit()` con respuesta 402 canónica
 
 ### ⬜ Fase 16 — Integraciones (WhatsApp, n8n, S3, portales)
 Definidas con el promotor en una fase posterior.
