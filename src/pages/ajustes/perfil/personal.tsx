@@ -38,7 +38,6 @@ import {
   parseJobTitle, encodeJobTitle, derivedDepartment,
 } from "@/data/jobTitles";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 
 const DEPARTMENT_SUGGESTIONS = [
   "Comercial", "Marketing", "Operaciones", "Administración",
