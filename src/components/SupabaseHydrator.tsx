@@ -22,6 +22,7 @@ import { hydrateAgencyProfilesFromSupabase } from "@/lib/agencyProfile";
 import { hydrateTwoFactorFromSupabase } from "@/lib/twoFactor";
 import { hydrateDeveloperPacksFromSupabase } from "@/lib/empresaCategories";
 import { hydrateUserPublicRefs } from "@/lib/userPublicRef";
+import { hydratePlanForCurrentUser } from "@/lib/plan";
 import { clearMemCache } from "@/lib/memCache";
 import { loginAs } from "@/lib/accountType";
 
@@ -92,6 +93,7 @@ async function hydrateAll(): Promise<void> {
     hydrateTwoFactorFromSupabase(),
     hydrateDeveloperPacksFromSupabase(),
     hydrateUserPublicRefs(),
+    hydratePlanForCurrentUser(),
   ]);
 }
 

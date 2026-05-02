@@ -49,6 +49,14 @@ export type PlanState = {
   signupKind: SignupKind;
   agencyPack: AgencyPack;
   promoterPack: PromoterPack;
+  /** ISO date · solo presente si promoterPack === "trial" · usado para
+   *  mostrar "tu prueba acaba el dd/mm/yyyy · N días restantes" en
+   *  `/ajustes/facturacion/plan`. Lo setea el trigger DB al crear el
+   *  workspace (`now() + interval '6 months'`). */
+  trialEndsAt?: string;
+  /** ISO date · cuándo arrancó el trial · usado para auditoría y para
+   *  saber cuánto del trial se ha consumido. */
+  trialStartedAt?: string;
 };
 
 export type PlanLimits = {
@@ -133,7 +141,11 @@ export const AGENCY_PACK_LABEL: Record<AgencyPack, string> = {
 
 export const PROMOTER_PACK_LABEL: Record<PromoterPack, string> = {
   none: "Sin pack promotor",
-  trial: "Promotor · 6 meses gratis",
+  /* Trial · etiqueta visible NO menciona el precio · el usuario que
+   *  acaba de registrarse no debe ver "249€" como label principal · el
+   *  precio futuro va en un sub-card discreto y en `/planes`.
+   *  Ver `/ajustes/facturacion/plan` · subtitle del card principal. */
+  trial: "Plan gratuito · prueba",
   promoter_249: "Promotor · 249€/mes",
   promoter_329: "Promotor · 329€/mes",
 };
@@ -197,13 +209,40 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
 };
 
 export const PLAN_LABEL: Record<PlanTier, string> = {
-  trial: "Promotor · 6 meses gratis",
+  trial: "Plan gratuito · prueba",
   promoter_249: "Promotor · 249€/mes",
   promoter_329: "Promotor · 329€/mes",
   agency_free: "Agencia · Gratis",
   agency_marketplace: "Agencia · Marketplace · 99€/mes",
   enterprise: "Enterprise",
 };
+
+/* ══════ Trial helpers ════════════════════════════════════════════ */
+
+/** Días restantes del trial · usado en el subtítulo de
+ *  `/ajustes/facturacion/plan` y en banners. Devuelve null si no hay
+ *  trial activo o no hay `trialEndsAt` en el state.
+ *  Negativo si el trial ya expiró (Stripe debería haber convertido). */
+export function trialDaysRemaining(state: PlanState): number | null {
+  if (state.promoterPack !== "trial" || !state.trialEndsAt) return null;
+  const end = new Date(state.trialEndsAt).getTime();
+  const now = Date.now();
+  return Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+}
+
+/** Fecha legible del fin del trial · "2 de noviembre de 2026". */
+export function formatTrialEndDate(state: PlanState): string | null {
+  if (!state.trialEndsAt) return null;
+  try {
+    return new Date(state.trialEndsAt).toLocaleDateString("es-ES", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return null;
+  }
+}
 
 /* ══════ Cache local · render-only ════════════════════════════════ */
 
@@ -235,6 +274,10 @@ function writeCache(workspaceKey: string, state: PlanState): void {
 
 function orgIdForUser(user: CurrentUser): string {
   if (user.accountType === "agency" && user.agencyId) return user.agencyId;
+  /* Developer · prioriza el `organizationId` real (viene del JWT +
+   *  organization_members al login). Solo cae al sentinel "developer-
+   *  default" para mocks legacy sin signup real. */
+  if (user.organizationId) return user.organizationId;
   return "developer-default";
 }
 
@@ -242,6 +285,30 @@ function defaultStateForUser(user: CurrentUser): PlanState {
   return user.accountType === "agency"
     ? DEFAULT_PLAN_STATE_AGENCY
     : DEFAULT_PLAN_STATE_PROMOTER;
+}
+
+/** Hidrata el plan desde Supabase usando los datos de sessionStorage
+ *  (no requiere CurrentUser construido) · llamado por
+ *  `SupabaseHydrator` al login + on-auth-change. Internamente reusa
+ *  `hydratePlanFromSupabase` con un user sintético. */
+export async function hydratePlanForCurrentUser(): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const { readAccountType } = await import("./accountType");
+    const snap = readAccountType();
+    const synthUser: CurrentUser = {
+      id: "anonymous",
+      name: "",
+      email: snap.developerEmail ?? "",
+      role: "admin",
+      organizationId: snap.organizationId ?? "",
+      accountType: snap.type,
+      agencyId: snap.type === "agency" ? snap.agencyId : undefined,
+    };
+    await hydratePlanFromSupabase(synthUser);
+  } catch (e) {
+    console.warn("[plan:hydrate] skipped:", e);
+  }
 }
 
 export async function hydratePlanFromSupabase(user: CurrentUser): Promise<PlanState | null> {
@@ -253,7 +320,7 @@ export async function hydratePlanFromSupabase(user: CurrentUser): Promise<PlanSt
     const orgId = orgIdForUser(user);
     const { data, error } = await supabase
       .from("workspace_plans")
-      .select("signup_kind, agency_pack, promoter_pack")
+      .select("signup_kind, agency_pack, promoter_pack, trial_started_at, trial_ends_at")
       .eq("organization_id", orgId)
       .maybeSingle();
     if (error) {
@@ -265,6 +332,8 @@ export async function hydratePlanFromSupabase(user: CurrentUser): Promise<PlanSt
       signupKind: (data.signup_kind as SignupKind) ?? defaultStateForUser(user).signupKind,
       agencyPack: (data.agency_pack as AgencyPack) ?? "none",
       promoterPack: (data.promoter_pack as PromoterPack) ?? "none",
+      trialStartedAt: data.trial_started_at ?? undefined,
+      trialEndsAt: data.trial_ends_at ?? undefined,
     };
     writeCache(currentWorkspaceKey(user), state);
     return state;

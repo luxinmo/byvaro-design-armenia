@@ -11,14 +11,15 @@
  * al portal hosted. Hoy mockean cambio de tier vía localStorage.
  */
 
-import { Crown, Sparkles, Check, ArrowRight, Handshake } from "lucide-react";
+import { Crown, Sparkles, Check, ArrowRight, Handshake, Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { SettingsScreen, SettingsCard } from "@/components/settings/SettingsScreen";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
-  usePlan, PLAN_LIMITS, PLAN_LABEL,
+  usePlan, usePlanState, PLAN_LIMITS, PLAN_LABEL,
   cancelSubscription, setPlan, isAgencyPlan, isPromoterPlan,
+  trialDaysRemaining, formatTrialEndDate,
   type PlanTier,
 } from "@/lib/plan";
 import { useUsageCounters } from "@/lib/usage";
@@ -30,10 +31,20 @@ type UsageRow = { label: string; used: number; limit: number };
 
 export default function AjustesFacturacionPlan() {
   const tier = usePlan();
+  const planState = usePlanState();
   const counters = useUsageCounters();
   const limits = PLAN_LIMITS[tier];
   const user = useCurrentUser();
   const isAgency = user.accountType === "agency";
+
+  /* Datos del trial · null si no hay trial activo · usado para mostrar
+   *  fecha de fin + días restantes en lugar del genérico "6 meses". */
+  const daysRemaining = trialDaysRemaining(planState);
+  const trialEndDate = formatTrialEndDate(planState);
+  /* Trial "urgente" · cuando faltan ≤30 días, mostramos CTA
+   *  "Suscribirme" prominente. Antes de ese umbral, CTA discreto
+   *  "Ver planes" · queremos NO asustar al usuario recién registrado. */
+  const trialUrgent = daysRemaining !== null && daysRemaining <= 30;
 
   /* Coherencia · si la sesión actual es agency pero el plan stored
    *  es de promotor (o viceversa), el caller debería haberlo migrado
@@ -82,9 +93,18 @@ export default function AjustesFacturacionPlan() {
     });
   };
 
-  /* Texto bajo el título según tier. */
+  /* Texto bajo el título según tier. Trial NO menciona el precio
+   *  futuro · solo da fecha de fin · evita asustar al usuario recién
+   *  registrado · ver doc/plan.md "Trial copy doctrine". */
   const subtitle = (() => {
-    if (tier === "trial") return "6 meses gratis · luego 249€/mes (IVA excl.)";
+    if (tier === "trial") {
+      if (trialEndDate && daysRemaining !== null) {
+        return daysRemaining > 0
+          ? `Tu prueba acaba el ${trialEndDate} · ${daysRemaining} ${daysRemaining === 1 ? "día restante" : "días restantes"}`
+          : `Tu prueba ha caducado · activa el plan Promotor para seguir`;
+      }
+      return "Acceso completo durante 6 meses · sin tarjeta requerida";
+    }
     if (tier === "promoter_249") return "249€/mes (IVA excl.) · postpago · sin permanencia";
     if (tier === "promoter_329") return "329€/mes (IVA excl.) · hasta 10 promociones";
     if (tier === "agency_free") return "Gratis para siempre si te invitan · 10 solicitudes propias en tu provincia";
@@ -93,11 +113,14 @@ export default function AjustesFacturacionPlan() {
     return "";
   })();
 
-  /* Icono visual del plan. */
+  /* Icono visual del plan. Trial usa Clock para reforzar la idea de
+   *  "tiempo limitado" sin connotación de pago · evita la corona del
+   *  plan premium que asusta. */
   const planIcon = (() => {
     if (tier === "agency_marketplace" || tier === "promoter_249" || tier === "promoter_329") {
       return <Crown className="h-6 w-6" />;
     }
+    if (tier === "trial") return <Clock className="h-6 w-6" />;
     if (tier === "agency_free") return <Handshake className="h-6 w-6" />;
     return <Sparkles className="h-6 w-6" />;
   })();
@@ -125,8 +148,20 @@ export default function AjustesFacturacionPlan() {
             </p>
             <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
           </div>
-          {/* CTA contextual según tier */}
-          {tier === "trial" && (
+          {/* CTA contextual según tier.
+           *  Trial · CTA discreto "Ver planes" en lugar de "Suscribirme"
+           *  para no asustar · si quedan ≤30 días o ya alcanzó algún
+           *  límite, sí muestra "Suscribirme" prominente. */}
+          {tier === "trial" && !trialUrgent && (
+            <Link
+              to="/planes"
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-border bg-card text-sm font-medium hover:bg-muted transition-colors shrink-0"
+            >
+              Ver planes
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          )}
+          {tier === "trial" && trialUrgent && (
             <Button onClick={handleSubscribePromoter} className="rounded-full bg-foreground text-background hover:bg-foreground/90">
               <Crown className="h-3.5 w-3.5" />
               Suscribirme
@@ -146,11 +181,36 @@ export default function AjustesFacturacionPlan() {
         </div>
       </SettingsCard>
 
+      {/* Mini-card discreto · solo trial · informa del precio futuro
+       *  sin mencionarlo en el header principal · transparencia legal
+       *  sin marketing agresivo. */}
+      {tier === "trial" && (
+        <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 flex items-start gap-3">
+          <div className="h-7 w-7 rounded-lg bg-card border border-border grid place-items-center shrink-0 mt-0.5 text-muted-foreground">
+            <Clock className="h-3.5 w-3.5" strokeWidth={1.8} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[12.5px] font-medium text-foreground">
+              Tras los 6 meses · 249€/mes (IVA excluido)
+            </p>
+            <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-relaxed">
+              Sin permanencia · cancela cuando quieras · si decides no continuar, mantienes tus datos en lectura.
+            </p>
+          </div>
+          <Link
+            to="/planes"
+            className="text-[11.5px] font-semibold text-primary hover:underline shrink-0 self-center"
+          >
+            Más detalles
+          </Link>
+        </div>
+      )}
+
       <SettingsCard
         title="Uso del workspace"
         description={
           tier === "trial"
-            ? "6 meses de prueba · cuando alcances un límite las acciones clave quedan bloqueadas hasta suscribirte."
+            ? "Acceso completo durante la prueba · cuando alcances un límite las acciones clave quedan bloqueadas hasta suscribirte."
             : tier === "agency_free"
             ? "Cuando agotes las 10 solicitudes en tu provincia, activa Marketplace para acceso nacional ilimitado."
             : "En el plan actual todas las métricas son ilimitadas."
