@@ -200,8 +200,7 @@ const PLANS: Plan[] = [
       "Para promotores y comercializadores · gestiona tu cartera y trabaja con agencias en toda España.",
     features: [
       "Hasta 5 promociones activas",
-      "Invitaciones a agencias · alcance nacional",
-      "10 colaboraciones cross-empresa gratis",
+      "Invitaciones a agencias ilimitadas · alcance nacional",
       "Reconocimiento de registros por IA · evita duplicados",
       "Microsite por promoción · página pública lista para vender",
       "Landing pages ilimitadas",
