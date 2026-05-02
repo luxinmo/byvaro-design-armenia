@@ -271,6 +271,27 @@ export default function CrearPromocion() {
   /* Pasos visibles según ramificación (depende de tipo/subUni) */
   const visibleSteps = useMemo(() => getAllSteps(state).map(s => s.id), [state]);
 
+  /* Auto-advance · cuando un step de selección única (role, tipo,
+   *  sub_uni) recibe una respuesta, avanzamos automáticamente al
+   *  siguiente paso. Evita que el usuario tenga que pulsar "Siguiente"
+   *  detrás de cada click de radio.
+   *
+   *  Implementación · el handler del OptionCard sube el flag
+   *  `autoAdvanceRef.current = true`. Este effect corre en el commit
+   *  siguiente (cuando `state` ya refleja la elección y por tanto
+   *  `visibleSteps` está actualizado · crítico para `tipo` que puede
+   *  saltarse `sub_uni` si el usuario eligió plurifamiliar). Si el
+   *  flag está alzado, computamos getNext() con la NUEVA visibleSteps
+   *  y avanzamos. Reset del flag a false en el mismo paso. */
+  const autoAdvanceRef = useRef(false);
+  useEffect(() => {
+    if (!autoAdvanceRef.current) return;
+    autoAdvanceRef.current = false;
+    const i = visibleSteps.indexOf(step);
+    const nextIdx = i + 1;
+    if (nextIdx < visibleSteps.length) setStep(visibleSteps[nextIdx]);
+  }, [state, visibleSteps, step]);
+
   /* Flags derivados del estado (usados en conditionals) */
   const isSingleHome = state.tipo === "unifamiliar" && state.subUni === "una_sola";
   const isVariasUni = state.tipo === "unifamiliar" && state.subUni === "varias";
@@ -681,32 +702,42 @@ export default function CrearPromocion() {
                  *  vive en el paso "Revisión" (`RevisionStep.tsx`) ·
                  *  ahí sí se enumera todo lo que falta antes de activar. */}
 
-                {/* ─── Step: role ─── */}
+                {/* ─── Step: role · single-select · auto-advance ─── */}
                 {step === "role" && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {roleOptions.map((o) => (
                       <OptionCard key={o.value} option={o} selected={state.role === o.value}
-                        onSelect={(v) => update("role", v as RoleOption)} />
+                        onSelect={(v) => {
+                          update("role", v as RoleOption);
+                          autoAdvanceRef.current = true;
+                        }} />
                     ))}
                   </div>
                 )}
 
-                {/* ─── Step: tipo ─── */}
+                {/* ─── Step: tipo · single-select · auto-advance ─── */}
                 {step === "tipo" && (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {tipoOptions.map((o) => (
                       <OptionCard key={o.value} option={o} selected={state.tipo === o.value}
-                        onSelect={handleTipoSelect} />
+                        onSelect={(v) => {
+                          handleTipoSelect(v);
+                          autoAdvanceRef.current = true;
+                        }} />
                     ))}
                   </div>
                 )}
 
-                {/* ─── Step: sub_uni ─── */}
+                {/* ─── Step: sub_uni · single-select · auto-advance ─── */}
                 {step === "sub_uni" && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {subUniOptions.map((o) => (
                       <OptionCard key={o.value} option={o} selected={state.subUni === o.value}
-                        onSelect={(v) => { update("subUni", v as SubUni); update("subVarias", null); }} />
+                        onSelect={(v) => {
+                          update("subUni", v as SubUni);
+                          update("subVarias", null);
+                          autoAdvanceRef.current = true;
+                        }} />
                     ))}
                   </div>
                 )}
