@@ -164,6 +164,11 @@ export interface UnitData {
   orientacion: string;
   parking: boolean;
   trastero: boolean;
+  /** Solo aplica a unifamiliar · indica que la villa tiene solárium
+   *  (terraza superior accesible). */
+  solarium?: boolean;
+  /** Solo aplica a unifamiliar · indica que la villa tiene sótano. */
+  sotano?: boolean;
   /** Piscina privada (solo aplicable a villas). */
   piscinaPrivada: boolean;
   status: UnitStatus;
@@ -172,6 +177,12 @@ export interface UnitData {
   /** Plano específico de la unidad (no plano de planta del edificio). */
   planos: boolean;
   subtipo: SubtipoUnidad | null;
+  /** Para promociones unifamiliares · qué tipología tiene esta unidad
+   *  concreta (independiente / adosados / pareados). Lo necesita el
+   *  adapter `unitDataToUnit` para mostrar la etiqueta correcta en
+   *  la columna "Tipo" del catálogo · sin esto, fallback "Apartamento"
+   *  (bug). Null/undef en promociones plurifamiliar/mixto. */
+  tipologiaUnifamiliar?: SubVarias;
   /** @deprecated Usar `ref`. Se mantiene por compatibilidad hasta migrar. */
   idInterna: string;
   caracteristicas: string[];
@@ -190,6 +201,10 @@ export interface UnitData {
   faseConstruccionOverride?: FaseConstruccion;
   /** URLs de planos subidos específicos de la unidad (múltiples docs). */
   planoUrls?: string[];
+  /** URLs de memorias de calidades específicas de la unidad. */
+  memoriaUrls?: string[];
+  /** URLs de brochures comerciales específicos de la unidad. */
+  brochureUrls?: string[];
   /* ── Operación comercial (se rellenan al reservar/vender) ── */
   clientName?: string;
   agencyName?: string;
@@ -245,11 +260,31 @@ export interface WizardState {
   trasterosIncluidosPorVivienda: number;
   trasteroPrecio: number;           // precio por defecto al crear un trastero suelto
   trasteroPrecios: number[];        // precio individualizado por Tn (índice 0 = T1)
+  /** Unidad a la que pertenece cada trastero suelto · "" = sin asignar.
+   *  Mismo índice que `trasteroPrecios`. */
+  trasteroAsignaciones?: string[];
   parkings: number;
   parkingsIncluidosPrecio: boolean;
   parkingsIncluidosPorVivienda: number;
   parkingPrecio: number;            // precio por defecto al crear una plaza suelta
   parkingPrecios: number[];         // precio individualizado por Pn (índice 0 = P1)
+  /** Unidad a la que pertenece cada plaza suelta. Mismo índice. */
+  parkingAsignaciones?: string[];
+  /* Solárium y sótano sueltos · solo aplica a unifamiliar. Mismo
+   * patrón que trasteros/parking · `count` total + `precios[]` por
+   * índice. La UI los expone en Anejos sueltos cuando hay villas.
+   * Opcionales · drafts antiguos no los tienen · runtime los hidrata
+   * con `?? 0` / `?? []`. */
+  solariums?: number;
+  solariumPrecio?: number;
+  solariumPrecios?: number[];
+  /** Unidad asignada a cada solárium · mismo índice que precios. */
+  solariumAsignaciones?: string[];
+  sotanos?: number;
+  sotanoPrecio?: number;
+  sotanoPrecios?: number[];
+  /** Unidad asignada a cada sótano · mismo índice que precios. */
+  sotanoAsignaciones?: string[];
   /* ── Zonas y amenidades (ampliado) ─────────────────────────────────
      Booleanos explícitos para las amenidades clave que la ficha de
      unidad necesita consultar de forma estructurada. El array genérico
@@ -302,6 +337,14 @@ export interface WizardState {
    *  directo a `aprobado` aunque este flag sea `por_visita`. */
   modoValidacionRegistro: ModoValidacionRegistro;
   // Info basica
+  /** Referencia pública canónica `PR + 5 dígitos` (CLAUDE.md scheme).
+   *  Se asigna automáticamente al abrir el wizard por primera vez ·
+   *  inmutable durante toda la vida del borrador y de la promoción
+   *  publicada. Sirve como identidad estable para el draft (su id
+   *  interno se deriva de aquí) · garantiza que cada autosave
+   *  actualiza el MISMO borrador en lugar de generar duplicados.
+   *  Opcional para retrocompat con drafts antiguos. */
+  publicRef?: string;
   /** Referencia interna de la promoción (abreviatura usada como prefijo
    *  en las referencias de unidades). Se autogenera desde el nombre
    *  pero el usuario puede editarla. */
@@ -316,6 +359,14 @@ export interface WizardState {
   caracteristicasAplicacion: "todas" | "algunas";
   estiloVivienda: EstiloVivienda | null;
   urbanizacion: boolean;
+  /** Tipo de urbanización · "cerrada" (gated), "resort" (mar/golf
+   *  con servicios) o "abierta" (sin acceso restringido). */
+  urbanizacionTipo: "cerrada" | "resort" | "abierta" | null;
+  urbanizacionNombre: string;
+  /** Amenities seleccionadas · ids planos. La agrupación visual
+   *  (seguridad / zonas comunes / deporte / social / servicios /
+   *  sostenibilidad) vive en `InfoBasicaStep` · el dato es solo el
+   *  set de ids. */
   zonasComunes: string[];
   certificadoEnergetico: string;
   // Descripcion
@@ -347,8 +398,23 @@ export interface WizardState {
   documentosBrochure: string[];
   // Override manual del % de obra (si el promotor lo ajusta en la ficha).
   constructionProgressOverride?: number;
+  /** Características por defecto de la promoción (`?wizardV5=1`).
+   *  Se propagan a cada unidad creada en `crear_unidades` según el
+   *  `appliesTo` de cada bloque. Opcional · drafts antiguos no lo
+   *  tienen y se hidratan al `defaultPromotionDefaults` al entrar
+   *  en el step. Spec en `extras-v5/types.ts`. */
+  promotionDefaults?: import("./extras-v5/types").PromotionDefaults;
 }
 
+/* defaultWizardState · TODOS los campos arrancan en estado "vacío".
+ * Antes había muchos números mock (importeReserva: 5000, comisiones
+ * 5/3%, validez 180/30 días, precios de parking/trastero/piscina,
+ * etc.) que se persistían en el state aunque el user nunca los
+ * tocara · luego aparecían en la ficha como si los hubiera
+ * configurado. Ahora cero / null / [] · el user introduce sus valores
+ * reales o los inputs muestran placeholder con sugerencia (no en el
+ * state). Excepción · numBloques y plantas se quedan en 1 porque no
+ * puede haber 0 edificios/plantas en plurifamiliar. */
 export const defaultWizardState: WizardState = {
   role: null,
   tipo: null,
@@ -356,20 +422,31 @@ export const defaultWizardState: WizardState = {
   subVarias: null,
   numBloques: 1,
   escalerasPorBloque: [1],
-  plantas: 1,
+  /* Defaults razonables para un edificio plurifamiliar típico · 4
+   * plantas con 4 viviendas/planta = 16 viviendas en 1 escalera + 1
+   * bloque. Hace que la vista previa del wizard se renderice
+   * inmediatamente al abrir el paso 3 sin "edificio vacío". El user
+   * ajusta a partir de ahí. */
+  plantas: 4,
   aptosPorPlanta: 4,
   plantaBajaTipo: null,
   locales: 0,
   trasteros: 0,
   trasterosIncluidosPrecio: true,
   trasterosIncluidosPorVivienda: 1,
-  trasteroPrecio: 5000,
+  trasteroPrecio: 0,
   trasteroPrecios: [],
   parkings: 0,
   parkingsIncluidosPrecio: true,
   parkingsIncluidosPorVivienda: 1,
-  parkingPrecio: 15000,
+  parkingPrecio: 0,
   parkingPrecios: [],
+  solariums: 0,
+  solariumPrecio: 0,
+  solariumPrecios: [],
+  sotanos: 0,
+  sotanoPrecio: 0,
+  sotanoPrecios: [],
   piscinaComunitaria: false,
   piscinaInterna: false,
   zonaSpa: false,
@@ -377,7 +454,7 @@ export const defaultWizardState: WizardState = {
   urbanizacionCerrada: false,
   piscinaPrivadaPorDefecto: false,
   piscinaIncluidaPrecio: true,
-  piscinaPrecio: 25000,
+  piscinaPrecio: 0,
   estado: null,
   tieneLicencia: null,
   faseConstruccion: null,
@@ -388,13 +465,13 @@ export const defaultWizardState: WizardState = {
   fechaEntrega: null,
   fechaTerminacion: null,
   tipoEntrega: null,
-  mesesTrasContrato: 18,
+  mesesTrasContrato: 0,
   tipologiasSeleccionadas: [],
   estilosSeleccionados: [],
   tiposUnidadMixto: [],
   colaboracion: false,
-  comisionInternacional: 5,
-  comisionNacional: 3,
+  comisionInternacional: 0,
+  comisionNacional: 0,
   diferenciarNacionalInternacional: false,
   diferenciarComisiones: false,
   agenciasRefusarNacional: false,
@@ -402,8 +479,8 @@ export const defaultWizardState: WizardState = {
   formaPagoComision: null,
   hitosComision: [],
   ivaIncluido: false,
-  condicionesRegistro: ["nombre_completo", "ultimas_4_cifras", "nacionalidad"],
-  validezRegistroDias: 180, // 6 meses por defecto
+  condicionesRegistro: [],
+  validezRegistroDias: 0,
   modoValidacionRegistro: "por_visita", // alineado con copy histórica · TODO(logic) implementar
   refPromocion: "",
   blockNames: {},
@@ -414,6 +491,8 @@ export const defaultWizardState: WizardState = {
   caracteristicasAplicacion: "todas",
   estiloVivienda: null,
   urbanizacion: false,
+  urbanizacionTipo: null,
+  urbanizacionNombre: "",
   zonasComunes: [],
   certificadoEnergetico: "",
   descripcion: "",
@@ -426,8 +505,8 @@ export const defaultWizardState: WizardState = {
   hitosPago: [],
   hitosCertificacion: [],
   requiereReserva: null,
-  importeReserva: 5000,
-  validezReserva: 30,
+  importeReserva: 0,
+  validezReserva: 0,
   avalBancario: false,
   avalEntidad: "",
   contactoWeb: "",

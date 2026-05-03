@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { FotoItem, VideoItem, FotoCategoria } from "@/components/crear-promocion/types";
 import { uploadPromotionImage, uploadFile } from "@/lib/storage";
+import { ensureDraftPersisted } from "@/lib/promotionDrafts";
 
 const fotoCategorias: { value: FotoCategoria; label: string }[] = [
   { value: "fachada", label: "Fachada" },
@@ -84,7 +85,6 @@ export function MultimediaEditor({
   showCollaborationWarning?: boolean;
   uploadScopeId?: string;
 }) {
-  const [uploadOpen, setUploadOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
   const [videoType, setVideoType] = useState<"youtube" | "video" | "vimeo360">("youtube");
   const [videoUrl, setVideoUrl] = useState("");
@@ -115,6 +115,19 @@ export function MultimediaEditor({
     setUploadingPhotos(true);
     const base = fotos.length;
     try {
+      /* Si el scope es un draft (`d-PRxxx`), nos aseguramos de que la
+       * fila esté en `promotion_drafts` antes de subir · sin esto, la
+       * RLS de storage rechaza con "violates row-level security policy"
+       * porque la policy comprueba EXISTS(promotion_drafts WHERE id=...
+       * AND user_id=auth.uid()). Sin autosave, la fila no existe hasta
+       * que el user pulsa "Guardar" · sin este ensure, ese paso es
+       * obligatorio antes de subir y rompe el flujo. */
+      if (uploadScopeId.startsWith("d-")) {
+        const ensured = await ensureDraftPersisted(uploadScopeId);
+        if (!ensured.ok) {
+          throw new Error(ensured.error ?? "No se pudo preparar el borrador para subir imágenes");
+        }
+      }
       const results = await Promise.allSettled(
         Array.from(files).map(async (file, i) => {
           const url = await uploadPromotionImage(uploadScopeId, file, "gallery");
@@ -133,13 +146,26 @@ export function MultimediaEditor({
       const ok = results
         .filter((r): r is PromiseFulfilledResult<FotoItem> => r.status === "fulfilled")
         .map((r) => r.value);
-      const failed = results.filter((r) => r.status === "rejected").length;
+      const rejected = results
+        .map((r, i) => ({ r, name: files[i]?.name ?? `#${i}` }))
+        .filter((x): x is { r: PromiseRejectedResult; name: string } => x.r.status === "rejected");
       if (ok.length > 0) {
         onFotosChange([...fotos, ...ok]);
         toast.success(`${ok.length} ${ok.length === 1 ? "imagen subida" : "imágenes subidas"}`);
       }
-      if (failed > 0) {
-        toast.error(`${failed} ${failed === 1 ? "imagen falló" : "imágenes fallaron"} al subir`);
+      if (rejected.length > 0) {
+        /* Loggea el motivo real de cada fallo · ayuda a diagnosticar
+         * (HEIC sin soporte, archivo > límite del bucket, RLS, etc.). */
+        rejected.forEach(({ r, name }) => {
+          const reason = r.reason instanceof Error ? r.reason.message : String(r.reason);
+          console.error(`[upload] "${name}" falló:`, reason, r.reason);
+        });
+        const firstReason = rejected[0].r.reason;
+        const firstMsg = firstReason instanceof Error ? firstReason.message : String(firstReason);
+        toast.error(
+          `${rejected.length} ${rejected.length === 1 ? "imagen falló" : "imágenes fallaron"} al subir`,
+          { description: firstMsg.slice(0, 140) },
+        );
       }
     } catch (e) {
       toast.error("Error al subir imágenes", {
@@ -148,12 +174,20 @@ export function MultimediaEditor({
     } finally {
       setUploadingPhotos(false);
       if (photoInputRef.current) photoInputRef.current.value = "";
-      setUploadOpen(false);
     }
   };
 
-  const setPrincipal = (id: string) =>
-    onFotosChange(fotos.map((f) => ({ ...f, esPrincipal: f.id === id })));
+  const setPrincipal = (id: string) => {
+    /* Marca como principal Y mueve al primer puesto · la foto principal
+     * es la cara de la promoción · debe ser obvia visualmente y la
+     * primera del grid. Re-numeramos `orden` para dejarla persistida. */
+    const target = fotos.find((f) => f.id === id);
+    if (!target) return;
+    const rest = fotos.filter((f) => f.id !== id);
+    const next = [{ ...target, esPrincipal: true }, ...rest.map((f) => ({ ...f, esPrincipal: false }))]
+      .map((f, i) => ({ ...f, orden: i }));
+    onFotosChange(next);
+  };
   const toggleLock = (id: string) =>
     onFotosChange(fotos.map((f) => (f.id === id ? { ...f, bloqueada: !f.bloqueada } : f)));
   const setCategoria = (id: string, cat: FotoCategoria) =>
@@ -262,7 +296,7 @@ export function MultimediaEditor({
           </p>
           <button
             type="button"
-            onClick={() => setUploadOpen(true)}
+            onClick={triggerPhotoPicker}
             className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full border border-border bg-card text-xs font-medium text-foreground hover:bg-muted transition-colors"
           >
             <Upload className="h-3 w-3" strokeWidth={1.5} />
@@ -271,15 +305,42 @@ export function MultimediaEditor({
         </div>
 
         {fotos.length === 0 ? (
-          <button
-            type="button"
-            onClick={() => setUploadOpen(true)}
-            className="rounded-xl border border-dashed border-border bg-muted/30 px-6 py-10 flex flex-col items-center gap-2 text-center hover:border-primary/40 hover:bg-muted/50 transition-colors"
+          <div
+            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handlePhotoFiles(e.dataTransfer.files);
+              }
+            }}
+            onClick={triggerPhotoPicker}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                triggerPhotoPicker();
+              }
+            }}
+            className={cn(
+              "rounded-xl border-2 border-dashed border-border bg-muted/30 px-6 py-10 flex flex-col items-center gap-2 text-center cursor-pointer transition-colors",
+              "hover:border-primary/40 hover:bg-muted/50",
+              uploadingPhotos && "opacity-60 pointer-events-none",
+            )}
           >
-            <ImageIcon className="h-8 w-8 text-muted-foreground/50" strokeWidth={1} />
-            <p className="text-sm font-medium text-muted-foreground">Arrastra fotos aquí o haz clic para subir</p>
-            <p className="text-xs text-muted-foreground/60">JPG, PNG o WEBP · Máximo 10 MB por imagen</p>
-          </button>
+            {uploadingPhotos ? (
+              <>
+                <Loader2 className="h-8 w-8 text-primary animate-spin" strokeWidth={1.5} />
+                <p className="text-sm font-medium text-primary">Subiendo imágenes…</p>
+              </>
+            ) : (
+              <>
+                <ImageIcon className="h-8 w-8 text-muted-foreground/50" strokeWidth={1} />
+                <p className="text-sm font-medium text-muted-foreground">Arrastra fotos aquí o haz clic para subir</p>
+                <p className="text-xs text-muted-foreground/60">JPG, PNG o WEBP · Máximo 10 MB por imagen</p>
+              </>
+            )}
+          </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {fotos.map((foto, idx) => (
@@ -440,36 +501,6 @@ export function MultimediaEditor({
         onChange={(e) => handlePhotoFiles(e.target.files)}
       />
 
-      {/* Modal subir fotos */}
-      <ModalShell open={uploadOpen} onClose={() => setUploadOpen(false)} title="Subir fotografías">
-        <div className="flex flex-col gap-3">
-          <div className="rounded-lg bg-warning/10 border border-warning/30 px-3 py-2 flex gap-2 text-xs text-warning leading-relaxed">
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" strokeWidth={1.5} />
-            <span>No subas imágenes con marca de agua si vas a compartirlas con colaboradores.</span>
-          </div>
-          <button
-            type="button"
-            onClick={triggerPhotoPicker}
-            disabled={uploadingPhotos || !uploadScopeId}
-            className="rounded-xl border-2 border-dashed border-border bg-muted/30 px-6 py-10 flex flex-col items-center gap-2 text-center hover:border-primary/40 hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {uploadingPhotos ? (
-              <>
-                <Loader2 className="h-10 w-10 text-primary animate-spin" strokeWidth={1.5} />
-                <p className="text-sm font-medium text-primary">Subiendo imágenes…</p>
-              </>
-            ) : (
-              <>
-                <ImageIcon className="h-10 w-10 text-muted-foreground/40" strokeWidth={1} />
-                <p className="text-sm font-medium text-muted-foreground">
-                  {uploadScopeId ? "Haz clic para seleccionar imágenes" : "Guarda el borrador para empezar a subir"}
-                </p>
-                <p className="text-xs text-muted-foreground/60">JPG, PNG o WEBP · selección múltiple</p>
-              </>
-            )}
-          </button>
-        </div>
-      </ModalShell>
 
       {/* Modal añadir video */}
       <ModalShell open={videoOpen} onClose={() => setVideoOpen(false)} title="Añadir video">

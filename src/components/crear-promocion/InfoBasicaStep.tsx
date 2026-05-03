@@ -23,13 +23,20 @@
  */
 
 import { useMemo } from "react";
-import { MapPin, Sparkles, Leaf, Palmtree, Home as HomeIcon } from "lucide-react";
+import {
+  MapPin, Sparkles, Leaf, Palmtree,
+  Lock, ShieldCheck, Bell,
+  Waves, TreePine, Baby, Dog,
+  Dumbbell, Volleyball, Footprints, Sparkles as SpaIcon,
+  Users as UsersIcon, Laptop, Wine, UtensilsCrossed, PartyPopper,
+  Car, Wrench, BellRing,
+  Plug, Recycle,
+} from "lucide-react";
 import type { WizardState, EstiloVivienda } from "./types";
 import {
   estiloViviendaOptions,
   amenitiesOptions,
   caracteristicasViviendaOptions,
-  zonasComOptions,
   certificadoEnergeticoOptions,
 } from "./options";
 import { cn } from "@/lib/utils";
@@ -95,15 +102,90 @@ function SectionLabel({ children, hint }: { children: React.ReactNode; hint?: st
 
 const inputClass = "h-10 px-3 text-[13.5px] bg-card border border-border rounded-xl focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground/60";
 
+/* Amenities de urbanización agrupadas · cada item es un id estable
+ * que persiste en `state.zonasComunes: string[]`. Los grupos son solo
+ * agrupación visual de la UI · el dato sigue plano. */
+const URBANIZACION_GROUPS: {
+  label: string;
+  items: { value: string; label: string; icon: React.ElementType }[];
+}[] = [
+  {
+    label: "Seguridad y acceso",
+    items: [
+      { value: "control_acceso",   label: "Control de acceso", icon: Lock },
+      { value: "seguridad_24h",    label: "Seguridad 24h",     icon: ShieldCheck },
+      { value: "conserjeria",      label: "Conserjería",       icon: Bell },
+    ],
+  },
+  {
+    label: "Zonas comunes",
+    items: [
+      { value: "piscina_com",      label: "Piscina",      icon: Waves },
+      { value: "jardin_com",       label: "Jardín",       icon: TreePine },
+      { value: "zona_infantil_com",label: "Zona infantil",icon: Baby },
+      { value: "zona_mascotas",    label: "Mascotas",     icon: Dog },
+    ],
+  },
+  {
+    label: "Deporte y salud",
+    items: [
+      { value: "gimnasio_com",     label: "Gimnasio",     icon: Dumbbell },
+      { value: "padel",            label: "Pádel",        icon: Volleyball },
+      { value: "tenis",            label: "Tenis",        icon: Volleyball },
+      { value: "running",          label: "Running",      icon: Footprints },
+      { value: "spa",              label: "SPA / wellness", icon: SpaIcon },
+    ],
+  },
+  {
+    label: "Social",
+    items: [
+      { value: "club_social",      label: "Club social",      icon: UsersIcon },
+      { value: "coworking",        label: "Coworking",        icon: Laptop },
+      { value: "bar",              label: "Bar",              icon: Wine },
+      { value: "restaurante",      label: "Restaurante",      icon: UtensilsCrossed },
+      { value: "sala_eventos",     label: "Sala de eventos",  icon: PartyPopper },
+    ],
+  },
+  {
+    label: "Servicios",
+    items: [
+      { value: "parking_visitas",  label: "Parking visitas", icon: Car },
+      { value: "mantenimiento",    label: "Mantenimiento",   icon: Wrench },
+      { value: "concierge",        label: "Concierge",       icon: BellRing },
+    ],
+  },
+  {
+    label: "Sostenibilidad",
+    items: [
+      { value: "carga_electrica",  label: "Carga eléctrica", icon: Plug },
+      { value: "reciclaje",        label: "Reciclaje",       icon: Recycle },
+    ],
+  },
+];
+
+const URBANIZACION_TIPOS: { value: "cerrada" | "resort" | "abierta"; label: string }[] = [
+  { value: "cerrada", label: "Cerrada" },
+  { value: "resort",  label: "Resort" },
+  { value: "abierta", label: "Abierta" },
+];
+
 /* ═══════════════════════════════════════════════════════════════════
    InfoBasicaStep
    ═══════════════════════════════════════════════════════════════════ */
 export function InfoBasicaStep({
   state,
   update,
+  defaultsCapturedInExtras = false,
 }: {
   state: WizardState;
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
+  /** Cuando V5 está activo (`?wizardV5=1`), el step "extras"
+   *  captura características de la vivienda (cocina, AC, vistas,
+   *  terraza, jardín, smart home…) y zonas comunes de la
+   *  urbanización. Si `true`, ocultamos esas dos secciones aquí
+   *  para no duplicar entrada · solo quedan nombre, dirección,
+   *  estilo (plurifamiliar) y certificado energético. */
+  defaultsCapturedInExtras?: boolean;
 }) {
   const isPlurifamiliar = state.tipo === "plurifamiliar" || state.tipo === "mixto";
   const isUnifamiliar = state.tipo === "unifamiliar";
@@ -186,9 +268,10 @@ export function InfoBasicaStep({
       )}
 
       {/* ═════════════════════════════════════════════════════════════
-          Rama UNIFAMILIAR: características + urbanización
+          Rama UNIFAMILIAR: características
+          (Solo si V5 NO está capturando defaults · evita duplicado.)
           ═════════════════════════════════════════════════════════════ */}
-      {isUnifamiliar && (
+      {isUnifamiliar && !defaultsCapturedInExtras && (
         <>
           <div>
             <SectionLabel>Características destacadas de las viviendas</SectionLabel>
@@ -202,7 +285,8 @@ export function InfoBasicaStep({
       )}
 
       {/* ═════════════════════════════════════════════════════════════
-          Rama PLURIFAMILIAR / MIXTO: amenities + características
+          Rama PLURIFAMILIAR / MIXTO: amenities (siempre · son del
+          edificio, no de la unidad) + características (solo legacy).
           ═════════════════════════════════════════════════════════════ */}
       {isPlurifamiliar && (
         <>
@@ -230,36 +314,38 @@ export function InfoBasicaStep({
             )}
           </div>
 
-          <div>
-            <SectionLabel>Características comunes de las viviendas</SectionLabel>
-            <PillSelect
-              options={caracteristicasViviendaOptions}
-              selected={state.caracteristicasVivienda}
-              onToggle={toggleCaracteristica}
-            />
-            {state.caracteristicasVivienda.length > 0 && (
-              <div className="mt-3 flex items-center gap-3 rounded-xl bg-muted/40 border border-border p-3">
-                <span className="text-[11.5px] text-muted-foreground">¿Aplican a todas las viviendas?</span>
-                <div className="flex gap-1 ml-auto">
-                  {(["todas", "algunas"] as const).map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => update("caracteristicasAplicacion", v)}
-                      className={cn(
-                        "h-7 rounded-full px-3 text-[11.5px] font-semibold transition-colors",
-                        state.caracteristicasAplicacion === v
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-background text-muted-foreground border border-border hover:text-foreground",
-                      )}
-                    >
-                      {v === "todas" ? "Todas" : "Solo algunas"}
-                    </button>
-                  ))}
+          {!defaultsCapturedInExtras && (
+            <div>
+              <SectionLabel>Características comunes de las viviendas</SectionLabel>
+              <PillSelect
+                options={caracteristicasViviendaOptions}
+                selected={state.caracteristicasVivienda}
+                onToggle={toggleCaracteristica}
+              />
+              {state.caracteristicasVivienda.length > 0 && (
+                <div className="mt-3 flex items-center gap-3 rounded-xl bg-muted/40 border border-border p-3">
+                  <span className="text-[11.5px] text-muted-foreground">¿Aplican a todas las viviendas?</span>
+                  <div className="flex gap-1 ml-auto">
+                    {(["todas", "algunas"] as const).map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => update("caracteristicasAplicacion", v)}
+                        className={cn(
+                          "h-7 rounded-full px-3 text-[11.5px] font-semibold transition-colors",
+                          state.caracteristicasAplicacion === v
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-background text-muted-foreground border border-border hover:text-foreground",
+                        )}
+                      >
+                        {v === "todas" ? "Todas" : "Solo algunas"}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </>
       )}
 
@@ -290,7 +376,37 @@ export function InfoBasicaStep({
 
           {/* Sub-formulario que se revela cuando el switch está ON */}
           {state.urbanizacion && (
-            <div className="border-t border-border bg-muted/20 p-4 flex flex-col gap-4">
+            <div className="border-t border-border bg-muted/20 p-4 flex flex-col gap-5">
+              {/* Tipo · Cerrada / Resort / Abierta */}
+              <div>
+                <label className="text-[11.5px] font-medium text-muted-foreground mb-1.5 block">
+                  Tipo
+                </label>
+                <div className="flex gap-1.5">
+                  {URBANIZACION_TIPOS.map((t) => {
+                    const isOn = state.urbanizacionTipo === t.value;
+                    return (
+                      <button
+                        key={t.value}
+                        type="button"
+                        onClick={() =>
+                          update("urbanizacionTipo", isOn ? null : t.value)
+                        }
+                        className={cn(
+                          "h-8 rounded-full px-3.5 text-[12px] font-medium transition-colors border",
+                          isOn
+                            ? "bg-foreground text-background border-foreground"
+                            : "bg-card text-muted-foreground border-border hover:text-foreground hover:border-foreground/30",
+                        )}
+                      >
+                        {t.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Nombre */}
               <div>
                 <label className="text-[11.5px] font-medium text-muted-foreground mb-1.5 block">
                   Nombre de la urbanización
@@ -299,31 +415,28 @@ export function InfoBasicaStep({
                   type="text"
                   placeholder="Ej. Urb. Los Flamingos, Nueva Andalucía…"
                   className={cn(inputClass, "w-full")}
-                  defaultValue=""
-                  /* En el modelo actual no hay `nombreUrbanizacion`.
-                     Lo dejamos como input cosmético; si en el futuro
-                     se añade al estado se conecta aquí. */
+                  value={state.urbanizacionNombre}
+                  onChange={(e) => update("urbanizacionNombre", e.target.value)}
                 />
                 <p className="text-[10px] text-muted-foreground/70 mt-1">
-                  Opcional. Si no la sabes, solo marca las zonas comunes que ofrece.
+                  Opcional. Si no la sabes, solo marca las amenities disponibles.
                 </p>
               </div>
 
-              <div>
-                <p className="text-[11.5px] font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                  <HomeIcon className="h-3 w-3" />
-                  Zonas comunes compartidas
-                </p>
-                <PillSelect
-                  options={zonasComOptions}
-                  selected={state.zonasComunes}
-                  onToggle={toggleZona}
-                />
-                {state.zonasComunes.length === 0 && (
-                  <p className="text-[10.5px] text-muted-foreground/80 mt-2">
-                    Selecciona las zonas comunes a las que tienen acceso los compradores.
-                  </p>
-                )}
+              {/* Amenities agrupadas */}
+              <div className="flex flex-col gap-4">
+                {URBANIZACION_GROUPS.map((g) => (
+                  <div key={g.label}>
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-2">
+                      {g.label}
+                    </p>
+                    <PillSelect
+                      options={g.items}
+                      selected={state.zonasComunes}
+                      onToggle={toggleZona}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
           )}

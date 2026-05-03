@@ -186,7 +186,82 @@ export function deleteDraft(id: string): void {
   void deleteDraftFromSupabase(id);
 }
 
+/** Borra TODOS los borradores del usuario actual · memCache + Supabase.
+ *  Útil para purgar huérfanos generados por el bug pre-fix de id no
+ *  determinista (un draft por sesión sin sync de URL). Devuelve el
+ *  número de borradores eliminados. */
+export async function deleteAllDrafts(): Promise<number> {
+  const drafts = readRaw();
+  const count = drafts.length;
+  writeRaw([]);
+  if (typeof window === "undefined") return count;
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return count;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return count;
+    const { error } = await supabase
+      .from("promotion_drafts")
+      .delete()
+      .eq("user_id", user.id);
+    if (error) console.warn("[drafts:deleteAll]", error.message);
+  } catch (e) {
+    console.warn("[drafts:deleteAll] skipped:", e);
+  }
+  window.dispatchEvent(new StorageEvent("storage", { key: DRAFTS_KEY }));
+  return count;
+}
+
 /* ══════ Write-through y hydratación · Supabase ════════════════════ */
+
+/** Garantiza que el draft existe en DB · upsert síncrono y devuelve
+ *  el primer error que el caller pueda mostrar. Pensado para que la
+ *  subida de imágenes (MultimediaEditor) pueda esperar antes de
+ *  pegarle a `storage.objects` · si el draft no está en DB cuando
+ *  llega el upload, RLS rechaza con `violates row-level security`.
+ *
+ *  Pasa `null` si Supabase no está configurado o si el user no está
+ *  autenticado (no falla · solo skip). */
+export async function ensureDraftPersisted(id: string): Promise<{ ok: boolean; error?: string }> {
+  if (typeof window === "undefined") return { ok: true };
+  const draft = readRaw().find((d) => d.id === id);
+  if (!draft) return { ok: false, error: `draft ${id} not found in cache` };
+  try {
+    const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+    if (!isSupabaseConfigured) return { ok: true };
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: "not authenticated" };
+    const orgId = sessionStorage.getItem("byvaro.accountType.organizationId.v1");
+    /* Validamos que el org_id existe antes de pasarlo · si no existe
+     * en organizations, dejamos NULL para que el insert no falle por
+     * FK violation. */
+    let validOrgId: string | null = null;
+    if (orgId) {
+      const { data: org } = await supabase
+        .from("organizations")
+        .select("id")
+        .eq("id", orgId)
+        .maybeSingle();
+      if (org) validOrgId = orgId;
+    }
+    const { error } = await supabase
+      .from("promotion_drafts")
+      .upsert({
+        id: draft.id,
+        user_id: user.id,
+        organization_id: validOrgId,
+        name: draft.name,
+        progress: draft.progress,
+        state: draft.state,
+        current_step: draft.currentStep ?? null,
+        updated_at: new Date(draft.updatedAt).toISOString(),
+      }, { onConflict: "id" });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
 
 /** Sube un draft (insert si no existía, update si ya estaba) a la
  *  tabla `promotion_drafts`. Falla en silencio · loggea warning. */
@@ -374,7 +449,10 @@ export function draftToPromotionData(d: PromotionDraft) {
      * · click en un borrador no abre la ficha. Con code undefined,
      * promotionHref cae al id (que SÍ es único: draft:abc123) y la
      * ruta se resuelve correctamente. */
-    code: s.refPromocion?.trim() || undefined,
+    /* Mostramos el `publicRef` (PR + 5 dígitos · scheme canónico)
+     * generado al abrir el wizard. Si por algún motivo no estuviera
+     * presente (drafts legacy), caemos al `refPromocion` editable. */
+    code: s.publicRef ?? s.refPromocion?.trim() ?? undefined,
     name: d.name,
     location: [s.direccionPromocion?.ciudad, s.direccionPromocion?.provincia]
       .filter(Boolean).join(", ") || "Sin ubicación",

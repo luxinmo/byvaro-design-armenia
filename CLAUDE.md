@@ -2803,6 +2803,53 @@ Carpeta `docs/` — cada archivo cubre un área:
 
 ---
 
+## 💶 REGLA DE ORO · Inputs de precio formato es-ES con miles
+
+> **Todo input que pida un importe en euros (o cualquier moneda) debe
+> mostrar el valor con separador de miles "es-ES" (`100.000`, no
+> `100000`). Sin excepciones.** El formato `100000` es engañoso ·
+> el usuario duda si son 100k o 1M, escribe ceros de más, comete
+> typos. El formato con miles elimina la ambigüedad de un vistazo.
+
+**Patrón canónico** · controlled `<input type="text" inputMode="numeric">`
+con doble conversión:
+
+```tsx
+<input
+  type="text"
+  inputMode="numeric"
+  value={value > 0 ? value.toLocaleString("es-ES") : ""}
+  placeholder="0"
+  onChange={(e) => {
+    const digits = e.target.value.replace(/[^0-9]/g, "");
+    onChange(digits === "" ? 0 : Number(digits));
+  }}
+  className="... text-right tnum ..."
+/>
+```
+
+Notas del patrón:
+- `type="text"` (no `number`) · permite formato visual con puntos.
+- `inputMode="numeric"` · teclado numérico en móvil.
+- `value=""` cuando es 0 · placeholder hace de hint · evita el bug
+  típico de "20" al teclear "2" sobre un input con "0".
+- `text-right tnum` · números monetarios alineados a la derecha y
+  tabular nums.
+- El `€` va FUERA del input (span aparte) · simplifica el regex.
+
+**Sitios donde aplica** (auditar al añadir uno nuevo):
+- Wizard crear-promoción · `PriceRow`, `AnejoList`, `PlanPagosStep`
+  (`importeReserva`), tabla edit-all de unidades (`price`).
+- Ficha de promoción · cualquier campo precio.
+- Modales de venta / oferta · precios de la operación.
+- Edición masiva de unidades · precios.
+
+**Lo que NO formateamos con miles**:
+- Porcentajes (`%`), m² (4 dígitos máx), dormitorios / baños / plantas
+  (1-2 dígitos), años / meses / plazos cortos.
+
+---
+
 ## 🔌 Handoff al backend · por dónde empezar
 
 Si eres el agente que levanta el backend real:

@@ -65,16 +65,24 @@ export function UnitSimpleEditDialog({
     return opts;
   }, [state.plantas, state.plantaBajaTipo, isEdificio]);
 
-  if (!unit) return null;
-
-  const includeHereditary = unit.usarFotosPromocion ?? true;
-  const fotosUnidadArr = unit.fotosUnidad || [];
-  const isDisabled = (promoFotoId: string) =>
-    fotosUnidadArr.some((f) => f.id === `disabled-${promoFotoId}`);
+  /* ── Hooks · DEBEN ir antes de cualquier early return (Rules of
+   *  Hooks). Cuando `unit` es null el modal está cerrado y el componente
+   *  retorna abajo. Si llamáramos a useState/useMemo después del return,
+   *  el número de hooks variaría entre renders y React explotaría con
+   *  pantalla en blanco. */
+  const fotosUnidadArr = unit?.fotosUnidad || [];
   const ownFotos = useMemo(
     () => fotosUnidadArr.filter((f) => !f.id.startsWith("disabled-")),
     [fotosUnidadArr],
   );
+  const [descGenerating, setDescGenerating] = useState(false);
+  const [planosOpen, setPlanosOpen] = useState(false);
+
+  if (!unit) return null;
+
+  const includeHereditary = unit.usarFotosPromocion ?? true;
+  const isDisabled = (promoFotoId: string) =>
+    fotosUnidadArr.some((f) => f.id === `disabled-${promoFotoId}`);
   const excludedCount = fotosUnidadArr.filter((f) => f.id.startsWith("disabled-")).length;
 
   const toggleHeritedFoto = (promoFotoId: string) => {
@@ -131,7 +139,6 @@ export function UnitSimpleEditDialog({
   };
 
   /* ── Descripción · generación IA mock ── */
-  const [descGenerating, setDescGenerating] = useState(false);
   const handleDescGenerate = () => {
     setDescGenerating(true);
     setTimeout(() => {
@@ -142,7 +149,6 @@ export function UnitSimpleEditDialog({
   };
 
   /* ── Planos · modal multi-doc ── */
-  const [planosOpen, setPlanosOpen] = useState(false);
   const planoUrls = unit.planoUrls ?? [];
   const addPlanosMock = () => {
     const urls = [
