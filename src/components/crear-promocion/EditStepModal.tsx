@@ -77,7 +77,20 @@ export function EditStepModal({
 
         <div className="px-5 py-4">
           {step === "extras" && <ExtrasV5 state={state} update={update} />}
-          {step === "detalles" && <DetallesStep state={state} update={update} />}
+          {step === "detalles" && (
+            <DetallesStep
+              state={state}
+              update={update}
+              trimestreOptions={(() => {
+                const y = new Date().getFullYear();
+                return [
+                  `T1 ${y}`, `T2 ${y}`, `T3 ${y}`, `T4 ${y}`,
+                  `T1 ${y + 1}`, `T2 ${y + 1}`, `T3 ${y + 1}`, `T4 ${y + 1}`,
+                  `T1 ${y + 2}`, `T2 ${y + 2}`, `T3 ${y + 2}`, `T4 ${y + 2}`,
+                ];
+              })()}
+            />
+          )}
           {step === "info_basica" && (
             <InfoBasicaStep state={state} update={update} defaultsCapturedInExtras />
           )}
