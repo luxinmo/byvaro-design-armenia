@@ -23,7 +23,7 @@ import {
   ChevronRight, ChevronLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@/components/ui/Checkbox";
 import type { WizardState } from "../types";
 import {
   defaultPromotionDefaults,
