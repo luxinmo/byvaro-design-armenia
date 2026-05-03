@@ -20,6 +20,7 @@
 import {
   CheckCircle2, AlertCircle, Pencil, Home, Building2, Users, Banknote,
   Image as ImageIcon, FileText, MapPin, Globe, AlertTriangle, ArrowRight, Check,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -124,6 +125,25 @@ export function RevisionStep({ state, onEditStep }: Props) {
   const totalIdiomas = 1 + Object.values(state.descripcionIdiomas).filter(Boolean).length;
   const marketingComplete = !!state.nombrePromocion && !!direccionCompleta;
 
+  /* ──── Características por defecto (V5 extras) ──── */
+  const d = state.promotionDefaults;
+  const extrasActiveLabels: string[] = [];
+  if (d) {
+    if (d.privatePool.enabled) extrasActiveLabels.push("Piscina privada");
+    if (d.parking.enabled) extrasActiveLabels.push("Parking");
+    if (d.storageRoom.enabled) extrasActiveLabels.push("Trastero");
+    if (d.plot.enabled) extrasActiveLabels.push("Parcela");
+    if (d.solarium.enabled) extrasActiveLabels.push("Solárium");
+    if (d.terraces.covered || d.terraces.uncovered) extrasActiveLabels.push("Terrazas");
+    /* "Más opciones" */
+    if (Object.values(d.equipment).some((v) => v && v !== null)) extrasActiveLabels.push("Equipamiento");
+    if (d.security.alarm || d.security.reinforcedDoor || d.security.videoSurveillance) extrasActiveLabels.push("Seguridad");
+    if (d.views.sea || d.views.mountain || d.views.golf || d.views.panoramic) extrasActiveLabels.push("Vistas");
+    if (d.orientation) extrasActiveLabels.push("Orientación");
+  }
+  /* No es obligatorio · siempre "completo" para no bloquear publicación. */
+  const extrasComplete = true;
+
   /* ──── Operativa ──── */
   const unidadesCount = state.unidades.length;
   const precioMedio = unidadesCount > 0
@@ -206,6 +226,29 @@ export function RevisionStep({ state, onEditStep }: Props) {
             }
           />
         )}
+      </SectionCard>
+
+      {/* ═════ CARACTERÍSTICAS POR DEFECTO (V5 extras) ═════ */}
+      <SectionCard icon={Sparkles} title="Características por defecto" complete={extrasComplete} onEdit={() => onEditStep("extras")}>
+        {extrasActiveLabels.length > 0 ? (
+          <Row
+            label="Activadas"
+            value={
+              <div className="flex flex-wrap gap-1.5">
+                {extrasActiveLabels.map((l) => (
+                  <span key={l} className="inline-flex items-center rounded-md bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    {l}
+                  </span>
+                ))}
+              </div>
+            }
+          />
+        ) : (
+          <Row label="Activadas" value={null} />
+        )}
+        <p className="text-[10.5px] text-muted-foreground/80 mt-2 leading-relaxed">
+          Cada vivienda hereda estas características al generarse. Edita aquí para cambiar las opciones esenciales y las "Más opciones" (equipamiento, vistas, seguridad, etc.).
+        </p>
       </SectionCard>
 
       {/* ═════ COMERCIALIZACIÓN ═════
