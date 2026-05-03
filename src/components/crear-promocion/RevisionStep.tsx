@@ -20,6 +20,7 @@
 import {
   CheckCircle2, AlertCircle, Pencil, Home, Building2, Users, Banknote,
   Image as ImageIcon, FileText, MapPin, Globe, AlertTriangle, ArrowRight, Check,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -98,7 +99,10 @@ export function RevisionStep({ state, onEditStep }: Props) {
   const subUniLabel = state.tipo === "unifamiliar"
     ? subUniOptions.find((o) => o.value === state.subUni)?.label ?? dash
     : null;
-  const subVariasLabel = state.tipo === "unifamiliar" && state.subUni === "varias"
+  /* Modelo individual SOLO aplica a "una sola vivienda" · cuando es
+   * "varias" el modelo de cada villa vive en `tipologiasSeleccionadas`
+   * (chips × cantidad) · evita la fila "Modelo: —" duplicada arriba. */
+  const subVariasLabel = state.tipo === "unifamiliar" && state.subUni === "una_sola"
     ? subVariasOptions.find((o) => o.value === state.subVarias)?.label ?? dash
     : null;
 
@@ -123,6 +127,25 @@ export function RevisionStep({ state, onEditStep }: Props) {
 
   const totalIdiomas = 1 + Object.values(state.descripcionIdiomas).filter(Boolean).length;
   const marketingComplete = !!state.nombrePromocion && !!direccionCompleta;
+
+  /* ──── Características por defecto (V5 extras) ──── */
+  const d = state.promotionDefaults;
+  const extrasActiveLabels: string[] = [];
+  if (d) {
+    if (d.privatePool.enabled) extrasActiveLabels.push("Piscina privada");
+    if (d.parking.enabled) extrasActiveLabels.push("Parking");
+    if (d.storageRoom.enabled) extrasActiveLabels.push("Trastero");
+    if (d.plot.enabled) extrasActiveLabels.push("Parcela");
+    if (d.solarium.enabled) extrasActiveLabels.push("Solárium");
+    if (d.terraces.covered || d.terraces.uncovered) extrasActiveLabels.push("Terrazas");
+    /* "Más opciones" */
+    if (Object.values(d.equipment).some((v) => v && v !== null)) extrasActiveLabels.push("Equipamiento");
+    if (d.security.alarm || d.security.reinforcedDoor || d.security.videoSurveillance) extrasActiveLabels.push("Seguridad");
+    if (d.views.sea || d.views.mountain || d.views.golf || d.views.panoramic) extrasActiveLabels.push("Vistas");
+    if (d.orientation) extrasActiveLabels.push("Orientación");
+  }
+  /* No es obligatorio · siempre "completo" para no bloquear publicación. */
+  const extrasComplete = true;
 
   /* ──── Operativa ──── */
   const unidadesCount = state.unidades.length;
@@ -190,11 +213,11 @@ export function RevisionStep({ state, onEditStep }: Props) {
         <Row label="Rol" value={state.role === "promotor" ? "Promotor" : state.role === "comercializador" ? "Comercializador" : null} />
         <Row label="Tipo de promoción" value={tipoLabel} />
         {subUniLabel && <Row label="Cantidad" value={subUniLabel} />}
-        {subVariasLabel && <Row label="Tipología" value={subVariasLabel} />}
+        {subVariasLabel && <Row label="Modelo" value={subVariasLabel} />}
         {edificioResumen && <Row label="Estructura" value={edificioResumen} />}
         {state.tipologiasSeleccionadas.length > 0 && (
           <Row
-            label="Tipologías"
+            label="Modelos"
             value={
               <div className="flex flex-wrap gap-1.5">
                 {state.tipologiasSeleccionadas.map((t) => (
@@ -208,8 +231,34 @@ export function RevisionStep({ state, onEditStep }: Props) {
         )}
       </SectionCard>
 
-      {/* ═════ COMERCIALIZACIÓN ═════ */}
-      <SectionCard icon={Building2} title="Comercialización" complete={comercComplete} onEdit={() => onEditStep("estado")}>
+      {/* ═════ CARACTERÍSTICAS POR DEFECTO (V5 extras) ═════ */}
+      <SectionCard icon={Sparkles} title="Características por defecto" complete={extrasComplete} onEdit={() => onEditStep("extras")}>
+        {extrasActiveLabels.length > 0 ? (
+          <Row
+            label="Activadas"
+            value={
+              <div className="flex flex-wrap gap-1.5">
+                {extrasActiveLabels.map((l) => (
+                  <span key={l} className="inline-flex items-center rounded-md bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    {l}
+                  </span>
+                ))}
+              </div>
+            }
+          />
+        ) : (
+          <Row label="Activadas" value={null} />
+        )}
+        <p className="text-[10.5px] text-muted-foreground/80 mt-2 leading-relaxed">
+          Cada vivienda hereda estas características al generarse. Edita aquí para cambiar las opciones esenciales y las "Más opciones" (equipamiento, vistas, seguridad, etc.).
+        </p>
+      </SectionCard>
+
+      {/* ═════ COMERCIALIZACIÓN ═════
+          onEditStep("detalles") · DetallesStep cubre estado + fase +
+          fecha entrega + piso piloto + oficinas (todo lo de esta
+          sección) · y SÍ tiene componente para abrirse en modal. */}
+      <SectionCard icon={Building2} title="Comercialización" complete={comercComplete} onEdit={() => onEditStep("detalles")}>
         <Row label="Estado" value={estadoLabel} />
         {faseLabel && <Row label="Fase de obra" value={faseLabel} />}
         {state.fechaEntrega && <Row label="Entrega" value={state.fechaEntrega} />}
@@ -218,8 +267,8 @@ export function RevisionStep({ state, onEditStep }: Props) {
         <Row label="Oficinas de venta" value={state.oficinasVentaSeleccionadas.length > 0 ? `${state.oficinasVentaSeleccionadas.length}` : "No"} />
       </SectionCard>
 
-      {/* ═════ MARKETING ═════ */}
-      <SectionCard icon={MapPin} title="Marketing" complete={marketingComplete} onEdit={() => onEditStep("info_basica")}>
+      {/* ═════ INFORMACIÓN ═════ */}
+      <SectionCard icon={MapPin} title="Información" complete={marketingComplete} onEdit={() => onEditStep("info_basica")}>
         <Row label="Nombre" value={state.nombrePromocion || null} />
         <Row label="Dirección" value={direccionCompleta || null} />
         {state.certificadoEnergetico && <Row label="Cert. energético" value={state.certificadoEnergetico} />}
