@@ -208,8 +208,11 @@ export function RevisionStep({ state, onEditStep }: Props) {
         )}
       </SectionCard>
 
-      {/* ═════ COMERCIALIZACIÓN ═════ */}
-      <SectionCard icon={Building2} title="Comercialización" complete={comercComplete} onEdit={() => onEditStep("estado")}>
+      {/* ═════ COMERCIALIZACIÓN ═════
+          onEditStep("detalles") · DetallesStep cubre estado + fase +
+          fecha entrega + piso piloto + oficinas (todo lo de esta
+          sección) · y SÍ tiene componente para abrirse en modal. */}
+      <SectionCard icon={Building2} title="Comercialización" complete={comercComplete} onEdit={() => onEditStep("detalles")}>
         <Row label="Estado" value={estadoLabel} />
         {faseLabel && <Row label="Fase de obra" value={faseLabel} />}
         {state.fechaEntrega && <Row label="Entrega" value={state.fechaEntrega} />}
