@@ -99,7 +99,10 @@ export function RevisionStep({ state, onEditStep }: Props) {
   const subUniLabel = state.tipo === "unifamiliar"
     ? subUniOptions.find((o) => o.value === state.subUni)?.label ?? dash
     : null;
-  const subVariasLabel = state.tipo === "unifamiliar" && state.subUni === "varias"
+  /* Modelo individual SOLO aplica a "una sola vivienda" · cuando es
+   * "varias" el modelo de cada villa vive en `tipologiasSeleccionadas`
+   * (chips × cantidad) · evita la fila "Modelo: —" duplicada arriba. */
+  const subVariasLabel = state.tipo === "unifamiliar" && state.subUni === "una_sola"
     ? subVariasOptions.find((o) => o.value === state.subVarias)?.label ?? dash
     : null;
 
