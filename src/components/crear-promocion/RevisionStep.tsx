@@ -180,40 +180,17 @@ export function RevisionStep({ state, onEditStep }: Props) {
         </div>
       )}
 
-      {/* ═════ Progreso global ═════ */}
-      <div className="rounded-xl border border-border bg-card px-5 py-4 flex items-center gap-4">
-        <div className="relative h-14 w-14 shrink-0">
-          <svg viewBox="0 0 36 36" className="h-14 w-14 -rotate-90">
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke="hsl(var(--muted))" strokeWidth="3" />
-            <circle
-              cx="18" cy="18" r="15.9" fill="none"
-              stroke="hsl(var(--primary))" strokeWidth="3"
-              strokeDasharray={`${percent}, 100`}
-              strokeLinecap="round"
-            />
-          </svg>
-          <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-foreground tnum">
-            {percent}%
-          </div>
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-foreground">
-            {percent === 100 ? "¡Todo listo!" : "Casi listo para activar"}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {percent === 100
-              ? "Puedes activar la promoción cuando quieras. Podrás seguir editando después."
-              : `Faltan ${sections.length - completedCount} secciones por revisar antes de activar.`}
-          </p>
-        </div>
-      </div>
+      {/* Card de progreso global ELIMINADA · era redundante con el
+          banner de arriba (que ya dice "todo listo" o "faltan X
+          requisitos") y con la sección "Lo que se activará" de abajo.
+          Tres veces el mismo mensaje en una pantalla = ruido. */}
 
       {/* ═════ TIPOLOGÍA ═════ */}
       <SectionCard icon={Home} title="Tipología" complete={tipologiaComplete} onEdit={() => onEditStep("tipo")}>
-        <Row label="Rol" value={state.role === "promotor" ? "Promotor" : state.role === "comercializador" ? "Comercializador exclusivo" : null} />
+        <Row label="Rol" value={state.role === "promotor" ? "Promotor" : state.role === "comercializador" ? "Comercializador" : null} />
         <Row label="Tipo de promoción" value={tipoLabel} />
-        {subUniLabel && <Row label="Nº de unidades" value={subUniLabel} />}
-        {subVariasLabel && <Row label="Tipología de varias" value={subVariasLabel} />}
+        {subUniLabel && <Row label="Cantidad" value={subUniLabel} />}
+        {subVariasLabel && <Row label="Tipología" value={subVariasLabel} />}
         {edificioResumen && <Row label="Estructura" value={edificioResumen} />}
         {state.tipologiasSeleccionadas.length > 0 && (
           <Row
@@ -248,7 +225,7 @@ export function RevisionStep({ state, onEditStep }: Props) {
         {state.certificadoEnergetico && <Row label="Cert. energético" value={state.certificadoEnergetico} />}
         <Row
           label="Amenities"
-          value={state.amenities.length > 0 ? `${state.amenities.length} selecciondas` : null}
+          value={state.amenities.length > 0 ? `${state.amenities.length} seleccionadas` : null}
         />
         <Row
           label="Características"
@@ -319,9 +296,13 @@ export function RevisionStep({ state, onEditStep }: Props) {
             <div className="min-w-0 flex-1">
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Colaboradores</p>
               <p className="text-xs text-foreground truncate tnum">
-                {state.diferenciarNacionalInternacional
-                  ? `${state.comisionInternacional}% intl · ${state.comisionNacional}% nac · pago ${formaPagoLabel.toLowerCase()}`
-                  : `${state.comisionInternacional}% · pago ${formaPagoLabel.toLowerCase()}`}
+                {!state.colaboracion
+                  ? "Uso interno · sin colaboración"
+                  : !state.formaPagoComision || state.comisionInternacional === 0
+                    ? "Sin configurar"
+                    : state.diferenciarNacionalInternacional
+                      ? `${state.comisionInternacional}% intl · ${state.comisionNacional}% nac · pago ${formaPagoLabel.toLowerCase()}`
+                      : `${state.comisionInternacional}% · pago ${formaPagoLabel.toLowerCase()}`}
               </p>
             </div>
           </button>
@@ -348,23 +329,25 @@ export function RevisionStep({ state, onEditStep }: Props) {
           Lo que se activará
         </p>
         <ul className="flex flex-col gap-1.5 text-xs text-foreground">
+          {state.nombrePromocion && (
+            <li className="flex items-start gap-2">
+              <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" strokeWidth={2} />
+              <span>
+                Microsite público en <span className="font-medium">byvaro.com/{state.nombrePromocion.toLowerCase().replace(/\s+/g, "-")}</span>
+              </span>
+            </li>
+          )}
           <li className="flex items-start gap-2">
             <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" strokeWidth={2} />
             <span>
-              Microsite público en <span className="font-medium">byvaro.com/{state.nombrePromocion ? state.nombrePromocion.toLowerCase().replace(/\s+/g, "-") : "tu-promocion"}</span>
-            </span>
-          </li>
-          <li className="flex items-start gap-2">
-            <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" strokeWidth={2} />
-            <span>
-              {unidadesCount > 0 ? `${unidadesCount} unidades` : "Sin unidades"} disponibles en el catálogo interno para ti y tus colaboradores.
+              {unidadesCount > 0 ? `${unidadesCount} unidades` : "Sin unidades"} disponibles en tu catálogo interno{state.colaboracion ? " y para tus colaboradores" : ""}.
             </span>
           </li>
           {state.colaboracion && (
             <li className="flex items-start gap-2">
               <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" strokeWidth={2} />
               <span>
-                La promoción podrá ser vista por agencias colaboradoras. Podrás invitarlas después.
+                Podrás compartir la promoción con agencias colaboradoras desde la ficha (botón "Compartir").
               </span>
             </li>
           )}
