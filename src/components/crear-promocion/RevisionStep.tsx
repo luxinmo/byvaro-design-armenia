@@ -210,11 +210,11 @@ export function RevisionStep({ state, onEditStep }: Props) {
         <Row label="Rol" value={state.role === "promotor" ? "Promotor" : state.role === "comercializador" ? "Comercializador" : null} />
         <Row label="Tipo de promoción" value={tipoLabel} />
         {subUniLabel && <Row label="Cantidad" value={subUniLabel} />}
-        {subVariasLabel && <Row label="Tipología" value={subVariasLabel} />}
+        {subVariasLabel && <Row label="Modelo" value={subVariasLabel} />}
         {edificioResumen && <Row label="Estructura" value={edificioResumen} />}
         {state.tipologiasSeleccionadas.length > 0 && (
           <Row
-            label="Tipologías"
+            label="Modelos"
             value={
               <div className="flex flex-wrap gap-1.5">
                 {state.tipologiasSeleccionadas.map((t) => (
