@@ -967,29 +967,43 @@ export default function CrearPromocion() {
 
                 {/* ─── Step: tipo · single-select · auto-advance ─── */}
                 {step === "tipo" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {tipoOptions.map((o) => (
-                      <OptionCard key={o.value} option={o} selected={state.tipo === o.value}
-                        onSelect={(v) => {
-                          handleTipoSelect(v);
-                          autoAdvanceRef.current = true;
-                        }} />
-                    ))}
-                  </div>
+                  state.unidades.length > 0 ? (
+                    <LockedStructureNotice
+                      current={tipoOptions.find((o) => o.value === state.tipo)?.label ?? "—"}
+                      label="Tipo de promoción"
+                    />
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {tipoOptions.map((o) => (
+                        <OptionCard key={o.value} option={o} selected={state.tipo === o.value}
+                          onSelect={(v) => {
+                            handleTipoSelect(v);
+                            autoAdvanceRef.current = true;
+                          }} />
+                      ))}
+                    </div>
+                  )
                 )}
 
                 {/* ─── Step: sub_uni · single-select · auto-advance ─── */}
                 {step === "sub_uni" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {subUniOptions.map((o) => (
-                      <OptionCard key={o.value} option={o} selected={state.subUni === o.value}
-                        onSelect={(v) => {
-                          update("subUni", v as SubUni);
-                          update("subVarias", null);
-                          autoAdvanceRef.current = true;
-                        }} />
-                    ))}
-                  </div>
+                  state.unidades.length > 0 ? (
+                    <LockedStructureNotice
+                      current={subUniOptions.find((o) => o.value === state.subUni)?.label ?? "—"}
+                      label="Cantidad de viviendas"
+                    />
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {subUniOptions.map((o) => (
+                        <OptionCard key={o.value} option={o} selected={state.subUni === o.value}
+                          onSelect={(v) => {
+                            update("subUni", v as SubUni);
+                            update("subVarias", null);
+                            autoAdvanceRef.current = true;
+                          }} />
+                      ))}
+                    </div>
+                  )
                 )}
 
                 {/* ─── Step: sub_varias ─── */}
@@ -1954,6 +1968,34 @@ function ExtraRow({
 /** Input de precio · usado cuando un anejo (trastero / parking / piscina
  *  privada) NO está incluido en el precio de la vivienda y hay que
  *  cobrarlo aparte. Mismo styling que ExtraRow para coherencia visual. */
+/* ═══════════════════════════════════════════════════════════════════
+   LockedStructureNotice
+   ═══════════════════════════════════════════════════════════════════
+   Banner read-only que aparece en los pasos `tipo` y `sub_uni` cuando
+   ya hay unidades creadas · cambiar esos campos regeneraría todo y
+   destruiría datos. El user ve el valor actual + aviso explícito de
+   que tiene que crear una promoción nueva si necesita ese cambio. */
+function LockedStructureNotice({ label, current }: { label: string; current: string }) {
+  return (
+    <div className="flex flex-col gap-3 max-w-[600px] mx-auto w-full">
+      <div className="rounded-2xl border border-border bg-card p-5">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-1.5">
+          {label}
+        </p>
+        <p className="text-[15px] font-semibold text-foreground">{current}</p>
+      </div>
+      <div className="rounded-xl bg-warning/10 border border-warning/30 px-4 py-3 text-[13px] text-foreground leading-relaxed">
+        <p className="font-medium mb-1">No puedes cambiarlo a estas alturas</p>
+        <p className="text-muted-foreground">
+          Ya has creado unidades en esta promoción. Cambiar este campo regeneraría toda la
+          estructura y perderías los datos introducidos. Si necesitas un tipo distinto,
+          crea una promoción nueva desde cero.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function PriceRow({
   label, value, onChange,
 }: { label: string; value: number; onChange: (v: number) => void }) {
