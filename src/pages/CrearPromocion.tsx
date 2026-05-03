@@ -62,6 +62,7 @@ import { MultimediaStep } from "@/components/crear-promocion/MultimediaStep";
 import { ColaboradoresStep } from "@/components/crear-promocion/ColaboradoresStep";
 import { CrearUnidadesStep } from "@/components/crear-promocion/CrearUnidadesStep";
 import { RevisionStep } from "@/components/crear-promocion/RevisionStep";
+import { EditStepModal, isSupportedInModal } from "@/components/crear-promocion/EditStepModal";
 import { ConfiguracionEdificio } from "@/components/crear-promocion/configuracion-edificio";
 import { ConfiguracionEdificioV3 } from "@/components/crear-promocion/configuracion-edificio/index-v3";
 import { ConfiguracionEdificioV4 } from "@/components/crear-promocion/configuracion-edificio/index-v4";
@@ -345,6 +346,12 @@ export default function CrearPromocion() {
    * por acción explícita del user. */
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const saving = false;
+
+  /* Step abierto en modal de edición desde la pantalla de Revisión.
+   * Null = ningún modal abierto. Los pasos no soportados (role/tipo/
+   * sub_uni/sub_varias/estado · inline en CrearPromocion) caen al
+   * navigate clásico via setStep. */
+  const [editModalStep, setEditModalStep] = useState<StepId | null>(null);
 
   /* Aviso de reanudación · cuando el user entra con `?draft=<id>`
    * desde fuera (link "Continuar editando"), mostramos un popup que
@@ -824,6 +831,17 @@ export default function CrearPromocion() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de edición desde Revisión · sin obligar al user a
+          re-navegar por todo el wizard. */}
+      <EditStepModal
+        open={editModalStep !== null}
+        step={editModalStep}
+        state={state}
+        update={update}
+        uploadScopeId={resolvedPromotionId ?? draftId ?? undefined}
+        onClose={() => setEditModalStep(null)}
+      />
 
       {/* ═══════════ Sidebar · PhaseTimeline ═══════════ */}
       <aside className="hidden lg:flex w-[300px] shrink-0 flex-col border-r border-border bg-card">
@@ -1372,7 +1390,16 @@ export default function CrearPromocion() {
 
                 {/* ─── Step: revision (paso final) ─── */}
                 {step === "revision" && (
-                  <RevisionStep state={state} onEditStep={setStep} />
+                  <RevisionStep
+                    state={state}
+                    onEditStep={(s) => {
+                      /* Si el paso tiene componente propio · abre modal. */
+                      if (isSupportedInModal(s)) setEditModalStep(s);
+                      /* Si no (role/tipo/sub_uni/sub_varias/estado) ·
+                       * fallback a navegación · son pasos cortos. */
+                      else setStep(s);
+                    }}
+                  />
                 )}
               </motion.div>
             </AnimatePresence>
