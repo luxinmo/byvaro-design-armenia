@@ -17,7 +17,7 @@
  */
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import type { StepId, WizardState, RoleOption, TipoPromocion, SubUni, SubVarias } from "./types";
+import type { StepId, WizardState, RoleOption } from "./types";
 import { ExtrasV5 } from "./extras-v5";
 import { DetallesStep } from "./DetallesStep";
 import { InfoBasicaStep } from "./InfoBasicaStep";
@@ -134,10 +134,13 @@ export function EditStepModal({
   );
 }
 
-/* ─── TipologiaQuickEdit · vista compacta de los 4 inline steps
- *  (role / tipo / subUni / subVarias) en una sola pantalla ·
- *  pensada para edición rápida desde el modal de Revisión sin
- *  navegar el wizard. */
+/* ─── TipologiaQuickEdit · solo permite cambiar ROL desde aquí.
+ *
+ *  El resto (tipo · cantidad · tipología) se muestra como read-only
+ *  con un hint indicando dónde cambiarlo. Razón · cambiar de
+ *  plurifamiliar a unifamiliar (o al revés) es destructivo · regenera
+ *  unidades, resetea estructura del edificio, invalida configuración.
+ *  Mejor obligar a entrar al wizard donde el cambio es explícito. */
 function TipologiaQuickEdit({
   state, update,
 }: {
@@ -145,10 +148,13 @@ function TipologiaQuickEdit({
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
 }) {
   const isUnifamiliar = state.tipo === "unifamiliar";
-  const isVarias = isUnifamiliar && state.subUni === "varias";
+  const tipoLabel = tipoOptions.find((o) => o.value === state.tipo)?.label ?? "—";
+  const subUniLabel = subUniOptions.find((o) => o.value === state.subUni)?.label ?? null;
+  const subVariasLabel = subVariasOptions.find((o) => o.value === state.subVarias)?.label ?? null;
+
   return (
     <div className="flex flex-col gap-5">
-      {/* Rol */}
+      {/* Rol · ÚNICO editable aquí */}
       <section>
         <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">Rol</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -163,90 +169,49 @@ function TipologiaQuickEdit({
         </div>
       </section>
 
-      {/* Tipo */}
-      <section>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">Tipo de promoción</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          {tipoOptions.map((o) => (
-            <OptionCard
-              key={o.value}
-              option={o}
-              selected={state.tipo === o.value}
-              onSelect={(v) => {
-                /* Al cambiar tipo, reseteamos sub-selecciones que ya no
-                 * aplican · evita estado inconsistente. */
-                update("tipo", v as TipoPromocion);
-                if (v !== "unifamiliar") {
-                  update("subUni", null);
-                  update("subVarias", null);
-                }
-              }}
+      {/* Resto · read-only + hint */}
+      <section className="rounded-2xl border border-border bg-muted/20 p-4">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-3">
+          Estructura de la promoción
+        </p>
+        <div className="flex flex-col gap-2 mb-3">
+          <ReadOnlyRow label="Tipo" value={tipoLabel} />
+          {isUnifamiliar && subUniLabel && <ReadOnlyRow label="Cantidad" value={subUniLabel} />}
+          {isUnifamiliar && state.subUni === "una_sola" && subVariasLabel && (
+            <ReadOnlyRow label="Tipología" value={subVariasLabel} />
+          )}
+          {isUnifamiliar && state.subUni === "varias" && state.tipologiasSeleccionadas.length > 0 && (
+            <ReadOnlyRow
+              label="Tipologías"
+              value={
+                <div className="flex flex-wrap gap-1.5">
+                  {state.tipologiasSeleccionadas.map((t) => (
+                    <span key={t.tipo} className="inline-flex items-center gap-1 rounded-md bg-primary/10 border border-primary/20 px-2 py-0.5 text-[11px] font-medium text-primary">
+                      {subVariasOptions.find((o) => o.value === t.tipo)?.label} × {t.cantidad}
+                    </span>
+                  ))}
+                </div>
+              }
             />
-          ))}
+          )}
+        </div>
+        <div className="rounded-lg bg-warning/10 border border-warning/30 px-3 py-2 text-[12px] text-foreground leading-relaxed">
+          <span className="font-medium">No puedes cambiarlo desde aquí.</span>{" "}
+          Cambiar el tipo de promoción regenera todas las unidades y resetea
+          la estructura. Si lo necesitas, sal del modal y entra al paso{" "}
+          <span className="font-medium">"Tipo de promoción"</span> del wizard
+          desde el sidebar lateral.
         </div>
       </section>
+    </div>
+  );
+}
 
-      {/* SubUni · solo unifamiliar */}
-      {isUnifamiliar && (
-        <section>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">Cantidad</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {subUniOptions.map((o) => (
-              <OptionCard
-                key={o.value}
-                option={o}
-                selected={state.subUni === o.value}
-                onSelect={(v) => {
-                  update("subUni", v as SubUni);
-                  update("subVarias", null);
-                }}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* SubVarias · unifamiliar una sola */}
-      {isUnifamiliar && state.subUni === "una_sola" && (
-        <section>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">Tipología</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {subVariasOptions.map((o) => (
-              <OptionCard
-                key={o.value}
-                option={o}
-                selected={state.subVarias === o.value}
-                onSelect={(v) => update("subVarias", v as SubVarias)}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* SubVarias · unifamiliar varias · solo info read-only · la
-          gestión completa de tipologías + cantidades sigue en el
-          step "sub_varias" (con multi-select y contadores). */}
-      {isVarias && (
-        <section>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">Tipologías seleccionadas</p>
-          {state.tipologiasSeleccionadas.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
-              {state.tipologiasSeleccionadas.map((t) => (
-                <span key={t.tipo} className="inline-flex items-center gap-1 rounded-md bg-primary/10 border border-primary/20 px-2 py-0.5 text-[11px] font-medium text-primary">
-                  {subVariasOptions.find((o) => o.value === t.tipo)?.label} × {t.cantidad}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[12px] text-muted-foreground italic">
-              Aún no has seleccionado tipologías. Vuelve al wizard para configurarlas.
-            </p>
-          )}
-          <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">
-            Para cambiar las tipologías y cantidades, sal y entra al step <span className="font-medium text-foreground">"Tipología y estilo"</span> del wizard · ahí tienes los multi-selectores con contadores.
-          </p>
-        </section>
-      )}
+function ReadOnlyRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 text-[12.5px]">
+      <span className="text-muted-foreground min-w-[100px] shrink-0">{label}</span>
+      <span className="text-foreground flex-1 min-w-0">{value}</span>
     </div>
   );
 }
