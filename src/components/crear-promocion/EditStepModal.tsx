@@ -68,9 +68,18 @@ export function EditStepModal({
 
   const title = STEP_TITLES[step] ?? "Editar";
 
+  /* Steps con tabla ancha (unidades) necesitan más espacio · sin
+   * esto la tabla overflowea horizontalmente y el user tiene que
+   * hacer scroll lateral · feo. El resto cabe bien en max-w-3xl. */
+  const widthClass =
+    step === "crear_unidades" ? "max-w-[min(1280px,95vw)]" :
+    step === "multimedia" ? "max-w-4xl" :
+    step === "extras" ? "max-w-2xl" :
+    "max-w-3xl";
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className={`${widthClass} max-h-[90vh] overflow-y-auto p-0`}>
         <DialogHeader className="px-5 pt-5 pb-3 border-b border-border/40 sticky top-0 bg-background z-10">
           <DialogTitle className="text-base font-semibold">{title}</DialogTitle>
         </DialogHeader>
