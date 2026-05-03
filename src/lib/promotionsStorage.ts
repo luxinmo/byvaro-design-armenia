@@ -63,14 +63,29 @@ export function getCreatedPromotions(): CreatedPromotion[] {
   return readCreated();
 }
 
+/** Resultado de la creación · indica si la sincronización a Supabase
+ *  tuvo éxito · el caller decide qué hacer si falla (NO borrar el
+ *  draft, mostrar toast, etc.). El cache local SIEMPRE se escribe
+ *  primero · `created` está garantizado. */
+export interface CreatePromotionResult {
+  created: CreatedPromotion;
+  /** true si Supabase confirmó el insert principal · false si falló
+   *  (RLS, schema mismatch, conexión...). Si false, el draft NO debe
+   *  borrarse para que el user no pierda los datos. */
+  supabaseOk: boolean;
+  /** Mensaje de error si supabaseOk=false · para mostrar al user. */
+  supabaseError?: string;
+}
+
 /** Convierte WizardState → fila DB + persiste a Supabase + localStorage.
- *  Optimistic local · async write-through. */
-export function createPromotionFromWizard(
+ *  Optimistic local · sync escritura local + AWAIT escritura Supabase.
+ *  El caller debe `await` para saber si fue OK antes de borrar el draft. */
+export async function createPromotionFromWizard(
   state: WizardState,
   ownerOrgId: string,
   ownerRole: "promotor" | "comercializador" = "promotor",
   status: "active" | "incomplete" = "active",
-): CreatedPromotion {
+): Promise<CreatePromotionResult> {
   const now = new Date().toISOString();
   const id = `prom-c-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
@@ -112,57 +127,53 @@ export function createPromotionFromWizard(
   const list = readCreated();
   writeCreated([created, ...list]);
 
-  /* Write-through · async fire-and-forget. */
-  void (async () => {
-    if (!isSupabaseConfigured) return;
-    const { error } = await supabase.from("promotions").insert({
-      id: created.id,
-      owner_organization_id: ownerOrgId,
-      owner_role: ownerRole,
-      name: created.name,
-      status: status === "active" ? "active" : "incomplete",
-      total_units: created.totalUnits,
-      available_units: created.availableUnits,
-      price_from: created.priceFrom,
-      price_to: created.priceTo,
-      delivery: created.delivery,
-      image_url: created.imageUrl,
-      description: created.description,
-      address: created.address,
-      city: created.city,
-      country: created.country,
-      can_share_with_agencies: true,
-      metadata: created.metadata,
-    });
-    if (error) {
-      console.warn("[promotions:create] insert failed:", error.message);
-      return;
-    }
-    /* Promo creada · ahora persistir las sub-entidades a sus tablas
-     *  dedicadas. Antes vivían SOLO en `promotions.metadata.wizardSnapshot`
-     *  y los componentes que las leen (Availability, Gallery, Plan de
-     *  pagos) las veían vacías porque consultan tablas, no JSONB.
-     *  Sin esto no había paridad local↔producción.
-     *
-     *  Anejos sueltos · NO se persisten aquí · el wizard solo trabaja
-     *  con counts agregados (state.parkings, state.trasteros). Los
-     *  anejos individuales se crean después desde la ficha de promoción
-     *  y `anejosStorage.ts` ya tiene write-through a `promotion_anejos`. */
-    const s = state as unknown as Record<string, unknown>;
-    const unidades = (s.unidades as UnitData[] | undefined) ?? [];
-    const fotos = (s.fotos as FotoItem[] | undefined) ?? [];
-    const videos = (s.videos as VideoItem[] | undefined) ?? [];
-    const hitosPago = (s.hitosPago as HitoPago[] | undefined) ?? [];
-
-    await Promise.all([
-      unidades.length > 0 ? saveUnitsToSupabase(created.id, unidades) : null,
-      (fotos.length > 0 || videos.length > 0)
-        ? saveGalleryToSupabase(created.id, fotos, videos) : null,
-      hitosPago.length > 0 ? savePaymentPlanToSupabase(created.id, hitosPago) : null,
-    ]);
-  })();
-
-  return created;
+  /* Write-through SÍNCRONO (await) a Supabase · si falla el insert
+   * principal, devolvemos `supabaseOk: false` · el caller NO debe
+   * borrar el draft para que el user pueda re-intentar / recuperar. */
+  if (!isSupabaseConfigured) {
+    /* Sin Supabase configurado tratamos como OK (entorno dev sin
+     * backend) · el cache local es la fuente. */
+    return { created, supabaseOk: true };
+  }
+  const { error } = await supabase.from("promotions").insert({
+    id: created.id,
+    owner_organization_id: ownerOrgId,
+    owner_role: ownerRole,
+    name: created.name,
+    status: status === "active" ? "active" : "incomplete",
+    total_units: created.totalUnits,
+    available_units: created.availableUnits,
+    price_from: created.priceFrom,
+    price_to: created.priceTo,
+    delivery: created.delivery,
+    image_url: created.imageUrl,
+    description: created.description,
+    address: created.address,
+    city: created.city,
+    country: created.country,
+    can_share_with_agencies: true,
+    metadata: created.metadata,
+  });
+  if (error) {
+    console.warn("[promotions:create] insert failed:", error.message);
+    return { created, supabaseOk: false, supabaseError: error.message };
+  }
+  /* Promo creada · ahora persistir las sub-entidades a sus tablas
+   * dedicadas. Si alguna falla NO marcamos supabaseOk=false (la promo
+   * principal sí está) · solo loggeamos. El user puede re-subir
+   * desde la ficha. */
+  const s = state as unknown as Record<string, unknown>;
+  const unidades = (s.unidades as UnitData[] | undefined) ?? [];
+  const fotos = (s.fotos as FotoItem[] | undefined) ?? [];
+  const videos = (s.videos as VideoItem[] | undefined) ?? [];
+  const hitosPago = (s.hitosPago as HitoPago[] | undefined) ?? [];
+  await Promise.all([
+    unidades.length > 0 ? saveUnitsToSupabase(created.id, unidades) : null,
+    (fotos.length > 0 || videos.length > 0)
+      ? saveGalleryToSupabase(created.id, fotos, videos) : null,
+    hitosPago.length > 0 ? savePaymentPlanToSupabase(created.id, hitosPago) : null,
+  ]);
+  return { created, supabaseOk: true };
 }
 
 /** Maps `UnitData[]` del wizard → filas de `promotion_units` y hace

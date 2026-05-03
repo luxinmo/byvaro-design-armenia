@@ -675,7 +675,7 @@ export default function CrearPromocion() {
   };
 
   /* Handlers */
-  const handleContinue = () => {
+  const handleContinue = async () => {
     const next = getNext();
     if (next) setStep(next);
     else if (onlyMissing && returnTo) {
@@ -714,10 +714,21 @@ export default function CrearPromocion() {
       const me = currentOrgIdentity(currentUser);
       const role = (state as unknown as { role?: "promotor" | "comercializador" }).role
         ?? "promotor";
-      const created = createPromotionFromWizard(state, me.orgId, role, "active");
+      const result = await createPromotionFromWizard(state, me.orgId, role, "active");
+      /* CRÍTICO · solo borramos el draft si Supabase confirmó el
+       * insert. Si falla, mantenemos el draft para que el user pueda
+       * re-intentar · evita pérdida de datos por RLS / schema mismatch
+       * que antes pasaba silencioso (cache local con la promo pero
+       * /promociones leyendo solo de Supabase = invisible). */
+      if (!result.supabaseOk) {
+        toast.error("No se pudo publicar la promoción en la nube", {
+          description: `${result.supabaseError ?? "Error desconocido"}. Tu borrador NO se ha borrado · puedes reintentar más tarde.`,
+        });
+        return;
+      }
       if (draftId) deleteDraft(draftId);
       toast.success("Promoción creada correctamente", {
-        description: `${created.name} · publicada en /promociones`,
+        description: `${result.created.name} · publicada en /promociones`,
       });
       navigate("/promociones");
     }
