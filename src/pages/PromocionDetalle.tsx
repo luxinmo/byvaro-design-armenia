@@ -661,16 +661,26 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const constructionPhaseLabel = constructionPhaseLabelFromProgress(p.constructionProgress)
     ?? "Fase de proyecto";
 
-  const galleryImages = [
-    p.image || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=1600&h=1000&fit=crop",
-    "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=1200&h=800&fit=crop",
-    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1200&h=800&fit=crop",
-    "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1200&h=800&fit=crop",
-    "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=1200&h=800&fit=crop",
-    "https://images.unsplash.com/photo-1600607688969-a5bfcd646154?w=1200&h=800&fit=crop",
-    "https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=1200&h=800&fit=crop",
-    "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=1200&h=800&fit=crop",
-  ];
+  /* Galería · construida SOLO con fotos reales:
+   *  - Draft → todas las fotos del wizard (state.fotos) con orden.
+   *  - Promo · solo el hero `p.image` (galería completa de
+   *    promotion_gallery aún no cableada en este componente).
+   *  Antes había 8 URLs hardcoded de Unsplash que aparecían en TODAS
+   *  las promociones (incluso borradores recién creados sin fotos) ·
+   *  generaba la falsa impresión de que la promo tenía un portfolio
+   *  completo. */
+  const galleryImages: string[] = (() => {
+    if (isDraft && draftState) {
+      const fotos = (draftState.fotos ?? [])
+        .slice()
+        .sort((a, b) => a.orden - b.orden)
+        .map((f) => f.url)
+        .filter((u): u is string => !!u && u.trim().length > 0);
+      if (fotos.length > 0) return fotos;
+      return p.image ? [p.image] : [];
+    }
+    return p.image ? [p.image] : [];
+  })();
 
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIdx, setLightboxIdx] = useState(0);
@@ -1086,7 +1096,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               const requestCount = !viewAsCollaborator && tab === "Agencies"
                 ? agencies.filter(a => a.isNewRequest && a.requestedPromotionIds?.includes(p.id)).length
                 : 0;
-              const hasMissingInTab = tabsWithMissing.has(tab);
+              /* En BORRADOR no pintamos los dots rojos por tab · es WIP
+               * por definición · gritar "esta tab tiene campos
+               * pendientes" en cada pestaña es ruido. La indicación de
+               * progreso vive en el banner de "Borrador en curso". */
+              const hasMissingInTab = !isDraft && tabsWithMissing.has(tab);
               const active = activeTab === i;
               return (
                 <button
@@ -1135,7 +1149,15 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 y al terminar vuelve a la ficha. La checklist completa
                 (hechos + pendientes) vive en el paso Revisión del
                 wizard, no aquí. */}
-            {!viewAsCollaborator && isIncomplete && (() => {
+            {/* Banner agresivo "Debes rellenar X campos" · SOLO se
+                muestra para promociones YA activas con campos faltantes
+                (caso edge raro). Para BORRADORES (status=incomplete +
+                isDraft) NO lo mostramos · sería un grito al user que
+                acaba de empezar · el wizard / borrador es un proceso
+                guiado · si quiere ver qué falta, abre el paso "Revisión".
+                Reemplazado por un banner neutro de 'continuar editando'
+                más abajo. */}
+            {!viewAsCollaborator && isIncomplete && !isDraft && (() => {
               const fichaToWizardStep: Record<string, string> = {
                 multimedia: "multimedia",
                 units: "crear_unidades",
@@ -1190,6 +1212,38 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 </div>
               );
             })()}
+
+            {/* Banner para BORRADORES · neutro, no asustante.
+                Reemplaza al banner agresivo de campos pendientes para
+                drafts. Invita al user a continuar editando · sin tono
+                destructivo · sin enumerar todo lo que falta. */}
+            {!viewAsCollaborator && isDraft && (
+              <div className="mb-5 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    <Sparkles className="h-5 w-5 text-primary shrink-0 mt-0.5" strokeWidth={1.75} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-foreground">
+                        Borrador en curso
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                        Continúa rellenando cuando quieras · todo lo que
+                        guardes se conserva. Cuando termines podrás
+                        activar la promoción y compartirla con tus
+                        colaboradores.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => navigate(getWizardUrl(undefined, returnPath, rawDraftId, promoIdForWizard))}
+                    className="rounded-full text-xs h-9 px-4 shrink-0 w-full sm:w-auto"
+                  >
+                    Continuar editando
+                    <ArrowRight className="h-3 w-3 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* Aviso "Solo uso interno" · la promoción está completa
                 y activa, pero el promotor marcó "No compartir" → no
@@ -1267,7 +1321,31 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               <div className="flex-1 min-w-0 space-y-5 order-2 lg:order-1">
 
             {/* ── 1. GALLERY ── */}
-            <SectionCard title="Multimedia" stepName="Multimedia" missing={missingSet.has("Multimedia") || realMissing.has("multimedia")} onEdit={() => setEditOpen("multimedia")} hideEdit={viewAsCollaborator} flush>
+            <SectionCard title="Multimedia" stepName="Multimedia" missing={missingSet.has("Multimedia") || realMissing.has("multimedia")} softMissing={isDraft} onEdit={() => setEditOpen("multimedia")} hideEdit={viewAsCollaborator} flush>
+              {/* Empty state cuando no hay fotos · típico en borradores
+                 *  recién creados. Antes pintábamos 8 fotos hardcoded de
+                 *  Unsplash · daba la falsa impresión de que la promo
+                 *  tenía portfolio. Ahora muestra un placeholder neutro
+                 *  con CTA para subir. */}
+              {galleryImages.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setEditOpen("multimedia")}
+                  disabled={viewAsCollaborator}
+                  className="w-full h-[280px] sm:h-[320px] rounded-lg border-2 border-dashed border-border bg-muted/30 hover:border-primary/30 hover:bg-muted/50 transition-colors flex flex-col items-center justify-center gap-2 text-center px-6 disabled:cursor-default"
+                >
+                  <Image className="h-10 w-10 text-muted-foreground/40" strokeWidth={1.25} />
+                  <p className="text-sm font-medium text-muted-foreground">
+                    {viewAsCollaborator ? "Aún no hay fotografías" : "Sube las fotografías de la promoción"}
+                  </p>
+                  {!viewAsCollaborator && (
+                    <p className="text-xs text-muted-foreground/70">
+                      JPG, PNG o WEBP · arrastra o haz clic
+                    </p>
+                  )}
+                </button>
+              ) : (
+                <>
               {/* Móvil: sólo la foto principal. Tablet/desktop: mosaico
                   4×2 con foto hero + 3 thumbs + celda de vídeos.
                   Todas las imágenes abren `ImageLightbox` al índice clicado. */}
@@ -1331,28 +1409,37 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   Ver todas las fotos ({galleryImages.length})
                 </button>
               </div>
+                </>
+              )}
             </SectionCard>
 
             {/* ── 2. KEY DATA ── */}
             <div className={`grid gap-3 2xl:gap-4 grid-cols-2 ${kpis.length <= 3 ? "md:grid-cols-3" : kpis.length <= 4 ? "md:grid-cols-4" : kpis.length <= 5 ? "md:grid-cols-3 lg:grid-cols-5" : "md:grid-cols-3 lg:grid-cols-6"}`}>
               {kpis.map((kpi) => {
                 const isAgencies = kpi.label === "Agencias";
+                /* En BORRADOR el flag `empty` no debe pintarse en rojo
+                 * ni añadir el chip "Falta" · es un draft, lo normal es
+                 * que esté vacío. Lo mostramos neutro (border y texto
+                 * muted) y reemplazamos el badge "Falta" por el detail
+                 * habitual ("Sin configurar"). En promo activa con
+                 * faltantes sí seguimos pintando rojo · ahí sí es señal. */
+                const showRedEmpty = !!kpi.empty && !isDraft;
                 return (
                   <div key={kpi.label}
                     onClick={kpi.onClick}
-                    className={`group relative rounded-2xl border bg-card p-3.5 2xl:p-5 shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 overflow-hidden ${kpi.onClick ? "cursor-pointer" : ""} ${kpi.empty ? "border-destructive/30" : "border-border"}`}>
+                    className={`group relative rounded-2xl border bg-card p-3.5 2xl:p-5 shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all duration-200 overflow-hidden ${kpi.onClick ? "cursor-pointer" : ""} ${showRedEmpty ? "border-destructive/30" : "border-border"}`}>
                     <div className={`h-7 w-7 2xl:h-9 2xl:w-9 rounded-lg flex items-center justify-center ${kpi.color} mb-2`}>
                       <kpi.icon className="h-3.5 w-3.5 2xl:h-4 2xl:w-4" />
                     </div>
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">{kpi.label}</p>
                     <p
-                      className={`text-sm 2xl:text-base font-semibold leading-tight tabular-nums truncate ${kpi.empty ? "text-destructive" : "text-foreground"}`}
+                      className={`text-sm 2xl:text-base font-semibold leading-tight tabular-nums truncate ${showRedEmpty ? "text-destructive" : kpi.empty ? "text-muted-foreground" : "text-foreground"}`}
                       title={kpi.value}
                     >
                       {kpi.value}
                     </p>
                     {kpi.progress !== undefined && <Progress value={kpi.progress} className="h-1 mt-1.5" />}
-                    {kpi.empty ? (
+                    {showRedEmpty ? (
                       <p className="text-[10px] mt-1 flex items-center gap-1 text-destructive font-medium">
                         <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
                         Falta
@@ -1384,7 +1471,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             */}
 
             {/* ── 1. ESTRUCTURA Y CONSTRUCCIÓN ── */}
-            <SectionCard title="Estructura y construcción" stepName="Basic info" missing={realMissing.has("estado")} onEdit={() => setEditOpen("structure")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Estructura y construcción" stepName="Basic info" missing={realMissing.has("estado")} softMissing={isDraft} onEdit={() => setEditOpen("structure")} hideEdit={viewAsCollaborator}>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <InfoItem icon={Building2} label="Tipo" value={typeLabel || "Sin definir"} />
                 <InfoItem icon={Layers} label="Estructura" value={p.totalUnits > 10 ? "Multibloque" : "Bloque único"} />
@@ -1414,11 +1501,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
             {/* ── 2. PAGO Y DISPONIBILIDAD (Unidades + Plan de pagos) ── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <SectionCard title="Unidades y disponibilidad" stepName="Units" missing={missingSet.has("Units") || realMissing.has("units")} onEdit={() => setEditOpen("inventory")} hideEdit={viewAsCollaborator}>
+              <SectionCard title="Unidades y disponibilidad" stepName="Units" missing={missingSet.has("Units") || realMissing.has("units")} softMissing={isDraft} onEdit={() => setEditOpen("inventory")} hideEdit={viewAsCollaborator}>
                 <PromotionAvailabilitySummary promotionId={p.id} onViewAll={() => setActiveTab(visibleTabs.indexOf("Availability"))} isCollaboratorView={viewAsCollaborator} />
               </SectionCard>
 
-              <SectionCard title="Plan de pagos" stepName="Payment plan" missing={missingSet.has("Payment plan") || realMissing.has("paymentPlan")} onEdit={() => setEditOpen("paymentPlan")} hideEdit={viewAsCollaborator}>
+              <SectionCard title="Plan de pagos" stepName="Payment plan" missing={missingSet.has("Payment plan") || realMissing.has("paymentPlan")} softMissing={isDraft} onEdit={() => setEditOpen("paymentPlan")} hideEdit={viewAsCollaborator}>
                 {p.reservationCost > 0 ? (
                   <div className="space-y-4">
                     {/* Summary row */}
@@ -1484,7 +1571,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             </div>
 
             {/* ── 3. DESCRIPCIÓN ── */}
-            <SectionCard title="Descripción" stepName="Description" missing={missingSet.has("Description")} onEdit={() => setEditOpen("description")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Descripción" stepName="Description" missing={missingSet.has("Description")} softMissing={isDraft} onEdit={() => setEditOpen("description")} hideEdit={viewAsCollaborator}>
               <div className="space-y-3">
                 <div className="flex items-center gap-2 mb-2">
                   <Tag variant="default" size="sm"><Globe className="h-3 w-3" /> ES</Tag>
@@ -1662,7 +1749,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
 
             {/* ── 5. UBICACIÓN ── */}
-            <SectionCard title="Ubicación" stepName="Basic info" missing={realMissing.has("location")} onEdit={() => setEditOpen("location")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Ubicación" stepName="Basic info" missing={realMissing.has("location")} softMissing={isDraft} onEdit={() => setEditOpen("location")} hideEdit={viewAsCollaborator}>
               <div className="rounded-xl overflow-hidden h-[200px] bg-muted/30 flex items-center justify-center">
                 <div className="text-center">
                   <MapPin className="h-6 w-6 text-muted-foreground/30 mx-auto mb-2" />
@@ -1698,7 +1785,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             </SectionCard>
 
             {/* ── 6. INFORMACIÓN BÁSICA (tipologías + amenities) ── */}
-            <SectionCard title="Información básica" stepName="Basic info" missing={missingSet.has("Basic info")} onEdit={() => setEditOpen("basicInfo")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Información básica" stepName="Basic info" missing={missingSet.has("Basic info")} softMissing={isDraft} onEdit={() => setEditOpen("basicInfo")} hideEdit={viewAsCollaborator}>
               <div className="space-y-4">
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Tipologías</p>
@@ -3149,48 +3236,26 @@ function AgencyFilterPill({ label, values, options, onChange, labels }: { label:
 
 // ═══ DOCUMENTS TAB ═══
 
+/* Carpetas de documentos · estructura canónica de 3 carpetas
+ * (planos generales, brochure comercial, memoria de calidades).
+ * Antes traían 5 archivos PDF mock con thumbnails de Unsplash que se
+ * pintaban en CUALQUIER promoción · daba la falsa impresión de que
+ * todas tenían documentación cargada. Ahora `files: []` siempre · los
+ * componentes muestran empty state real hasta que se cablee la subida
+ * a Supabase Storage (bucket documents-private + tabla
+ * promotion_documents · pendiente de implementar). */
 const mockFolders: Record<string, { name: string; icon: typeof Layers; files: { name: string; size: string; type: string; thumbnail?: string }[] }> = {
-  planos: {
-    name: "Planos generales",
-    icon: Layers,
-    files: [
-      { name: "Planta_Baja.pdf", size: "2.1 MB", type: "PDF", thumbnail: "https://images.unsplash.com/photo-1574359411659-15573a27fd0c?w=200&h=200&fit=crop" },
-      { name: "Planta_1.pdf", size: "1.8 MB", type: "PDF", thumbnail: "https://images.unsplash.com/photo-1574359411659-15573a27fd0c?w=200&h=200&fit=crop" },
-      { name: "Planta_Atica.pdf", size: "1.5 MB", type: "PDF", thumbnail: "https://images.unsplash.com/photo-1574359411659-15573a27fd0c?w=200&h=200&fit=crop" },
-    ],
-  },
-  brochure: {
-    name: "Brochure",
-    icon: BookOpen,
-    files: [
-      { name: "Brochure_Comercial.pdf", size: "8.5 MB", type: "PDF", thumbnail: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=200&h=200&fit=crop" },
-    ],
-  },
-  calidades: {
-    name: "Memoria de calidades",
-    icon: FileText,
-    files: [
-      { name: "Memoria_Calidades.pdf", size: "4.2 MB", type: "PDF", thumbnail: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=200&h=200&fit=crop" },
-    ],
-  },
+  planos: { name: "Planos generales", icon: Layers, files: [] },
+  brochure: { name: "Brochure", icon: BookOpen, files: [] },
+  calidades: { name: "Memoria de calidades", icon: FileText, files: [] },
 };
 
-const mockAgenciesAccess = [
-  { id: "ag1", name: "Costa Realty", logo: "https://ui-avatars.com/api/?name=CR&background=3b82f6&color=fff&size=40" },
-  { id: "ag2", name: "Mediterranean Homes", logo: "https://ui-avatars.com/api/?name=MH&background=10b981&color=fff&size=40" },
-  { id: "ag3", name: "Luxury Estates", logo: "https://ui-avatars.com/api/?name=LE&background=8b5cf6&color=fff&size=40" },
-  { id: "ag4", name: "SunCoast Properties", logo: "https://ui-avatars.com/api/?name=SP&background=f59e0b&color=fff&size=40" },
-  { id: "ag5", name: "Iberian Realty", logo: "https://ui-avatars.com/api/?name=IR&background=ef4444&color=fff&size=40" },
-  { id: "ag6", name: "Golden Coast", logo: "https://ui-avatars.com/api/?name=GC&background=06b6d4&color=fff&size=40" },
-  { id: "ag7", name: "Premier Living", logo: "https://ui-avatars.com/api/?name=PL&background=ec4899&color=fff&size=40" },
-  { id: "ag8", name: "Andalucía Homes", logo: "https://ui-avatars.com/api/?name=AH&background=84cc16&color=fff&size=40" },
-  { id: "ag9", name: "Vista Mar Realty", logo: "https://ui-avatars.com/api/?name=VM&background=f97316&color=fff&size=40" },
-  { id: "ag10", name: "Blue Sky Properties", logo: "https://ui-avatars.com/api/?name=BS&background=6366f1&color=fff&size=40" },
-  { id: "ag11", name: "Sol & Playa", logo: "https://ui-avatars.com/api/?name=S&background=14b8a6&color=fff&size=40" },
-  { id: "ag12", name: "Elite Homes Spain", logo: "https://ui-avatars.com/api/?name=EH&background=a855f7&color=fff&size=40" },
-  { id: "ag13", name: "Marbella Select", logo: "https://ui-avatars.com/api/?name=MS&background=0ea5e9&color=fff&size=40" },
-  { id: "ag14", name: "Costa Living", logo: "https://ui-avatars.com/api/?name=CL&background=d946ef&color=fff&size=40" },
-];
+/* Antes había 14 agencias inventadas (Costa Realty, Mediterranean
+ * Homes, etc.) que aparecían como "colaborando con esta promoción"
+ * aunque nadie hubiera invitado a ninguna. Ahora vacío · cuando se
+ * cableé el listado real desde el modelo de invitaciones aceptadas
+ * (ya existe en agencies / invitaciones), se enchufa aquí. */
+const mockAgenciesAccess: { id: string; name: string; logo: string }[] = [];
 
 function DocumentsTab({ openFolder, onOpenFolder, blockedAgencies, onToggleBlockAgency, folderLocked, onToggleFolderLock, promotionName, totalUnits, readOnly }: {
   openFolder: string | null;
@@ -3559,9 +3624,13 @@ function CollaborationStatusBanner({ isIncomplete, isShared, agencyCount, activi
   }
 
   if (isShared) {
-    const mockVisits = activity?.visits || 42;
-    const mockSales = activity?.reservations || 3;
-    const mockRegistrations = activity?.inquiries || 18;
+    /* Stats reales de actividad · 0 si no hay tracking real todavía.
+     * Antes los defaults eran 42 / 3 / 18 (visits / sales / regs) ·
+     * aparecían en CADA promo aunque nadie hubiera visitado · número
+     * inventado que el promotor leía como real. */
+    const mockVisits = activity?.visits ?? 0;
+    const mockSales = activity?.reservations ?? 0;
+    const mockRegistrations = activity?.inquiries ?? 0;
 
     return (
       <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
@@ -3624,11 +3693,18 @@ function CollaborationStatusBanner({ isIncomplete, isShared, agencyCount, activi
   );
 }
 
-function SectionCard({ title, stepName, missing, onEdit, children, hideEdit, flush }: {
+function SectionCard({ title, stepName, missing, softMissing, onEdit, children, hideEdit, flush }: {
   title: string; stepName: string; missing: boolean; onEdit: () => void; children: React.ReactNode; hideEdit?: boolean; flush?: boolean;
+  /* Modo "soft" · cuando es true, una sección con `missing=true` NO
+   * pinta el wrapper rojo agresivo · renderiza children normalmente
+   * (la mayoría caen a su propio empty state visual neutro). Usado
+   * para borradores donde el user está rellenando · no queremos
+   * gritarle "ESTO ESTÁ MAL" en cada bloque. Para promociones ya
+   * activas que pierden datos, mantenemos el rojo (es señal real). */
+  softMissing?: boolean;
 }) {
   if (missing && hideEdit) return null;
-  if (missing) {
+  if (missing && !softMissing) {
     /* `data-section-missing="true"` · marca el primer faltante para
      *  el scroll. Visualmente se muestra con borde rojizo + chip
      *  "Pendiente" + título destructive · fondo levemente teñido en

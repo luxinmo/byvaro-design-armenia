@@ -19,7 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { memCache } from "@/lib/memCache";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronRight, X, Sparkles, Rocket, SkipForward } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Plus, Sparkles, Rocket, SkipForward } from "lucide-react";
 import { toast } from "sonner"; // Toaster global en App.tsx
 
 import type {
@@ -36,7 +36,11 @@ import {
   saveOverride as savePromoWizardOverride,
 } from "@/lib/promotionWizardOverrides";
 import { canPublishWizard } from "@/lib/publicationRequirements";
-import { saveDraft as persistDraft, getDraft, deleteDraft } from "@/lib/promotionDrafts";
+import { saveDraft as persistDraft, getDraft, deleteDraft, listDrafts } from "@/lib/promotionDrafts";
+import { generatePublicRef } from "@/lib/publicRef";
+import { ExtrasV5 } from "@/components/crear-promocion/extras-v5";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { FileWarning } from "lucide-react";
 import { createPromotionFromWizard } from "@/lib/promotionsStorage";
 import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import { useCurrentUser, isAdmin } from "@/lib/currentUser";
@@ -58,12 +62,15 @@ import { MultimediaStep } from "@/components/crear-promocion/MultimediaStep";
 import { ColaboradoresStep } from "@/components/crear-promocion/ColaboradoresStep";
 import { CrearUnidadesStep } from "@/components/crear-promocion/CrearUnidadesStep";
 import { RevisionStep } from "@/components/crear-promocion/RevisionStep";
+import { ConfiguracionEdificio } from "@/components/crear-promocion/configuracion-edificio";
+import { ConfiguracionEdificioV3 } from "@/components/crear-promocion/configuracion-edificio/index-v3";
+import { ConfiguracionEdificioV4 } from "@/components/crear-promocion/configuracion-edificio/index-v4";
 import { Switch } from "@/components/ui/Switch";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { cn } from "@/lib/utils";
 import {
   FileCheck, FileX, Calendar as CalendarIconLucide, Home as HomeIcon, Store as StoreIcon,
-  Minus, Archive, Car, Waves,
+  Minus, Archive, Car, Waves, Building2,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -159,8 +166,29 @@ export default function CrearPromocion() {
      tiene 2 promociones activas. Borrador y guardado siguen libres
      para no dejar trabajo perdido. */
   const createGuard = useUsageGuard("createPromotion");
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const draftIdParam = searchParams.get("draft");
+  /* Feature flag · activa el rediseño del paso "Configuración del
+   * edificio" (wizard conversacional con preview en vivo). Mientras
+   * está en validación, sin la flag el componente actual sigue
+   * funcionando intacto. URL típica · ?wizardV2=1&draft=... */
+  const wizardV2 = searchParams.get("wizardV2") === "1";
+  /* Variante V3 · binary cards con auto-advance ("Una/varias escaleras",
+   * "Uno/varios bloques") · plantas y viviendas al final. URL típica
+   * · ?wizardV3=1&draft=... */
+  const wizardV3 = searchParams.get("wizardV3") === "1";
+  /* Variante V4 · bloques primero (sin selección por defecto) ·
+   * configuración per-bloque cuando hay varios. URL típica
+   * · ?wizardV4=1&draft=... */
+  const wizardV4 = searchParams.get("wizardV4") === "1";
+  /* V5 ya es el default · `?wizardV5=1` queda como alias por compat
+   * (no cambia nada), pero no se necesita activarlo · `ExtrasV5`
+   * sustituye al step extras legacy en TODOS los flujos. */
+  /* Sub-step interno de V4 · necesario para gatear el Siguiente global
+   * del wizard exterior. Mientras V4 no está en "resumen", el botón
+   * Siguiente del footer queda inactivo · evita saltar al paso 4 sin
+   * haber confirmado la configuración del edificio. */
+  const [v4InternalSubstep, setV4InternalSubstep] = useState<string>("bloques");
   /* `?promotionId=X` · cuando el wizard se abre desde la ficha de una
    *  promoción YA creada (botón "Completar todo" o "Editar"), hidratamos
    *  el `WizardState` con todos los datos existentes · evita que pasos
@@ -198,8 +226,50 @@ export default function CrearPromocion() {
       }
     }
     const legacy = loadLegacyDraft(); // se consume y borra la legacy key
-    if (legacy) return { id: null, state: legacy };
-    return { id: null, state: defaultWizardState };
+    if (legacy) {
+      /* Si el legacy ya trae publicRef, derivamos su id determinista ·
+       * si no, lo generamos al vuelo (también para legacys sin ref). */
+      const ref = legacy.publicRef ?? generatePublicRef("promotion");
+      return { id: `d-${ref}`, state: { ...legacy, publicRef: ref } };
+    }
+    /* REUSE de borrador en curso · si el user ya tiene un borrador
+     * SIN nombre (señal clara de "abandoné el wizard antes de
+     * empezar a etiquetar"), reusamos ese mismo en vez de crear uno
+     * nuevo. Evita la fuga de "cada entrada fresca = otro draft".
+     * Cuando el user termina de etiquetar la promoción (pone nombre),
+     * el draft pasa a ser "real" y la siguiente entrada al wizard sí
+     * crea uno nuevo · porque el filtro deja de matchearlo.
+     *
+     * Si hay flag de variante en la URL · igual reusamos, pero
+     * forzamos el currentStep al que muestra la variante para que
+     * sea visible inmediatamente (manejado abajo en `initialStep`). */
+    const inProgress = listDrafts()
+      .filter((d) => !(d.state.nombrePromocion ?? "").trim())
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+    if (inProgress.length > 0) {
+      const d = inProgress[0];
+      return { id: d.id, state: d.state, currentStep: d.currentStep };
+    }
+    /* Wizard nuevo · genera publicRef de inmediato. El draft se
+     * identifica por `d-${publicRef}` (determinista) · cualquier
+     * autosave/refresh actualiza el MISMO borrador en el listado.
+     *
+     * IMPORTANTE · persistimos AQUÍ (en el useMemo, no en useEffect).
+     * Razón · React StrictMode (dev) monta el componente dos veces ·
+     * la 2ª pasada por el useMemo no veía el draft de la 1ª en caché
+     * porque la persistencia (que vivía en useEffect) corre DESPUÉS
+     * del mount. Resultado · 2 publicRefs distintos → 2 drafts. Al
+     * persistir aquí, la 2ª pasada SÍ encuentra el draft de la 1ª
+     * vía el branch de in-progress de arriba y lo reusa.
+     *
+     * Side-effect en useMemo se considera anti-pattern, pero React
+     * lo permite explícitamente para "lazy initialization" como esta
+     * (similar a `useState(() => initFn())`). */
+    const newRef = generatePublicRef("promotion");
+    const id = `d-${newRef}`;
+    const newState = { ...defaultWizardState, publicRef: newRef };
+    persistDraft(newState, id);
+    return { id, state: newState };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -218,6 +288,21 @@ export default function CrearPromocion() {
   const setDraftId = useCallback((id: string) => {
     draftIdRef.current = id;
     setDraftIdState(id);
+  }, []);
+
+  /* Sync URL ↔ draftId · si entramos sin `?draft=` pero ya tenemos
+   * uno asignado por el initialDraft, reflejamos el id en la URL con
+   * replace para que un refresh continúe el MISMO borrador en lugar
+   * de generar otro. La persistencia ya se hizo en el useMemo de
+   * initialDraft (lazy init · evita doble-mount de StrictMode). */
+  useEffect(() => {
+    if (promotionIdParam) return;
+    if (!draftId) return;
+    if (draftIdParam) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("draft", draftId);
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* Resuelve `?promotionId=X` al `id` interno · activa el flujo de
@@ -242,66 +327,51 @@ export default function CrearPromocion() {
    *  Sin (2), un draft a medias siempre arrancaba en "role" obligando
    *  al usuario a re-recorrer todo · regla nueva: respetar el último
    *  step donde el user estaba al guardar. */
-  const initialStep = (searchParams.get("step") as StepId)
+  /* Override por variante · si entras con `?wizardV2/V3/V4=1` (paso
+   * config_edificio rediseñado), saltamos directamente a ese step
+   * para que veas la variante. V5 ya es default · sin override. */
+  const variantStep: StepId | null =
+    (wizardV2 || wizardV3 || wizardV4) ? "config_edificio" :
+    null;
+  const initialStep = variantStep
+    || (searchParams.get("step") as StepId)
     || initialDraft.currentStep
     || "role";
   const [step, setStep] = useState<StepId>(initialStep);
 
-  // Indicador de autoguardado
-  const [savedAt, setSavedAt] = useState<number | null>(() => (initialDraft.state !== defaultWizardState ? Date.now() : null));
-  const [saving, setSaving] = useState(false);
-  const saveTimeoutRef = useRef<number | null>(null);
-  const isFirstRenderRef = useRef(true);
+  /* Indicador de "guardado el ..." · usado en header/móvil para mostrar
+   * cuándo fue el último guardado MANUAL (botones "Guardar borrador" /
+   * "Guardar y salir"). Sin autosave, este timestamp solo se actualiza
+   * por acción explícita del user. */
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const saving = false;
+
+  /* Aviso de reanudación · cuando el user entra con `?draft=<id>`
+   * desde fuera (link "Continuar editando"), mostramos un popup que
+   * recuerda que la promoción aún no está completa antes de saltarle
+   * al step donde lo dejó. Evita que crea que ya se publicó. */
+  const [showResumeNotice, setShowResumeNotice] = useState(() => {
+    /* Solo si entra con draftIdParam Y el draft tenía algún progreso
+     * real (no si era un draft vacío recién creado). */
+    return !!draftIdParam && initialDraft.id != null
+      && !!(initialDraft.state.nombrePromocion?.trim()
+        || initialDraft.state.role
+        || initialDraft.state.tipo
+        || initialDraft.state.unidades.length > 0);
+  });
 
   const update = useCallback(<K extends keyof WizardState>(key: K, value: WizardState[K]) => {
     setState(prev => ({ ...prev, [key]: value }));
   }, []);
 
-  // Auto-save con debounce (~400ms). Evita escribir localStorage en cada
-  // keypress y da tiempo a mostrar el estado "Guardando…".
-  // Si estamos editando una promo existente (`resolvedPromotionId`),
-  // guardamos en el override store (por-promo) en vez de en el draft
-  // genérico · así los cambios persisten al volver a abrir la promo.
-  useEffect(() => {
-    if (isFirstRenderRef.current) {
-      isFirstRenderRef.current = false;
-      return;
-    }
-    setSaving(true);
-    if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = window.setTimeout(() => {
-      if (resolvedPromotionId) {
-        savePromoWizardOverride(resolvedPromotionId, state);
-        setSavedAt(Date.now());
-        setSaving(false);
-        return;
-      }
-      /* Leemos el id del REF (síncrono) · si el primer autosave acaba
-       * de generar uno, el ref ya lo refleja aunque el state aún no se
-       * haya commiteado · evitamos generar un segundo id duplicado.
-       * Pasamos también `step` para que al reabrir el draft volvamos
-       * justo donde estaba el user. */
-      const currentId = draftIdRef.current;
-      const res = persistDraft(state, currentId ?? undefined, step);
-      if (!currentId) setDraftId(res.id);
-      if (!res.ok && res.error === "quota") {
-        toast.error("No se pudo autoguardar", {
-          description: "El navegador ha quedado sin espacio. Elimina algún borrador o reduce fotos para continuar.",
-        });
-      } else if (res.discarded.length > 0) {
-        toast.info(`Se descartó "${res.discarded[0]}" por superar el límite de 50 borradores`);
-      }
-      setSavedAt(Date.now());
-      setSaving(false);
-    }, 400);
-    return () => {
-      if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
-    };
-    /* Añadimos `step` a las deps · cambiar de paso es una mutación
-     * que SÍ queremos persistir aunque el state del wizard no haya
-     * cambiado. Sin esto, navegar entre pasos sin teclear nada NO
-     * actualizaba el currentStep guardado. */
-  }, [state, resolvedPromotionId, step]);
+  /* Autosave ELIMINADO · 2026-05 · ver historial git para la versión
+   * con debounce. Razones:
+   *   1. Generaba drafts huérfanos cada vez que el user entraba al
+   *      wizard sin `?draft=` en URL · pile-up de borradores vacíos.
+   *   2. La barrera "guarda antes de subir imágenes" es chocante
+   *      cuando el user no sabe que hay autosave.
+   * Persistencia ahora · solo via botones "Guardar borrador" y
+   * "Guardar y salir" · `flushSave()` los maneja de forma síncrona. */
 
   /* Pasos visibles según ramificación (depende de tipo/subUni) */
   const visibleSteps = useMemo(() => getAllSteps(state).map(s => s.id), [state]);
@@ -370,12 +440,25 @@ export default function CrearPromocion() {
     }
   };
   const updateTipologiaCantidad = (tipo: SubVarias, delta: number) => {
-    setState(prev => ({
-      ...prev,
-      tipologiasSeleccionadas: prev.tipologiasSeleccionadas.map(t =>
-        t.tipo === tipo ? { ...t, cantidad: Math.max(1, t.cantidad + delta) } : t
-      ),
-    }));
+    setState(prev => {
+      const current = prev.tipologiasSeleccionadas.find(t => t.tipo === tipo);
+      if (!current) return prev;
+      const nextCantidad = current.cantidad + delta;
+      /* Si bajamos a 0 quitamos la tipología por completo · equivale
+       * a deseleccionarla (mismo efecto que clicar la card). */
+      if (nextCantidad <= 0) {
+        return {
+          ...prev,
+          tipologiasSeleccionadas: prev.tipologiasSeleccionadas.filter(t => t.tipo !== tipo),
+        };
+      }
+      return {
+        ...prev,
+        tipologiasSeleccionadas: prev.tipologiasSeleccionadas.map(t =>
+          t.tipo === tipo ? { ...t, cantidad: nextCantidad } : t
+        ),
+      };
+    });
   };
   const toggleEstilo = (estilo: EstiloVivienda) => {
     setState(prev => ({
@@ -432,8 +515,73 @@ export default function CrearPromocion() {
           && !!s.direccionPromocion.ciudad.trim();
       case "multimedia": return s.fotos.length > 0;
       case "descripcion": return !!s.descripcion || Object.keys(s.descripcionIdiomas ?? {}).length > 0;
-      case "crear_unidades": return s.unidades.length > 0;
-      case "colaboradores": return !s.colaboracion || !!s.formaPagoComision;
+      case "crear_unidades": {
+        if (s.unidades.length === 0) return false;
+        /* Cada unidad debe tener los campos comerciales mínimos
+         * rellenos · sin esto no se puede listar ni vender. La parcela
+         * solo se exige en unifamiliar (los pisos no tienen parcela). */
+        const isUnifamiliar = s.tipo === "unifamiliar";
+        const unitsOk = s.unidades.every((u) => {
+          if (!u.dormitorios || u.dormitorios <= 0) return false;
+          if (!u.banos || u.banos <= 0) return false;
+          if (!u.superficieConstruida || u.superficieConstruida <= 0) return false;
+          if (!u.precio || u.precio <= 0) return false;
+          if (isUnifamiliar && (!u.parcela || u.parcela <= 0)) return false;
+          return true;
+        });
+        if (!unitsOk) return false;
+        /* Anejos sueltos · cada uno (trastero, parking, solárium,
+         * sótano) debe tener precio > 0 · si lo añadiste, hay que
+         * ponerle precio o quitarlo. Solárium/sótano solo en unifamiliar. */
+        const totalViv = s.unidades.length;
+        const trasterosBundled = s.trasterosIncluidosPrecio
+          ? totalViv * s.trasterosIncluidosPorVivienda
+          : 0;
+        const trasterosSueltos = Math.max(0, s.trasteros - trasterosBundled);
+        for (let i = 0; i < trasterosSueltos; i++) {
+          if (!s.trasteroPrecios[i] || s.trasteroPrecios[i] <= 0) return false;
+        }
+        const parkingsBundled = s.parkingsIncluidosPrecio
+          ? totalViv * s.parkingsIncluidosPorVivienda
+          : 0;
+        const parkingsSueltos = Math.max(0, s.parkings - parkingsBundled);
+        for (let i = 0; i < parkingsSueltos; i++) {
+          if (!s.parkingPrecios[i] || s.parkingPrecios[i] <= 0) return false;
+        }
+        const solariums = s.solariums ?? 0;
+        const solariumPrecios = s.solariumPrecios ?? [];
+        for (let i = 0; i < solariums; i++) {
+          if (!solariumPrecios[i] || solariumPrecios[i] <= 0) return false;
+        }
+        const sotanos = s.sotanos ?? 0;
+        const sotanoPrecios = s.sotanoPrecios ?? [];
+        for (let i = 0; i < sotanos; i++) {
+          if (!sotanoPrecios[i] || sotanoPrecios[i] <= 0) return false;
+        }
+        return true;
+      }
+      case "colaboradores": {
+        /* Cuando colaboración está activa (la step la auto-activa al
+         * entrar) exigimos los campos comerciales mínimos para
+         * compartir con agencias:
+         *   - Comisión internacional > 0.
+         *   - Si diferencia nacional/internacional, también nacional > 0.
+         *   - Forma de pago de comisión elegida.
+         *   - Si forma de pago = "personalizado", al menos 1 hito y
+         *     suma de % cliente Y % colaborador = 100.
+         * Si NO colabora (toggle off) · paso completo sin más. */
+        if (!s.colaboracion) return true;
+        if (!s.comisionInternacional || s.comisionInternacional <= 0) return false;
+        if (s.diferenciarComisiones && (!s.comisionNacional || s.comisionNacional <= 0)) return false;
+        if (!s.formaPagoComision) return false;
+        if (s.formaPagoComision === "personalizado") {
+          if (s.hitosComision.length === 0) return false;
+          const sumCliente = s.hitosComision.reduce((acc, h) => acc + h.pagoCliente, 0);
+          const sumColab = s.hitosComision.reduce((acc, h) => acc + h.pagoColaborador, 0);
+          if (sumCliente !== 100 || sumColab !== 100) return false;
+        }
+        return true;
+      }
       case "plan_pagos": return !!s.metodoPago;
       case "revision": return false; // último paso, no salta
     }
@@ -492,8 +640,30 @@ export default function CrearPromocion() {
    *   · `revision` · exige `canPublishWizard` (chequeo completo).
    */
   const canContinue = () => {
-    if (step === "extras") return true;
+    if (step === "extras") {
+      /* Validación del V5 · cualquier categoría activada (toggle on)
+       * que tenga campos `appliesTo` y/o `priceMode` debe tenerlos
+       * elegidos · si no, Siguiente queda inactivo. Las categorías
+       * sin enabled flag (terraces, equipment, security, views,
+       * orientation, urbanization) no requieren validación · son
+       * colecciones de checkboxes opcionales. */
+      const d = state.promotionDefaults;
+      if (d) {
+        if (d.privatePool.enabled && (!d.privatePool.appliesTo || !d.privatePool.priceMode)) return false;
+        if (d.parking.enabled && (!d.parking.appliesTo || !d.parking.priceMode)) return false;
+        if (d.storageRoom.enabled && (!d.storageRoom.appliesTo || !d.storageRoom.priceMode)) return false;
+        if (d.solarium.enabled && (!d.solarium.appliesTo || !d.solarium.priceMode)) return false;
+        if (d.plot.enabled && !d.plot.appliesTo) return false;
+      }
+      return true;
+    }
     if (step === "revision") return canPublishWizard(state);
+    /* Si estás en V4 (config_edificio · flag wizardV4=1) el Siguiente
+     * global queda inactivo hasta que llegues al sub-step "resumen"
+     * del flujo interno · evita saltar al paso 4 sin confirmar. */
+    if (step === "config_edificio" && wizardV4 && v4InternalSubstep !== "resumen") {
+      return false;
+    }
     return isStepComplete(state, step);
   };
 
@@ -551,27 +721,23 @@ export default function CrearPromocion() {
     else navigate(-1);
   };
   /** Cancela el autosave pendiente (si hay timer) y guarda síncrono
-   *  con el state actual. Evita race condition: si el usuario pulsa
-   *  "Guardar y salir" dentro de los 400ms del debounce, garantizamos
-   *  que el id se conserve y no se cree un draft duplicado. */
+   *  con el state actual. Llamado por los botones "Guardar borrador" /
+   *  "Guardar y salir" · sin autosave detrás · save explícito. */
   const flushSave = (): string => {
-    if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
     /* Editando promo existente · save al override store · NO crea
      *  draft huérfano. Idempotente (mismo promotionId siempre). */
     if (resolvedPromotionId) {
       savePromoWizardOverride(resolvedPromotionId, state);
       return resolvedPromotionId;
     }
-    /* Igual que el autosave · leemos del REF síncrono · evita el race
-     * cuando el manual save se llama justo después de un autosave que
-     * acaba de generar id pero React aún no commitó setDraftId. Pasamos
-     * `step` para preservar el último paso al reabrir. */
+    /* Pasamos `step` para preservar el último paso al reabrir. */
     const currentId = draftIdRef.current;
     const res = persistDraft(state, currentId ?? undefined, step);
     if (!currentId) setDraftId(res.id);
     if (!res.ok && res.error === "quota") {
       toast.error("No se pudo guardar", { description: "Espacio de almacenamiento lleno." });
     }
+    setSavedAt(Date.now());
     return res.id;
   };
   const handleSaveDraft = () => {
@@ -633,6 +799,31 @@ export default function CrearPromocion() {
 
   return (
     <div className="fixed inset-0 z-40 flex bg-background">
+
+      {/* Aviso de reanudación · al volver a un draft incompleto */}
+      <Dialog open={showResumeNotice} onOpenChange={setShowResumeNotice}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-warning/10 text-warning">
+              <FileWarning className="h-5 w-5" strokeWidth={1.7} />
+            </div>
+            <DialogTitle className="mt-3">La creación de la promoción aún no está completa</DialogTitle>
+            <DialogDescription className="mt-1.5 leading-relaxed">
+              Te llevamos al punto donde la dejaste. Continúa para terminar todos los pasos
+              y poder compartir la promoción con tus colaboradores.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <button
+              type="button"
+              onClick={() => setShowResumeNotice(false)}
+              className="inline-flex items-center justify-center h-10 px-5 rounded-full bg-foreground text-background text-[13px] font-medium hover:bg-foreground/90 transition-colors shadow-soft w-full sm:w-auto"
+            >
+              Continuar editando
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ═══════════ Sidebar · PhaseTimeline ═══════════ */}
       <aside className="hidden lg:flex w-[300px] shrink-0 flex-col border-r border-border bg-card">
@@ -715,6 +906,7 @@ export default function CrearPromocion() {
             "mx-auto w-full",
             step === "crear_unidades" ? "max-w-[1200px]"
               : step === "colaboradores" ? "max-w-[720px]"
+              : step === "config_edificio" ? "max-w-[1080px]"
               : "max-w-[580px]"
           )}>
             <AnimatePresence mode="wait">
@@ -839,7 +1031,7 @@ export default function CrearPromocion() {
                                     </div>
                                   </button>
                                   {selected && (
-                                    <InlineStepper value={selected.cantidad} min={1}
+                                    <InlineStepper value={selected.cantidad} min={0}
                                       onChange={(v) => updateTipologiaCantidad(o.value, v - selected.cantidad)} />
                                   )}
                                 </div>
@@ -884,294 +1076,144 @@ export default function CrearPromocion() {
                 )}
 
                 {/* ─── Step: config_edificio ─── */}
-                {step === "config_edificio" && (
-                  <div className="flex flex-col gap-3">
-                    <SectionLabel>Bloques y escaleras</SectionLabel>
-
-                    <NumericStepper
-                      label="Número de bloques"
-                      value={state.numBloques}
-                      min={1}
-                      onChange={(v) => {
-                        update("numBloques", v);
-                        const current = state.escalerasPorBloque;
-                        if (v > current.length) {
-                          update("escalerasPorBloque", [...current, ...Array(v - current.length).fill(1)]);
-                        } else {
-                          update("escalerasPorBloque", current.slice(0, v));
-                        }
-                      }}
-                    />
-
-                    {state.numBloques === 1 ? (
-                      <NumericStepper
-                        label="Escaleras"
-                        value={state.escalerasPorBloque[0] || 1}
-                        min={1}
-                        onChange={(v) => update("escalerasPorBloque", [v])}
-                      />
-                    ) : (
-                      <div className="flex flex-col gap-2">
-                        {state.escalerasPorBloque.map((esc, i) => (
-                          <NumericStepper
-                            key={i}
-                            label={`Escaleras en Bloque ${i + 1}`}
-                            value={esc}
-                            min={1}
-                            onChange={(v) => {
-                              const next = [...state.escalerasPorBloque];
-                              next[i] = v;
-                              update("escalerasPorBloque", next);
-                            }}
-                          />
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Renombrado opcional de bloques · solo si hay >1. */}
-                    {state.numBloques > 1 && (
-                      <>
-                        <div className="h-px bg-border my-1" />
-                        <SectionLabel>
-                          Nombres de bloques <span className="font-normal normal-case text-muted-foreground">· opcional · "Bloque 1", "Torre Norte"…</span>
-                        </SectionLabel>
-                        <div className="flex flex-col gap-2">
-                          {Array.from({ length: state.numBloques }, (_, i) => {
-                            const key = `B${i + 1}`;
-                            return (
-                              <div key={key} className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground w-20 shrink-0">Bloque {i + 1}</span>
-                                <input
-                                  type="text"
-                                  value={state.blockNames[key] ?? ""}
-                                  onChange={(e) => {
-                                    const next = { ...state.blockNames };
-                                    const trimmed = e.target.value.trim();
-                                    if (!trimmed) delete next[key];
-                                    else next[key] = e.target.value;
-                                    update("blockNames", next);
-                                  }}
-                                  placeholder={`Bloque ${i + 1}`}
-                                  className="flex-1 h-9 px-3 rounded-lg border border-border bg-card text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </>
-                    )}
-
-                    <div className="h-px bg-border my-1" />
-                    <SectionLabel>Distribución</SectionLabel>
-                    <NumericStepper label="Plantas sobre rasante" value={state.plantas} min={1}
-                      onChange={(v) => update("plantas", v)} />
-                    <NumericStepper label="Viviendas por planta (por escalera)" value={state.aptosPorPlanta} min={1}
-                      onChange={(v) => update("aptosPorPlanta", v)} />
-
-                    <div className="h-px bg-border my-1" />
-                    <SectionLabel>Planta baja (planta 0)</SectionLabel>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <PlantaBajaCard icon={Minus} title="Sin uso residencial" desc="Nada en PB"
-                        selected={state.plantaBajaTipo === null}
-                        onClick={() => update("plantaBajaTipo", null)} />
-                      <PlantaBajaCard icon={StoreIcon} title="Locales comerciales" desc="Espacios comerciales"
-                        selected={state.plantaBajaTipo === "locales"}
-                        onClick={() => update("plantaBajaTipo", "locales")} />
-                      <PlantaBajaCard icon={HomeIcon} title="Viviendas (bajos)" desc="Viviendas tipo bajo"
-                        selected={state.plantaBajaTipo === "viviendas"}
-                        onClick={() => update("plantaBajaTipo", "viviendas")} />
-                    </div>
-
-                    {state.plantaBajaTipo === "locales" && (
-                      <NumericStepper label="Nº de locales en planta baja" value={state.locales} min={0}
-                        onChange={(v) => update("locales", v)} />
-                    )}
-
-                    {/* Summary */}
-                    <div className="rounded-xl bg-muted/40 border border-border px-4 py-3 text-xs text-muted-foreground leading-relaxed mt-1">
-                      {state.plantaBajaTipo === "viviendas" && (
-                        <><span className="font-semibold text-foreground">Bajos:</span> Se generarán {state.aptosPorPlanta * multiplier} viviendas tipo bajo en planta 0. </>
-                      )}
-                      {state.plantaBajaTipo === "locales" && (
-                        <><span className="font-semibold text-foreground">Planta 0:</span> Zona de locales. Las viviendas empiezan en planta 1. </>
-                      )}
-                      {state.plantaBajaTipo === null && (
-                        <><span className="font-semibold text-foreground">Planta 0:</span> Sin uso residencial. Las viviendas empiezan en planta 1. </>
-                      )}
-                      <br />
-                      <span className="font-semibold text-foreground">Total:</span>{" "}
-                      <span className="tnum">{totalViviendas} viviendas</span>
-                      {state.numBloques > 1 && <> en <span className="tnum">{state.numBloques}</span> bloques</>}
-                      {totalEscaleras > 1 && <> (<span className="tnum">{totalEscaleras}</span> escaleras)</>}
-                    </div>
-                  </div>
+                {/* Layout 2-col en lg+ · inputs a la izquierda, preview
+                   visual del edificio sticky a la derecha · móvil/tablet
+                   colapsa a 1 col (preview debajo). El preview siempre
+                   visible en viewport mientras editas los steppers ·
+                   feedback inmediato de los cambios. */}
+                {step === "config_edificio" && wizardV4 && (
+                  <ConfiguracionEdificioV4
+                    state={state}
+                    update={update}
+                    onContinueOuter={handleContinue}
+                    onSubstepChange={setV4InternalSubstep}
+                  />
                 )}
+                {step === "config_edificio" && wizardV3 && !wizardV4 && (
+                  <ConfiguracionEdificioV3
+                    state={state}
+                    update={update}
+                    onContinueOuter={handleContinue}
+                  />
+                )}
+                {step === "config_edificio" && wizardV2 && !wizardV3 && !wizardV4 && (
+                  <ConfiguracionEdificio
+                    state={state}
+                    update={update}
+                    onContinueOuter={handleContinue}
+                  />
+                )}
+                {step === "config_edificio" && !wizardV2 && !wizardV3 && !wizardV4 && (
+                  <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-8">
+                  {/* ─── COLUMNA IZQUIERDA · Form ─── */}
+                  <div className="flex flex-col gap-6 min-w-0">
 
-                {/* ─── Step: extras ─── */}
-                {step === "extras" && (
-                  <div className="flex flex-col gap-3">
-                    <SectionLabel>Anejos por vivienda</SectionLabel>
-
-                    {/* Trasteros · si NO está incluido en el precio se pide
-                         el precio que se cobra por cada uno. La opción de
-                         añadir "trasteros adicionales sueltos" se ha movido
-                         a la sección Anejos sueltos del paso "Crear unidades"
-                         · ahí se nombran y se les pone precio individual. */}
-                    <ExtraBox
-                      icon={Archive}
-                      title="Trastero incluido"
-                      desc="Cada vivienda incluye trastero"
-                      active={state.trasteros > 0}
-                      onToggle={(v) => {
-                        if (v) {
-                          update("trasterosIncluidosPorVivienda", 1);
-                          update("trasteros", totalViviendas);
-                        } else {
-                          update("trasteros", 0);
-                        }
-                      }}
-                    >
-                      <ExtraRow label="Trasteros incluidos por vivienda"
-                        value={state.trasterosIncluidosPorVivienda}
-                        min={1}
-                        onChange={(v) => {
-                          update("trasterosIncluidosPorVivienda", v);
-                          const extra = Math.max(0, state.trasteros - totalViviendas * state.trasterosIncluidosPorVivienda);
-                          update("trasteros", totalViviendas * v + extra);
-                        }} />
-                      <Checkbox
-                        id="trasteros-precio"
-                        checked={state.trasterosIncluidosPrecio}
-                        onCheckedChange={(v) => update("trasterosIncluidosPrecio", v)}
-                        label="Incluido en el precio de la vivienda"
-                      />
-                      {!state.trasterosIncluidosPrecio && (
-                        <PriceRow
-                          label="Precio por trastero"
-                          value={state.trasteroPrecio}
-                          onChange={(v) => update("trasteroPrecio", v)}
-                        />
-                      )}
-                      <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
-                        Si hay trasteros adicionales sueltos, los podrás añadir
-                        más adelante en el paso <span className="font-medium text-foreground">Crear unidades · Anejos sueltos</span>.
-                      </p>
-                    </ExtraBox>
-
-                    {/* Parking · mismo patrón. Plazas adicionales sueltas
-                         viven en Anejos sueltos del paso "Crear unidades". */}
-                    <ExtraBox
-                      icon={Car}
-                      title="Plaza de parking"
-                      desc="Cada vivienda incluye plaza de parking"
-                      active={state.parkings > 0}
-                      onToggle={(v) => {
-                        if (v) {
-                          update("parkingsIncluidosPorVivienda", 1);
-                          update("parkings", totalViviendas);
-                        } else {
-                          update("parkings", 0);
-                        }
-                      }}
-                    >
-                      <ExtraRow label="Plazas incluidas por vivienda"
-                        value={state.parkingsIncluidosPorVivienda}
-                        min={1}
-                        onChange={(v) => {
-                          update("parkingsIncluidosPorVivienda", v);
-                          const extra = Math.max(0, state.parkings - totalViviendas * state.parkingsIncluidosPorVivienda);
-                          update("parkings", totalViviendas * v + extra);
-                        }} />
-                      <Checkbox
-                        id="parkings-precio"
-                        checked={state.parkingsIncluidosPrecio}
-                        onCheckedChange={(v) => update("parkingsIncluidosPrecio", v)}
-                        label="Incluido en el precio de la vivienda"
-                      />
-                      {!state.parkingsIncluidosPrecio && (
-                        <PriceRow
-                          label="Precio por plaza"
-                          value={state.parkingPrecio}
-                          onChange={(v) => update("parkingPrecio", v)}
-                        />
-                      )}
-                      <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
-                        Si hay plazas de parking adicionales sueltas, las podrás añadir
-                        más adelante en el paso <span className="font-medium text-foreground">Crear unidades · Anejos sueltos</span>.
-                      </p>
-                    </ExtraBox>
-
-                    {/* Piscina privada · solo aplica a unifamiliar. Mismo
-                         patrón que trastero/parking · si no está incluida
-                         en el precio, se pide el importe. */}
-                    {state.tipo === "unifamiliar" && (
-                      <ExtraBox
-                        icon={Waves}
-                        title="Piscina privada"
-                        desc="Cada villa incluye piscina propia"
-                        active={state.piscinaPrivadaPorDefecto}
-                        onToggle={(v) => update("piscinaPrivadaPorDefecto", v)}
-                      >
-                        <Checkbox
-                          id="piscina-precio"
-                          checked={state.piscinaIncluidaPrecio}
-                          onCheckedChange={(v) => update("piscinaIncluidaPrecio", v)}
-                          label="Incluida en el precio de la vivienda"
-                        />
-                        {!state.piscinaIncluidaPrecio && (
-                          <PriceRow
-                            label="Precio por piscina privada"
-                            value={state.piscinaPrecio}
-                            onChange={(v) => update("piscinaPrecio", v)}
-                          />
-                        )}
-                        <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
-                          Esto es el valor por defecto para todas las villas. Si
-                          alguna no tiene piscina, podrás desactivarla en esa villa
-                          concreta más adelante en el paso <span className="font-medium text-foreground">Crear unidades</span>.
+                    {/* Card 1 · Distribución */}
+                    <section className="rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-soft">
+                      <header className="mb-4">
+                        <h2 className="text-[14px] font-semibold text-foreground">Distribución del edificio</h2>
+                        <p className="text-[12px] text-muted-foreground mt-1 leading-relaxed">
+                          Define cuántas plantas tiene y cuántas viviendas hay por escalera.
                         </p>
-                      </ExtraBox>
-                    )}
+                      </header>
+                      <div className="flex flex-col gap-3">
+                        <NumericStepper label="Plantas sobre rasante" value={state.plantas} min={1}
+                          onChange={(v) => update("plantas", v)} />
+                        <NumericStepper label="Viviendas por planta" value={state.aptosPorPlanta} min={1}
+                          onChange={(v) => update("aptosPorPlanta", v)} />
+                      </div>
+                      <p className="text-[11px] text-muted-foreground/80 mt-3 leading-relaxed">
+                        Bloques y escaleras se gestionan desde la vista previa (a la derecha) ·
+                        usa los botones <span className="font-medium text-foreground">+ Bloque</span> y
+                        <span className="font-medium text-foreground"> + Escalera</span>.
+                      </p>
+                    </section>
 
-                    {/* Zonas y amenidades · booleanos explícitos de la
-                         promoción. La ficha de unidad los consulta para
-                         mostrar iconos reales. La piscina privada vive
-                         arriba en su propia ExtraBox · aquí solo zonas
-                         compartidas de la promoción. */}
-                    <div className="rounded-2xl border border-border bg-card p-4">
-                      <div className="flex items-center gap-2.5 mb-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-                          <Waves className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">Zonas y amenidades</p>
-                          <p className="text-xs text-muted-foreground">Qué incluye la promoción para todas las viviendas</p>
-                        </div>
+                    {/* Card 2 · Planta baja */}
+                    <section className="rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-soft">
+                      <header className="mb-4">
+                        <h2 className="text-[14px] font-semibold text-foreground">Planta baja</h2>
+                        <p className="text-[12px] text-muted-foreground mt-1 leading-relaxed">
+                          ¿Qué uso tiene la planta 0 del edificio?
+                        </p>
+                      </header>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <PlantaBajaCard icon={Minus} title="Sin uso residencial" desc="Nada en planta baja"
+                          selected={state.plantaBajaTipo === null}
+                          onClick={() => update("plantaBajaTipo", null)} />
+                        <PlantaBajaCard icon={StoreIcon} title="Locales comerciales" desc="Espacios comerciales"
+                          selected={state.plantaBajaTipo === "locales"}
+                          onClick={() => update("plantaBajaTipo", "locales")} />
+                        <PlantaBajaCard icon={HomeIcon} title="Viviendas (bajos)" desc="Viviendas tipo bajo"
+                          selected={state.plantaBajaTipo === "viviendas"}
+                          onClick={() => update("plantaBajaTipo", "viviendas")} />
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <AmenityToggle label="Piscina comunitaria"
-                          checked={state.piscinaComunitaria}
-                          onCheckedChange={(v) => update("piscinaComunitaria", v)} />
-                        <AmenityToggle label="Piscina interna / climatizada"
-                          checked={state.piscinaInterna}
-                          onCheckedChange={(v) => update("piscinaInterna", v)} />
-                        <AmenityToggle label="Zona SPA"
-                          checked={state.zonaSpa}
-                          onCheckedChange={(v) => update("zonaSpa", v)} />
-                        <AmenityToggle label="Zona infantil / parque"
-                          checked={state.zonaInfantil}
-                          onCheckedChange={(v) => update("zonaInfantil", v)} />
-                        <AmenityToggle label="Urbanización cerrada"
-                          checked={state.urbanizacionCerrada}
-                          onCheckedChange={(v) => update("urbanizacionCerrada", v)} />
+                      {state.plantaBajaTipo === "locales" && (
+                        <div className="mt-3">
+                          <NumericStepper label="Número de locales" value={state.locales} min={0}
+                            onChange={(v) => update("locales", v)} />
+                        </div>
+                      )}
+                    </section>
+
+                    {/* Card 3 · Resumen */}
+                    <section className="rounded-2xl border border-primary/20 bg-primary/5 p-5">
+                      <div className="flex items-start gap-3">
+                        <div className="h-9 w-9 rounded-xl bg-primary/10 grid place-items-center text-primary shrink-0">
+                          <Building2 className="h-4 w-4" strokeWidth={1.75} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-semibold text-foreground">
+                            <span className="tnum">{totalViviendas}</span> {totalViviendas === 1 ? "vivienda" : "viviendas"} en total
+                          </p>
+                          <p className="text-[12px] text-muted-foreground mt-0.5 leading-relaxed">
+                            {state.numBloques} {state.numBloques === 1 ? "bloque" : "bloques"} ·{" "}
+                            {totalEscaleras} {totalEscaleras === 1 ? "escalera" : "escaleras"} ·{" "}
+                            {state.plantas} plantas · {state.aptosPorPlanta} viv/planta
+                            {state.plantaBajaTipo === "viviendas" && (
+                              <> · <span className="font-medium text-foreground">+{state.aptosPorPlanta * multiplier} bajos en PB</span></>
+                            )}
+                          </p>
+                        </div>
                       </div>
+                    </section>
+                  </div>
+
+                  {/* ─── COLUMNA DERECHA · Preview visual ─── */}
+                  <aside className="lg:sticky lg:top-4 self-start w-full">
+                    <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+                      <header className="mb-4">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                          Vista previa
+                        </p>
+                        <p className="text-[12.5px] text-foreground mt-0.5">
+                          Así queda el edificio
+                        </p>
+                      </header>
+                      {state.aptosPorPlanta >= 1 ? (
+                        <BuildingPreview state={state} update={update} />
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-border bg-muted/30 px-5 py-10 flex flex-col items-center gap-2.5 text-center">
+                          <Building2 className="h-10 w-10 text-muted-foreground/40" strokeWidth={1.25} />
+                          <p className="text-[13px] font-semibold text-foreground">
+                            Aún no hay edificio
+                          </p>
+                          <p className="text-[11.5px] text-muted-foreground leading-relaxed max-w-[220px]">
+                            Define el número de viviendas por planta para empezar a visualizar la fachada.
+                          </p>
+                        </div>
+                      )}
                     </div>
-
-                    <TotalSummary items={summaryItems} />
+                  </aside>
                   </div>
                 )}
+
+                {/* ─── Step: extras (V5 · características por defecto) ─── */}
+                {step === "extras" && (
+                  <ExtrasV5 state={state} update={update} />
+                )}
+
 
                 {/* ─── Step: estado ─── */}
                 {step === "estado" && (
@@ -1276,7 +1318,11 @@ export default function CrearPromocion() {
 
                 {/* ─── Step: info_basica ─── */}
                 {step === "info_basica" && (
-                  <InfoBasicaStep state={state} update={update} />
+                  <InfoBasicaStep
+                    state={state}
+                    update={update}
+                    defaultsCapturedInExtras
+                  />
                 )}
 
                 {/* ─── Step: descripcion ─── */}
@@ -1317,7 +1363,11 @@ export default function CrearPromocion() {
 
                 {/* ─── Step: crear_unidades ─── */}
                 {step === "crear_unidades" && (
-                  <CrearUnidadesStep state={state} update={update} />
+                  <CrearUnidadesStep
+                    state={state}
+                    update={update}
+                    uploadScopeId={resolvedPromotionId ?? draftId ?? undefined}
+                  />
                 )}
 
                 {/* ─── Step: revision (paso final) ─── */}
@@ -1470,6 +1520,326 @@ function ToggleRow({
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   BuildingPreview · fachada visual del edificio (no diagrama técnico).
+   ───────────────────────────────────────────────────────────────────
+   Renderiza cada bloque como un edificio real con:
+     · Tejado (roof) horizontal con pequeño remate.
+     · Paredes (perímetro · cream/concrete tone).
+     · Plantas apiladas top-down · cada planta dividida en N escaleras.
+     · Cada escalera tiene M ventanas (1 por apartamento) con marco.
+     · Líneas verticales separan escaleras (las paredes interiores).
+     · Planta baja · puerta de entrada por escalera + (si "locales")
+       escaparates comerciales o (si "viviendas") ventanas tipo bajo.
+
+   Ratios pensados para que se vea como un edificio real:
+     · Ventana 16x18 (más alta que ancha · estética arquitectónica).
+     · Gap entre ventanas 6px (bandera entre apts).
+     · Altura de planta 30px (12px de ventana + 18px de antepecho).
+     · PB · 36px (puerta más alta que ventanas).
+
+   El header con nombre y el footer con total quedan fuera de la
+   fachada · formato card. ═══════════════════════════════════════════════ */
+function BuildingPreview({
+  state,
+  update,
+}: {
+  state: WizardState;
+  update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
+}) {
+  const aptos = state.aptosPorPlanta;
+  const showBlockLabels = state.numBloques > 1;
+  /* Compresión de plantas · si hay > 6 plantas, dibujamos solo P{top}
+   * y P1 con una banda intermedia "+N plantas". Evita que un edificio
+   * de 58 plantas se estire fuera del viewport. */
+  const COMPRESS_THRESHOLD = 6;
+  const compressed = state.plantas > COMPRESS_THRESHOLD;
+  const visiblePlantas = compressed
+    ? [state.plantas, 1] // solo top y bottom
+    : Array.from({ length: state.plantas }, (_, i) => state.plantas - i);
+  const collapsedCount = compressed ? state.plantas - 2 : 0;
+
+  /* Sizing dinámico · ventanas más grandes/cuadradas si hay pocas
+   * viviendas/escalera · evita el efecto "torre flaca". */
+  const windowW = aptos === 1 ? 22 : aptos === 2 ? 18 : 16;
+  const windowH = aptos === 1 ? 22 : 18;
+  const colMinW = 60;
+  const floorH = compressed ? 24 : (state.plantas > 8 ? 22 : 26);
+
+  /* ── Mutators inline · todos van por el mismo helper update() ── */
+  const addBloque = () => {
+    const next = state.numBloques + 1;
+    update("numBloques", next);
+    update("escalerasPorBloque", [...state.escalerasPorBloque, 1]);
+  };
+  const removeBloque = (idx: number) => {
+    if (state.numBloques <= 1) return;
+    const next = state.escalerasPorBloque.filter((_, i) => i !== idx);
+    update("numBloques", state.numBloques - 1);
+    update("escalerasPorBloque", next);
+  };
+  const addEscalera = (blockIdx: number) => {
+    const next = [...state.escalerasPorBloque];
+    next[blockIdx] = (next[blockIdx] || 1) + 1;
+    update("escalerasPorBloque", next);
+  };
+  const removeEscalera = (blockIdx: number) => {
+    const current = state.escalerasPorBloque[blockIdx] || 1;
+    if (current <= 1) return;
+    const next = [...state.escalerasPorBloque];
+    next[blockIdx] = current - 1;
+    update("escalerasPorBloque", next);
+  };
+  const renameBloque = (blockIdx: number, value: string) => {
+    const key = `B${blockIdx + 1}`;
+    const next = { ...state.blockNames };
+    if (!value.trim()) delete next[key];
+    else next[key] = value;
+    update("blockNames", next);
+  };
+
+  return (
+    <div className="-mx-2 sm:mx-0 px-2 sm:px-0 overflow-x-auto pb-1">
+      <div className="inline-flex gap-4 min-w-min items-end">
+        {Array.from({ length: state.numBloques }, (_, b) => {
+          const blockKey = `B${b + 1}`;
+          const blockName = state.blockNames[blockKey] || `Bloque ${b + 1}`;
+          const escs = state.escalerasPorBloque[b] || 1;
+          const showEscLabels = escs > 1;
+          const totalVivs = state.plantas * escs * aptos
+            + (state.plantaBajaTipo === "viviendas" ? escs * aptos : 0);
+
+          return (
+            <article key={b} className="flex flex-col items-center gap-2 shrink-0">
+              {/* Header · solo si hay >1 bloque · editable inline */}
+              {showBlockLabels && (
+                <div className="flex items-center gap-1.5 group/block">
+                  <Building2 className="h-3.5 w-3.5 text-primary" strokeWidth={1.75} />
+                  <input
+                    type="text"
+                    value={state.blockNames[blockKey] ?? ""}
+                    onChange={(e) => renameBloque(b, e.target.value)}
+                    placeholder={blockName}
+                    className="text-[12px] font-semibold text-foreground bg-transparent border-b border-transparent hover:border-border focus:border-primary outline-none px-0.5 max-w-[120px] tracking-tight"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeBloque(b)}
+                    className="opacity-0 group-hover/block:opacity-100 transition-opacity h-4 w-4 grid place-items-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    title="Eliminar bloque"
+                  >
+                    <X className="h-3 w-3" strokeWidth={2} />
+                  </button>
+                </div>
+              )}
+
+              {/* ── FACHADA ── */}
+              <div className="flex flex-col items-center">
+                {/* Tejado */}
+                <div className="h-2 w-[calc(100%+10px)] -mb-px rounded-t-sm bg-foreground/85 shadow-soft" />
+
+                {/* Cuerpo del edificio */}
+                <div className="border border-foreground/40 bg-[#f4ede1] dark:bg-foreground/10 shadow-soft overflow-hidden">
+                  {/* Labels ESC · solo si >1 escalera */}
+                  {showEscLabels && (
+                    <div className="flex bg-foreground/5 border-b border-foreground/20">
+                      {Array.from({ length: escs }, (_, e) => (
+                        <div
+                          key={e}
+                          className={cn(
+                            "flex items-center justify-center gap-1 py-0.5 group/esc",
+                            e > 0 && "border-l border-foreground/30",
+                          )}
+                          style={{ minWidth: colMinW }}
+                        >
+                          <span className="text-[8.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            ESC {e + 1}
+                          </span>
+                          {escs > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeEscalera(b)}
+                              className="opacity-0 group-hover/esc:opacity-100 transition-opacity h-3 w-3 grid place-items-center rounded-full text-muted-foreground hover:text-destructive"
+                              title="Eliminar escalera"
+                            >
+                              <X className="h-2.5 w-2.5" strokeWidth={2.25} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Plantas residenciales · top y bottom · banda
+                     comprimida en medio si hay > COMPRESS_THRESHOLD */}
+                  {visiblePlantas.map((p, idx) => (
+                    <div
+                      key={`p-${p}`}
+                      className={cn(
+                        "flex",
+                        idx > 0 && "border-t border-foreground/15",
+                      )}
+                      style={{ height: floorH }}
+                    >
+                      {Array.from({ length: escs }, (_, e) => (
+                        <div
+                          key={e}
+                          className={cn(
+                            "flex items-center justify-around gap-[6px] px-[10px]",
+                            e > 0 && "border-l border-foreground/30",
+                          )}
+                          style={{ minWidth: colMinW }}
+                        >
+                          {Array.from({ length: aptos }, (_, a) => (
+                            <span
+                              key={a}
+                              className="rounded-[2px] bg-sky-200 dark:bg-sky-900/60 border border-sky-700/40 dark:border-sky-300/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] shrink-0"
+                              style={{ width: windowW, height: windowH }}
+                              title={`P${p} · puerta ${a + 1}`}
+                            />
+                          ))}
+                        </div>
+                      ))}
+                      {/* Inserción de banda compressed entre P{top} y P1 */}
+                    </div>
+                  ))}
+                  {/* Banda de plantas comprimidas · entre top y bottom.
+                     Render con position absoluto NO posible · uso un row
+                     extra después del primero (top) cuando compressed. */}
+                  {compressed && (
+                    <div
+                      className="flex items-center border-t border-b border-foreground/30 bg-foreground/8 relative"
+                      style={{ height: floorH }}
+                    >
+                      {/* Líneas verticales que cruzan para mantener
+                         continuidad visual de las paredes interiores */}
+                      {Array.from({ length: escs }, (_, e) => (
+                        <div
+                          key={e}
+                          className={cn(
+                            "h-full",
+                            e > 0 && "border-l border-foreground/30",
+                          )}
+                          style={{ minWidth: colMinW, flex: 1 }}
+                        />
+                      ))}
+                      {/* Texto centrado superpuesto · spans full width */}
+                      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-foreground/80 tnum tracking-tight pointer-events-none">
+                        + {collapsedCount} {collapsedCount === 1 ? "planta" : "plantas"}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Planta baja · con puerta(s) de entrada por escalera */}
+                  <div className="flex border-t border-foreground/40 bg-foreground/5" style={{ minHeight: floorH + 8 }}>
+                    {Array.from({ length: escs }, (_, e) => (
+                      <div
+                        key={e}
+                        className={cn(
+                          "flex items-end justify-center gap-[6px] px-[10px] pt-[6px] pb-[2px] flex-1",
+                          e > 0 && "border-l border-foreground/30",
+                        )}
+                        style={{ minWidth: colMinW }}
+                      >
+                        {state.plantaBajaTipo === "viviendas" ? (
+                          Array.from({ length: aptos }, (_, a) => (
+                            <span
+                              key={a}
+                              className="rounded-[2px] bg-emerald-200 dark:bg-emerald-900/60 border border-emerald-700/40 dark:border-emerald-300/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] shrink-0"
+                              style={{ width: windowW, height: windowH }}
+                              title={`PB · bajo ${a + 1}`}
+                            />
+                          ))
+                        ) : state.plantaBajaTipo === "locales" ? (
+                          <>
+                            <span
+                              className="rounded-sm bg-amber-200 dark:bg-amber-900/60 border border-amber-700/50 dark:border-amber-300/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] flex-1"
+                              style={{ height: windowH + 8, minWidth: 28 }}
+                              title="Local comercial"
+                            />
+                            <span
+                              className="w-[10px] rounded-t-sm bg-foreground/70 border border-foreground/80 shrink-0"
+                              style={{ height: windowH + 10 }}
+                              title="Entrada residencial"
+                            />
+                          </>
+                        ) : (
+                          <span
+                            className="w-[14px] rounded-t-sm bg-foreground/70 border border-foreground/80 shrink-0"
+                            style={{ height: windowH + 10 }}
+                            title="Entrada al portal"
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Acera/suelo */}
+                <div className="h-1 w-[calc(100%+14px)] -mt-px rounded-b-sm bg-foreground/30" />
+              </div>
+
+              {/* Footer · resumen + botón añadir escalera */}
+              <div className="text-center flex flex-col items-center gap-1">
+                <p className="text-[10px] text-muted-foreground tnum">
+                  {state.plantas}P · {escs} esc · {aptos} viv/planta
+                </p>
+                <p className="text-[11px] font-semibold text-foreground tnum">
+                  {totalVivs} {totalVivs === 1 ? "vivienda" : "viviendas"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => addEscalera(b)}
+                  className="mt-1 inline-flex items-center gap-1 h-6 px-2 rounded-full border border-dashed border-border text-[10px] font-medium text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                  title="Añadir una escalera a este bloque"
+                >
+                  <Plus className="h-2.5 w-2.5" strokeWidth={2.25} />
+                  Escalera
+                </button>
+              </div>
+            </article>
+          );
+        })}
+
+        {/* Botón "Añadir bloque" · ghost · al lado derecho del último bloque */}
+        <button
+          type="button"
+          onClick={addBloque}
+          className="flex flex-col items-center justify-center gap-1.5 self-stretch min-h-[160px] w-[80px] rounded-xl border-2 border-dashed border-border bg-muted/20 text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors shrink-0"
+          title="Añadir un bloque más"
+        >
+          <Plus className="h-5 w-5" strokeWidth={1.75} />
+          <span className="text-[10px] font-medium">Añadir bloque</span>
+        </button>
+      </div>
+
+      {/* Leyenda */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 text-[10px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-[2px] bg-sky-200 border border-sky-700/40 inline-block" />
+          Vivienda
+        </span>
+        {state.plantaBajaTipo === "viviendas" && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-[2px] bg-emerald-200 border border-emerald-700/40 inline-block" />
+            Bajo residencial
+          </span>
+        )}
+        {state.plantaBajaTipo === "locales" && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-sm bg-amber-200 border border-amber-700/50 inline-block" />
+            Local comercial
+          </span>
+        )}
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-2 rounded-t-sm bg-foreground/70 border border-foreground/80 inline-block" />
+          Entrada al portal
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function PlantaBajaCard({
   icon: Icon, title, desc, selected, onClick,
 }: {
@@ -1565,11 +1935,17 @@ function PriceRow({
       <span className="text-xs text-muted-foreground">{label}</span>
       <div className="flex items-center gap-1">
         <input
-          type="number"
-          min={0}
-          value={value}
-          onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
-          className="h-8 w-28 rounded-lg border border-border bg-card text-sm tnum px-2 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+          type="text"
+          inputMode="numeric"
+          /* Formato es-ES con miles · "100.000" en vez de "100000".
+           * Empty string cuando 0 · placeholder hace de hint. */
+          value={value > 0 ? value.toLocaleString("es-ES") : ""}
+          placeholder="0"
+          onChange={(e) => {
+            const digits = e.target.value.replace(/[^0-9]/g, "");
+            onChange(digits === "" ? 0 : Number(digits));
+          }}
+          className="h-8 w-28 rounded-lg border border-border bg-card text-sm tnum px-2 text-right outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
         />
         <span className="text-xs text-muted-foreground">€</span>
       </div>

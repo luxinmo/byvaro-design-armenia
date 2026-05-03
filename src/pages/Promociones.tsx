@@ -26,7 +26,8 @@ import { PromocionesMap } from "@/components/promociones/PromocionesMap";
 import { cn } from "@/lib/utils";
 import { MinimalSort } from "@/components/ui/MinimalSort";
 import { ViewToggle } from "@/components/ui/ViewToggle";
-import { listDrafts, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
+import { listDrafts, deleteDraft, deleteAllDrafts, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
+import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { SharePromotionDialog } from "@/components/promotions/SharePromotionDialog";
@@ -1080,6 +1081,31 @@ export default function Promociones() {
           {/* Derecha: en móvil sólo la ordenación en la misma línea que
               los tabs. En sm+ contador + sort + 3 vistas. */}
           <div className="ml-auto flex items-center gap-3 sm:gap-4">
+            {/* Botón "Eliminar todos" · visible mientras existan drafts
+                (en cualquier tab). Útil para purgar huérfanos del bug
+                previo de id no determinista (ahora arreglado). */}
+            {drafts.length > 0 && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: `¿Eliminar ${drafts.length} ${drafts.length === 1 ? "borrador" : "borradores"}?`,
+                    description: "Se borrarán todos los borradores de promoción de tu cuenta. Esta acción no se puede deshacer.",
+                    confirmLabel: "Eliminar todos",
+                    variant: "destructive",
+                  });
+                  if (!ok) return;
+                  const n = await deleteAllDrafts();
+                  setDrafts(listDrafts());
+                  toast.success(`${n} ${n === 1 ? "borrador eliminado" : "borradores eliminados"}`);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full text-[12.5px] font-medium text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+                Eliminar borradores ({drafts.length})
+              </button>
+            )}
+
             <span className="text-xs text-muted-foreground hidden sm:inline">
               <span className="font-semibold text-foreground tnum">{sortedAndFiltered.length}</span> resultados
             </span>
@@ -1161,11 +1187,21 @@ export default function Promociones() {
               const hasMissing = p.missingSteps && p.missingSteps.length > 0;
 
               const isDraft = p.id.startsWith(DRAFT_ID_PREFIX);
-              // Tanto incompletas (draft) como publicadas abren la ficha de
-              // promoción. En incompletas los bloques se pintan con borde
-              // rojo (status="incomplete" + missingSteps) · el usuario
-              // puede completar cada campo desde ahí.
-              const navigateTarget = () => navigate(promotionHref(p));
+              /* Borrador · click va DIRECTO al wizard en el paso donde
+               * el user lo dejó guardado (currentStep persistido en
+               * promotion_drafts.current_step). Antes navegábamos a la
+               * ficha y desde ahí "Continuar editando" · click extra
+               * sin valor. La ficha del borrador es ahora un atajo
+               * residual · el wizard ES el sitio para editar.
+               * Promo activa · click va a la ficha como siempre. */
+              const navigateTarget = () => {
+                if (isDraft) {
+                  const rawId = p.id.slice(DRAFT_ID_PREFIX.length);
+                  navigate(`/crear-promocion?draft=${rawId}`);
+                  return;
+                }
+                navigate(promotionHref(p));
+              };
 
               return (
                 <article

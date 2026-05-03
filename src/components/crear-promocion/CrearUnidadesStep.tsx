@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { Info, Trash2, Plus, Archive, Car } from "lucide-react";
+import { Info, Trash2, Plus, Archive, Car, Sun, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/Checkbox";
 import {
@@ -31,6 +31,10 @@ import type {
 import { PromotionAvailabilityFull } from "@/components/promotions/detail/PromotionAvailabilityFull";
 import type { Unit } from "@/data/units";
 import { UnitSimpleEditDialog } from "./UnitSimpleEditDialog";
+import { UnitPhotosDialog } from "./UnitPhotosDialog";
+import { uploadPromotionImage } from "@/lib/storage";
+import { ensureDraftPersisted } from "@/lib/promotionDrafts";
+import { toast } from "sonner";
 
 const orientaciones = ["Norte", "Sur", "Este", "Oeste", "NE", "NO", "SE", "SO"];
 
@@ -50,14 +54,18 @@ function unifamiliarLabelFor(index: number, tipo: SubVarias): string {
 }
 
 function baseUnit(partial: Partial<UnitData>): UnitData {
+  /* Todos los campos numéricos arrancan en 0 / vacío · el user los
+   * rellena · sin defaults inventados que confundan ("¿precio 250k
+   * lo puse yo o vino de fábrica?"). El status sigue en "available"
+   * porque es el estado inicial real, no un valor inventado. */
   return {
     id: "unit-x",
     ref: "",
     nombre: "",
-    dormitorios: 2, banos: 2,
-    superficieConstruida: 80, superficieUtil: 65, superficieTerraza: 12,
+    dormitorios: 0, banos: 0,
+    superficieConstruida: 0, superficieUtil: 0, superficieTerraza: 0,
     parcela: 0,
-    precio: 250000, planta: 0, orientacion: "Sur",
+    precio: 0, planta: 0, orientacion: "",
     parking: false, trastero: false,
     piscinaPrivada: false,
     status: "available",
@@ -142,16 +150,33 @@ function generateEdificio(state: WizardState): UnitData[] {
 function generateSingleUnit(state: WizardState): UnitData[] {
   const prefix = promoRefPrefix(state);
   const isIndependiente = state.subVarias === "independiente";
+  /* Si el user definió "Parcela desde X m²" en V5, usamos ese mínimo
+   * como default · si no, fallback razonable. */
+  const parcelDefault = state.promotionDefaults?.plot?.minSizeSqm
+    ?? (isIndependiente ? 400 : 0);
+  /* Defaults de V5 (extras-v5) · prioritarios sobre los flags legacy
+   * `piscinaPrivadaPorDefecto`/`parkings`/`trasteros` que ya no se
+   * configuran (el user los configura en V5). */
+  const promoHasPool = state.promotionDefaults?.privatePool?.enabled
+    ?? state.piscinaPrivadaPorDefecto;
+  const promoHasParking = (state.promotionDefaults?.parking?.enabled ?? false)
+    || state.parkings > 0;
+  const promoHasStorage = (state.promotionDefaults?.storageRoom?.enabled ?? false)
+    || state.trasteros > 0;
   return [
     baseUnit({
       id: "unit-1",
       ref: `${prefix}-0001`,
       nombre: isIndependiente ? "Villa 1" : "V1",
-      dormitorios: 3, superficieConstruida: 150, superficieUtil: 120,
-      superficieTerraza: 25, precio: 350000,
-      parcela: isIndependiente ? 400 : 0,
-      piscinaPrivada: isIndependiente && state.piscinaPrivadaPorDefecto,
-      parking: state.parkings > 0, trastero: state.trasteros > 0,
+      tipologiaUnifamiliar: state.subVarias ?? undefined,
+      /* Sin precio/dormitorios/m² hardcoded · el user rellena. Los
+       * únicos defaults que sí mantenemos son los que vienen de pasos
+       * previos del wizard (parcela del V5, parking/trastero/piscina
+       * del extras, vistas/caracteristicas del info-básica). */
+      parcela: parcelDefault,
+      piscinaPrivada: promoHasPool && isIndependiente,
+      parking: promoHasParking,
+      trastero: promoHasStorage,
       vistas: state.caracteristicasVivienda?.includes("vistas_mar") ? (["mar"] as TipoVista[]) : [],
       caracteristicas: [...(state.caracteristicasVivienda || [])],
     }),
@@ -163,6 +188,17 @@ function generateMultipleUnifamiliar(state: WizardState): UnitData[] {
   const prefix = promoRefPrefix(state);
   let counter = 0;
   const countersByTipo: Record<string, number> = {};
+  /* "Parcela desde X m²" del V5 (si el user lo configuró) · default
+   * compartido para todas las tipologías · si no se definió, cae a
+   * heurística por tipo. */
+  const minPlot = state.promotionDefaults?.plot?.minSizeSqm;
+  /* Defaults de V5 · prioritarios sobre los flags legacy. */
+  const promoHasPool = state.promotionDefaults?.privatePool?.enabled
+    ?? state.piscinaPrivadaPorDefecto;
+  const promoHasParking = (state.promotionDefaults?.parking?.enabled ?? false)
+    || state.parkings > 0;
+  const promoHasStorage = (state.promotionDefaults?.storageRoom?.enabled ?? false)
+    || state.trasteros > 0;
   for (const tipologia of state.tipologiasSeleccionadas) {
     const isIndependiente = tipologia.tipo === "independiente";
     for (let i = 0; i < tipologia.cantidad; i++) {
@@ -173,12 +209,13 @@ function generateMultipleUnifamiliar(state: WizardState): UnitData[] {
           id: `unit-${counter + 1}`,
           ref: `${prefix}-${String(counter + 1).padStart(4, "0")}`,
           nombre: unifamiliarLabelFor(idx, tipologia.tipo),
-          dormitorios: 3, superficieConstruida: 150, superficieUtil: 120,
-          superficieTerraza: 25, precio: 350000,
-          parcela: isIndependiente ? 400 : (tipologia.tipo === "pareados" ? 250 : 150),
-          piscinaPrivada: isIndependiente && state.piscinaPrivadaPorDefecto,
+          tipologiaUnifamiliar: tipologia.tipo,
+          /* Sin defaults inventados · solo lo configurado en pasos previos. */
+          parcela: minPlot ?? (isIndependiente ? 400 : (tipologia.tipo === "pareados" ? 250 : 150)),
+          piscinaPrivada: promoHasPool && isIndependiente,
           orientacion: orientaciones[counter % orientaciones.length],
-          parking: state.parkings > 0, trastero: state.trasteros > 0,
+          parking: promoHasParking,
+          trastero: promoHasStorage,
           vistas: state.caracteristicasVivienda?.includes("vistas_mar") ? (["mar"] as TipoVista[]) : [],
           caracteristicas: [...(state.caracteristicasVivienda || [])],
         }),
@@ -191,15 +228,11 @@ function generateMultipleUnifamiliar(state: WizardState): UnitData[] {
 }
 
 function defaultsForSubtipo(subtipo: SubtipoUnidad): Partial<UnitData> {
-  switch (subtipo) {
-    case "penthouse":   return { dormitorios: 3, banos: 2, superficieConstruida: 140, superficieUtil: 110, superficieTerraza: 40, precio: 520000 };
-    case "duplex":      return { dormitorios: 3, banos: 2, superficieConstruida: 130, superficieUtil: 105, superficieTerraza: 20, precio: 420000 };
-    case "triplex":     return { dormitorios: 4, banos: 3, superficieConstruida: 180, superficieUtil: 145, superficieTerraza: 30, precio: 620000 };
-    case "loft":        return { dormitorios: 1, banos: 1, superficieConstruida: 60,  superficieUtil: 52,  superficieTerraza: 0,  precio: 210000 };
-    case "planta_baja": return { dormitorios: 2, banos: 2, superficieConstruida: 90,  superficieUtil: 75,  superficieTerraza: 10, precio: 290000 };
-    case "apartamento":
-    default:            return { dormitorios: 2, banos: 2, superficieConstruida: 80,  superficieUtil: 65,  superficieTerraza: 12, precio: 250000 };
-  }
+  /* Solo dejamos `parcela` para `planta_baja` (los bajos suelen tener
+   * jardín · es info estructural, no inventada). El resto de campos
+   * los rellena el user · sin precios/dormitorios/m² hardcoded. */
+  if (subtipo === "planta_baja") return { parcela: 30 };
+  return {};
 }
 
 /* ═══════════ Adapters UnitData ↔ Unit ═══════════ */
@@ -210,6 +243,14 @@ const subtipoToType: Record<SubtipoUnidad, string> = {
   duplex: "Dúplex",
   triplex: "Tríplex",
   planta_baja: "Estudio",
+};
+/* Etiquetas para promociones unifamiliares · usadas en la columna
+ * "Tipo" del catálogo cuando la unidad es una villa (no aplica el
+ * subtipo plurifamiliar). */
+const tipologiaUnifamiliarToType: Record<SubVarias, string> = {
+  independiente: "Independiente",
+  pareados: "Pareada",
+  adosados: "Adosada",
 };
 const typeToSubtipo: Record<string, SubtipoUnidad> = {
   "Apartamento": "apartamento",
@@ -242,7 +283,13 @@ function unitDataToUnit(u: UnitData): Unit {
     floor: u.planta ?? 0,
     door: extractDoor(u.nombre),
     publicId: u.nombre,
-    type: subtipoToType[u.subtipo ?? "apartamento"] ?? "Apartamento",
+    /* Prioridad · si es unifamiliar (tiene `tipologiaUnifamiliar`),
+     * usamos su etiqueta. Si es plurifamiliar/mixto, derivamos del
+     * subtipo. Sin nada → "Sin tipo" para que no mienta con
+     * "Apartamento" por defecto. */
+    type: u.tipologiaUnifamiliar
+      ? tipologiaUnifamiliarToType[u.tipologiaUnifamiliar]
+      : (u.subtipo ? subtipoToType[u.subtipo] : "Sin tipo"),
     bedrooms: u.dormitorios ?? 0,
     bathrooms: u.banos ?? 0,
     builtArea: u.superficieConstruida ?? 0,
@@ -251,6 +298,10 @@ function unitDataToUnit(u: UnitData): Unit {
     garden: 0,
     parcel: u.parcela ?? 0,
     hasPool: u.piscinaPrivada ?? false,
+    hasParking: u.parking ?? false,
+    hasStorage: u.trastero ?? false,
+    hasSolarium: u.solarium ?? false,
+    hasBasement: u.sotano ?? false,
     orientation: u.orientacion ?? "Sur",
     price: u.precio ?? 0,
     status: u.status ?? "available",
@@ -276,6 +327,10 @@ function mergeUnitIntoUnitData(existing: UnitData, unit: Unit): UnitData {
     superficieTerraza: unit.terrace,
     parcela: unit.parcel,
     piscinaPrivada: unit.hasPool,
+    parking: unit.hasParking,
+    trastero: unit.hasStorage,
+    solarium: unit.hasSolarium,
+    sotano: unit.hasBasement,
     planta: unit.floor,
     orientacion: unit.orientation,
     precio: unit.price,
@@ -343,9 +398,11 @@ function CharacteristicsSummary({ state }: { state: WizardState }) {
 export function CrearUnidadesStep({
   state,
   update,
+  uploadScopeId,
 }: {
   state: WizardState;
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
+  uploadScopeId?: string;
 }) {
   const isSingleHome = state.tipo === "unifamiliar" && state.subUni === "una_sola";
   const isEdificio = state.tipo === "plurifamiliar" || state.tipo === "mixto";
@@ -354,6 +411,8 @@ export function CrearUnidadesStep({
   const [addOpen, setAddOpen] = useState(false);
   const [addAnejosOpen, setAddAnejosOpen] = useState(false);
   const [editUnitId, setEditUnitId] = useState<string | null>(null);
+  /* Modal ligero solo-fotos · disparado al click del thumbnail. */
+  const [editPhotosUnitId, setEditPhotosUnitId] = useState<string | null>(null);
 
   // Auto-generar al entrar si aún no hay unidades + migrar drafts
   // antiguos que no tengan los campos nuevos (ref, parcela, status,
@@ -366,20 +425,51 @@ export function CrearUnidadesStep({
       return;
     }
     // Chequeo de migración: si alguna unidad no tiene los campos nuevos
-    // obligatorios, los rellenamos con los defaults.
-    const needsMigration = state.unidades.some(
+    // obligatorios, los rellenamos con los defaults. También migramos
+    // `tipologiaUnifamiliar` (campo nuevo · ver adapter unitDataToUnit)
+    // en drafts unifamiliar pre-existentes que no lo tenían y mostraban
+    // "Sin tipo" / "Apartamento" en la columna Tipo.
+    const isUnifamiliar = state.tipo === "unifamiliar";
+    const needsTipologiaMigration = isUnifamiliar
+      && state.unidades.some((u) => !u.tipologiaUnifamiliar);
+    const needsMigration = needsTipologiaMigration || state.unidades.some(
       (u) => !u.ref || u.parcela === undefined || u.piscinaPrivada === undefined || !u.status,
     );
     if (needsMigration) {
       const prefix = promoRefPrefix(state);
+      /* Para multifamiliar villas, mapeamos por orden las tipologías
+       * seleccionadas a las unidades existentes (idéntico orden de
+       * generación) · para single villa todas reciben state.subVarias. */
+      const tipologiasOrdered: SubVarias[] = [];
+      if (isMultipleUnifamiliar) {
+        for (const t of state.tipologiasSeleccionadas) {
+          for (let i = 0; i < t.cantidad; i++) tipologiasOrdered.push(t.tipo);
+        }
+      }
+      const minPlot = state.promotionDefaults?.plot?.minSizeSqm;
+      const v5HasPool = state.promotionDefaults?.privatePool?.enabled ?? false;
       update(
         "unidades",
         state.unidades.map((u, i) => ({
           ...u,
           ref: u.ref || u.idInterna || `${prefix}-${String(i + 1).padStart(4, "0")}`,
-          parcela: u.parcela ?? 0,
-          piscinaPrivada: u.piscinaPrivada ?? false,
+          /* Si el user puso "Parcela desde X" en V5 y la unidad
+           * estaba en 0 (sin asignar), aplicamos el valor por defecto. */
+          parcela: u.parcela && u.parcela > 0 ? u.parcela : (minPlot ?? 0),
+          /* Si V5 dice que hay piscina privada y es independiente,
+           * propagamos · si la unidad ya tenía piscina, mantener. */
+          piscinaPrivada: u.piscinaPrivada
+            || (v5HasPool && (u.tipologiaUnifamiliar === "independiente" || state.subVarias === "independiente")),
           status: u.status ?? "available",
+          tipologiaUnifamiliar: u.tipologiaUnifamiliar
+            ?? (isSingleHome ? (state.subVarias ?? undefined) : undefined)
+            ?? (isMultipleUnifamiliar ? tipologiasOrdered[i] : undefined),
+          /* Si pasamos de plurifamiliar a unifamiliar (draft con
+           * subtipos viejos como "penthouse"/"apartamento") · limpiamos
+           * el subtipo · no aplica a villas y rompe el adapter
+           * unitDataToUnit cuando tipologiaUnifamiliar también está
+           * vacío (cae al subtipoToType y muestra "Ático"). */
+          subtipo: isUnifamiliar ? null : u.subtipo,
         })),
       );
     }
@@ -413,17 +503,35 @@ export function CrearUnidadesStep({
       else if (u.nombre.startsWith("V")) existingByTipo["independiente"] = (existingByTipo["independiente"] ?? 0) + 1;
     });
 
+    /* Defaults heredados de los pasos previos del wizard ·
+     * tipología viene del paso sub_varias, parcela del V5,
+     * piscina/parking/trastero de extras-V5 (boolean por unidad). */
+    const minPlot = state.promotionDefaults?.plot?.minSizeSqm;
+    const promoHasPool = state.promotionDefaults?.privatePool?.enabled ?? false;
+    const promoHasParking = (state.promotionDefaults?.parking?.enabled ?? false) || state.parkings > 0;
+    const promoHasStorage = (state.promotionDefaults?.storageRoom?.enabled ?? false) || state.trasteros > 0;
     const newUnits: UnitData[] = [];
     (Object.entries(deltas) as [SubVarias, number][]).forEach(([tipo, delta]) => {
       const startIdx = existingByTipo[tipo] ?? 0;
+      const isIndependiente = tipo === "independiente";
       for (let i = 0; i < delta; i++) {
         newUnits.push(
           baseUnit({
             id: `unit-${now}-${offset}`,
             nombre: unifamiliarLabelFor(startIdx + i, tipo),
-            dormitorios: 3, superficieConstruida: 150, superficieUtil: 120,
-            superficieTerraza: 25, precio: 350000,
+            /* CRÍTICO · sin esto la unidad sale como "Sin tipo" /
+             * "Apartamento" porque unitDataToUnit cae en el default. */
+            tipologiaUnifamiliar: tipo,
+            /* Sin defaults inventados de precio/dormitorios/m² · el
+             * user los rellena en la tabla. Solo dejamos los que vienen
+             * configurados en pasos previos. */
+            parcela: minPlot ?? (isIndependiente ? 400 : (tipo === "pareados" ? 250 : 150)),
+            piscinaPrivada: promoHasPool && isIndependiente,
+            parking: promoHasParking,
+            trastero: promoHasStorage,
             orientacion: orientaciones[offset % orientaciones.length],
+            vistas: state.caracteristicasVivienda?.includes("vistas_mar") ? (["mar"] as TipoVista[]) : [],
+            caracteristicas: [...(state.caracteristicasVivienda || [])],
           }),
         );
         offset++;
@@ -445,6 +553,11 @@ export function CrearUnidadesStep({
   const addMoreForEdificio = (deltas: Record<SubtipoUnidad, number>) => {
     const now = Date.now();
     let offset = state.unidades.length;
+    /* Defaults heredados de los pasos previos · igual que en
+     * generateEdificio para que las unidades añadidas no sean
+     * inconsistentes con las generadas iniciales. */
+    const promoHasParking = (state.promotionDefaults?.parking?.enabled ?? false) || state.parkings > 0;
+    const promoHasStorage = (state.promotionDefaults?.storageRoom?.enabled ?? false) || state.trasteros > 0;
     const newUnits: UnitData[] = [];
     (Object.entries(deltas) as [SubtipoUnidad, number][]).forEach(([subtipo, delta]) => {
       const label = subtipoUnidadOptions.find((o) => o.value === subtipo)?.label ?? "Unidad";
@@ -456,6 +569,10 @@ export function CrearUnidadesStep({
             nombre: `${label} ${offset + 1}`,
             subtipo,
             orientacion: orientaciones[offset % orientaciones.length],
+            parking: promoHasParking,
+            trastero: promoHasStorage,
+            vistas: state.caracteristicasVivienda?.includes("vistas_mar") ? (["mar"] as TipoVista[]) : [],
+            caracteristicas: [...(state.caracteristicasVivienda || [])],
             ...defaults,
           }),
         );
@@ -495,6 +612,29 @@ export function CrearUnidadesStep({
     update("parkingPrecios", next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parkingsAdicionales]);
+  /* Sync precios para solárium y sótano · mismo patrón. Defensivo
+   * contra drafts legacy sin estos campos · si falta el array,
+   * usamos []. */
+  useEffect(() => {
+    const cur = state.solariumPrecios ?? [];
+    const target = state.solariums ?? 0;
+    if (cur.length === target) return;
+    const next = [...cur];
+    while (next.length < target) next.push(state.solariumPrecio ?? 0);
+    while (next.length > target) next.pop();
+    update("solariumPrecios", next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.solariums]);
+  useEffect(() => {
+    const cur = state.sotanoPrecios ?? [];
+    const target = state.sotanos ?? 0;
+    if (cur.length === target) return;
+    const next = [...cur];
+    while (next.length < target) next.push(state.sotanoPrecio ?? 0);
+    while (next.length > target) next.pop();
+    update("sotanoPrecios", next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.sotanos]);
 
   const setTrasteroPrecio = (idx: number, v: number) => {
     const next = [...state.trasteroPrecios];
@@ -506,9 +646,28 @@ export function CrearUnidadesStep({
     next[idx] = v;
     update("parkingPrecios", next);
   };
-  const addMoreAnejos = (deltas: { parking: number; trastero: number }) => {
-    if (deltas.parking > 0) update("parkings", state.parkings + deltas.parking);
-    if (deltas.trastero > 0) update("trasteros", state.trasteros + deltas.trastero);
+  const addMoreAnejos = (deltas: { parking: number; trastero: number; solarium: number; sotano: number }) => {
+    /* `state.trasteros` / `state.parkings` representan TOTAL · sueltos
+     * = total - bundled. Si total < bundled (caso V5 que no auto-rellena
+     * el campo legacy), un simple `+= delta` se queda absorbido por el
+     * bundled y no aparece en la lista de sueltos. Llevamos primero al
+     * floor del bundled para que el delta vaya íntegro a los sueltos. */
+    if (deltas.trastero > 0) {
+      const bundled = state.trasterosIncluidosPrecio
+        ? totalViviendas * state.trasterosIncluidosPorVivienda
+        : 0;
+      const floor = Math.max(state.trasteros, bundled);
+      update("trasteros", floor + deltas.trastero);
+    }
+    if (deltas.parking > 0) {
+      const bundled = state.parkingsIncluidosPrecio
+        ? totalViviendas * state.parkingsIncluidosPorVivienda
+        : 0;
+      const floor = Math.max(state.parkings, bundled);
+      update("parkings", floor + deltas.parking);
+    }
+    if (deltas.solarium > 0) update("solariums", (state.solariums ?? 0) + deltas.solarium);
+    if (deltas.sotano > 0) update("sotanos", (state.sotanos ?? 0) + deltas.sotano);
     setAddAnejosOpen(false);
   };
 
@@ -518,12 +677,66 @@ export function CrearUnidadesStep({
     const next = [...state.trasteroPrecios];
     next.splice(idx, 1);
     update("trasteroPrecios", next);
+    const nextA = [...(state.trasteroAsignaciones ?? [])];
+    nextA.splice(idx, 1);
+    update("trasteroAsignaciones", nextA);
   };
   const removeParking = (idx: number) => {
     update("parkings", Math.max(0, state.parkings - 1));
     const next = [...state.parkingPrecios];
     next.splice(idx, 1);
     update("parkingPrecios", next);
+    const nextA = [...(state.parkingAsignaciones ?? [])];
+    nextA.splice(idx, 1);
+    update("parkingAsignaciones", nextA);
+  };
+  /* Setters de asignación · array paralelo a precios. */
+  const makeSetAsignacion = (key: "trasteroAsignaciones" | "parkingAsignaciones" | "solariumAsignaciones" | "sotanoAsignaciones") =>
+    (idx: number, unitId: string) => {
+      const cur = (state[key] ?? []) as string[];
+      const next = [...cur];
+      while (next.length <= idx) next.push("");
+      next[idx] = unitId;
+      update(key, next);
+    };
+  const setTrasteroAsignacion = makeSetAsignacion("trasteroAsignaciones");
+  const setParkingAsignacion = makeSetAsignacion("parkingAsignaciones");
+  const setSolariumAsignacion = makeSetAsignacion("solariumAsignaciones");
+  const setSotanoAsignacion = makeSetAsignacion("sotanoAsignaciones");
+
+  /* Lista de unidades disponibles para asignar (id + label). */
+  const unitsForSelect = useMemo(
+    () => state.unidades.map((u) => ({ id: u.id, label: u.nombre || u.ref || u.id })),
+    [state.unidades],
+  );
+
+  const setSolariumPrecio = (idx: number, v: number) => {
+    const next = [...(state.solariumPrecios ?? [])];
+    next[idx] = v;
+    update("solariumPrecios", next);
+  };
+  const removeSolarium = (idx: number) => {
+    update("solariums", Math.max(0, (state.solariums ?? 0) - 1));
+    const next = [...(state.solariumPrecios ?? [])];
+    next.splice(idx, 1);
+    update("solariumPrecios", next);
+    const nextA = [...(state.solariumAsignaciones ?? [])];
+    nextA.splice(idx, 1);
+    update("solariumAsignaciones", nextA);
+  };
+  const setSotanoPrecio = (idx: number, v: number) => {
+    const next = [...(state.sotanoPrecios ?? [])];
+    next[idx] = v;
+    update("sotanoPrecios", next);
+  };
+  const removeSotano = (idx: number) => {
+    update("sotanos", Math.max(0, (state.sotanos ?? 0) - 1));
+    const next = [...(state.sotanoPrecios ?? [])];
+    next.splice(idx, 1);
+    update("sotanoPrecios", next);
+    const nextA = [...(state.sotanoAsignaciones ?? [])];
+    nextA.splice(idx, 1);
+    update("sotanoAsignaciones", nextA);
   };
 
   /* Cantidades actuales por tipo, para prefillar el popup. */
@@ -591,7 +804,54 @@ export function CrearUnidadesStep({
         units={unitsForView}
         onUnitsChange={handleUnitsChange}
         onEditUnit={(id) => setEditUnitId(id)}
+        onEditUnitPhotos={(id) => setEditPhotosUnitId(id)}
+        onReorderUnits={(orderedIds) => {
+          /* Reordena `state.unidades` siguiendo el array de ids que
+           * llega del drag handle · ids no presentes (no debería pasar
+           * pero por defensiva) se mantienen al final. */
+          const byId = new Map(state.unidades.map((u) => [u.id, u]));
+          const reordered = orderedIds
+            .map((id) => byId.get(id))
+            .filter((u): u is typeof state.unidades[0] => !!u);
+          const missing = state.unidades.filter((u) => !orderedIds.includes(u.id));
+          update("unidades", [...reordered, ...missing]);
+        }}
         hideExternalActions
+        defaultBulkEditAll
+        onUploadFile={async (unitId, kind, file) => {
+          if (!uploadScopeId) {
+            toast.error("Guarda el borrador antes de subir archivos");
+            return;
+          }
+          try {
+            if (uploadScopeId.startsWith("d-")) {
+              const ensured = await ensureDraftPersisted(uploadScopeId);
+              if (!ensured.ok) throw new Error(ensured.error ?? "No se pudo preparar el borrador");
+            }
+            const url = await uploadPromotionImage(uploadScopeId, file, "unit");
+            const next = state.unidades.map((x) => {
+              if (x.id !== unitId) return x;
+              if (kind === "plano") return { ...x, planoUrls: [...(x.planoUrls ?? []), url] };
+              if (kind === "memoria") return { ...x, memoriaUrls: [...(x.memoriaUrls ?? []), url] };
+              return { ...x, brochureUrls: [...(x.brochureUrls ?? []), url] };
+            });
+            update("unidades", next);
+            const labels = { plano: "Plano", memoria: "Memoria de calidades", brochure: "Brochure" };
+            toast.success(`${labels[kind]} subido`);
+          } catch (e) {
+            toast.error("Error al subir archivo", {
+              description: e instanceof Error ? e.message : "Inténtalo de nuevo",
+            });
+          }
+        }}
+        getUnitPhoto={(u) => {
+          /* Foto propia de la unidad (subida desde su modal de edición)
+           * tiene prioridad · si no, cae al fallback de fotos heredadas
+           * de la promoción que se resuelve en el componente. */
+          const data = state.unidades.find((x) => x.id === u.id);
+          const own = (data?.fotosUnidad ?? []).find((f) => !f.id.startsWith("disabled-"));
+          return own?.url;
+        }}
         promotionCtx={{
           ciudad: state.direccionPromocion.ciudad,
           provincia: state.direccionPromocion.provincia,
@@ -610,6 +870,7 @@ export function CrearUnidadesStep({
             zonaInfantil: state.zonaInfantil,
             urbanizacionCerrada: state.urbanizacionCerrada,
           },
+          fotos: state.fotos.map((f) => f.url),
         }}
       />
 
@@ -634,7 +895,7 @@ export function CrearUnidadesStep({
           </button>
         </div>
 
-        {parkingsAdicionales === 0 && trasterosAdicionales === 0 ? (
+        {parkingsAdicionales === 0 && trasterosAdicionales === 0 && (state.solariums ?? 0) === 0 && (state.sotanos ?? 0) === 0 ? (
           <button
             type="button"
             onClick={() => setAddAnejosOpen(true)}
@@ -658,7 +919,10 @@ export function CrearUnidadesStep({
                 count={parkingsAdicionales}
                 prices={state.parkingPrecios}
                 defaultPrice={state.parkingPrecio}
+                assignments={state.parkingAsignaciones ?? []}
+                units={unitsForSelect}
                 onChangePrice={setParkingPrecio}
+                onChangeAssignment={setParkingAsignacion}
                 onRemove={removeParking}
               />
             )}
@@ -671,8 +935,43 @@ export function CrearUnidadesStep({
                 count={trasterosAdicionales}
                 prices={state.trasteroPrecios}
                 defaultPrice={state.trasteroPrecio}
+                assignments={state.trasteroAsignaciones ?? []}
+                units={unitsForSelect}
                 onChangePrice={setTrasteroPrecio}
+                onChangeAssignment={setTrasteroAsignacion}
                 onRemove={removeTrastero}
+              />
+            )}
+            {(state.solariums ?? 0) > 0 && (
+              <AnejoList
+                icon={Sun}
+                title="Solariums sueltos"
+                subtitle="No incluidos en el precio de la vivienda"
+                idPrefix="S"
+                count={state.solariums ?? 0}
+                prices={state.solariumPrecios ?? []}
+                defaultPrice={state.solariumPrecio ?? 0}
+                assignments={state.solariumAsignaciones ?? []}
+                units={unitsForSelect}
+                onChangePrice={setSolariumPrecio}
+                onChangeAssignment={setSolariumAsignacion}
+                onRemove={removeSolarium}
+              />
+            )}
+            {(state.sotanos ?? 0) > 0 && (
+              <AnejoList
+                icon={Layers}
+                title="Sótanos sueltos"
+                subtitle="No incluidos en el precio de la vivienda"
+                idPrefix="B"
+                count={state.sotanos ?? 0}
+                prices={state.sotanoPrecios ?? []}
+                defaultPrice={state.sotanoPrecio ?? 0}
+                assignments={state.sotanoAsignaciones ?? []}
+                units={unitsForSelect}
+                onChangePrice={setSotanoPrecio}
+                onChangeAssignment={setSotanoAsignacion}
+                onRemove={removeSotano}
               />
             )}
           </div>
@@ -696,11 +995,17 @@ export function CrearUnidadesStep({
         />
       )}
 
-      {/* Popup Añadir anejos */}
+      {/* Popup Añadir anejos · solárium/sótano solo en unifamiliar */}
       <AddAnejosDialog
         open={addAnejosOpen}
         onOpenChange={setAddAnejosOpen}
-        current={{ parking: parkingsAdicionales, trastero: trasterosAdicionales }}
+        showUnifamiliarOnly={state.tipo === "unifamiliar"}
+        current={{
+          parking: parkingsAdicionales,
+          trastero: trasterosAdicionales,
+          solarium: state.solariums ?? 0,
+          sotano: state.sotanos ?? 0,
+        }}
         onConfirm={addMoreAnejos}
       />
 
@@ -718,22 +1023,44 @@ export function CrearUnidadesStep({
           );
         }}
       />
+
+      {/* Modal ligero · solo fotos · disparado al click del thumbnail */}
+      <UnitPhotosDialog
+        open={editPhotosUnitId !== null}
+        onOpenChange={(v) => { if (!v) setEditPhotosUnitId(null); }}
+        unit={editPhotosUnitId ? state.unidades.find((u) => u.id === editPhotosUnitId) ?? null : null}
+        state={state}
+        uploadScopeId={uploadScopeId}
+        onUpdate={(patch) => {
+          if (!editPhotosUnitId) return;
+          update(
+            "unidades",
+            state.unidades.map((u) => (u.id === editPhotosUnitId ? { ...u, ...patch } : u)),
+          );
+        }}
+      />
     </div>
   );
 }
 
 /* ═══════════ Anejos sueltos: lista vertical con precio individual ═══════════ */
 function AnejoList({
-  icon: Icon, title, subtitle, idPrefix, count, prices, defaultPrice, onChangePrice, onRemove,
+  icon: Icon, title, subtitle, idPrefix, count, prices, defaultPrice, assignments, units, onChangePrice, onChangeAssignment, onRemove,
 }: {
   icon: typeof Archive;
   title: string;
   subtitle?: string;
-  idPrefix: "T" | "P";
+  idPrefix: "T" | "P" | "S" | "B";
   count: number;
   prices: number[];
   defaultPrice: number;
+  /** ID de la unidad asignada · "" / undefined = sin asignar. Mismo
+   *  índice que `prices`. */
+  assignments: string[];
+  /** Lista de unidades disponibles para asignar (id + nombre/publicId). */
+  units: { id: string; label: string }[];
   onChangePrice: (idx: number, v: number) => void;
+  onChangeAssignment: (idx: number, unitId: string) => void;
   onRemove: (idx: number) => void;
 }) {
   return (
@@ -750,22 +1077,45 @@ function AnejoList({
           {Array.from({ length: count }, (_, i) => {
             const id = `${idPrefix}${i + 1}`;
             const value = prices[i] ?? defaultPrice;
+            const assignedTo = assignments[i] ?? "";
             return (
-              <div key={id} className="group flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors">
+              <div key={id} className="group flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors flex-wrap sm:flex-nowrap">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground shrink-0">
                     <Icon className="h-4 w-4" strokeWidth={1.5} />
                   </div>
                   <span className="text-sm font-semibold text-foreground tnum">{id}</span>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+                  {/* Selector de unidad asignada */}
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">Vivienda</span>
+                    <select
+                      value={assignedTo}
+                      onChange={(e) => onChangeAssignment(i, e.target.value)}
+                      className="h-8 rounded-lg border border-border bg-card text-xs px-2 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 min-w-[120px]"
+                    >
+                      <option value="">Sin asignar</option>
+                      {units.map((u) => (
+                        <option key={u.id} value={u.id}>{u.label}</option>
+                      ))}
+                    </select>
+                  </div>
                   <div className="flex items-center gap-1">
                     <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">Precio</span>
                     <input
-                      type="number"
-                      value={value}
-                      onChange={(e) => onChangePrice(i, Math.max(0, Number(e.target.value) || 0))}
-                      className="h-8 w-28 rounded-lg border border-border bg-card text-sm tnum px-2 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                      type="text"
+                      inputMode="numeric"
+                      /* Formato es-ES con miles · "100.000" en vez de
+                       * "100000". Empty string cuando 0 · evita el bug
+                       * de "20" al teclear "2" sobre "0". */
+                      value={value > 0 ? value.toLocaleString("es-ES") : ""}
+                      placeholder="0"
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/[^0-9]/g, "");
+                        onChangePrice(i, digits === "" ? 0 : Number(digits));
+                      }}
+                      className="h-8 w-28 rounded-lg border border-border bg-card text-sm tnum px-2 text-right outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                     />
                     <span className="text-xs text-muted-foreground ml-0.5">€</span>
                   </div>
@@ -974,29 +1324,38 @@ function AddMoreEdificioDialog({
 }
 
 /* ═══════════ AddAnejos: elegir trastero / parking + cantidades ═══════════ */
+type AnejoKey = "parking" | "trastero" | "solarium" | "sotano";
+
 function AddAnejosDialog({
-  open, onOpenChange, current, onConfirm,
+  open, onOpenChange, current, onConfirm, showUnifamiliarOnly,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  current: { parking: number; trastero: number };
-  onConfirm: (deltas: { parking: number; trastero: number }) => void;
+  current: { parking: number; trastero: number; solarium: number; sotano: number };
+  onConfirm: (deltas: { parking: number; trastero: number; solarium: number; sotano: number }) => void;
+  showUnifamiliarOnly: boolean;
 }) {
-  const [values, setValues] = useState<{ parking: number; trastero: number }>(current);
-  useEffect(() => { if (open) setValues(current); }, [open, current.parking, current.trastero]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [values, setValues] = useState<typeof current>(current);
+  useEffect(() => { if (open) setValues(current); }, [open, current.parking, current.trastero, current.solarium, current.sotano]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deltaP = Math.max(0, values.parking - current.parking);
   const deltaT = Math.max(0, values.trastero - current.trastero);
-  const totalDelta = deltaP + deltaT;
+  const deltaS = Math.max(0, values.solarium - current.solarium);
+  const deltaB = Math.max(0, values.sotano - current.sotano);
+  const totalDelta = deltaP + deltaT + deltaS + deltaB;
 
   const options: {
-    key: "parking" | "trastero";
+    key: AnejoKey;
     icon: typeof Car;
     label: string;
     description: string;
   }[] = [
     { key: "parking",  icon: Car,     label: "Plaza de parking", description: "Plaza suelta con precio propio" },
     { key: "trastero", icon: Archive, label: "Trastero",         description: "Trastero suelto con precio propio" },
+    ...(showUnifamiliarOnly ? [
+      { key: "solarium" as AnejoKey, icon: Sun,    label: "Solárium", description: "Terraza superior accesible · precio propio" },
+      { key: "sotano" as AnejoKey,   icon: Layers, label: "Sótano",   description: "Sótano de la villa · precio propio" },
+    ] : []),
   ];
 
   return (
@@ -1060,7 +1419,7 @@ function AddAnejosDialog({
           </button>
           <button
             type="button"
-            onClick={() => onConfirm({ parking: deltaP, trastero: deltaT })}
+            onClick={() => onConfirm({ parking: deltaP, trastero: deltaT, solarium: deltaS, sotano: deltaB })}
             disabled={totalDelta === 0}
             className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-foreground text-background text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-40"
           >

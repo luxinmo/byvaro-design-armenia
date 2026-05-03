@@ -17,7 +17,6 @@
  * de SharedWidgets y tokens HSL.
  */
 
-import { useEffect, useRef } from "react";
 import {
   Globe, Home, Handshake, Info, Users, Shield, ClipboardList, Clock,
   Plus, Trash2, AlertTriangle, Handshake as HandshakeIcon,
@@ -79,27 +78,45 @@ export function ColaboradoresStep({
   const totalCliente = state.hitosComision.reduce((s, h) => s + h.pagoCliente, 0);
   const totalColab = state.hitosComision.reduce((s, h) => s + h.pagoColaborador, 0);
 
-  /* Activación implícita · cuando el usuario aterriza en este paso
-   *  (típicamente desde un text-link "Configurar comisiones para
-   *  colaborar →" en la ficha o desde el sidebar del wizard) ya está
-   *  diciendo "quiero colaborar con agencias". Solo se activa UNA
-   *  VEZ en el mount · si después el usuario pulsa el text-link
-   *  "Desactivar colaboración · volver a uso interno" abajo, el
-   *  efecto NO la vuelve a activar (el ref `autoActivated` lo
-   *  inhabilita). El guardado real al "Publicar" persiste el cambio.
-   *  TODO(backend): cuando aterrice `Promotion.createdByUserId`,
-   *  bloquear este efecto si `!canManage`. */
-  const didMount = useRef(false);
-  useEffect(() => {
-    if (didMount.current) return;
-    didMount.current = true;
-    if (canManage && !state.colaboracion) {
-      update("colaboracion", true);
-    }
-  }, [canManage, state.colaboracion, update]);
+  /* Activación implícita ELIMINADA (2026-05) · ahora el user debe
+   * activar la colaboración explícitamente con el toggle. Razón ·
+   * arrastrar al usuario a "todo el mundo colabora" oculta la
+   * decisión real y deja el step en estado inconsistente (toggle on,
+   * pero comisiones vacías). El nuevo banner de arriba explica las
+   * dos opciones (uso interno vs colaboración). */
 
   return (
     <div className="flex flex-col gap-5">
+      {/* Banner explicativo · dos opciones claras · uso interno vs
+          colaboración con agencias. Sin auto-activar nada · el user
+          decide. */}
+      <div className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-4 sm:p-5">
+        <div className="flex items-start gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
+            <Info className="h-4 w-4" strokeWidth={1.7} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[13.5px] font-semibold text-foreground mb-1.5">
+              ¿Quieres colaborar con agencias inmobiliarias?
+            </p>
+            <ul className="text-[12.5px] text-foreground/80 leading-relaxed space-y-1">
+              <li>
+                <span className="font-medium">Sí · activa la colaboración</span> ·
+                podrás compartir esta promoción con agencias colaboradoras y
+                recibir registros de sus clientes. Configura comisiones y forma
+                de pago abajo.
+              </li>
+              <li>
+                <span className="font-medium">No · uso interno</span> · deja el
+                toggle desactivado. La promoción seguirá funcionando para tu
+                equipo (registros, visitas, ventas) pero <strong>no será visible
+                ni se podrá compartir con colaboradores</strong>.
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
       {/* Read-only · solo admin/creador puede gestionar · TODO(backend):
        *  comprobar `createdByUserId` cuando exista en el modelo. */}
       {!canManage && (

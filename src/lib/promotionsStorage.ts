@@ -22,6 +22,10 @@ const CREATED_KEY = "byvaro.promotions.created.v1";
 
 interface CreatedPromotion {
   id: string;
+  /** Referencia pública canónica `PR + 5 dígitos`. Heredada del
+   *  borrador (WizardState.publicRef) · garantiza que la promoción
+   *  publicada conserva el mismo identificador humano que el draft. */
+  code?: string;
   name: string;
   ownerOrganizationId: string;
   ownerRole: "promotor" | "comercializador";
@@ -86,6 +90,7 @@ export function createPromotionFromWizard(
 
   const created: CreatedPromotion = {
     id,
+    code: (s.publicRef as string) || undefined,
     name,
     ownerOrganizationId: ownerOrgId,
     ownerRole,

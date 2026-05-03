@@ -69,7 +69,7 @@
  *   - TODO(feature): mapa interactivo (plano de plantas) como modo de vista extra.
  */
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { unitsByPromotion, Unit, UnitStatus, PromotionContext } from "@/data/units";
 import { type Anejo, type AnejoStatus, type AnejoTipo } from "@/data/anejos";
@@ -86,7 +86,8 @@ import {
   Download, Search, ChevronDown, ChevronUp, ChevronRight,
   Waves, Building2, LayoutGrid, List, ArrowUpDown,
   Pencil, X, Check, Camera, Bed, Compass, Send, SlidersHorizontal,
-  MoreVertical, Eye, ShoppingCart,
+  MoreVertical, Eye, ShoppingCart, Image as ImageIcon, Upload, FileCheck,
+  GripVertical,
 } from "lucide-react";
 // ColumnCustomizer: dialog Byvaro para elegir columnas visibles en el catálogo.
 import { ColumnCustomizer, type ColumnDef } from "@/components/ui/column-customizer";
@@ -123,26 +124,27 @@ const statusOptions: UnitStatus[] = ["available", "reserved", "sold", "withdrawn
 /** En vista colaborador ocultamos "withdrawn" — la agencia no gestiona
  *  retiradas, es una decisión interna del promotor. */
 const statusOptionsCollab: UnitStatus[] = ["available", "reserved", "sold"];
-const typeOptions = ["Apartamento", "Ático", "Dúplex", "Estudio"];
+const TYPE_OPTIONS_PLURI = ["Apartamento", "Ático", "Dúplex", "Tríplex", "Loft", "Bajos"];
+const TYPE_OPTIONS_UNI = ["Independiente", "Pareada", "Adosada"];
 const orientationOptions = ["Norte", "Sur", "Este", "Oeste", "NE", "NO", "SE", "SO"];
 
 type SortField = "block" | "floor" | "type" | "bedrooms" | "builtArea" | "price" | "status";
 
-type EditableFieldKey = "price" | "bedrooms" | "bathrooms" | "floor" | "terrace" | "type" | "builtArea" | "orientation" | "status" | "publicId" | "parcel";
+type EditableFieldKey = "price" | "bedrooms" | "bathrooms" | "floor" | "terrace" | "type" | "builtArea" | "usableArea" | "hasPool" | "orientation" | "status" | "publicId" | "parcel";
 
 const getEditableFieldOptions = (hasUnifamiliar: boolean): { key: EditableFieldKey; label: string }[] => [
   { key: "publicId", label: "ID visible" },
-  { key: "price", label: "Precio" },
-  { key: "status", label: "Estado" },
-  { key: "bedrooms", label: "Habitaciones" },
-  { key: "bathrooms", label: "Baños" },
-  { key: "builtArea", label: "Superficie (m²)" },
-  { key: "terrace", label: "Terraza (m²)" },
   { key: "type", label: "Tipología" },
-  { key: "orientation", label: "Orientación" },
+  { key: "bedrooms", label: "Dormitorios" },
+  { key: "bathrooms", label: "Baños" },
+  { key: "builtArea", label: "Construidos (m²)" },
+  { key: "usableArea", label: "Útiles (m²)" },
   ...(hasUnifamiliar
     ? [{ key: "parcel" as EditableFieldKey, label: "Parcela (m²)" }]
     : [{ key: "floor" as EditableFieldKey, label: "Planta" }]),
+  { key: "terrace", label: "Terraza (m²)" },
+  { key: "hasPool", label: "Piscina" },
+  { key: "price", label: "Precio" },
 ];
 
 interface EditedFields {
@@ -152,6 +154,8 @@ interface EditedFields {
   bathrooms?: number;
   floor?: number;
   terrace?: number;
+  usableArea?: number;
+  hasPool?: boolean;
   type?: string;
   builtArea?: number;
   orientation?: string;
@@ -178,9 +182,34 @@ interface Props {
   hideExternalActions?: boolean;
   /** Contexto heredado de la promoción para la ficha de unidad. */
   promotionCtx?: PromotionContext;
+  /** Resolver per-unit del thumbnail · si la unidad tiene fotos
+   *  propias devuelve la primera, si no `undefined` y el componente
+   *  cae al fallback (`promotionCtx.fotos[0]`). Sin resolver y sin
+   *  fotos en el contexto · placeholder neutro (sin demos picsum). */
+  getUnitPhoto?: (unit: Unit) => string | undefined;
+  /** Al montar, arranca directamente en modo "edición masiva" con
+   *  TODOS los campos editables activos y la vista en tabla. Pensado
+   *  para el wizard de creación · el usuario quiere ver y rellenar
+   *  los datos de cada unidad en una grilla tipo Excel. Sin él, el
+   *  componente arranca en modo "catálogo" lectura. */
+  defaultBulkEditAll?: boolean;
+  /** Subida de archivo por unidad y tipo · callback que recibe el id,
+   *  qué tipo de documento es y el File seleccionado. El caller
+   *  (wizard) lo sube a Storage y persiste la URL en el campo
+   *  correspondiente de la unidad. Sin esto, el botón se oculta. */
+  onUploadFile?: (unitId: string, kind: "plano" | "memoria" | "brochure", file: File) => void;
+  /** Click en el thumbnail de la columna "Foto" · abre un modal
+   *  ligero solo para fotos (subir propias + toggle heredadas). Si
+   *  no se pasa, el thumb queda no-interactivo. Distinto de
+   *  `onEditUnit` (modal completo de edición). */
+  onEditUnitPhotos?: (unitId: string) => void;
+  /** Reordenar unidades arrastrando · activa el drag handle (9
+   *  puntitos) en la primera columna en lugar del checkbox. El
+   *  caller recibe los ids en el nuevo orden y persiste. */
+  onReorderUnits?: (orderedIds: string[]) => void;
 }
 
-export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = false, units, onUnitsChange, onEditUnit, hideExternalActions = false, promotionCtx }: Props) {
+export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = false, units, onUnitsChange, onEditUnit, hideExternalActions = false, promotionCtx, getUnitPhoto, defaultBulkEditAll = false, onUploadFile, onEditUnitPhotos, onReorderUnits }: Props) {
   const { toast } = useToast();
   const controlled = units !== undefined;
   const [innerUnits, setInnerUnits] = useState<Unit[]>(() => units ?? unitsByPromotion[promotionId] ?? []);
@@ -301,7 +330,9 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("block");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [viewMode, setViewMode] = useState<"table" | "grid" | "catalog">("catalog");
+  const [viewMode, setViewMode] = useState<"table" | "grid" | "catalog">(
+    defaultBulkEditAll ? "table" : "catalog",
+  );
   const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(new Set());
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null);
   // Nueva vista de unidad · modal centrado (opción 2).
@@ -402,8 +433,39 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
 
   const blocks = [...new Set(allUnits.map(u => u.block))];
   const types = [...new Set(allUnits.map(u => u.type))];
-  const hasUnifamiliar = allUnits.some(u => ["Villa", "Chalet", "Unifamiliar", "Pareado", "Adosado"].includes(u.type));
+  const hasUnifamiliar = allUnits.some(u => ["Villa", "Chalet", "Unifamiliar", "Pareado", "Adosado", "Independiente", "Pareada", "Adosada"].includes(u.type));
   const editableFieldOptions = getEditableFieldOptions(hasUnifamiliar);
+
+  /* Auto-arrancar bulk edit con TODOS los campos cuando el caller
+   * activa `defaultBulkEditAll` (wizard "crear unidades"). Una sola
+   * vez al montar / cuando llegan las unidades · si el user sale del
+   * modo manualmente, no lo re-activamos. */
+  const bulkEditInitializedRef = useRef(false);
+  /* Drag de fila · ids del source (la unidad que arrastras) y del
+   * target (donde caerá). Trabajamos con ids en vez de índices · más
+   * estable cuando hay varios bloques. El reorder se hace al `drop`
+   * (no on `dragOver`) · evita el efecto "jumpy" de mover la fila en
+   * tiempo real bajo el cursor. */
+  const [dragSourceId, setDragSourceId] = useState<string | null>(null);
+  const [dragTargetId, setDragTargetId] = useState<string | null>(null);
+  const [dragPosition, setDragPosition] = useState<"above" | "below">("below");
+  useEffect(() => {
+    if (!defaultBulkEditAll) return;
+    if (bulkEditInitializedRef.current) return;
+    if (allUnits.length === 0) return;
+    const allFields = new Set<EditableFieldKey>(editableFieldOptions.map(o => o.key));
+    const initial: Record<string, EditedFields> = {};
+    allUnits.filter(u => u.status === "available").forEach(u => {
+      const fields: EditedFields = {};
+      allFields.forEach(f => { (fields as Record<string, unknown>)[f] = (u as unknown as Record<string, unknown>)[f]; });
+      initial[u.id] = fields;
+    });
+    setEditedData(initial);
+    setActiveEditFields(allFields);
+    setBulkEditing(true);
+    bulkEditInitializedRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultBulkEditAll, allUnits.length]);
   const catalogColumns: { key: CatalogCol; label: string }[] = [
     { key: "photo", label: "Foto" },
     { key: "ref", label: "Referencia" },
@@ -569,6 +631,13 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
       ...prev,
       [unitId]: { ...prev[unitId], [field]: value },
     }));
+    /* Auto-commit en modo `defaultBulkEditAll` (wizard) · no hay
+     * barra "Guardar cambios" visible · cada edit se propaga ya al
+     * caller via `onUnitsChange`. En modo manual seguimos usando
+     * editedData hasta que el user pulse Guardar. */
+    if (defaultBulkEditAll) {
+      setAllUnits(prev => prev.map(u => (u.id === unitId ? { ...u, [field]: value } : u)));
+    }
   };
 
   const handleUnitUpdate = (unitId: string, updates: Partial<Unit>) => {
@@ -593,12 +662,23 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
 
   // Helper: get value (edited or original)
   const getVal = (u: Unit, field: keyof EditedFields) => {
+    /* En modo wizard (`defaultBulkEditAll`) leemos siempre de la unit
+     * controlada · cualquier cambio externo (migración de campos,
+     * regeneración por cambio de tipología, etc.) se refleja al
+     * instante. El editedData cacheado en este modo era origen de
+     * bugs · snapshot stale al montar antes de las migraciones. */
+    if (defaultBulkEditAll) return (u as unknown as Record<string, unknown>)[field];
     if (bulkEditing && editedData[u.id]) return editedData[u.id][field] ?? (u as any)[field];
     return (u as any)[field];
   };
 
   const isEditable = (id: string) => {
     if (!bulkEditing) return false;
+    /* En modo wizard (`defaultBulkEditAll`) toda unidad es editable
+     * · estamos creándolas · el filtro por status="available" solo
+     * aplica a la edición masiva post-promo (no editas precios de
+     * unidades vendidas). */
+    if (defaultBulkEditAll) return true;
     const u = allUnits.find(x => x.id === id);
     return u?.status === "available";
   };
@@ -721,8 +801,10 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
 
       {/* Bulk editing bar · sticky para que las acciones Guardar / Cancelar
           estén siempre visibles mientras el usuario edita en medio de una
-          tabla larga. */}
-      {bulkEditing && (
+          tabla larga. NO se muestra cuando `defaultBulkEditAll` está activo
+          (wizard) · ahí la edición es el modo por defecto y la barra es
+          ruido visual. Los cambios se autoguardan via `onUnitsChange`. */}
+      {bulkEditing && !defaultBulkEditAll && (
         <div className="sticky top-2 z-20 border border-warning/30 rounded-xl bg-warning/10 px-4 py-2.5 flex items-center justify-between shadow-soft-lg">
           <div className="flex items-center gap-3">
             <Pencil className="h-4 w-4 text-warning" strokeWidth={1.5} />
@@ -963,67 +1045,78 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
               {types.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
 
-            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as UnitStatus | "all")}
-              className="min-w-0 h-9 px-2.5 rounded-lg border border-border bg-background text-sm">
-              <option value="all">Estados</option>
-              {(isCollaboratorView ? statusOptionsCollab : statusOptions).map(s => <option key={s} value={s}>{statusConfig[s].label}</option>)}
-            </select>
+            {/* Filtro Estados · oculto en modo wizard (la disponibilidad
+                se gestiona en su propio tab, no aquí). */}
+            {!defaultBulkEditAll && (
+              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as UnitStatus | "all")}
+                className="min-w-0 h-9 px-2.5 rounded-lg border border-border bg-background text-sm">
+                <option value="all">Estados</option>
+                {(isCollaboratorView ? statusOptionsCollab : statusOptions).map(s => <option key={s} value={s}>{statusConfig[s].label}</option>)}
+              </select>
+            )}
           </div>
 
           <div className="flex items-center gap-1 sm:ml-auto">
             {/* Edición masiva directa — no requiere pre-selección, aplica a
                 todas las unidades disponibles (Excel-like). Oculta en móvil:
                 Excel-like no funciona bien con pantallas estrechas. */}
-            {!isCollaboratorView && !bulkEditing && (
+            {!isCollaboratorView && !bulkEditing && !defaultBulkEditAll && (
               <Button variant="outline" size="sm" className="hidden md:inline-flex h-9 text-xs gap-1.5 rounded-full mr-1" onClick={openFieldSelector}>
                 <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} /> Edición masiva
               </Button>
             )}
-            <Button variant={viewMode === "table" ? "secondary" : "ghost"} size="icon" className="h-9 w-9" onClick={() => setViewMode("table")}>
-              <List className="h-4 w-4" />
-            </Button>
-            <Button variant={viewMode === "catalog" ? "secondary" : "ghost"} size="icon" className="h-9 w-9" onClick={() => setViewMode("catalog")} title="Catálogo con fotos">
-              <Camera className="h-4 w-4" />
-            </Button>
+            {/* Toggles de vista (tabla / catálogo) · ocultos en modo wizard
+                · ahí solo hay UNA vista (tabla edit-all). */}
+            {!defaultBulkEditAll && (
+              <>
+                <Button variant={viewMode === "table" ? "secondary" : "ghost"} size="icon" className="h-9 w-9" onClick={() => setViewMode("table")}>
+                  <List className="h-4 w-4" />
+                </Button>
+                <Button variant={viewMode === "catalog" ? "secondary" : "ghost"} size="icon" className="h-9 w-9" onClick={() => setViewMode("catalog")} title="Catálogo con fotos">
+                  <Camera className="h-4 w-4" />
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Mini-toolbar móvil — mismo patrón MinimalSort que /promociones.
-          Izquierda: filtro de estado (Todas / Disponibles / Vendidas…).
-          Derecha: orden (bloque / planta / precio / superficie…). */}
-      <div className="sm:hidden flex items-center justify-between gap-2 px-1 pb-1">
-        <MinimalSort
-          value={filterStatus}
-          onChange={(v) => setFilterStatus(v as UnitStatus | "all")}
-          align="left"
-          options={[
-            { value: "all", label: `Todas (${filtered.length})` },
-            { value: "available", label: "Disponibles" },
-            { value: "reserved", label: "Reservadas" },
-            { value: "sold", label: "Vendidas" },
-            ...(isCollaboratorView ? [] : [{ value: "withdrawn", label: "Retiradas" }]),
-          ]}
-        />
-        <MinimalSort
-          value={`${sortField}-${sortDir}`}
-          onChange={(v) => {
-            const [f, d] = v.split("-") as [SortField, "asc" | "desc"];
-            setSortField(f);
-            setSortDir(d);
-          }}
-          label="Ordenar"
-          options={[
-            { value: "block-asc", label: "Bloque" },
-            { value: "floor-asc", label: "Planta ↑" },
-            { value: "floor-desc", label: "Planta ↓" },
-            { value: "price-asc", label: "Precio ↑" },
-            { value: "price-desc", label: "Precio ↓" },
-            { value: "builtArea-desc", label: "Superficie ↓" },
-            { value: "bedrooms-desc", label: "Dormitorios ↓" },
-          ]}
-        />
-      </div>
+      {/* Mini-toolbar móvil — filtro estado + orden. Oculta en modo
+          wizard (sin estados, orden manual via drag handle). */}
+      {!defaultBulkEditAll && (
+        <div className="sm:hidden flex items-center justify-between gap-2 px-1 pb-1">
+          <MinimalSort
+            value={filterStatus}
+            onChange={(v) => setFilterStatus(v as UnitStatus | "all")}
+            align="left"
+            options={[
+              { value: "all", label: `Todas (${filtered.length})` },
+              { value: "available", label: "Disponibles" },
+              { value: "reserved", label: "Reservadas" },
+              { value: "sold", label: "Vendidas" },
+              ...(isCollaboratorView ? [] : [{ value: "withdrawn", label: "Retiradas" }]),
+            ]}
+          />
+          <MinimalSort
+            value={`${sortField}-${sortDir}`}
+            onChange={(v) => {
+              const [f, d] = v.split("-") as [SortField, "asc" | "desc"];
+              setSortField(f);
+              setSortDir(d);
+            }}
+            label="Ordenar"
+            options={[
+              { value: "block-asc", label: "Bloque" },
+              { value: "floor-asc", label: "Planta ↑" },
+              { value: "floor-desc", label: "Planta ↓" },
+              { value: "price-asc", label: "Precio ↑" },
+              { value: "price-desc", label: "Precio ↓" },
+              { value: "builtArea-desc", label: "Superficie ↓" },
+              { value: "bedrooms-desc", label: "Dormitorios ↓" },
+            ]}
+          />
+        </div>
+      )}
 
       {/* Blocks */}
       {blocks.map(block => {
@@ -1114,41 +1207,49 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
 
             {/* Table view */}
             {!isCollapsed && viewMode === "table" && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+              <div className="overflow-x-auto -mx-3 sm:mx-0">
+                <table className="w-full text-[11px] sm:text-xs">
                   <thead>
                     <tr className="bg-muted/40 text-muted-foreground">
                       {!isCollaboratorView && (
-                        <th className="px-3 py-2.5 text-left w-10">
-                          <Checkbox
-                            checked={isAllSelected}
-                            onCheckedChange={toggleSelectAll}
-                            className="h-3.5 w-3.5"
-                          />
-                        </th>
+                        /* En modo wizard mostramos un drag handle "9 puntos"
+                         * (vacío en header) para reordenar filas · en modo
+                         * normal sale el checkbox de selección masiva. */
+                        defaultBulkEditAll ? (
+                          <th className="px-1 py-2.5 w-8" />
+                        ) : (
+                          <th className="px-3 py-2.5 text-left w-10">
+                            <Checkbox
+                              checked={isAllSelected}
+                              onCheckedChange={toggleSelectAll}
+                              className="h-3.5 w-3.5"
+                            />
+                          </th>
+                        )
                       )}
-                      <th className="px-3 py-2.5 text-left font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("block")}>
+                      <th className="px-2 py-2.5 text-left font-medium whitespace-nowrap w-[56px]">Foto</th>
+                      <th className="px-2 py-2.5 text-left font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("block")}>
                         ID {renderSortIcon("block")}
                       </th>
-                      <th className="px-3 py-2.5 text-left font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("floor")}>
-                        {hasUnifamiliar ? "Parcela" : "Planta"} {renderSortIcon("floor")}
-                      </th>
-                      <th className="px-3 py-2.5 text-left font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("type")}>
+                      <th className="px-2 py-2.5 text-left font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("type")}>
                         Tipo {renderSortIcon("type")}
                       </th>
-                      <th className="px-3 py-2.5 text-center font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("bedrooms")}>
-                        Hab. {renderSortIcon("bedrooms")}
+                      <th className="hidden sm:table-cell px-2 py-2.5 text-center font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("bedrooms")}>
+                        Dorm. {renderSortIcon("bedrooms")}
                       </th>
-                      <th className="px-3 py-2.5 text-center font-medium whitespace-nowrap">Baños</th>
-                      <th className="px-3 py-2.5 text-right font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("builtArea")}>
-                        m² {renderSortIcon("builtArea")}
+                      <th className="hidden sm:table-cell px-2 py-2.5 text-center font-medium whitespace-nowrap">Baños</th>
+                      <th className="hidden md:table-cell px-2 py-2.5 text-right font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("builtArea")}>
+                        m² const. {renderSortIcon("builtArea")}
                       </th>
-                      <th className="px-3 py-2.5 text-left font-medium whitespace-nowrap">Orient.</th>
-                      <th className="px-3 py-2.5 text-right font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("price")}>
+                      <th className="hidden lg:table-cell px-2 py-2.5 text-right font-medium whitespace-nowrap">m² útiles</th>
+                      <th className="hidden md:table-cell px-2 py-2.5 text-right font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("floor")}>
+                        {hasUnifamiliar ? "Parcela" : "Planta"} {renderSortIcon("floor")}
+                      </th>
+                      <th className="hidden lg:table-cell px-2 py-2.5 text-right font-medium whitespace-nowrap">Terraza</th>
+                      <th className="hidden lg:table-cell px-2 py-2.5 text-center font-medium whitespace-nowrap">Piscina</th>
+                      <th className="hidden md:table-cell px-2 py-2.5 text-center font-medium whitespace-nowrap">Archivos</th>
+                      <th className="px-2 py-2.5 text-right font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("price")}>
                         Precio {renderSortIcon("price")}
-                      </th>
-                      <th className="px-3 py-2.5 text-center font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("status")}>
-                        Estado {renderSortIcon("status")}
                       </th>
                       <th className="px-2 py-2.5 w-10 text-right">
                         <button
@@ -1169,142 +1270,277 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                       const isSelected = selectedUnits.has(u.id);
                       const editing = isEditable(u.id);
 
+                      const isDragSource = defaultBulkEditAll && dragSourceId === u.id;
+                      const isDragTarget = defaultBulkEditAll && dragTargetId === u.id && dragSourceId !== u.id;
+                      const showDropIndicatorAbove = isDragTarget && dragPosition === "above";
+                      const showDropIndicatorBelow = isDragTarget && dragPosition === "below";
+                      const handleRowDragOver = (e: React.DragEvent) => {
+                        if (!defaultBulkEditAll || !dragSourceId || dragSourceId === u.id) return;
+                        e.preventDefault();
+                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                        const midY = rect.top + rect.height / 2;
+                        setDragTargetId(u.id);
+                        setDragPosition(e.clientY < midY ? "above" : "below");
+                      };
+                      const handleRowDrop = (e: React.DragEvent) => {
+                        if (!defaultBulkEditAll || !dragSourceId || dragSourceId === u.id) return;
+                        e.preventDefault();
+                        const fromIdx = filtered.findIndex((x) => x.id === dragSourceId);
+                        let toIdx = filtered.findIndex((x) => x.id === u.id);
+                        if (fromIdx === -1 || toIdx === -1) return;
+                        if (dragPosition === "below") toIdx++;
+                        if (toIdx > fromIdx) toIdx--; // ajustar tras splice
+                        const next = [...filtered];
+                        const [moved] = next.splice(fromIdx, 1);
+                        next.splice(toIdx, 0, moved);
+                        onReorderUnits?.(next.map((x) => x.id));
+                        setDragSourceId(null);
+                        setDragTargetId(null);
+                      };
                       return (
                         <React.Fragment key={u.id}>
+                          {/* Línea visual de drop ARRIBA · alineada al ancho
+                              de la tabla via colSpan. */}
+                          {showDropIndicatorAbove && (
+                            <tr aria-hidden>
+                              <td colSpan={20} className="p-0">
+                                <div className="h-1 bg-primary rounded-full mx-2 shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
+                              </td>
+                            </tr>
+                          )}
                           <tr
+                            onDragOver={handleRowDragOver}
+                            onDrop={handleRowDrop}
+                            onDragLeave={(e) => {
+                              /* Solo limpiamos si salimos de la tr (no de un
+                               * hijo) · evita parpadeo del indicador. */
+                              const related = e.relatedTarget as Node | null;
+                              if (!e.currentTarget.contains(related)) {
+                                if (dragTargetId === u.id) setDragTargetId(null);
+                              }
+                            }}
                             className={cn(
-                              "border-t border-border transition-colors",
+                              "border-t border-border transition-all",
                               !bulkEditing && "cursor-pointer hover:bg-muted/30",
                               isExpanded && "bg-muted/40",
                               isSelected && !bulkEditing && "bg-primary/5",
-                              editing && "bg-warning/5"
+                              editing && "bg-warning/5",
+                              /* Source · fantasma claro con borde discontinuo */
+                              isDragSource && "opacity-30",
                             )}
                             onClick={() => toggleExpandUnit(u.id)}
                           >
-                            {/* Checkbox — hidden for collaborator */}
+                            {/* Primera col · drag handle (wizard) o
+                                checkbox (modo normal). */}
                             {!isCollaboratorView && (
-                              <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={() => toggleSelect(u.id)}
-                                  className="h-3.5 w-3.5"
-                                />
-                              </td>
+                              defaultBulkEditAll ? (
+                                <td
+                                  className="px-1 py-2 align-middle"
+                                  draggable
+                                  onClick={e => e.stopPropagation()}
+                                  onDragStart={(e) => {
+                                    setDragSourceId(u.id);
+                                    e.dataTransfer.effectAllowed = "move";
+                                  }}
+                                  onDragEnd={() => {
+                                    setDragSourceId(null);
+                                    setDragTargetId(null);
+                                  }}
+                                >
+                                  <div className={cn(
+                                    "flex items-center justify-center transition-all rounded p-0.5",
+                                    isDragSource
+                                      ? "cursor-grabbing text-primary bg-primary/10"
+                                      : "cursor-grab text-muted-foreground/60 hover:text-foreground hover:bg-muted/40"
+                                  )}
+                                       title="Arrastrar para reordenar">
+                                    <GripVertical className="h-4 w-4" strokeWidth={1.8} />
+                                  </div>
+                                </td>
+                              ) : (
+                                <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                                  <Checkbox
+                                    checked={isSelected}
+                                    onCheckedChange={() => toggleSelect(u.id)}
+                                    className="h-3.5 w-3.5"
+                                  />
+                                </td>
+                              )
                             )}
 
+                            {/* Foto · thumbnail clickable · abre el modal
+                                ligero de fotos (subir propias + toggle
+                                heredadas). Distinto del modal completo
+                                que se abre con onEditUnit. */}
+                            <td className="px-2 py-2" onClick={e => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                disabled={!onEditUnitPhotos}
+                                onClick={() => onEditUnitPhotos?.(u.id)}
+                                className={cn(
+                                  "block w-[44px] h-[32px] sm:w-[48px] sm:h-[36px] rounded overflow-hidden bg-muted/30 transition-all",
+                                  onEditUnitPhotos
+                                    ? "cursor-pointer hover:ring-2 hover:ring-primary/40 hover:opacity-90"
+                                    : "cursor-default",
+                                )}
+                                title={onEditUnitPhotos ? "Gestionar fotos de esta unidad" : undefined}
+                              >
+                                <UnitThumb u={u} getUnitPhoto={getUnitPhoto} promotionCtx={promotionCtx} />
+                              </button>
+                            </td>
+
                             {/* ID (publicId editable) */}
-                            <td className="px-3 py-2" onClick={e => editing && isFieldEditable("publicId") && e.stopPropagation()}>
+                            <td className="px-2 py-2" onClick={e => editing && isFieldEditable("publicId") && e.stopPropagation()}>
                               {renderEditableCell(u, "publicId",
-                                <span className="text-xs font-bold text-foreground">{getUnitDisplayId(u)}</span>,
+                                <span className="text-[11px] sm:text-xs font-bold text-foreground">{getUnitDisplayId(u)}</span>,
                                 <input
                                   type="text"
                                   value={getVal(u, "publicId") || ""}
                                   placeholder={`${u.floor}º${u.door}`}
                                   onChange={e => updateField(u.id, "publicId", e.target.value)}
-                                  className={cn("w-20 h-7 px-2 text-xs font-bold", editableCellClass)}
+                                  className={cn("w-20 sm:w-24 h-7 px-2 text-xs font-bold", editableCellClass)}
                                 />
-                              )}</td>
-
-                            {/* Planta / Parcela */}
-                            <td className="px-3 py-2" onClick={e => editing && (isFieldEditable("floor") || isFieldEditable("parcel")) && e.stopPropagation()}>
-                              {(() => {
-                                const isUni = ["Villa", "Chalet", "Unifamiliar", "Pareado", "Adosado"].includes(u.type);
-                                if (isUni) {
-                                  return renderEditableCell(u, "parcel",
-                                    <span className="text-xs text-muted-foreground">{u.parcel > 0 ? `${u.parcel}m²` : "—"}</span>,
-                                    <input type="number" value={getVal(u, "parcel") || 0} onChange={e => updateField(u.id, "parcel", Number(e.target.value))} className={cn("w-20 h-7 px-2 text-xs", editableCellClass)} />
-                                  );
-                                }
-                                return renderEditableCell(u, "floor",
-                                  <span className="text-xs text-muted-foreground">{u.floor === 0 ? "PB" : `P${u.floor}`}</span>,
-                                  <select value={getVal(u, "floor")} onChange={e => updateField(u.id, "floor", Number(e.target.value))} className={cn("w-20 h-7 px-1.5 text-xs", editableCellClass)}>
-                                    {Array.from({ length: 15 }, (_, i) => <option key={i} value={i}>{i === 0 ? "PB" : `P${i}`}</option>)}
-                                  </select>
-                                );
-                              })()}
+                              )}
                             </td>
 
                             {/* Tipo */}
-                            <td className="px-3 py-2" onClick={e => editing && isFieldEditable("type") && e.stopPropagation()}>
+                            <td className="px-2 py-2" onClick={e => editing && isFieldEditable("type") && e.stopPropagation()}>
                               {renderEditableCell(u, "type",
                                 <span className="text-foreground">{u.type}</span>,
                                 <select
                                   value={getVal(u, "type")}
                                   onChange={e => updateField(u.id, "type", e.target.value)}
-                                  className={cn("w-24 h-7 px-1.5 text-xs", editableCellClass)}
+                                  className={cn("w-24 sm:w-28 h-7 px-1.5 text-xs", editableCellClass)}
                                 >
-                                  {typeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                                  {(hasUnifamiliar ? TYPE_OPTIONS_UNI : TYPE_OPTIONS_PLURI).map(t => <option key={t} value={t}>{t}</option>)}
                                 </select>
                               )}
                             </td>
 
-                            {/* Hab */}
-                            <td className="px-3 py-2 text-center" onClick={e => editing && isFieldEditable("bedrooms") && e.stopPropagation()}>
+                            {/* Dorm. */}
+                            <td className="hidden sm:table-cell px-2 py-2 text-center" onClick={e => editing && isFieldEditable("bedrooms") && e.stopPropagation()}>
                               {renderEditableCell(u, "bedrooms",
                                 <span className="text-foreground font-medium">{u.bedrooms}</span>,
                                 <input
                                   type="number"
                                   min={0}
                                   max={10}
-                                  value={getVal(u, "bedrooms")}
-                                  onChange={e => updateField(u.id, "bedrooms", Number(e.target.value))}
-                                  className={cn("w-14 h-7 px-2 text-xs text-center", editableCellClass)}
+                                  value={(getVal(u, "bedrooms") as number) || ""}
+                                  placeholder="0"
+                                  onChange={e => updateField(u.id, "bedrooms", e.target.value === "" ? 0 : Number(e.target.value))}
+                                  className={cn("w-12 sm:w-14 h-7 px-2 text-xs text-center", editableCellClass)}
                                 />
                               )}
                             </td>
 
                             {/* Baños */}
-                            <td className="px-3 py-2 text-center" onClick={e => editing && isFieldEditable("bathrooms") && e.stopPropagation()}>
+                            <td className="hidden sm:table-cell px-2 py-2 text-center" onClick={e => editing && isFieldEditable("bathrooms") && e.stopPropagation()}>
                               {renderEditableCell(u, "bathrooms",
                                 <span className="text-foreground">{u.bathrooms}</span>,
                                 <input
                                   type="number"
                                   min={0}
                                   max={10}
-                                  value={getVal(u, "bathrooms")}
-                                  onChange={e => updateField(u.id, "bathrooms", Number(e.target.value))}
-                                  className={cn("w-14 h-7 px-2 text-xs text-center", editableCellClass)}
+                                  value={(getVal(u, "bathrooms") as number) || ""}
+                                  placeholder="0"
+                                  onChange={e => updateField(u.id, "bathrooms", e.target.value === "" ? 0 : Number(e.target.value))}
+                                  className={cn("w-12 sm:w-14 h-7 px-2 text-xs text-center", editableCellClass)}
                                 />
                               )}
                             </td>
 
-                            {/* m² */}
-                            <td className="px-3 py-2 text-right" onClick={e => editing && isFieldEditable("builtArea") && e.stopPropagation()}>
+                            {/* m² construidos */}
+                            <td className="hidden md:table-cell px-2 py-2 text-right" onClick={e => editing && isFieldEditable("builtArea") && e.stopPropagation()}>
                               {renderEditableCell(u, "builtArea",
                                 <span>{u.builtArea} m²</span>,
                                 <input
                                   type="number"
-                                  value={getVal(u, "builtArea")}
-                                  onChange={e => updateField(u.id, "builtArea", Number(e.target.value))}
-                                  className={cn("w-20 h-7 px-2 text-xs text-right", editableCellClass)}
+                                  value={(getVal(u, "builtArea") as number) || ""}
+                                  placeholder="0"
+                                  onChange={e => updateField(u.id, "builtArea", e.target.value === "" ? 0 : Number(e.target.value))}
+                                  className={cn("w-16 lg:w-20 h-7 px-2 text-xs text-right", editableCellClass)}
                                 />
                               )}
                             </td>
 
-                            {/* Orientación */}
-                            <td className="px-3 py-2" onClick={e => editing && isFieldEditable("orientation") && e.stopPropagation()}>
-                              {renderEditableCell(u, "orientation",
-                                <span className="text-[10px] text-muted-foreground">{u.orientation}</span>,
+                            {/* m² útiles */}
+                            <td className="hidden lg:table-cell px-2 py-2 text-right" onClick={e => editing && isFieldEditable("usableArea") && e.stopPropagation()}>
+                              {renderEditableCell(u, "usableArea",
+                                <span>{u.usableArea > 0 ? `${u.usableArea} m²` : "—"}</span>,
+                                <input
+                                  type="number"
+                                  value={(getVal(u, "usableArea") as number) || ""}
+                                  placeholder="0"
+                                  onChange={e => updateField(u.id, "usableArea", e.target.value === "" ? 0 : Number(e.target.value))}
+                                  className={cn("w-16 lg:w-20 h-7 px-2 text-xs text-right", editableCellClass)}
+                                />
+                              )}
+                            </td>
+
+                            {/* Parcela / Planta */}
+                            <td className="hidden md:table-cell px-2 py-2 text-right" onClick={e => editing && (isFieldEditable("floor") || isFieldEditable("parcel")) && e.stopPropagation()}>
+                              {(() => {
+                                const isUni = ["Villa", "Chalet", "Unifamiliar", "Pareado", "Adosado", "Independiente", "Pareada", "Adosada"].includes(u.type);
+                                if (isUni) {
+                                  return renderEditableCell(u, "parcel",
+                                    <span className="text-xs text-muted-foreground">{u.parcel > 0 ? `${u.parcel} m²` : "—"}</span>,
+                                    <input type="number" value={(getVal(u, "parcel") as number) || ""} placeholder="0" onChange={e => updateField(u.id, "parcel", e.target.value === "" ? 0 : Number(e.target.value))} className={cn("w-16 lg:w-20 h-7 px-2 text-xs text-right", editableCellClass)} />
+                                  );
+                                }
+                                return renderEditableCell(u, "floor",
+                                  <span className="text-xs text-muted-foreground">{u.floor === 0 ? "PB" : `P${u.floor}`}</span>,
+                                  <select value={getVal(u, "floor")} onChange={e => updateField(u.id, "floor", Number(e.target.value))} className={cn("w-16 lg:w-20 h-7 px-1.5 text-xs", editableCellClass)}>
+                                    {Array.from({ length: 15 }, (_, i) => <option key={i} value={i}>{i === 0 ? "PB" : `P${i}`}</option>)}
+                                  </select>
+                                );
+                              })()}
+                            </td>
+
+                            {/* Terraza */}
+                            <td className="hidden lg:table-cell px-2 py-2 text-right" onClick={e => editing && isFieldEditable("terrace") && e.stopPropagation()}>
+                              {renderEditableCell(u, "terrace",
+                                <span className="text-xs text-muted-foreground">{u.terrace > 0 ? `${u.terrace} m²` : "—"}</span>,
+                                <input
+                                  type="number"
+                                  value={(getVal(u, "terrace") as number) || ""}
+                                  placeholder="0"
+                                  onChange={e => updateField(u.id, "terrace", e.target.value === "" ? 0 : Number(e.target.value))}
+                                  className={cn("w-16 lg:w-20 h-7 px-2 text-xs text-right", editableCellClass)}
+                                />
+                              )}
+                            </td>
+
+                            {/* Piscina sí/no */}
+                            <td className="hidden lg:table-cell px-2 py-2 text-center" onClick={e => editing && isFieldEditable("hasPool") && e.stopPropagation()}>
+                              {renderEditableCell(u, "hasPool",
+                                <span className="text-xs text-muted-foreground">{u.hasPool ? "Sí" : "No"}</span>,
                                 <select
-                                  value={getVal(u, "orientation")}
-                                  onChange={e => updateField(u.id, "orientation", e.target.value)}
-                                  className={cn("w-16 h-7 px-1 text-xs", editableCellClass)}
+                                  value={(getVal(u, "hasPool") as boolean) ? "yes" : "no"}
+                                  onChange={e => updateField(u.id, "hasPool" as never, (e.target.value === "yes") as never)}
+                                  className={cn("w-14 lg:w-16 h-7 px-1.5 text-xs", editableCellClass)}
                                 >
-                                  {orientationOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                                  <option value="no">No</option>
+                                  <option value="yes">Sí</option>
                                 </select>
                               )}
                             </td>
 
-                            {/* Precio · input con miles "476.000" para
-                                coincidir con el formato de lectura y evitar
-                                confusiones entre 500000 y 500.000. */}
-                            <td className="px-3 py-2 text-right" onClick={e => editing && isFieldEditable("price") && e.stopPropagation()}>
+                            {/* Archivos · popover con 3 tipos · plano / memoria / brochure */}
+                            <td className="hidden md:table-cell px-2 py-2 text-center" onClick={e => e.stopPropagation()}>
+                              <UnitFilesButton u={u} onUploadFile={onUploadFile} />
+                            </td>
+
+                            {/* Precio */}
+                            <td className="px-2 py-2 text-right" onClick={e => editing && isFieldEditable("price") && e.stopPropagation()}>
                               {renderEditableCell(u, "price",
                                 <span className="text-sm font-semibold text-foreground tabular-nums">{priceForDisplay(u)}</span>,
                                 <input
                                   type="text"
                                   inputMode="numeric"
-                                  value={Number(getVal(u, "price") || 0).toLocaleString("es-ES")}
+                                  /* Empty string cuando 0 · evita el "20" al teclear "2"
+                                   * sobre un campo con "0" (típico bug de número padded). */
+                                  value={Number(getVal(u, "price")) > 0 ? Number(getVal(u, "price")).toLocaleString("es-ES") : ""}
+                                  placeholder="0"
                                   onChange={e => {
                                     const digits = e.target.value.replace(/[^0-9]/g, "");
                                     updateField(u.id, "price", digits === "" ? 0 : Number(digits));
@@ -1314,64 +1550,20 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                               )}
                             </td>
 
-                            {/* Estado */}
-                            <td className="px-3 py-2 text-center" onClick={e => editing && isFieldEditable("status") && e.stopPropagation()}>
-                              {renderEditableCell(u, "status",
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${sc.class}`}>
-                                  <span className={`h-1.5 w-1.5 rounded-full ${sc.dotClass}`} />
-                                  {sc.label}
-                                </span>,
-                                <select
-                                  value={getVal(u, "status")}
-                                  onChange={e => updateField(u.id, "status", e.target.value)}
-                                  className={cn("w-24 h-7 px-1 text-xs", editableCellClass)}
-                                >
-                                  {statusOptions.map(s => <option key={s} value={s}>{statusConfig[s].label}</option>)}
-                                </select>
-                              )}
-                            </td>
-                            <td className="px-2 py-2 text-right" onClick={e => e.stopPropagation()}>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
-                                    <MoreVertical className="h-3.5 w-3.5" />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-44">
-                                  <DropdownMenuItem onClick={() => toggleExpandUnit(u.id)} className="gap-2 text-xs">
-                                    <Eye className="h-3.5 w-3.5" /> Ver
-                                  </DropdownMenuItem>
-                                  {!isCollaboratorView && (
-                                    <DropdownMenuItem
-                                      disabled={u.status !== "available"}
-                                      onClick={() => onEditUnit
-                                        ? onEditUnit(u.id)
-                                        : setEditUnitId(u.id)}
-                                      className="gap-2 text-xs"
-                                    >
-                                      <Pencil className="h-3.5 w-3.5" /> Editar fotos
-                                    </DropdownMenuItem>
-                                  )}
-                                  <DropdownMenuItem
-                                    disabled={u.status !== "available"}
-                                    onClick={() => setEmailUnitId(u.id)}
-                                    className="gap-2 text-xs"
-                                  >
-                                    <Send className="h-3.5 w-3.5" /> Enviar por email
-                                  </DropdownMenuItem>
-                                  {!isCollaboratorView && (
-                                    <DropdownMenuItem
-                                      disabled={u.status !== "available"}
-                                      onClick={() => toast({ title: "Iniciar compra", description: `Operación para ${getUnitDisplayId(u)}` })}
-                                      className="gap-2 text-xs"
-                                    >
-                                      <ShoppingCart className="h-3.5 w-3.5" /> Iniciar compra
-                                    </DropdownMenuItem>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </td>
+                            {/* Spacer column to balance the customizer header cell.
+                                Antes había un menú "..." (eliminar/editar/email)
+                                · removido por petición del user · la edición es
+                                directa en celdas. */}
+                            <td className="px-2 py-2" />
                           </tr>
+                          {/* Línea visual de drop ABAJO. */}
+                          {showDropIndicatorBelow && (
+                            <tr aria-hidden>
+                              <td colSpan={20} className="p-0">
+                                <div className="h-1 bg-primary rounded-full mx-2 shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
+                              </td>
+                            </tr>
+                          )}
                           {isExpanded && !bulkEditing && <UnitDetailPanel unit={u} onUpdateUnit={handleUnitUpdate} isCollaboratorView={isCollaboratorView} />}
                         </React.Fragment>
                       );
@@ -1434,7 +1626,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                       {/* Checkbox individual oculto en cards móvil —
                           no hay edición masiva aquí. */}
                       <div className="w-[64px] h-[48px] rounded-none overflow-hidden bg-muted/30 shrink-0">
-                        <img src={`https://picsum.photos/seed/${u.id}/160/108`} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        <UnitThumb u={u} getUnitPhoto={getUnitPhoto} promotionCtx={promotionCtx} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
@@ -1534,7 +1726,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                     {blockUnits.map((u) => {
                       const sc = statusConfig[u.status] ?? statusConfig.available;
                       const isSelected = selectedUnits.has(u.id);
-                      const isUni = ["Villa", "Chalet", "Unifamiliar", "Pareado", "Adosado"].includes(u.type);
+                      const isUni = ["Villa", "Chalet", "Unifamiliar", "Pareado", "Adosado", "Independiente", "Pareada", "Adosada"].includes(u.type);
                       return (
                         <tr
                           key={u.id}
@@ -1550,7 +1742,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                           {visibleCols.has("photo") && (
                             <td className="px-2 py-1.5">
                               <div className="w-[80px] h-[54px] rounded-none overflow-hidden bg-muted/30 shrink-0">
-                                <img src={`https://picsum.photos/seed/${u.id}/160/108`} alt={`${u.type} ${getUnitDisplayId(u)}`} className="w-full h-full object-cover" loading="lazy" />
+                                <UnitThumb u={u} getUnitPhoto={getUnitPhoto} promotionCtx={promotionCtx} />
                               </div>
                             </td>
                           )}
@@ -1781,5 +1973,88 @@ function SegmentSwitcher({
         );
       })}
     </div>
+  );
+}
+
+/* ─── Thumb de unidad · usa foto propia → foto promo → placeholder ─── */
+function UnitThumb({
+  u,
+  getUnitPhoto,
+  promotionCtx,
+}: {
+  u: Unit;
+  getUnitPhoto?: (unit: Unit) => string | undefined;
+  promotionCtx?: PromotionContext;
+}) {
+  const src = getUnitPhoto?.(u) ?? promotionCtx?.fotos?.[0];
+  if (!src) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-muted/40">
+        <ImageIcon className="h-4 w-4 text-muted-foreground/50" strokeWidth={1.5} />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={`${u.type} ${u.publicId ?? u.ref}`}
+      className="w-full h-full object-cover"
+      loading="lazy"
+    />
+  );
+}
+
+/* ─── Popover "Archivos" por unidad · 3 tipos de documento ─── */
+function UnitFilesButton({
+  u,
+  onUploadFile,
+}: {
+  u: Unit;
+  onUploadFile?: (unitId: string, kind: "plano" | "memoria" | "brochure", file: File) => void;
+}) {
+  const planoRef = useRef<HTMLInputElement>(null);
+  const memoriaRef = useRef<HTMLInputElement>(null);
+  const brochureRef = useRef<HTMLInputElement>(null);
+  if (!onUploadFile) return <span className="text-[11px] text-muted-foreground/60">—</span>;
+  const triggerInput = (ref: React.RefObject<HTMLInputElement>) => () => ref.current?.click();
+  const handleChange = (kind: "plano" | "memoria" | "brochure", ref: React.RefObject<HTMLInputElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const f = e.target.files?.[0];
+      if (f) onUploadFile(u.id, kind, f);
+      if (ref.current) ref.current.value = "";
+    };
+  return (
+    <>
+      <input ref={planoRef}    type="file" accept="image/*,application/pdf" className="hidden" onChange={handleChange("plano", planoRef)} />
+      <input ref={memoriaRef}  type="file" accept="application/pdf,image/*"  className="hidden" onChange={handleChange("memoria", memoriaRef)} />
+      <input ref={brochureRef} type="file" accept="application/pdf,image/*"  className="hidden" onChange={handleChange("brochure", brochureRef)} />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex items-center justify-center h-7 w-7 rounded-full border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+            title="Subir archivo de la unidad"
+          >
+            <Upload className="h-3.5 w-3.5" strokeWidth={1.7} />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuItem onClick={triggerInput(planoRef)} className="gap-2 text-xs">
+            <Upload className="h-3.5 w-3.5" /> Plano
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={triggerInput(memoriaRef)} className="gap-2 text-xs">
+            <Upload className="h-3.5 w-3.5" /> Memoria de calidades
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={triggerInput(brochureRef)} className="gap-2 text-xs">
+            <Upload className="h-3.5 w-3.5" /> Brochure
+          </DropdownMenuItem>
+          <div className="border-t border-border/60 mt-1 pt-1.5 px-2 pb-1">
+            <p className="text-[10.5px] text-muted-foreground leading-snug">
+              Más adelante podrás subir archivos en masa para varias unidades a la vez.
+            </p>
+          </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }

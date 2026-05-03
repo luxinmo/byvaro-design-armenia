@@ -19,6 +19,12 @@ export type Unit = {
   garden: number;
   parcel: number;
   hasPool: boolean;
+  hasParking: boolean;
+  hasStorage: boolean;
+  /** Solo aplica a unifamiliar. Por defecto false en plurifamiliar. */
+  hasSolarium: boolean;
+  /** Solo aplica a unifamiliar. */
+  hasBasement: boolean;
   orientation: string;
   price: number;
   status: UnitStatus;
@@ -63,6 +69,11 @@ export type PromotionContext = {
     zonaInfantil?: boolean;
     urbanizacionCerrada?: boolean;
   };
+  /** Fotos de la promoción (URLs públicas) · se usan como fallback
+   *  para los thumbnails de cada unidad cuando la unidad aún no
+   *  tiene fotos propias subidas. La primera foto es la que sale en
+   *  la mini-card de la columna "Foto". */
+  fotos?: string[];
 };
 
 function generateUnits(promotionId: string, totalUnits: number, availableUnits: number, priceMin: number, priceMax: number): Unit[] {
