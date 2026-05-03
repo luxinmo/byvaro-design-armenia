@@ -264,8 +264,8 @@ export function RevisionStep({ state, onEditStep }: Props) {
         <Row label="Oficinas de venta" value={state.oficinasVentaSeleccionadas.length > 0 ? `${state.oficinasVentaSeleccionadas.length}` : "No"} />
       </SectionCard>
 
-      {/* ═════ MARKETING ═════ */}
-      <SectionCard icon={MapPin} title="Marketing" complete={marketingComplete} onEdit={() => onEditStep("info_basica")}>
+      {/* ═════ INFORMACIÓN ═════ */}
+      <SectionCard icon={MapPin} title="Información" complete={marketingComplete} onEdit={() => onEditStep("info_basica")}>
         <Row label="Nombre" value={state.nombrePromocion || null} />
         <Row label="Dirección" value={direccionCompleta || null} />
         {state.certificadoEnergetico && <Row label="Cert. energético" value={state.certificadoEnergetico} />}
