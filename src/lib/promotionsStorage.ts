@@ -63,6 +63,24 @@ export function getCreatedPromotions(): CreatedPromotion[] {
   return readCreated();
 }
 
+/** Borra una promoción creada · cache local + Supabase. Usado por el
+ *  botón "Eliminar" de la ficha cuando el user creó una promo
+ *  incompleta o quiere descartarla. */
+export async function deleteCreatedPromotion(id: string): Promise<{ ok: boolean; error?: string }> {
+  /* Borra del cache local primero (sync) · UI refresca al instante. */
+  const list = readCreated();
+  const next = list.filter((p) => p.id !== id);
+  writeCreated(next);
+  /* Write-through async a Supabase. */
+  if (!isSupabaseConfigured) return { ok: true };
+  const { error } = await supabase.from("promotions").delete().eq("id", id);
+  if (error) {
+    console.warn("[promotions:delete]", error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
 /** Resultado de la creación · indica si la sincronización a Supabase
  *  tuvo éxito · el caller decide qué hacer si falla (NO borrar el
  *  draft, mostrar toast, etc.). El cache local SIEMPRE se escribe
