@@ -29,8 +29,11 @@ import {
   Megaphone,
 } from "lucide-react";
 import { getMissingForPromotion } from "@/lib/publicationRequirements"; // fuente única de verdad de requisitos para publicar
-import { useOverride } from "@/lib/promotionWizardOverrides";
+import { useOverride, saveOverride } from "@/lib/promotionWizardOverrides";
 import { wizardStateToPromotion } from "@/lib/wizardStateToPromotion";
+import { promotionToWizardState } from "@/lib/promotionToWizardState";
+import { EditStepModal, isSupportedInModal } from "@/components/crear-promocion/EditStepModal";
+import type { StepId } from "@/components/crear-promocion/types";
 import { Button } from "@/components/ui/button";
 import { cn, priceForDisplay } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -306,6 +309,40 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const [canShareOverride, setCanShareOverride] = useState<boolean | null>(null);
   // Edit dialogs
   const [editOpen, setEditOpen] = useState<null | "multimedia" | "basicInfo" | "structure" | "description" | "location" | "paymentPlan" | "showHouse" | "memoria" | "planos" | "brochure" | "contacts" | "inventory" | "salesOffices">(null);
+
+  /* Modal del WIZARD canónico (EditStepModal) embebido en la ficha ·
+   * unifica los popups de "Editar" de cada bloque con los del paso
+   * "Configuración" del wizard · una sola fuente de verdad para los
+   * formularios de edición. Helpers wireados más abajo cuando ya
+   * tengamos el WizardState efectivo (override + base). */
+  const [wizardModalStep, setWizardModalStep] = useState<StepId | null>(null);
+
+  /* Mapping editOpen-key → StepId para abrir el EditStepModal canónico
+   * en lugar del Edit*Dialog antiguo. Si el step NO está soportado en
+   * el modal (memoria, contacts) caemos al Edit*Dialog legacy
+   * vía `setEditOpen(key)`. */
+  const openEdit = (key: NonNullable<typeof editOpen>) => {
+    const map: Partial<Record<NonNullable<typeof editOpen>, StepId>> = {
+      multimedia: "multimedia",
+      basicInfo: "info_basica",
+      structure: "tipo",
+      description: "descripcion",
+      location: "ubicacion",
+      paymentPlan: "plan_pagos",
+      showHouse: "detalles",
+      planos: "planos",
+      brochure: "brochure",
+      inventory: "crear_unidades",
+      salesOffices: "operativa",
+    };
+    const step = map[key];
+    if (step && isSupportedInModal(step)) {
+      setWizardModalStep(step);
+    } else {
+      /* Fallback al Edit*Dialog legacy (memoria, contacts). */
+      setEditOpen(key);
+    }
+  };
   /** IDs de las oficinas del workspace que actúan como puntos de venta
    *  para esta promoción. Se inicializan desde `p.puntosDeVentaIds` y
    *  los datos completos se resuelven vía `useOficinas()` — esa es la
@@ -519,6 +556,23 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     if (!wizardOverride) return pBase;
     return wizardStateToPromotion(wizardOverride, pBase);
   }, [pBase, wizardOverride]);
+
+  /* WizardState efectivo para el `EditStepModal` embebido · prioriza
+   * el override (si existe) · fallback a derivar de la promo + units.
+   * Cualquier edición del modal se persiste vía `saveOverride` y la
+   * promo `p` recalcula vía wizardStateToPromotion en el siguiente
+   * render. */
+  const wizardStateForModal = useMemo<WizardState | null>(() => {
+    if (!pBase) return null;
+    if (wizardOverride) return wizardOverride;
+    return promotionToWizardState(pBase, unitsByPromotion[pBase.id] ?? []);
+  }, [pBase, wizardOverride]);
+
+  const updateWizardField = <K extends keyof WizardState>(key: K, value: WizardState[K]) => {
+    if (!pBase || !wizardStateForModal) return;
+    const next = { ...wizardStateForModal, [key]: value };
+    saveOverride(pBase.id, next);
+  };
 
   if (p && !initialized) {
     setComercialesList(p.comerciales || []);
@@ -1444,7 +1498,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               <div className="flex-1 min-w-0 space-y-5 order-2 lg:order-1">
 
             {/* ── 1. GALLERY ── */}
-            <SectionCard title="Multimedia" stepName="Multimedia" missing={missingSet.has("Multimedia") || realMissing.has("multimedia")} softMissing={isDraft} onEdit={() => setEditOpen("multimedia")} hideEdit={viewAsCollaborator} flush>
+            <SectionCard title="Multimedia" stepName="Multimedia" missing={missingSet.has("Multimedia") || realMissing.has("multimedia")} softMissing={isDraft} onEdit={() => openEdit("multimedia")} hideEdit={viewAsCollaborator} flush>
               {/* Empty state cuando no hay fotos · típico en borradores
                  *  recién creados. Antes pintábamos 8 fotos hardcoded de
                  *  Unsplash · daba la falsa impresión de que la promo
@@ -1453,7 +1507,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               {galleryImages.length === 0 ? (
                 <button
                   type="button"
-                  onClick={() => setEditOpen("multimedia")}
+                  onClick={() => openEdit("multimedia")}
                   disabled={viewAsCollaborator}
                   className="w-full h-[280px] sm:h-[380px] rounded-lg border-2 border-dashed border-border bg-muted/30 hover:border-primary/30 hover:bg-muted/50 transition-colors flex flex-col items-center justify-center gap-2 text-center px-6 disabled:cursor-default"
                 >
@@ -1744,7 +1798,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 : (trasteroEnabled ? "Sin definir si incluye" : undefined);
               const showEstructura = !isUnifamiliar(p.buildingType);
               return (
-            <SectionCard title="Estructura" stepName="Basic info" missing={realMissing.has("estado")} softMissing={isDraft} onEdit={() => setEditOpen("structure")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Estructura" stepName="Basic info" missing={realMissing.has("estado")} softMissing={isDraft} onEdit={() => openEdit("structure")} hideEdit={viewAsCollaborator}>
               {/* Construcción y Entrega · ELIMINADOS de aquí · ya
                   viven en el KPI strip de arriba (Construcción
                   con %  + Entrega con fecha). Mostramos solo los
@@ -1799,11 +1853,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
             {/* ── 2. PAGO Y DISPONIBILIDAD (Unidades + Plan de pagos) ── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <SectionCard title="Unidades y disponibilidad" stepName="Units" missing={missingSet.has("Units") || realMissing.has("units")} softMissing={isDraft} onEdit={() => setEditOpen("inventory")} hideEdit={viewAsCollaborator}>
+              <SectionCard title="Unidades y disponibilidad" stepName="Units" missing={missingSet.has("Units") || realMissing.has("units")} softMissing={isDraft} onEdit={() => openEdit("inventory")} hideEdit={viewAsCollaborator}>
                 <PromotionAvailabilitySummary promotionId={p.id} onViewAll={() => setActiveTab(visibleTabs.indexOf("Availability"))} isCollaboratorView={viewAsCollaborator} />
               </SectionCard>
 
-              <SectionCard title="Plan de pagos" stepName="Payment plan" missing={missingSet.has("Payment plan") || realMissing.has("paymentPlan")} softMissing={isDraft} onEdit={() => setEditOpen("paymentPlan")} hideEdit={viewAsCollaborator}>
+              <SectionCard title="Plan de pagos" stepName="Payment plan" missing={missingSet.has("Payment plan") || realMissing.has("paymentPlan")} softMissing={isDraft} onEdit={() => openEdit("paymentPlan")} hideEdit={viewAsCollaborator}>
                 {(() => {
                   /* Lectura REAL del wizardSnapshot · antes esta sección
                    *  era HARDCODED (60 días · "Hitos" · 4 hitos demo ·
@@ -1917,7 +1971,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             </div>
 
             {/* ── 3. DESCRIPCIÓN ── */}
-            <SectionCard title="Descripción" stepName="Description" missing={missingSet.has("Description")} softMissing={isDraft} onEdit={() => setEditOpen("description")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Descripción" stepName="Description" missing={missingSet.has("Description")} softMissing={isDraft} onEdit={() => openEdit("description")} hideEdit={viewAsCollaborator}>
               <div className="space-y-3">
                 <div className="flex items-center gap-2 mb-2">
                   <Tag variant="default" size="sm"><Globe className="h-3 w-3" /> ES</Tag>
@@ -1962,7 +2016,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   title="Memoria de calidades"
                   files={memoria}
                   emptyHint="Sube la memoria de calidades en PDF"
-                  onUpload={() => setEditOpen("memoria")}
+                  onUpload={() => openEdit("memoria")}
                   onManage={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("calidades"); }}
                   viewAsCollaborator={viewAsCollaborator}
                 />
@@ -1973,7 +2027,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   files={planos}
                   emptyHint="Planos de planta y distribución"
                   shareable
-                  onUpload={() => setEditOpen("planos")}
+                  onUpload={() => openEdit("planos")}
                   onManage={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("planos"); }}
                   viewAsCollaborator={viewAsCollaborator}
                 />
@@ -1985,7 +2039,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     files={brochure}
                     emptyHint="Sube el brochure comercial"
                     shareable
-                    onUpload={() => setEditOpen("brochure")}
+                    onUpload={() => openEdit("brochure")}
                     onManage={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("brochure"); }}
                     onDownload={showBrochure ? downloadBrochure : undefined}
                     onRemove={() => { setBrochureRemoved(true); toast.success("Brochure eliminado"); }}
@@ -1999,7 +2053,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
 
             {/* ── 5. UBICACIÓN ── */}
-            <SectionCard title="Ubicación" stepName="Basic info" missing={realMissing.has("location")} softMissing={isDraft} onEdit={() => setEditOpen("location")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Ubicación" stepName="Basic info" missing={realMissing.has("location")} softMissing={isDraft} onEdit={() => openEdit("location")} hideEdit={viewAsCollaborator}>
               <div className="rounded-xl overflow-hidden h-[200px] bg-muted/30 flex items-center justify-center">
                 <div className="text-center">
                   <MapPin className="h-6 w-6 text-muted-foreground/30 mx-auto mb-2" />
@@ -2040,7 +2094,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   (Piscina, Gimnasio, Jardín, Cocina equipada, Aire,
                   Terraza, Smart home...) · todos inventados aunque
                   el promotor no marcase nada en el wizard. */}
-            <SectionCard title="Información básica" stepName="Basic info" missing={missingSet.has("Basic info")} softMissing={isDraft} onEdit={() => setEditOpen("basicInfo")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Información básica" stepName="Basic info" missing={missingSet.has("Basic info")} softMissing={isDraft} onEdit={() => openEdit("basicInfo")} hideEdit={viewAsCollaborator}>
               {(() => {
                 const snap = (p as unknown as {
                   metadata?: { wizardSnapshot?: {
@@ -2246,7 +2300,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               comerciales={viewAsCollaborator ? [] : comercialesList}
               onAddMember={viewAsCollaborator ? undefined : () => setAddComercialOpen(true)}
               onAddOffice={viewAsCollaborator ? undefined : () => setPickOfficesOpen(true)}
-              onEditOffices={viewAsCollaborator ? undefined : () => setEditOpen("salesOffices")}
+              onEditOffices={viewAsCollaborator ? undefined : () => openEdit("salesOffices")}
               hideManagement={viewAsCollaborator}
             />
               </div>
@@ -2948,6 +3002,21 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       />
       <EditInventoryDialog open={editOpen === "inventory"} onOpenChange={(v) => setEditOpen(v ? "inventory" : null)} onGoAvailability={() => setActiveTab(visibleTabs.indexOf("Availability"))} />
       <EditSalesOfficesDialog open={editOpen === "salesOffices"} onOpenChange={(v) => setEditOpen(v ? "salesOffices" : null)} offices={salesOffices} onSave={setSalesOffices} />
+
+      {/* EditStepModal canónico · embebe el step real del wizard como
+        * popup. Reemplaza los Edit*Dialog antiguos para los bloques
+        * mappeados en `openEdit()`. Las ediciones se persisten vía
+        * `saveOverride` (override store del wizard). */}
+      {wizardStateForModal && (
+        <EditStepModal
+          open={wizardModalStep !== null}
+          step={wizardModalStep}
+          state={wizardStateForModal}
+          update={updateWizardField}
+          uploadScopeId={p?.id}
+          onClose={() => setWizardModalStep(null)}
+        />
+      )}
 
 
       {/* Pick team members (visual multi-select) */}
