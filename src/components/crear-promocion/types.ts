@@ -500,7 +500,7 @@ export const defaultWizardState: WizardState = {
   ivaIncluido: false,
   condicionesRegistro: [],
   validezRegistroDias: 0,
-  modoValidacionRegistro: "por_visita", // alineado con copy histórica · TODO(logic) implementar
+  modoValidacionRegistro: "directo", // regla canónica · NUNCA `por_visita` por defecto (no recomendamos amarrar comisión a visita) · TODO(logic) implementar
   refPromocion: "",
   blockNames: {},
   nombrePromocion: "",

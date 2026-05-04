@@ -414,18 +414,20 @@ export function ColaboradoresStep({
             Modo de validación
           </div>
           <div className="grid sm:grid-cols-2 gap-2">
+            {/* REGLA CANÓNICA · ninguna opción lleva badge "Recomendado".
+             *  El producto es neutro · NUNCA empujamos a "Tras visita"
+             *  como default ni como recomendación (ver CLAUDE.md +
+             *  memoria `feedback_commissions_no_default_after_visit`). */}
             {([
-              {
-                value: "por_visita" as const,
-                label: "Tras la visita",
-                recommended: true,
-                desc: "El cliente queda como preregistro reservado a nombre del colaborador · se confirma tras la primera visita realizada.",
-              },
               {
                 value: "directo" as const,
                 label: "Directo al aprobar",
-                recommended: false,
                 desc: "El cliente queda formalmente registrado al aprobar · sin condicionar a visita.",
+              },
+              {
+                value: "por_visita" as const,
+                label: "Tras la visita",
+                desc: "El cliente queda como preregistro reservado a nombre del colaborador · se confirma tras la primera visita realizada.",
               },
             ]).map((opt) => {
               const active = state.modoValidacionRegistro === opt.value;
@@ -447,11 +449,6 @@ export function ColaboradoresStep({
                       {active && <div className="h-2 w-2 rounded-full bg-primary" />}
                     </div>
                     <span className="text-xs font-semibold text-foreground">{opt.label}</span>
-                    {opt.recommended && (
-                      <span className="ml-auto text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                        Recomendado
-                      </span>
-                    )}
                   </div>
                   <p className="text-[10.5px] text-muted-foreground leading-relaxed mt-1.5">
                     {opt.desc}
@@ -477,7 +474,7 @@ export function ColaboradoresStep({
                   </>
                 ) : (
                   <>
-                    El cliente queda <span className="text-foreground font-medium">formalmente registrado</span> al aprobar el promotor, sin esperar visita. Recomendado solo si la operativa de la promoción no requiere visita previa para confirmar la atribución.
+                    El cliente queda <span className="text-foreground font-medium">formalmente registrado</span> al aprobar el promotor, sin esperar visita. El colaborador queda con la atribución desde ese momento.
                   </>
                 )}
               </p>

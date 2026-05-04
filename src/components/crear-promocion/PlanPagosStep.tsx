@@ -71,7 +71,11 @@ const metodoPagoOptions = [
   },
 ];
 
-const validezReservaOptions = [30, 60, 90, 120];
+/* Opciones canónicas de validez del contrato de reserva · ventanas
+ * cortas reales del mercado · pasado este plazo el comprador firma
+ * CPV o pierde la señal. Si necesitas otro valor, cámbialo aquí (es
+ * la única fuente). */
+const validezReservaOptions = [7, 14, 30, 60];
 
 /* ─── Estilos compartidos ──────────────────────────────────────────── */
 const inputBase =
