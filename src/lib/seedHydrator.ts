@@ -371,6 +371,19 @@ export function hydrateSeedsFromSupabase(): Promise<void> {
         }
       }
 
+      /* RESCUE · si una promo del workspace tiene `wizardSnapshot.unidades`
+       * en metadata pero NO tiene units en `unitsByPromotion`, las
+       * unidades nunca se persistieron a Supabase (insert silencioso
+       * fallido pre-fix). Reconstruimos desde wizardSnapshot y
+       * re-intentamos el insert · si Supabase rechaza otra vez, al
+       * menos quedan visibles en cache local hasta que se resuelva. */
+      try {
+        const { rescueOrphanUnits } = await import("./rescueOrphanUnits");
+        await rescueOrphanUnits(developerOnlyPromotions);
+      } catch (e) {
+        console.warn("[hydrator] rescueOrphanUnits skipped:", e);
+      }
+
       /* Hydrate AGENCIES + PROMOTORES desde organizations + profiles ·
        *  REFRESH solo de identity (name, logo, location, type). Las
        *  métricas operativas (visits, sales, comisión, contracts…) NO
