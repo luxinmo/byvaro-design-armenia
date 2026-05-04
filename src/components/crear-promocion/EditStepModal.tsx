@@ -28,6 +28,7 @@ import { MultimediaStep } from "./MultimediaStep";
 import { CrearUnidadesStep } from "./CrearUnidadesStep";
 import { ColaboradoresStep } from "./ColaboradoresStep";
 import { PlanPagosStep } from "./PlanPagosStep";
+import { EstadoStep } from "./EstadoStep";
 import { OptionCard } from "./SharedWidgets";
 import { roleOptions, tipoOptions, subUniOptions, subVariasOptions, estadoOptions, faseConstruccionOptions } from "./options";
 import { FileCheck, FileX } from "lucide-react";
@@ -126,7 +127,7 @@ export function EditStepModal({
             />
           )}
           {step === "tipo" && <TipologiaQuickEdit state={state} />}
-          {step === "estado" && <EstadoQuickEdit state={state} update={update} />}
+          {step === "estado" && <EstadoStep state={state} update={update} />}
           {step === "extras" && <ExtrasV5 state={state} update={update} />}
           {step === "detalles" && (
             <DetallesStep

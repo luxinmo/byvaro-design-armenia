@@ -62,6 +62,7 @@ import { MultimediaStep } from "@/components/crear-promocion/MultimediaStep";
 import { ColaboradoresStep } from "@/components/crear-promocion/ColaboradoresStep";
 import { CrearUnidadesStep } from "@/components/crear-promocion/CrearUnidadesStep";
 import { RevisionStep } from "@/components/crear-promocion/RevisionStep";
+import { EstadoStep } from "@/components/crear-promocion/EstadoStep";
 import { EditStepModal, isSupportedInModal } from "@/components/crear-promocion/EditStepModal";
 import { ConfiguracionEdificio } from "@/components/crear-promocion/configuracion-edificio";
 import { ConfiguracionEdificioV3 } from "@/components/crear-promocion/configuracion-edificio/index-v3";
@@ -1361,90 +1362,11 @@ export default function CrearPromocion() {
 
                 {/* ─── Step: estado ─── */}
                 {step === "estado" && (
-                  <div className="flex flex-col gap-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {estadoOptions.map((o) => (
-                        <OptionCard key={o.value} option={o} selected={state.estado === o.value}
-                          onSelect={handleEstadoSelect} />
-                      ))}
-                    </div>
-
-                    {/* Licencia (solo para proyecto) */}
-                    {state.estado === "proyecto" && (
-                      <div className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
-                        <SectionLabel>¿Tiene licencia de obra?</SectionLabel>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <LicenciaCard icon={FileCheck} title="Con licencia" desc="Licencia concedida"
-                            selected={state.tieneLicencia === true} onClick={() => update("tieneLicencia", true)} />
-                          <LicenciaCard icon={FileX} title="Sin licencia" desc="Pendiente de licencia"
-                            selected={state.tieneLicencia === false} onClick={() => update("tieneLicencia", false)} />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Fase de construcción (cuando en_construccion) */}
-                    {state.estado === "en_construccion" && (
-                      <div className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
-                        <SectionLabel>Etapa de construcción</SectionLabel>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                          {faseConstruccionOptions.map((o) => (
-                            <OptionCard key={o.value} option={o} selected={state.faseConstruccion === o.value}
-                              onSelect={handleFaseSelect} />
-                          ))}
-                        </div>
-
-                        {/* Fecha estimada de entrega · disponible para CUALQUIER
-                          * fase (Obra no iniciada → Entrega próxima). El user
-                          * puede estimar cuándo entregará desde el momento que
-                          * inicia la obra, no solo cuando esté próximo. */}
-                        {state.faseConstruccion && (
-                          <div className="pt-3 border-t border-border">
-                            <SectionLabel>Fecha estimada de entrega</SectionLabel>
-                            <div className="grid grid-cols-4 gap-2">
-                              {trimestreOptions.map((t) => (
-                                <button key={t} onClick={() => update("trimestreEntrega", t)}
-                                  className={cn(
-                                    "rounded-lg border px-2 py-2 text-xs font-medium transition-colors tnum",
-                                    state.trimestreEntrega === t
-                                      ? "border-primary bg-primary/10 text-primary"
-                                      : "border-border bg-background text-muted-foreground hover:border-foreground/20 hover:text-foreground"
-                                  )}
-                                >
-                                  {t}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Fecha de terminación (cuando terminado) */}
-                    {state.estado === "terminado" && (
-                      <div className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-                            <CalendarIconLucide className="h-4 w-4" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-foreground">Fecha de terminación</p>
-                            <p className="text-xs text-muted-foreground">¿Cuándo se terminó la obra?</p>
-                          </div>
-                        </div>
-                        <input
-                          type="date"
-                          max={new Date().toISOString().split("T")[0]}
-                          value={state.fechaTerminacion ? state.fechaTerminacion.split("T")[0] : ""}
-                          onChange={(e) => update("fechaTerminacion", e.target.value ? new Date(e.target.value).toISOString() : null)}
-                          className="h-9 px-3 text-sm bg-card border border-border rounded-xl focus:border-primary outline-none transition-colors tnum"
-                        />
-                        <p className="text-[11px] text-muted-foreground">La fecha no puede ser posterior a hoy.</p>
-                      </div>
-                    )}
-
-                    {/* Mixto: informativo */}
+                  <>
+                    <EstadoStep state={state} update={update} />
+                    {/* Mixto: informativo · solo en wizard, no en modal. */}
                     {state.tipo === "mixto" && (
-                      <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 flex flex-col gap-2">
+                      <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 flex flex-col gap-2 mt-4">
                         <p className="text-xs font-semibold text-foreground">Promoción mixta</p>
                         <p className="text-xs text-muted-foreground leading-relaxed">
                           Para crear una promoción mixta, primero configura la parte <strong>plurifamiliar</strong>.
@@ -1452,7 +1374,7 @@ export default function CrearPromocion() {
                         </p>
                       </div>
                     )}
-                  </div>
+                  </>
                 )}
 
                 {/* ─── Step: detalles ─── */}
