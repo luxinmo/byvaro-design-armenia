@@ -1263,7 +1263,7 @@ export default function Promociones() {
         <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
           <div className="max-w-content mx-auto">
             {sortedAndFiltered.length === 0 ? (
-              <EmptyState mode={emptyMode} onCreate={handleCreateNewPromotion} />
+<EmptyState mode={emptyMode} onCreate={handleCreateNewPromotion} />
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {sortedAndFiltered.map(p => {
@@ -1291,7 +1291,7 @@ export default function Promociones() {
       <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
         <div className="max-w-content mx-auto flex flex-col gap-3 lg:gap-4">
           {sortedAndFiltered.length === 0 ? (
-            <EmptyState mode={emptyMode} onCreate={handleCreateNewPromotion} />
+<EmptyState mode={emptyMode} onCreate={handleCreateNewPromotion} />
           ) : (
             sortedAndFiltered.map((p) => {
               /* Stats LIVE · derivados de unidades reales · cae a seed
