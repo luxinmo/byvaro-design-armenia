@@ -823,9 +823,7 @@ export default function Promociones() {
    *  para "Vendidas". */
   const hasDraft = useMemo(
     () => allPromotions.some((p) =>
-      p.status === "incomplete"
-      || p.status === "inactive"
-      || (p.status === "active" && getMissingForPromotion(p).length > 0)
+      p.status === "incomplete" || p.status === "inactive"
     ),
     [allPromotions],
   );
@@ -910,21 +908,17 @@ export default function Promociones() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return allPromotions.filter(p => {
-      /* Tabs (modelo 2026-05-01):
-       *  · draft     · incomplete / inactive (legacy) · O active con
-       *                campos obligatorios pendientes (incongruencia
-       *                heredada del seed · se trata como borrador para
-       *                ser coherente con el detail page).
-       *  · active    · status="active" Y sin missing fields.
-       *  · published · alias legacy de active.
-       *  · sold-out  · sold-out.
-       *  · all       · sin filtro. */
-      const incompleteByMissing = p.status === "active"
-        && getMissingForPromotion(p).length > 0;
+      /* Tabs · REGLA · confiamos en `p.status` de DB · NO re-validamos
+       * con `getMissingForPromotion`. Antes el filtro "Activas"
+       * ocultaba promos active que tuvieran cualquier missing
+       * (empresaTieneIdentidad sin configurar, image vacío, etc.) ·
+       * el user veía una lista vacía aunque hubiera promos activadas.
+       * El detail page sigue avisando con banner rojo si faltan
+       * datos · pero el listado refleja el estado real de DB. */
       if (statusFilter === "draft") {
-        if (p.status !== "incomplete" && p.status !== "inactive" && !incompleteByMissing) return false;
+        if (p.status !== "incomplete" && p.status !== "inactive") return false;
       } else if (statusFilter === "active" || statusFilter === "published") {
-        if (p.status !== "active" || incompleteByMissing) return false;
+        if (p.status !== "active") return false;
       } else if (statusFilter === "sold-out") {
         if (p.status !== "sold-out") return false;
       }
