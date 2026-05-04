@@ -1316,11 +1316,18 @@ export default function Promociones() {
                *  si la promo no tiene units cargadas. Sustituye el
                *  badge / availableUnits / totalUnits del seed estático. */
               const liveStats = getPromoStats(p.id, p);
-              const badgeLabel = liveStats.badge === "new" ? "Nueva"
-                : liveStats.badge === "last-units" ? "Últimas unidades"
-                : null;
               const status = statusTag(p);
               const { typologies, units: availableUnits, lastUnit, isSingle } = getAvailableData(p.id, unitsByPromotion);
+              /* Badge sobre la foto · REGLA canónica:
+               *  · totalUnits === 1                → "Única unidad"
+               *  · totalUnits > 1 + 1 disponible   → "Última unidad" (singular)
+               *  · totalUnits > 1 + ≤N disponibles → "Últimas unidades" (plural)
+               *  · `live.badge="new"`              → "Nueva". */
+              const badgeLabel = liveStats.badge === "new"
+                ? "Nueva"
+                : liveStats.badge === "last-units"
+                  ? (isSingle ? "Única unidad" : "Última unidad")
+                  : null;
               const trending = isTrending(p);
               const hasMissing = p.missingSteps && p.missingSteps.length > 0;
 
@@ -2371,7 +2378,13 @@ function PromoCardCompact({ promo: p, isTrending, isAgencyUser }: { promo: DevPr
         )}
         {liveStats.badge && (
           <Tag variant="overlay" size="sm" shape="pill" className="absolute top-3 left-3 shadow-soft">
-            {liveStats.badge === "new" ? "Nueva" : "Últimas unidades"}
+            {/* REGLA · Total=1 → "Única unidad" · Total>1+1 dispo → "Última
+              * unidad" (singular) · Nueva → "Nueva". */}
+            {liveStats.badge === "new"
+              ? "Nueva"
+              : liveStats.totalUnits === 1
+                ? "Única unidad"
+                : "Última unidad"}
           </Tag>
         )}
       </div>
