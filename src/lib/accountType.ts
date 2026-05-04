@@ -48,6 +48,11 @@ const ORG_ID_KEY = "byvaro.accountType.organizationId.v1";
  *  Usado por useCurrentUser para mostrar nombre real en sidebar/UI
  *  sin tener que llamar a Supabase en cada render. */
 const USER_NAME_KEY = "byvaro.accountType.userName.v1";
+/** auth.uid() del JWT · el UUID real del user en `auth.users`. Lo guardamos
+ *  en sessionStorage al login para que helpers síncronos (meStorage,
+ *  selectores de equipo) lo resuelvan sin tener que llamar a
+ *  `supabase.auth.getUser()` en cada render. */
+const USER_ID_KEY = "byvaro.accountType.userId.v1";
 const CHANGE_EVENT = "byvaro:account-change";
 
 /** Agencia por defecto cuando el usuario activa modo agencia sin elegir una. */
@@ -62,6 +67,8 @@ type Snapshot = {
   organizationId?: string;
   /** Nombre completo del user · se setea en login desde JWT metadata. */
   userName?: string;
+  /** auth.uid() del JWT · UUID real en auth.users. */
+  userId?: string;
 };
 
 /** sessionStorage vive por pestaña; así el usuario puede tener una pestaña como
@@ -78,7 +85,8 @@ function read(): Snapshot {
   const agencyEmail = sessionStorage.getItem(AGENCY_EMAIL_KEY) ?? undefined;
   const organizationId = sessionStorage.getItem(ORG_ID_KEY) ?? undefined;
   const userName = sessionStorage.getItem(USER_NAME_KEY) ?? undefined;
-  return { type, agencyId, developerEmail, agencyEmail, organizationId, userName };
+  const userId = sessionStorage.getItem(USER_ID_KEY) ?? undefined;
+  return { type, agencyId, developerEmail, agencyEmail, organizationId, userName, userId };
 }
 
 function emit() {
@@ -131,6 +139,10 @@ export function loginAs(
    *  para que el sidebar/UI lo muestre sin tener que llamar a Supabase
    *  en cada render. */
   userName?: string,
+  /** auth.uid() · UUID real del user. Permite que meStorage, selectores
+   *  de equipo y permisos resuelvan al user actual sin tener que esperar
+   *  a la sesión Supabase async. */
+  userId?: string,
 ) {
   sessionStorage.setItem(STORAGE_KEY, type);
   // Limpia cualquier identidad previa del otro rol para que no se mezclen.
@@ -150,6 +162,8 @@ export function loginAs(
   else sessionStorage.removeItem(ORG_ID_KEY);
   if (userName) sessionStorage.setItem(USER_NAME_KEY, userName);
   else sessionStorage.removeItem(USER_NAME_KEY);
+  if (userId) sessionStorage.setItem(USER_ID_KEY, userId);
+  else sessionStorage.removeItem(USER_ID_KEY);
   emit();
 }
 
@@ -162,6 +176,9 @@ export async function logout() {
   sessionStorage.removeItem(AGENCY_KEY);
   sessionStorage.removeItem(DEVELOPER_EMAIL_KEY);
   sessionStorage.removeItem(AGENCY_EMAIL_KEY);
+  sessionStorage.removeItem(ORG_ID_KEY);
+  sessionStorage.removeItem(USER_NAME_KEY);
+  sessionStorage.removeItem(USER_ID_KEY);
   if (typeof window !== "undefined") {
     memCache.removeItem("byvaro.user.profile.v1");
     memCache.removeItem("byvaro.user.phones.v1");
