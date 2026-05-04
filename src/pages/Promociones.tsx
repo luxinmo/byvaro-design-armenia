@@ -1582,7 +1582,7 @@ export default function Promociones() {
                           {/* REGLA · "Planta" no aplica a unifamiliares (villas
                             * son una vivienda en parcela · no edificio).
                             * Solo se muestra para promociones plurifamiliares. */}
-                          {isUnifamiliar(p) ? (
+                          {isUnifamiliar(p.buildingType) ? (
                             <span className="text-xs text-muted-foreground">{lastUnit.orientation}</span>
                           ) : (
                             <span className="text-xs text-muted-foreground">Planta {lastUnit.floor} · {lastUnit.orientation}</span>
