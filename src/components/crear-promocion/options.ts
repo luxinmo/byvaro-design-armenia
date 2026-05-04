@@ -60,6 +60,12 @@ export const estadoOptions: CardOption<EstadoPromocion>[] = [
  *  referencia técnica habitual en obra nueva. Si cambian, mantenlos
  *  coherentes con la copy del label (visible), la description (subline)
  *  y los buckets del helper `constructionPhaseFromProgress` de abajo. */
+/* Fases mostradas como opción al usuario · "llave_en_mano" y
+ *  "definir_mas_tarde" REMOVIDAS de aquí · "llave_en_mano" se cubre
+ *  con el estado "Terminado" (otro selector más arriba en el step) ·
+ *  "definir_mas_tarde" sobraba (basta con no marcar nada). Las
+ *  constantes y mapeos siguen aceptando los valores legacy para que
+ *  promos antiguas se sigan renderizando bien. */
 export const faseConstruccionOptions: CardOption<FaseConstruccion>[] = [
   { value: "inicio_obra", label: "Obra no iniciada", description: "Aún no se han movido máquinas en el solar", icon: Hammer },
   { value: "estructura", label: "Estructura · 20–40%", description: "Levantamiento de la estructura del edificio", icon: Columns3 },
@@ -67,16 +73,15 @@ export const faseConstruccionOptions: CardOption<FaseConstruccion>[] = [
   { value: "instalaciones", label: "Instalaciones · 60–75%", description: "Instalaciones interiores y servicios", icon: Plug },
   { value: "acabados", label: "Acabados · 75–90%", description: "Fase final de acabados interiores", icon: Paintbrush },
   { value: "entrega_proxima", label: "Entrega próxima · 90–100%", description: "La obra está a punto de finalizarse", icon: PackageCheck },
-  { value: "llave_en_mano", label: "Llave en mano · 100%", description: "Terminada y disponible para entrega inmediata", icon: Key },
-  { value: "definir_mas_tarde", label: "Lo añadiré más tarde", description: "Completa este dato cuando lo tengas claro", icon: Clock },
 ];
 
-/* Lista canónica de fases REALES (excluye 'definir_mas_tarde') · usada
+/* Lista canónica de fases REALES (excluye 'definir_mas_tarde' y
+ *  'llave_en_mano' que ahora se modela vía estado=Terminado) · usada
  *  por mapeos % → fase y por selectores de edición que necesitan
  *  enumerar solo etapas de obra. */
 export const FASES_CONSTRUCCION_REALES: FaseConstruccion[] = [
   "inicio_obra", "estructura", "cerramientos",
-  "instalaciones", "acabados", "entrega_proxima", "llave_en_mano",
+  "instalaciones", "acabados", "entrega_proxima",
 ];
 
 /** Mapea un % de progreso de obra (0-100) a la fase canónica que

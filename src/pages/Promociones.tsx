@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { promotions, getBuildingTypeLabel, isUnifamiliar, type Promotion } from "@/data/promotions";
+import { composeDelivery } from "@/lib/deliveryFormat";
 import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import { developerOnlyPromotions, type DevPromotion } from "@/data/developerPromotions";
 import { unitsByPromotion } from "@/data/units";
@@ -578,7 +579,20 @@ export default function Promociones() {
         constructionProgress?: number;
         reservationCost?: number;
         commission?: number;
+        wizardSnapshot?: {
+          fechaEntrega?: string | null;
+          trimestreEntrega?: string | null;
+          tipoEntrega?: string | null;
+          mesesTrasContrato?: number;
+          mesesTrasLicencia?: number;
+        };
       };
+      /* Delivery fallback desde wizardSnapshot · helper canónico
+       * `composeDelivery`. */
+      let derivedDelivery: string | null = p.delivery;
+      if (!derivedDelivery && meta.wizardSnapshot) {
+        derivedDelivery = composeDelivery(meta.wizardSnapshot) || null;
+      }
       return {
         id: p.id,
         code: p.code,
@@ -591,7 +605,7 @@ export default function Promociones() {
         totalUnits: p.totalUnits,
         status: (p.status as DevPromotion["status"]) ?? "active",
         reservationCost: meta.reservationCost ?? 0,
-        delivery: p.delivery ?? "",
+        delivery: derivedDelivery ?? "",
         commission: meta.commission ?? 0,
         developer: "",
         agencies: 0,
@@ -601,6 +615,13 @@ export default function Promociones() {
         constructionProgress: meta.constructionProgress,
         image: p.imageUrl ?? undefined,
         updatedAt: p.createdAt,
+        canShareWithAgencies: p.canShareWithAgencies,
+        /* CRÍTICO · pasar metadata RAW al output · sin esto, el chip
+         * de licencia y el delivery fallback (que leen
+         * `p.metadata.wizardSnapshot.X`) no funcionan para promos del
+         * cache local. Bug confirmado en local: hasMeta=false en el
+         * chip aunque la promo en DB tenía la metadata correcta. */
+        metadata: p.metadata ?? {},
       } as unknown as DevPromotion;
     }),
     [createdPromos],
@@ -1565,8 +1586,9 @@ export default function Promociones() {
                           note la diferencia. Si null (no preguntado),
                           no mostramos chip. */}
                       {(() => {
-                        const wsTieneLic = (p as { metadata?: { wizardSnapshot?: { tieneLicencia?: boolean | null } } })
-                          .metadata?.wizardSnapshot?.tieneLicencia;
+                        const meta = (p as { metadata?: Record<string, unknown> }).metadata;
+                        const ws = meta?.wizardSnapshot as { tieneLicencia?: boolean | null } | undefined;
+                        const wsTieneLic = ws?.tieneLicencia;
                         if (wsTieneLic === true) {
                           return (
                             <span className="inline-flex items-center gap-1 text-[11px] font-medium text-success">
@@ -2441,6 +2463,35 @@ function PromoCardCompact({ promo: p, isTrending, isAgencyUser }: { promo: DevPr
         <p className="text-[11.5px] text-muted-foreground mt-0.5 truncate">
           {getPromoterDisplayName(p)} · {p.delivery}
         </p>
+        {/* Chip "Licencia" · lee tieneLicencia real del wizardSnapshot ·
+            true → "Licencia concedida" verde · false → "Sin licencia"
+            muted · null/undefined → no aparece. Coherencia con la list
+            view del listado. */}
+        {(() => {
+          const wsTieneLic = (p as { metadata?: { wizardSnapshot?: { tieneLicencia?: boolean | null } } })
+            .metadata?.wizardSnapshot?.tieneLicencia;
+          if (wsTieneLic === true) {
+            return (
+              <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-success mt-1">
+                <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-success/15">
+                  <Check className="h-2 w-2 text-success" strokeWidth={3} />
+                </span>
+                Licencia concedida
+              </span>
+            );
+          }
+          if (wsTieneLic === false) {
+            return (
+              <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-muted-foreground mt-1">
+                <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-muted">
+                  <X className="h-2 w-2 text-muted-foreground" strokeWidth={3} />
+                </span>
+                Sin licencia
+              </span>
+            );
+          }
+          return null;
+        })()}
         <p className="text-lg font-bold text-foreground mt-2 tnum">
           {fmt(liveStats.priceMin)}
           {liveStats.priceMax > liveStats.priceMin && <span className="text-muted-foreground font-normal"> — {fmt(liveStats.priceMax)}</span>}

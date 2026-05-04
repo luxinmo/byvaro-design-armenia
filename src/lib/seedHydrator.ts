@@ -36,6 +36,7 @@ import { registros, type Registro } from "@/data/records";
 import type { Promotion } from "@/data/promotions";
 import type { Unit, UnitStatus } from "@/data/units";
 import { seedRef } from "@/lib/publicRef";
+import { composeDelivery } from "./deliveryFormat";
 
 const SEED_HYDRATED_EVENT = "byvaro:seed-hydrated";
 
@@ -111,6 +112,13 @@ function rowToDevPromotion(r: PromotionRow): DevPromotion {
       modoValidacionRegistro?: string;
     };
   };
+  /* Delivery · fallback desde wizardSnapshot vía helper canónico.
+   * Cubre promos legacy con `r.delivery=null`. */
+  let derivedDelivery: string | null = r.delivery;
+  if (!derivedDelivery && meta.wizardSnapshot) {
+    derivedDelivery = composeDelivery(meta.wizardSnapshot) || null;
+  }
+
   /* CollaborationConfig · 2 fuentes en orden de preferencia:
    *  1. `meta.collaboration` (escrito por createPromotionFromWizard
    *     desde el fix del PR #95).
@@ -148,7 +156,7 @@ function rowToDevPromotion(r: PromotionRow): DevPromotion {
     totalUnits: r.total_units,
     status: status as DevPromotion["status"],
     reservationCost: meta.reservationCost ?? 0,
-    delivery: r.delivery ?? "",
+    delivery: derivedDelivery ?? "",
     commission: meta.commission ?? 0,
     developer: "",
     agencies: 0,

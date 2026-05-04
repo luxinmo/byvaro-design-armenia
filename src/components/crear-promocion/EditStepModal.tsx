@@ -28,13 +28,17 @@ import { MultimediaStep } from "./MultimediaStep";
 import { CrearUnidadesStep } from "./CrearUnidadesStep";
 import { ColaboradoresStep } from "./ColaboradoresStep";
 import { PlanPagosStep } from "./PlanPagosStep";
+import { EstadoStep } from "./EstadoStep";
 import { OptionCard } from "./SharedWidgets";
-import { roleOptions, tipoOptions, subUniOptions, subVariasOptions } from "./options";
+import { roleOptions, tipoOptions, subUniOptions, subVariasOptions, estadoOptions, faseConstruccionOptions } from "./options";
+import { FileCheck, FileX } from "lucide-react";
+import { futureTrimesterOptions } from "@/lib/futureTrimesters";
 
 const STEP_TITLES: Partial<Record<StepId, string>> = {
   identidad: "Identidad",
   tipo: "Tipo y estructura",
   extras: "Características por defecto",
+  estado: "Estructura · estado y entrega",
   detalles: "Construcción y entrega",
   ubicacion: "Ubicación",
   info_basica: "Información básica",
@@ -53,7 +57,7 @@ const STEP_TITLES: Partial<Record<StepId, string>> = {
  * planos/brochure` son fragmentos accesibles solo desde Revisión · no
  * aparecen en la timeline lineal. */
 const SUPPORTED: StepId[] = [
-  "identidad", "tipo", "extras", "detalles", "ubicacion", "info_basica",
+  "identidad", "tipo", "extras", "estado", "detalles", "ubicacion", "info_basica",
   "descripcion", "multimedia", "crear_unidades", "operativa",
   "planos", "brochure",
   "colaboradores", "plan_pagos",
@@ -92,6 +96,9 @@ export function EditStepModal({
     step === "tipo" ? "max-w-2xl" :
     step === "identidad" || step === "ubicacion" || step === "operativa" ? "max-w-xl" :
     step === "planos" || step === "brochure" ? "max-w-2xl" :
+    /* "estado" combina pantallas 6+7 del wizard · necesita más
+     * espacio que un mini-step. */
+    step === "estado" ? "max-w-3xl" :
     "max-w-3xl";
 
   return (
@@ -122,19 +129,30 @@ export function EditStepModal({
             />
           )}
           {step === "tipo" && <TipologiaQuickEdit state={state} />}
+          {step === "estado" && (
+            /* El step "estado" del wizard (6/14) depende del step
+             *  "detalles" (7/14) · van juntos en flow lineal. En el
+             *  modal de Estructura los renderizamos AMBOS apilados
+             *  para reflejar el mismo dominio (estado de obra +
+             *  entrega + piso piloto). `hideOfficesSection` evita
+             *  duplicar oficinas (ya tienen su propio popup
+             *  `operativa` desde otro bloque de la ficha). */
+            <div className="flex flex-col gap-6">
+              <EstadoStep state={state} update={update} />
+              <DetallesStep
+                state={state}
+                update={update}
+                trimestreOptions={futureTrimesterOptions()}
+                hideOfficesSection
+              />
+            </div>
+          )}
           {step === "extras" && <ExtrasV5 state={state} update={update} />}
           {step === "detalles" && (
             <DetallesStep
               state={state}
               update={update}
-              trimestreOptions={(() => {
-                const y = new Date().getFullYear();
-                return [
-                  `T1 ${y}`, `T2 ${y}`, `T3 ${y}`, `T4 ${y}`,
-                  `T1 ${y + 1}`, `T2 ${y + 1}`, `T3 ${y + 1}`, `T4 ${y + 1}`,
-                  `T1 ${y + 2}`, `T2 ${y + 2}`, `T3 ${y + 2}`, `T4 ${y + 2}`,
-                ];
-              })()}
+              trimestreOptions={futureTrimesterOptions()}
             />
           )}
           {step === "info_basica" && (
@@ -809,6 +827,210 @@ function ReadOnlyRow({ label, value }: { label: string; value: React.ReactNode }
     <div className="flex items-start gap-3 text-[12.5px]">
       <span className="text-muted-foreground min-w-[100px] shrink-0">{label}</span>
       <span className="text-foreground flex-1 min-w-0">{value}</span>
+    </div>
+  );
+}
+
+/* ─── EstadoQuickEdit · Estado de obra + Licencia + Hito de
+ *  construcción + Tipo de entrega + Meses tras contrato/licencia.
+ *  Combina lo que el wizard pone en los pasos "estado" y
+ *  "detalles" en un mini-popup compacto · pensado para el bloque
+ *  Estructura de la ficha de promoción donde el promotor cambia
+ *  estos campos a menudo. */
+function EstadoQuickEdit({
+  state, update,
+}: {
+  state: WizardState;
+  update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
+}) {
+  const inputBase = "rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-colors";
+  const trimestreOptions = futureTrimesterOptions();
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Estado de obra · 3 OptionCards */}
+      <section>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">
+          Estado de obra
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {estadoOptions.map((o) => (
+            <OptionCard
+              key={o.value}
+              option={o}
+              selected={state.estado === o.value}
+              onSelect={(v) => {
+                update("estado", v as WizardState["estado"]);
+                /* Limpiar campos no aplicables al cambiar de estado · evita
+                 * estado inconsistente (ej. licencia=true en proyecto
+                 * cuando el user ya pasó a en_construccion). */
+                if (v !== "proyecto") update("tieneLicencia", null);
+                if (v !== "en_construccion") update("faseConstruccion", null);
+              }}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* Licencia · solo cuando estado=proyecto */}
+      {state.estado === "proyecto" && (
+        <section>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">
+            ¿Tiene licencia de obra?
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => update("tieneLicencia", true)}
+              className={`text-left rounded-lg border px-3.5 py-3 transition-colors flex items-center gap-2.5 ${
+                state.tieneLicencia === true
+                  ? "border-success bg-success/5"
+                  : "border-border hover:border-success/30"
+              }`}
+            >
+              <FileCheck className="h-4 w-4 text-success shrink-0" strokeWidth={1.75} />
+              <div>
+                <p className="text-xs font-semibold text-foreground">Con licencia</p>
+                <p className="text-[10.5px] text-muted-foreground">Licencia concedida</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => update("tieneLicencia", false)}
+              className={`text-left rounded-lg border px-3.5 py-3 transition-colors flex items-center gap-2.5 ${
+                state.tieneLicencia === false
+                  ? "border-warning bg-warning/5"
+                  : "border-border hover:border-warning/30"
+              }`}
+            >
+              <FileX className="h-4 w-4 text-warning shrink-0" strokeWidth={1.75} />
+              <div>
+                <p className="text-xs font-semibold text-foreground">Sin licencia</p>
+                <p className="text-[10.5px] text-muted-foreground">Pendiente de licencia</p>
+              </div>
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* Fase de construcción · solo cuando estado=en_construccion */}
+      {state.estado === "en_construccion" && (
+        <section>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">
+            Etapa de construcción
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {faseConstruccionOptions.map((o) => (
+              <OptionCard
+                key={o.value}
+                option={o}
+                selected={state.faseConstruccion === o.value}
+                onSelect={(v) => update("faseConstruccion", v as WizardState["faseConstruccion"])}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Fecha de entrega · siempre visible salvo "terminado" */}
+      {state.estado !== "terminado" && (
+        <section>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">
+            Tipo de entrega
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => update("tipoEntrega", "fecha_definida")}
+              className={`text-left rounded-lg border px-3 py-2.5 transition-colors ${
+                state.tipoEntrega === "fecha_definida" ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"
+              }`}
+            >
+              <p className="text-[12px] font-semibold text-foreground">Fecha definida</p>
+              <p className="text-[10.5px] text-muted-foreground">Trimestre concreto</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => update("tipoEntrega", "tras_contrato_cv")}
+              className={`text-left rounded-lg border px-3 py-2.5 transition-colors ${
+                state.tipoEntrega === "tras_contrato_cv" ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"
+              }`}
+            >
+              <p className="text-[12px] font-semibold text-foreground">Tras contrato C/V</p>
+              <p className="text-[10.5px] text-muted-foreground">X meses después</p>
+            </button>
+            {state.estado === "proyecto" && state.tieneLicencia === false && (
+              <button
+                type="button"
+                onClick={() => update("tipoEntrega", "tras_licencia")}
+                className={`text-left rounded-lg border px-3 py-2.5 transition-colors ${
+                  state.tipoEntrega === "tras_licencia" ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"
+                }`}
+              >
+                <p className="text-[12px] font-semibold text-foreground">Tras licencia</p>
+                <p className="text-[10.5px] text-muted-foreground">X meses después</p>
+              </button>
+            )}
+          </div>
+
+          {/* Trimestre · si fecha_definida */}
+          {state.tipoEntrega === "fecha_definida" && (
+            <div className="mt-3 grid grid-cols-4 gap-2">
+              {trimestreOptions.map((t) => {
+                const on = state.trimestreEntrega === t;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => update("trimestreEntrega", t)}
+                    className={`rounded-lg border px-2 py-2 text-[11.5px] font-semibold transition-colors tnum ${
+                      on ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:border-foreground/20 hover:text-foreground"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Meses · si tras_contrato_cv */}
+          {state.tipoEntrega === "tras_contrato_cv" && (
+            <div className="mt-3 flex items-center gap-2">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={state.mesesTrasContrato > 0 ? String(state.mesesTrasContrato) : ""}
+                placeholder="0"
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/[^0-9]/g, "");
+                  update("mesesTrasContrato", digits === "" ? 0 : Math.min(120, Number(digits)));
+                }}
+                className={`${inputBase} h-9 w-24 px-2.5 text-[13px] tnum text-right`}
+              />
+              <span className="text-[12px] text-muted-foreground">meses tras la firma del contrato</span>
+            </div>
+          )}
+
+          {/* Meses · si tras_licencia */}
+          {state.tipoEntrega === "tras_licencia" && (
+            <div className="mt-3 flex items-center gap-2">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={state.mesesTrasLicencia > 0 ? String(state.mesesTrasLicencia) : ""}
+                placeholder="0"
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/[^0-9]/g, "");
+                  update("mesesTrasLicencia", digits === "" ? 0 : Math.min(120, Number(digits)));
+                }}
+                className={`${inputBase} h-9 w-24 px-2.5 text-[13px] tnum text-right`}
+              />
+              <span className="text-[12px] text-muted-foreground">meses tras obtener la licencia</span>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

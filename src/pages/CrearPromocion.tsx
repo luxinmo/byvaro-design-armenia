@@ -41,7 +41,7 @@ import { generatePublicRef } from "@/lib/publicRef";
 import { ExtrasV5 } from "@/components/crear-promocion/extras-v5";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { FileWarning } from "lucide-react";
-import { createPromotionFromWizard } from "@/lib/promotionsStorage";
+import { createPromotionFromWizard, deleteCreatedPromotion } from "@/lib/promotionsStorage";
 import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import { useCurrentUser, isAdmin } from "@/lib/currentUser";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -62,6 +62,7 @@ import { MultimediaStep } from "@/components/crear-promocion/MultimediaStep";
 import { ColaboradoresStep } from "@/components/crear-promocion/ColaboradoresStep";
 import { CrearUnidadesStep } from "@/components/crear-promocion/CrearUnidadesStep";
 import { RevisionStep } from "@/components/crear-promocion/RevisionStep";
+import { EstadoStep } from "@/components/crear-promocion/EstadoStep";
 import { EditStepModal, isSupportedInModal } from "@/components/crear-promocion/EditStepModal";
 import { ConfiguracionEdificio } from "@/components/crear-promocion/configuracion-edificio";
 import { ConfiguracionEdificioV3 } from "@/components/crear-promocion/configuracion-edificio/index-v3";
@@ -69,6 +70,7 @@ import { ConfiguracionEdificioV4 } from "@/components/crear-promocion/configurac
 import { Switch } from "@/components/ui/Switch";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { cn } from "@/lib/utils";
+import { futureTrimesterOptions } from "@/lib/futureTrimesters";
 import {
   FileCheck, FileX, Calendar as CalendarIconLucide, Home as HomeIcon, Store as StoreIcon,
   Minus, Archive, Car, Waves, Building2, Trash2,
@@ -461,13 +463,10 @@ export default function CrearPromocion() {
     { label: "plazas parking", count: state.parkings },
   ];
 
-  /* Opciones de trimestre (año actual +2) */
-  const currentYear = new Date().getFullYear();
-  const trimestreOptions = [
-    `T1 ${currentYear}`, `T2 ${currentYear}`, `T3 ${currentYear}`, `T4 ${currentYear}`,
-    `T1 ${currentYear + 1}`, `T2 ${currentYear + 1}`, `T3 ${currentYear + 1}`, `T4 ${currentYear + 1}`,
-    `T1 ${currentYear + 2}`, `T2 ${currentYear + 2}`, `T3 ${currentYear + 2}`, `T4 ${currentYear + 2}`,
-  ];
+  /* Opciones de trimestre · próximos 4 años desde HOY · filtra los
+   *  que ya pasaron en el año en curso · es ilógico ofrecer
+   *  "T1 2026" cuando estamos en Q2 2026. */
+  const trimestreOptions = futureTrimesterOptions();
 
   /* Handlers auxiliares (multi-select con cantidades, estado con cascada) */
   const toggleTipologia = (tipo: SubVarias) => {
@@ -1363,86 +1362,11 @@ export default function CrearPromocion() {
 
                 {/* ─── Step: estado ─── */}
                 {step === "estado" && (
-                  <div className="flex flex-col gap-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {estadoOptions.map((o) => (
-                        <OptionCard key={o.value} option={o} selected={state.estado === o.value}
-                          onSelect={handleEstadoSelect} />
-                      ))}
-                    </div>
-
-                    {/* Licencia (solo para proyecto) */}
-                    {state.estado === "proyecto" && (
-                      <div className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
-                        <SectionLabel>¿Tiene licencia de obra?</SectionLabel>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <LicenciaCard icon={FileCheck} title="Con licencia" desc="Licencia concedida"
-                            selected={state.tieneLicencia === true} onClick={() => update("tieneLicencia", true)} />
-                          <LicenciaCard icon={FileX} title="Sin licencia" desc="Pendiente de licencia"
-                            selected={state.tieneLicencia === false} onClick={() => update("tieneLicencia", false)} />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Fase de construcción (cuando en_construccion) */}
-                    {state.estado === "en_construccion" && (
-                      <div className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
-                        <SectionLabel>Etapa de construcción</SectionLabel>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                          {faseConstruccionOptions.map((o) => (
-                            <OptionCard key={o.value} option={o} selected={state.faseConstruccion === o.value}
-                              onSelect={handleFaseSelect} />
-                          ))}
-                        </div>
-
-                        {state.faseConstruccion === "entrega_proxima" && (
-                          <div className="pt-3 border-t border-border">
-                            <SectionLabel>Fecha estimada de entrega</SectionLabel>
-                            <div className="grid grid-cols-4 gap-2">
-                              {trimestreOptions.map((t) => (
-                                <button key={t} onClick={() => update("trimestreEntrega", t)}
-                                  className={cn(
-                                    "rounded-lg border px-2 py-2 text-xs font-medium transition-colors tnum",
-                                    state.trimestreEntrega === t
-                                      ? "border-primary bg-primary/10 text-primary"
-                                      : "border-border bg-background text-muted-foreground hover:border-foreground/20 hover:text-foreground"
-                                  )}
-                                >
-                                  {t}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Fecha de terminación (cuando terminado) */}
-                    {state.estado === "terminado" && (
-                      <div className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-                            <CalendarIconLucide className="h-4 w-4" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-foreground">Fecha de terminación</p>
-                            <p className="text-xs text-muted-foreground">¿Cuándo se terminó la obra?</p>
-                          </div>
-                        </div>
-                        <input
-                          type="date"
-                          max={new Date().toISOString().split("T")[0]}
-                          value={state.fechaTerminacion ? state.fechaTerminacion.split("T")[0] : ""}
-                          onChange={(e) => update("fechaTerminacion", e.target.value ? new Date(e.target.value).toISOString() : null)}
-                          className="h-9 px-3 text-sm bg-card border border-border rounded-xl focus:border-primary outline-none transition-colors tnum"
-                        />
-                        <p className="text-[11px] text-muted-foreground">La fecha no puede ser posterior a hoy.</p>
-                      </div>
-                    )}
-
-                    {/* Mixto: informativo */}
+                  <>
+                    <EstadoStep state={state} update={update} />
+                    {/* Mixto: informativo · solo en wizard, no en modal. */}
                     {state.tipo === "mixto" && (
-                      <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 flex flex-col gap-2">
+                      <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 flex flex-col gap-2 mt-4">
                         <p className="text-xs font-semibold text-foreground">Promoción mixta</p>
                         <p className="text-xs text-muted-foreground leading-relaxed">
                           Para crear una promoción mixta, primero configura la parte <strong>plurifamiliar</strong>.
@@ -1450,7 +1374,7 @@ export default function CrearPromocion() {
                         </p>
                       </div>
                     )}
-                  </div>
+                  </>
                 )}
 
                 {/* ─── Step: detalles ─── */}
@@ -1520,6 +1444,22 @@ export default function CrearPromocion() {
                 {step === "revision" && (
                   <RevisionStep
                     state={state}
+                    onDeletePromotion={resolvedPromotionId ? async () => {
+                      const ok = await confirm({
+                        title: `¿Eliminar "${state.nombrePromocion || "esta promoción"}"?`,
+                        description: "Se borrará la promoción del catálogo y de la base de datos. Esta acción no se puede deshacer.",
+                        confirmLabel: "Eliminar",
+                        variant: "destructive",
+                      });
+                      if (!ok) return;
+                      const res = await deleteCreatedPromotion(resolvedPromotionId);
+                      if (!res.ok) {
+                        toast.error("Error al eliminar", { description: res.error });
+                        return;
+                      }
+                      toast.success("Promoción eliminada");
+                      setTimeout(() => navigate("/promociones"), 50);
+                    } : undefined}
                     onEditStep={(s) => {
                       /* Steps que necesitan persistencia para subir
                        *  archivos (storage RLS exige draftId real) ·

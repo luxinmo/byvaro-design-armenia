@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTabParam } from "@/lib/useTabParam";
 import { getDraft, saveDraft as persistDraft, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
 import { deleteCreatedPromotion, getCreatedPromotions } from "@/lib/promotionsStorage";
+import { composeDelivery } from "@/lib/deliveryFormat";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { WizardState, FotoItem, FotoCategoria } from "@/components/crear-promocion/types";
 import { faseConstruccionOptions, constructionPhaseLabelFromProgress } from "@/components/crear-promocion/options";
@@ -28,8 +29,11 @@ import {
   Megaphone,
 } from "lucide-react";
 import { getMissingForPromotion } from "@/lib/publicationRequirements"; // fuente única de verdad de requisitos para publicar
-import { useOverride } from "@/lib/promotionWizardOverrides";
+import { useOverride, saveOverride, getOverride } from "@/lib/promotionWizardOverrides";
 import { wizardStateToPromotion } from "@/lib/wizardStateToPromotion";
+import { promotionToWizardState } from "@/lib/promotionToWizardState";
+import { EditStepModal, isSupportedInModal } from "@/components/crear-promocion/EditStepModal";
+import type { StepId } from "@/components/crear-promocion/types";
 import { Button } from "@/components/ui/button";
 import { cn, priceForDisplay } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -305,6 +309,44 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const [canShareOverride, setCanShareOverride] = useState<boolean | null>(null);
   // Edit dialogs
   const [editOpen, setEditOpen] = useState<null | "multimedia" | "basicInfo" | "structure" | "description" | "location" | "paymentPlan" | "showHouse" | "memoria" | "planos" | "brochure" | "contacts" | "inventory" | "salesOffices">(null);
+
+  /* Modal del WIZARD canónico (EditStepModal) embebido en la ficha ·
+   * unifica los popups de "Editar" de cada bloque con los del paso
+   * "Configuración" del wizard · una sola fuente de verdad para los
+   * formularios de edición. Helpers wireados más abajo cuando ya
+   * tengamos el WizardState efectivo (override + base). */
+  const [wizardModalStep, setWizardModalStep] = useState<StepId | null>(null);
+
+  /* Mapping editOpen-key → StepId para abrir el EditStepModal canónico
+   * en lugar del Edit*Dialog antiguo. Si el step NO está soportado en
+   * el modal (memoria, contacts) caemos al Edit*Dialog legacy
+   * vía `setEditOpen(key)`. */
+  const openEdit = (key: NonNullable<typeof editOpen>) => {
+    const map: Partial<Record<NonNullable<typeof editOpen>, StepId>> = {
+      multimedia: "multimedia",
+      basicInfo: "info_basica",
+      /* "Estructura" abre el step "estado" · combina estado de
+       * obra + licencia + fase de construcción + tipo de entrega
+       * (incluye meses tras contrato/licencia). El user lo pidió
+       * explícitamente · es lo que más cambia tras crear la promo. */
+      structure: "estado",
+      description: "descripcion",
+      location: "ubicacion",
+      paymentPlan: "plan_pagos",
+      showHouse: "detalles",
+      planos: "planos",
+      brochure: "brochure",
+      inventory: "crear_unidades",
+      salesOffices: "operativa",
+    };
+    const step = map[key];
+    if (step && isSupportedInModal(step)) {
+      setWizardModalStep(step);
+    } else {
+      /* Fallback al Edit*Dialog legacy (memoria, contacts). */
+      setEditOpen(key);
+    }
+  };
   /** IDs de las oficinas del workspace que actúan como puntos de venta
    *  para esta promoción. Se inicializan desde `p.puntosDeVentaIds` y
    *  los datos completos se resuelven vía `useOficinas()` — esa es la
@@ -452,7 +494,19 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         reservationCost?: number;
         commission?: number;
         collaboration?: unknown;
+        wizardSnapshot?: {
+          fechaEntrega?: string | null;
+          trimestreEntrega?: string | null;
+          tipoEntrega?: string | null;
+          mesesTrasContrato?: number;
+          mesesTrasLicencia?: number;
+        };
       };
+      /* Delivery fallback · helper canónico `composeDelivery`. */
+      let derivedDelivery: string | null = c.delivery;
+      if (!derivedDelivery && meta.wizardSnapshot) {
+        derivedDelivery = composeDelivery(meta.wizardSnapshot) || null;
+      }
       return {
         id: c.id,
         code: c.code,
@@ -466,7 +520,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         totalUnits: c.totalUnits,
         status: (c.status as DevPromotion["status"]) ?? "active",
         reservationCost: meta.reservationCost ?? 0,
-        delivery: c.delivery ?? "",
+        delivery: derivedDelivery ?? "",
         commission: meta.commission ?? 0,
         developer: "",
         agencies: 0,
@@ -506,6 +560,40 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     if (!wizardOverride) return pBase;
     return wizardStateToPromotion(wizardOverride, pBase);
   }, [pBase, wizardOverride]);
+
+  /* WizardState efectivo para el `EditStepModal` embebido · prioridad:
+   *  1. `wizardOverride` (lo que el user editó en sesión actual).
+   *  2. `metadata.wizardSnapshot` · state ORIGINAL guardado al
+   *     crear la promo · contiene tieneLicencia, mesesTrasLicencia,
+   *     faseConstruccion, etc. que `promotionToWizardState` no
+   *     deriva (queda como defaults · falsa licencia=true).
+   *  3. Fallback · derivar de la promo + units (legacy seed).
+   * Cualquier edición se persiste vía `saveOverride` · la promo `p`
+   * recalcula vía wizardStateToPromotion en el siguiente render. */
+  const wizardStateForModal = useMemo<WizardState | null>(() => {
+    if (!pBase) return null;
+    if (wizardOverride) return wizardOverride;
+    const snapshot = (pBase as { metadata?: { wizardSnapshot?: WizardState } })
+      .metadata?.wizardSnapshot;
+    if (snapshot) return snapshot;
+    return promotionToWizardState(pBase, unitsByPromotion[pBase.id] ?? []);
+  }, [pBase, wizardOverride]);
+
+  const updateWizardField = <K extends keyof WizardState>(key: K, value: WizardState[K]) => {
+    if (!pBase) return;
+    /* CRÍTICO · leer del cache MÁS FRESCO (`getOverride`) en cada
+     * llamada. Antes usaba `wizardStateForModal` del closure · si en
+     * el mismo tick venían varias updates encadenadas (ej. el
+     * onSelect del estado dispara update de estado + update de
+     * tieneLicencia + update de faseConstruccion), las llamadas 2-3
+     * pisaban a la 1 porque todas leían el mismo state stale. Con
+     * getOverride() leemos lo que acaba de escribir el saveOverride
+     * SÍNCRONO inmediatamente anterior. */
+    const current = getOverride(pBase.id) ?? wizardStateForModal;
+    if (!current) return;
+    const next = { ...current, [key]: value };
+    saveOverride(pBase.id, next);
+  };
 
   if (p && !initialized) {
     setComercialesList(p.comerciales || []);
@@ -627,14 +715,39 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         }] : []),
       ] : []),
       ...(isPublished ? [
+        (() => {
+          /* REGLA · "Brochure" deshabilitado si la promo NO tiene
+           * brochure cargado · ni general (wizardSnapshot.
+           * documentosBrochure) ni por unidad (unit.brochureUrls).
+           * Mantenemos la opción `brochureRemoved` (toggle de la
+           * card) como override manual. */
+          const ws = (p as { metadata?: { wizardSnapshot?: {
+            documentosBrochure?: unknown[];
+            unidades?: { brochureUrls?: string[] }[];
+          } } }).metadata?.wizardSnapshot;
+          const hasGeneralBrochure = (ws?.documentosBrochure?.length ?? 0) > 0;
+          const hasUnitBrochure = (ws?.unidades ?? []).some(
+            (u) => (u.brochureUrls?.length ?? 0) > 0,
+          );
+          const hasBrochure = hasGeneralBrochure || hasUnitBrochure;
+          const disabled = brochureRemoved || !hasBrochure;
+          return {
+            icon: FileText,
+            label: "Brochure",
+            hint: disabled ? "No hay brochure subido" : "Descargar brochure",
+            onClick: disabled ? undefined : downloadBrochure,
+            disabled,
+          };
+        })(),
         {
-          icon: FileText,
-          label: "Brochure",
-          hint: brochureRemoved ? "No hay brochure subido" : "Descargar brochure",
-          onClick: brochureRemoved ? undefined : downloadBrochure,
-          disabled: brochureRemoved,
+          icon: Download,
+          /* Si la promo tiene 1 sola unidad, "Listado de precios" no
+           * tiene sentido (no hay listado · es un solo precio).
+           * Renombramos a "Descargar PDF" · más genérico. */
+          label: p.totalUnits === 1 ? "Descargar PDF" : "Listado de precios",
+          hint: "Descargar en PDF",
+          onClick: () => setPriceListOpen(true),
         },
-        { icon: Download, label: "Listado de precios", hint: "Descargar en PDF", onClick: () => setPriceListOpen(true) },
       ] : []),
       /* "Configuración" · entry-point único a TODA la configuración
        *  de la promoción · abre el wizard en el paso Revisión donde
@@ -652,44 +765,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       /* "Eliminar" · solo en promociones creadas via wizard (`prom-c-*`).
        *  Movido del header al rail con `danger: true` para separar
        *  acciones cotidianas de la destructiva. */
-      /* Eliminar · disponible para promos del workspace propio.
-       * Antes el gate era `p.id.startsWith("prom-c-")` · solo
-       * funcionaba para promos creadas via wizard cuyo cache local
-       * estaba caliente. Tras hidratación desde Supabase + sesión
-       * limpia, la misma promo cumple el patrón pero el listado a
-       * veces la mostraba bajo otro id · el botón desaparecía.
-       * Con `ownerOrganizationId === myOrgId` sí cubre todas las
-       * promos del workspace · independientemente de su origen. */
-      ...(!viewAsCollaborator && (() => {
-        const promoOwner = (p as { ownerOrganizationId?: string }).ownerOrganizationId;
-        const myOrgIdSession = sessionStorage.getItem("byvaro.accountType.organizationId.v1");
-        return !!promoOwner && !!myOrgIdSession && promoOwner === myOrgIdSession;
-      })() ? [{
-        icon: Trash2,
-        label: "Eliminar",
-        hint: "Borrar permanentemente esta promoción",
-        onClick: async () => {
-          const ok = await confirm({
-            title: `¿Eliminar "${p.name}"?`,
-            description: "Se borrará la promoción del catálogo y de la base de datos. Esta acción no se puede deshacer.",
-            confirmLabel: "Eliminar",
-            variant: "destructive",
-          });
-          if (!ok) return;
-          const res = await deleteCreatedPromotion(p.id);
-          if (!res.ok) {
-            toast.error("Error al eliminar", { description: res.error });
-            return;
-          }
-          toast.success("Promoción eliminada");
-          /* Navegar tras un pequeño tick · da tiempo a que el evento
-           * `byvaro:promotions-changed` propague el cache vacío al
-           * listado · evita que el user vea brevemente la promo
-           * borrada al aterrizar en /promociones. */
-          setTimeout(() => navigate("/promociones"), 50);
-        },
-        danger: true,
-      }] : []),
+      /* "Eliminar" · MOVIDO de aquí al paso "Revisión" del wizard de
+       * Configuración (al final de la página, en la zona danger).
+       * Razón · agrupar acciones destructivas en un solo lugar para
+       * evitar clicks accidentales desde la ficha. El user que
+       * quiera borrar abre Configuración → scroll al final → botón
+       * Eliminar. */
       { icon: Info, label: "Datos en vivo", hint: "Precios y disponibilidad se actualizan en tiempo real. Confirma antes de cerrar.", info: true },
     ];
     return (
@@ -1405,26 +1486,24 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               && !isIncomplete
               && sharingEnabledForPromo
               && countAgenciesForPromotion(p.id) === 0 && (
-              <div className="mb-5 rounded-2xl border border-warning/30 bg-warning/5 p-5">
-                <div className="flex items-start gap-3">
-                  <Users className="h-5 w-5 text-warning shrink-0 mt-0.5" strokeWidth={1.5} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground">
-                      Esta promoción aún no se está compartiendo
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                      Está activa y lista para colaborar · pero ninguna agencia la tiene
-                      en su cartera todavía.{" "}
-                      <button
-                        type="button"
-                        onClick={() => tryInvite()}
-                        className="inline-flex items-center gap-1 font-semibold text-foreground hover:underline underline-offset-2"
-                      >
-                        Invitar agencias
-                        <ArrowRight className="h-3 w-3" strokeWidth={2} />
-                      </button>
-                    </p>
-                  </div>
+              <div className="mb-5 rounded-xl border border-warning/30 bg-warning/5 px-4 py-2.5">
+                {/* Aviso · UNA SOLA LÍNEA · ocupa menos espacio. Antes
+                  * eran 2 líneas con título + descripción · agrupadas
+                  * en una sola con el CTA a la derecha. */}
+                <div className="flex items-center gap-2.5">
+                  <Users className="h-4 w-4 text-warning shrink-0" strokeWidth={1.75} />
+                  <p className="text-[12.5px] text-foreground flex-1 min-w-0 truncate">
+                    <span className="font-semibold">Aún no se comparte</span>
+                    <span className="text-muted-foreground"> · ninguna agencia en cartera</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => tryInvite()}
+                    className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-foreground hover:underline underline-offset-2 shrink-0"
+                  >
+                    Invitar agencias
+                    <ArrowRight className="h-3 w-3" strokeWidth={2} />
+                  </button>
                 </div>
               </div>
             )}
@@ -1440,7 +1519,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               <div className="flex-1 min-w-0 space-y-5 order-2 lg:order-1">
 
             {/* ── 1. GALLERY ── */}
-            <SectionCard title="Multimedia" stepName="Multimedia" missing={missingSet.has("Multimedia") || realMissing.has("multimedia")} softMissing={isDraft} onEdit={() => setEditOpen("multimedia")} hideEdit={viewAsCollaborator} flush>
+            <SectionCard title="Multimedia" stepName="Multimedia" missing={missingSet.has("Multimedia") || realMissing.has("multimedia")} softMissing={isDraft} onEdit={() => openEdit("multimedia")} hideEdit={viewAsCollaborator} flush>
               {/* Empty state cuando no hay fotos · típico en borradores
                  *  recién creados. Antes pintábamos 8 fotos hardcoded de
                  *  Unsplash · daba la falsa impresión de que la promo
@@ -1449,7 +1528,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               {galleryImages.length === 0 ? (
                 <button
                   type="button"
-                  onClick={() => setEditOpen("multimedia")}
+                  onClick={() => openEdit("multimedia")}
                   disabled={viewAsCollaborator}
                   className="w-full h-[280px] sm:h-[380px] rounded-lg border-2 border-dashed border-border bg-muted/30 hover:border-primary/30 hover:bg-muted/50 transition-colors flex flex-col items-center justify-center gap-2 text-center px-6 disabled:cursor-default"
                 >
@@ -1740,7 +1819,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 : (trasteroEnabled ? "Sin definir si incluye" : undefined);
               const showEstructura = !isUnifamiliar(p.buildingType);
               return (
-            <SectionCard title="Estructura" stepName="Basic info" missing={realMissing.has("estado")} softMissing={isDraft} onEdit={() => setEditOpen("structure")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Estructura" stepName="Basic info" missing={realMissing.has("estado")} softMissing={isDraft} onEdit={() => openEdit("structure")} hideEdit={viewAsCollaborator}>
               {/* Construcción y Entrega · ELIMINADOS de aquí · ya
                   viven en el KPI strip de arriba (Construcción
                   con %  + Entrega con fecha). Mostramos solo los
@@ -1757,22 +1836,37 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 <InfoItem icon={Home} label="Unidades totales" value={`${p.totalUnits}`} />
                 <InfoItem icon={Car} label="Parking" value={parkingValue} sub={parkingSub} />
                 <InfoItem icon={Archive} label="Trastero" value={trasteroValue} sub={trasteroSub} />
-                {/* Licencia · sello de garantía · mismo estilo que
-                    el chip del listado de promociones para coherencia
-                    visual · "Licencia concedida" full · sin label
-                    "Licencia" arriba · check verde dentro de círculo. */}
-                <div>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Shield className="h-3 w-3 text-success" strokeWidth={2} />
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Estado legal</p>
-                  </div>
-                  <p className="text-sm font-semibold text-success inline-flex items-center gap-1.5">
-                    <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-success/15">
-                      <Check className="h-2.5 w-2.5 text-success" strokeWidth={3} />
-                    </span>
-                    Licencia concedida
-                  </p>
-                </div>
+                {/* Licencia · lee `metadata.wizardSnapshot.tieneLicencia`
+                    real · NO hardcoded. true → verde · false → muted ·
+                    null/undefined → no se renderiza el bloque. */}
+                {(() => {
+                  const wsTieneLic = (p as { metadata?: { wizardSnapshot?: { tieneLicencia?: boolean | null } } })
+                    .metadata?.wizardSnapshot?.tieneLicencia;
+                  if (wsTieneLic == null) return null;
+                  const granted = wsTieneLic === true;
+                  return (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Shield className={cn("h-3 w-3", granted ? "text-success" : "text-muted-foreground")} strokeWidth={2} />
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Estado legal</p>
+                      </div>
+                      <p className={cn(
+                        "text-sm font-semibold inline-flex items-center gap-1.5",
+                        granted ? "text-success" : "text-muted-foreground",
+                      )}>
+                        <span className={cn(
+                          "inline-flex items-center justify-center h-4 w-4 rounded-full",
+                          granted ? "bg-success/15" : "bg-muted",
+                        )}>
+                          {granted
+                            ? <Check className="h-2.5 w-2.5 text-success" strokeWidth={3} />
+                            : <X className="h-2.5 w-2.5 text-muted-foreground" strokeWidth={3} />}
+                        </span>
+                        {granted ? "Licencia concedida" : "Sin licencia"}
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
             </SectionCard>
               );
@@ -1780,11 +1874,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
             {/* ── 2. PAGO Y DISPONIBILIDAD (Unidades + Plan de pagos) ── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <SectionCard title="Unidades y disponibilidad" stepName="Units" missing={missingSet.has("Units") || realMissing.has("units")} softMissing={isDraft} onEdit={() => setEditOpen("inventory")} hideEdit={viewAsCollaborator}>
+              <SectionCard title="Unidades y disponibilidad" stepName="Units" missing={missingSet.has("Units") || realMissing.has("units")} softMissing={isDraft} onEdit={() => openEdit("inventory")} hideEdit={viewAsCollaborator}>
                 <PromotionAvailabilitySummary promotionId={p.id} onViewAll={() => setActiveTab(visibleTabs.indexOf("Availability"))} isCollaboratorView={viewAsCollaborator} />
               </SectionCard>
 
-              <SectionCard title="Plan de pagos" stepName="Payment plan" missing={missingSet.has("Payment plan") || realMissing.has("paymentPlan")} softMissing={isDraft} onEdit={() => setEditOpen("paymentPlan")} hideEdit={viewAsCollaborator}>
+              <SectionCard title="Plan de pagos" stepName="Payment plan" missing={missingSet.has("Payment plan") || realMissing.has("paymentPlan")} softMissing={isDraft} onEdit={() => openEdit("paymentPlan")} hideEdit={viewAsCollaborator}>
                 {(() => {
                   /* Lectura REAL del wizardSnapshot · antes esta sección
                    *  era HARDCODED (60 días · "Hitos" · 4 hitos demo ·
@@ -1898,7 +1992,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             </div>
 
             {/* ── 3. DESCRIPCIÓN ── */}
-            <SectionCard title="Descripción" stepName="Description" missing={missingSet.has("Description")} softMissing={isDraft} onEdit={() => setEditOpen("description")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Descripción" stepName="Description" missing={missingSet.has("Description")} softMissing={isDraft} onEdit={() => openEdit("description")} hideEdit={viewAsCollaborator}>
               <div className="space-y-3">
                 <div className="flex items-center gap-2 mb-2">
                   <Tag variant="default" size="sm"><Globe className="h-3 w-3" /> ES</Tag>
@@ -1943,7 +2037,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   title="Memoria de calidades"
                   files={memoria}
                   emptyHint="Sube la memoria de calidades en PDF"
-                  onUpload={() => setEditOpen("memoria")}
+                  onUpload={() => openEdit("memoria")}
                   onManage={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("calidades"); }}
                   viewAsCollaborator={viewAsCollaborator}
                 />
@@ -1954,7 +2048,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   files={planos}
                   emptyHint="Planos de planta y distribución"
                   shareable
-                  onUpload={() => setEditOpen("planos")}
+                  onUpload={() => openEdit("planos")}
                   onManage={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("planos"); }}
                   viewAsCollaborator={viewAsCollaborator}
                 />
@@ -1966,7 +2060,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     files={brochure}
                     emptyHint="Sube el brochure comercial"
                     shareable
-                    onUpload={() => setEditOpen("brochure")}
+                    onUpload={() => openEdit("brochure")}
                     onManage={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("brochure"); }}
                     onDownload={showBrochure ? downloadBrochure : undefined}
                     onRemove={() => { setBrochureRemoved(true); toast.success("Brochure eliminado"); }}
@@ -1980,7 +2074,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
 
             {/* ── 5. UBICACIÓN ── */}
-            <SectionCard title="Ubicación" stepName="Basic info" missing={realMissing.has("location")} softMissing={isDraft} onEdit={() => setEditOpen("location")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Ubicación" stepName="Basic info" missing={realMissing.has("location")} softMissing={isDraft} onEdit={() => openEdit("location")} hideEdit={viewAsCollaborator}>
               <div className="rounded-xl overflow-hidden h-[200px] bg-muted/30 flex items-center justify-center">
                 <div className="text-center">
                   <MapPin className="h-6 w-6 text-muted-foreground/30 mx-auto mb-2" />
@@ -2021,7 +2115,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   (Piscina, Gimnasio, Jardín, Cocina equipada, Aire,
                   Terraza, Smart home...) · todos inventados aunque
                   el promotor no marcase nada en el wizard. */}
-            <SectionCard title="Información básica" stepName="Basic info" missing={missingSet.has("Basic info")} softMissing={isDraft} onEdit={() => setEditOpen("basicInfo")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Información básica" stepName="Basic info" missing={missingSet.has("Basic info")} softMissing={isDraft} onEdit={() => openEdit("basicInfo")} hideEdit={viewAsCollaborator}>
               {(() => {
                 const snap = (p as unknown as {
                   metadata?: { wizardSnapshot?: {
@@ -2227,7 +2321,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               comerciales={viewAsCollaborator ? [] : comercialesList}
               onAddMember={viewAsCollaborator ? undefined : () => setAddComercialOpen(true)}
               onAddOffice={viewAsCollaborator ? undefined : () => setPickOfficesOpen(true)}
-              onEditOffices={viewAsCollaborator ? undefined : () => setEditOpen("salesOffices")}
+              onEditOffices={viewAsCollaborator ? undefined : () => openEdit("salesOffices")}
               hideManagement={viewAsCollaborator}
             />
               </div>
@@ -2929,6 +3023,21 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       />
       <EditInventoryDialog open={editOpen === "inventory"} onOpenChange={(v) => setEditOpen(v ? "inventory" : null)} onGoAvailability={() => setActiveTab(visibleTabs.indexOf("Availability"))} />
       <EditSalesOfficesDialog open={editOpen === "salesOffices"} onOpenChange={(v) => setEditOpen(v ? "salesOffices" : null)} offices={salesOffices} onSave={setSalesOffices} />
+
+      {/* EditStepModal canónico · embebe el step real del wizard como
+        * popup. Reemplaza los Edit*Dialog antiguos para los bloques
+        * mappeados en `openEdit()`. Las ediciones se persisten vía
+        * `saveOverride` (override store del wizard). */}
+      {wizardStateForModal && (
+        <EditStepModal
+          open={wizardModalStep !== null}
+          step={wizardModalStep}
+          state={wizardStateForModal}
+          update={updateWizardField}
+          uploadScopeId={p?.id}
+          onClose={() => setWizardModalStep(null)}
+        />
+      )}
 
 
       {/* Pick team members (visual multi-select) */}
