@@ -27,8 +27,8 @@ import { PhoneInput } from "@/components/ui/PhoneInput";
 import { Flag } from "@/components/ui/Flag";
 import { JobTitlePicker } from "@/components/team/JobTitlePicker";
 import { useDirty } from "@/components/settings/SettingsDirtyContext";
-import { useMe, updateMe } from "@/lib/meStorage";
-import { uploadUserAvatar } from "@/lib/storage";
+import { useMe, updateMe, updateMeAsync } from "@/lib/meStorage";
+import { uploadUserAvatar, pruneUserAvatars } from "@/lib/storage";
 import { supabase, isSupabaseConfigured } from "@/lib/supabaseClient";
 import { UserRefBadge } from "@/components/ui/UserRefBadge";
 import { useUserPublicRef, formatUserRef } from "@/lib/userPublicRef";
@@ -98,6 +98,11 @@ export default function AjustesPerfilPersonal() {
   }, []);
   const myPublicRef = useUserPublicRef(supabaseUserId);
 
+  /* La hidratación desde `user_profiles` la ejecuta `SupabaseHydrator`
+   *  al login (`hydrateMyProfile`). Aquí solo consumimos la lista
+   *  hidratada via `useMe()` y nos refrescamos cuando el evento de
+   *  cambio se dispare. */
+
   const isDirty = useMemo(
     () => JSON.stringify(profile) !== JSON.stringify(initial),
     [profile, initial],
@@ -137,10 +142,14 @@ export default function AjustesPerfilPersonal() {
         : [...p.languages, code],
     }));
 
-  const save = () => {
-    updateMe({
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    /* No incluimos `email` · es read-only desde aquí · el cambio de
+     *  email del usuario va por flujo de Supabase Auth (verificación)
+     *  en otra pantalla. */
+    const result = await updateMeAsync({
       name: profile.fullName.trim(),
-      email: profile.email.trim(),
       jobTitle: encodeJobTitle(profile.jobTitleKeys) || undefined,
       department: profile.department.trim() || undefined,
       phone: profile.phone.trim() || undefined,
@@ -148,6 +157,11 @@ export default function AjustesPerfilPersonal() {
       bio: profile.bio.trim() || undefined,
       avatarUrl: profile.avatar,
     });
+    setSaving(false);
+    if (!result.ok) {
+      toast.error("No se pudo guardar el perfil", { description: result.error });
+      return;
+    }
     setInitial(profile);
     setDirty(false);
     toast.success("Perfil guardado");
@@ -166,8 +180,8 @@ export default function AjustesPerfilPersonal() {
       title="Información personal"
       description="Esta información se muestra a tus compañeros de equipo, aparece en los emails que envías y en tu tarjeta pública de Equipo."
       actions={
-        <Button onClick={save} disabled={!isDirty} className="rounded-full" size="sm">
-          Guardar cambios
+        <Button onClick={save} disabled={!isDirty || saving} className="rounded-full" size="sm">
+          {saving ? "Guardando…" : "Guardar cambios"}
         </Button>
       }
     >
@@ -242,7 +256,21 @@ export default function AjustesPerfilPersonal() {
                   variant="ghost"
                   size="sm"
                   className="rounded-full text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => onChange({ avatar: undefined })}
+                  onClick={async () => {
+                    onChange({ avatar: undefined });
+                    const result = await updateMeAsync({ avatarUrl: undefined });
+                    if (!result.ok) {
+                      toast.error("No se pudo eliminar el avatar", { description: result.error });
+                      return;
+                    }
+                    if (isSupabaseConfigured) {
+                      try {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        if (user) await pruneUserAvatars(user.id, null);
+                      } catch (e) { console.warn("[personal:avatar] prune failed:", e); }
+                    }
+                    toast.success("Avatar eliminado");
+                  }}
                 >
                   Eliminar
                 </Button>
@@ -262,11 +290,16 @@ export default function AjustesPerfilPersonal() {
               placeholder="Ej. María González Pérez"
             />
           </SettingsField>
-          <SettingsField label="Email">
+          <SettingsField
+            label="Email"
+            description="Para cambiar tu email, ve a Seguridad · cambio de email."
+          >
             <Input
               type="email"
               value={profile.email}
-              onChange={(e) => onChange({ email: e.target.value })}
+              readOnly
+              disabled
+              className="bg-muted/40 text-muted-foreground cursor-not-allowed"
             />
           </SettingsField>
           <SettingsField label="Teléfono">
@@ -421,20 +454,70 @@ export default function AjustesPerfilPersonal() {
         open={photoOpen}
         onClose={() => setPhotoOpen(false)}
         onSave={async (dataUrl) => {
+          /* Eliminar avatar · persistir inmediatamente. */
           if (!dataUrl) {
             onChange({ avatar: undefined });
+            const result = await updateMeAsync({ avatarUrl: undefined });
+            if (!result.ok) {
+              toast.error("No se pudo eliminar el avatar", { description: result.error });
+              return;
+            }
+            if (isSupabaseConfigured) {
+              try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) await pruneUserAvatars(user.id, null);
+              } catch (e) { console.warn("[personal:avatar] prune failed:", e); }
+            }
+            toast.success("Avatar eliminado");
             return;
           }
-          /* Optimistic local · preview con dataUrl. Después subo a
-           *  bucket user-avatars y reemplazo por URL pública. */
+
+          /* Optimistic local · preview con dataUrl. */
           onChange({ avatar: dataUrl });
-          if (!isSupabaseConfigured) return;
+
+          /* Sin Supabase → solo guardar el dataUrl local (mock). */
+          if (!isSupabaseConfigured) {
+            const result = await updateMeAsync({ avatarUrl: dataUrl });
+            if (!result.ok) {
+              toast.error("No se pudo guardar el avatar", { description: result.error });
+              return;
+            }
+            toast.success("Avatar guardado");
+            return;
+          }
+
+          /* Con Supabase · sube al bucket, reemplaza por URL pública,
+           * persiste en `user_profiles.avatar_url` Y limpia avatares
+           * antiguos del bucket (best-effort). */
           try {
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
+            if (!user) {
+              toast.error("Sin sesión activa · vuelve a entrar");
+              return;
+            }
             const blob = await (await fetch(dataUrl)).blob();
             const publicUrl = await uploadUserAvatar(user.id, blob);
             onChange({ avatar: publicUrl });
+
+            /* Persistir inmediatamente · sin esperar al botón "Guardar".
+             * Así el avatar no se pierde si el user se va sin guardar. */
+            const result = await updateMeAsync({ avatarUrl: publicUrl });
+            if (!result.ok) {
+              toast.error("No se pudo guardar el avatar", { description: result.error });
+              return;
+            }
+
+            /* Limpiar avatares previos · conserva el recién subido. El
+             * path se deduce de la URL: .../<bucket>/<userId>/<file>. */
+            const keepPath = (() => {
+              try {
+                const m = publicUrl.match(/user-avatars\/(.+)$/);
+                return m ? m[1] : null;
+              } catch { return null; }
+            })();
+            await pruneUserAvatars(user.id, keepPath);
+
+            toast.success("Avatar guardado");
           } catch (e) {
             console.warn("[personal:avatar] upload failed:", e);
             toast.error("No se pudo subir el avatar", {

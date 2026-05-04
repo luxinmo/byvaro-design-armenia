@@ -25,6 +25,7 @@ import { hydrateDeveloperPacksFromSupabase } from "@/lib/empresaCategories";
 import { hydrateUserPublicRefs } from "@/lib/userPublicRef";
 import { hydratePlanForCurrentUser } from "@/lib/plan";
 import { hydrateTeamFromSupabase } from "@/lib/teamHydrator";
+import { hydrateMyProfile } from "@/lib/meProfileHydrator";
 import { hydrateDraftsFromSupabase } from "@/lib/promotionDrafts";
 import { clearMemCache } from "@/lib/memCache";
 import { loginAs } from "@/lib/accountType";
@@ -43,7 +44,8 @@ async function ensureSessionStorageHydrated(): Promise<void> {
 
     const hasName = sessionStorage.getItem("byvaro.accountType.userName.v1");
     const hasOrgId = sessionStorage.getItem("byvaro.accountType.organizationId.v1");
-    if (hasName && hasOrgId) return; // ya está poblado
+    const hasUserId = sessionStorage.getItem("byvaro.accountType.userId.v1");
+    if (hasName && hasOrgId && hasUserId) return; // ya está poblado
 
     const { data: members } = await supabase
       .from("organization_members")
@@ -68,6 +70,7 @@ async function ensureSessionStorageHydrated(): Promise<void> {
       accountType === "agency" ? user.email! : undefined,
       m.organization_id,
       userName,
+      user.id,
     );
   } catch (e) {
     console.warn("[SupabaseHydrator] ensure session skipped:", e);
@@ -82,7 +85,8 @@ type HydratorName =
   | "base" | "seeds" | "invitations" | "emails" | "promoCollabStatus"
   | "agencyLicenses" | "companyEvents" | "favoriteAgencies"
   | "agencyOnboarding" | "agencyProfiles" | "twoFactor"
-  | "developerPacks" | "publicRefs" | "plan" | "team" | "drafts";
+  | "developerPacks" | "publicRefs" | "plan" | "team" | "drafts"
+  | "myProfile";
 
 const HYDRATORS: Record<HydratorName, () => Promise<unknown>> = {
   base: hydrateFromSupabase,
@@ -101,6 +105,11 @@ const HYDRATORS: Record<HydratorName, () => Promise<unknown>> = {
   plan: hydratePlanForCurrentUser,
   team: hydrateTeamFromSupabase,
   drafts: hydrateDraftsFromSupabase,
+  /* Perfil canónico del user actual · cubre el caso de no aparecer
+   *  todavía en list_workspace_members (workspace pending, primer
+   *  login). Sin esto, /ajustes/perfil/personal arrancaría con seed
+   *  mock "u1" para users reales con UUID auth.uid() distinto. */
+  myProfile: hydrateMyProfile,
 };
 
 const promiseCache: Partial<Record<HydratorName, Promise<unknown>>> = {};
@@ -135,7 +144,10 @@ function getCriticalForRoute(pathname: string): HydratorName[] {
     return [...always, "seeds"];
   }
   if (pathname.startsWith("/empresa") || pathname.startsWith("/ajustes")) {
-    return [...always, "agencyOnboarding", "twoFactor", "developerPacks"];
+    /* myProfile crítico aquí · /ajustes/perfil/personal es el sitio
+     *  donde más impacta · si carga vacío, el form arranca con seed
+     *  mock y al guardar pisaría datos reales. */
+    return [...always, "agencyOnboarding", "twoFactor", "developerPacks", "myProfile"];
   }
   if (pathname.startsWith("/calendario")) {
     return [...always, "seeds"];

@@ -243,6 +243,32 @@ export async function uploadUserAvatar(userId: string, file: File | Blob): Promi
   return result.url;
 }
 
+/** Borra todos los avatares previos del user EXCEPTO el path indicado.
+ *  Útil tras subir uno nuevo · evita acumular blobs huérfanos en el
+ *  bucket. Best-effort · errores se loggean. */
+export async function pruneUserAvatars(userId: string, keepPath?: string | null): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  try {
+    const { data, error } = await supabase.storage.from("user-avatars").list(userId, {
+      limit: 100,
+      sortBy: { column: "created_at", order: "desc" },
+    });
+    if (error) {
+      console.warn("[storage:user-avatars] list failed:", error.message);
+      return;
+    }
+    if (!data || data.length === 0) return;
+    const targets = data
+      .map((f) => `${userId}/${f.name}`)
+      .filter((p) => p !== keepPath);
+    if (targets.length === 0) return;
+    const { error: rmErr } = await supabase.storage.from("user-avatars").remove(targets);
+    if (rmErr) console.warn("[storage:user-avatars] prune failed:", rmErr.message);
+  } catch (e) {
+    console.warn("[storage:user-avatars] prune exception:", e);
+  }
+}
+
 /** Sube documento privado · contrato, factura, licencia.
  *  Path: documents-private/<org_id>/<kind>/<filename> */
 export async function uploadDocument(
