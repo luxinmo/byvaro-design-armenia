@@ -240,8 +240,21 @@ export function getMissingForPromotion(p: Promotion): MissingRequirement[] {
     missing.push({ key: "unidades-disponibles", label: "Sin unidades disponibles", ficha: "units" });
   }
 
-  /* ── Plan de pagos ────────────────────────────────────── */
-  if (!p.reservationCost || p.reservationCost <= 0) {
+  /* ── Plan de pagos ──────────────────────────────────────
+     El plan se considera DEFINIDO si:
+      - Hay `reservationCost > 0` (plan con reserva), O
+      - El wizard guardó `metodoPago` (puede ser "contrato",
+        "manual" o "certificaciones" · ninguno exige reserva).
+     Antes solo chequeábamos reservationCost · falsos positivos
+     en promos cuyo plan se define en contrato (sin reserva
+     adelantada) · el banner decía "Sin plan de pagos" aunque
+     el user SÍ había configurado el método. */
+  const wizardSnap = (p as { metadata?: { wizardSnapshot?: { metodoPago?: string | null } } })
+    .metadata?.wizardSnapshot;
+  const planDefined =
+    (typeof p.reservationCost === "number" && p.reservationCost > 0)
+    || !!wizardSnap?.metodoPago;
+  if (!planDefined) {
     missing.push({ key: "plan-pagos", label: "Sin plan de pagos definido", ficha: "paymentPlan" });
   }
 

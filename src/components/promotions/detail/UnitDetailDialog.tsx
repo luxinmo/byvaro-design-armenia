@@ -394,12 +394,23 @@ export function UnitDetailDialog({ unit, open, onOpenChange, isCollaboratorView 
                     <DetailRow label="Orientación" value={unit.orientation}
                       editMode={editMode} onChange={(v) => update({ orientation: v })}
                       options={["Norte", "Sur", "Este", "Oeste", "Noreste", "Noroeste", "Sureste", "Suroeste"]} />
-                    <DetailRow label="Bloque" value={unit.block || ""}
-                      editMode={editMode} onChange={(v) => update({ block: v })} />
-                    <DetailRow label="Planta" value={String(unit.floor)}
-                      editMode={editMode} type="number" onChange={(v) => update({ floor: Number(v) || 0 })} />
-                    <DetailRow label="Puerta" value={unit.door || ""}
-                      editMode={editMode} onChange={(v) => update({ door: v })} />
+                    {/* REGLA · Bloque/Planta/Puerta solo aplican a
+                      * promociones plurifamiliares · una villa no tiene
+                      * planta ni puerta. Para unifamiliares mostramos
+                      * "Parcela" en lugar de los 3 campos anteriores. */}
+                    {isUni ? (
+                      <DetailRow label="Parcela" value={String(unit.parcel || 0)}
+                        editMode={editMode} type="number" onChange={(v) => update({ parcel: Number(v) || 0 })} />
+                    ) : (
+                      <>
+                        <DetailRow label="Bloque" value={unit.block || ""}
+                          editMode={editMode} onChange={(v) => update({ block: v })} />
+                        <DetailRow label="Planta" value={String(unit.floor)}
+                          editMode={editMode} type="number" onChange={(v) => update({ floor: Number(v) || 0 })} />
+                        <DetailRow label="Puerta" value={unit.door || ""}
+                          editMode={editMode} onChange={(v) => update({ door: v })} />
+                      </>
+                    )}
                     <DetailRow label="Referencia interna" value={unit.ref}
                       editMode={editMode} onChange={(v) => update({ ref: v })} />
                     <DetailRow label="ID pública" value={unit.publicId || ""}

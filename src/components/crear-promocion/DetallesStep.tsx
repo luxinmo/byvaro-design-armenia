@@ -485,12 +485,18 @@ export function DetallesStep({
             <div className="pt-3 border-t border-border">
               <SectionLabel>¿Cuántos meses después del contrato?</SectionLabel>
               <div className="flex items-center gap-2">
+                {/* REGLA · "0" desaparece al focus · placeholder visual ·
+                  * patrón canónico de inputs numéricos del producto. */}
                 <input
-                  type="number"
-                  min={1}
-                  max={120}
-                  value={state.mesesTrasContrato}
-                  onChange={(e) => update("mesesTrasContrato", Math.max(1, parseInt(e.target.value || "0", 10)))}
+                  type="text"
+                  inputMode="numeric"
+                  value={state.mesesTrasContrato > 0 ? String(state.mesesTrasContrato) : ""}
+                  placeholder="0"
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/[^0-9]/g, "");
+                    const n = digits === "" ? 0 : Math.min(120, Number(digits));
+                    update("mesesTrasContrato", n);
+                  }}
                   className={cn(inputClass, "w-24 tnum")}
                 />
                 <span className="text-[12.5px] text-muted-foreground">meses tras la firma del contrato</span>
@@ -498,10 +504,32 @@ export function DetallesStep({
             </div>
           )}
 
-          {/* Aviso si tras_licencia */}
+          {/* Meses si tras_licencia · análogo a tras_contrato_cv ·
+            * el promotor estima cuántos meses pasan desde que obtenga
+            * la licencia hasta entregar. */}
           {state.tipoEntrega === "tras_licencia" && (
-            <div className="rounded-xl bg-warning/5 border border-warning/30 p-3 text-[11.5px] text-foreground leading-relaxed">
-              La entrega se estimará automáticamente desde la fecha en que consigas la licencia. Puedes actualizarla cuando la tengas.
+            <div className="pt-3 border-t border-border flex flex-col gap-3">
+              <div>
+                <SectionLabel>¿Cuántos meses después de obtener la licencia?</SectionLabel>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={state.mesesTrasLicencia > 0 ? String(state.mesesTrasLicencia) : ""}
+                    placeholder="0"
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/[^0-9]/g, "");
+                      const n = digits === "" ? 0 : Math.min(120, Number(digits));
+                      update("mesesTrasLicencia", n);
+                    }}
+                    className={cn(inputClass, "w-24 tnum")}
+                  />
+                  <span className="text-[12.5px] text-muted-foreground">meses tras obtener la licencia</span>
+                </div>
+              </div>
+              <div className="rounded-xl bg-warning/5 border border-warning/30 p-3 text-[11.5px] text-foreground leading-relaxed">
+                La entrega se estimará desde la fecha en que consigas la licencia + los meses indicados. Puedes actualizar la fecha exacta cuando la tengas.
+              </div>
             </div>
           )}
         </div>

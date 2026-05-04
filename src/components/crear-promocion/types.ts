@@ -327,6 +327,10 @@ export interface WizardState {
   fechaTerminacion: string | null;
   tipoEntrega: TipoEntrega | null;
   mesesTrasContrato: number;
+  /** Meses estimados desde que se obtenga la licencia hasta entrega ·
+   *  análogo a `mesesTrasContrato` · solo aplica cuando
+   *  `tipoEntrega === "tras_licencia"`. */
+  mesesTrasLicencia: number;
   // Unifamiliar multi-select
   tipologiasSeleccionadas: TipologiaSeleccionada[];
   estilosSeleccionados: EstiloVivienda[];
@@ -485,6 +489,7 @@ export const defaultWizardState: WizardState = {
   fechaTerminacion: null,
   tipoEntrega: null,
   mesesTrasContrato: 0,
+  mesesTrasLicencia: 0,
   tipologiasSeleccionadas: [],
   estilosSeleccionados: [],
   tiposUnidadMixto: [],

@@ -15,7 +15,7 @@ import {
   List, Map as MapIcon, LayoutGrid, Mail, ArrowRight, EyeOff, HardHat,
   type LucideIcon,
 } from "lucide-react";
-import { promotions, getBuildingTypeLabel, type Promotion } from "@/data/promotions";
+import { promotions, getBuildingTypeLabel, isUnifamiliar, type Promotion } from "@/data/promotions";
 import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import { developerOnlyPromotions, type DevPromotion } from "@/data/developerPromotions";
 import { unitsByPromotion } from "@/data/units";
@@ -150,6 +150,16 @@ function getDeliveryYear(delivery?: string): number {
   if (!delivery) return 9999;
   const match = delivery.match(/\d{4}/);
   return match ? parseInt(match[0], 10) : 9999;
+}
+
+/** Parsea un timestamp ISO ("2026-05-04T20:32:11Z") o numérico a
+ *  millis · 0 si vacío/inválido (orden "Recientes" lo manda al
+ *  final). */
+function parseTime(t?: string | number): number {
+  if (typeof t === "number") return t;
+  if (!t) return 0;
+  const ms = Date.parse(t);
+  return Number.isFinite(ms) ? ms : 0;
 }
 
 /** Traduce un value de propertyType a su label en español */
@@ -823,9 +833,7 @@ export default function Promociones() {
    *  para "Vendidas". */
   const hasDraft = useMemo(
     () => allPromotions.some((p) =>
-      p.status === "incomplete"
-      || p.status === "inactive"
-      || (p.status === "active" && getMissingForPromotion(p).length > 0)
+      p.status === "incomplete" || p.status === "inactive"
     ),
     [allPromotions],
   );
@@ -910,21 +918,17 @@ export default function Promociones() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return allPromotions.filter(p => {
-      /* Tabs (modelo 2026-05-01):
-       *  · draft     · incomplete / inactive (legacy) · O active con
-       *                campos obligatorios pendientes (incongruencia
-       *                heredada del seed · se trata como borrador para
-       *                ser coherente con el detail page).
-       *  · active    · status="active" Y sin missing fields.
-       *  · published · alias legacy de active.
-       *  · sold-out  · sold-out.
-       *  · all       · sin filtro. */
-      const incompleteByMissing = p.status === "active"
-        && getMissingForPromotion(p).length > 0;
+      /* Tabs · REGLA · confiamos en `p.status` de DB · NO re-validamos
+       * con `getMissingForPromotion`. Antes el filtro "Activas"
+       * ocultaba promos active que tuvieran cualquier missing
+       * (empresaTieneIdentidad sin configurar, image vacío, etc.) ·
+       * el user veía una lista vacía aunque hubiera promos activadas.
+       * El detail page sigue avisando con banner rojo si faltan
+       * datos · pero el listado refleja el estado real de DB. */
       if (statusFilter === "draft") {
-        if (p.status !== "incomplete" && p.status !== "inactive" && !incompleteByMissing) return false;
+        if (p.status !== "incomplete" && p.status !== "inactive") return false;
       } else if (statusFilter === "active" || statusFilter === "published") {
-        if (p.status !== "active" || incompleteByMissing) return false;
+        if (p.status !== "active") return false;
       } else if (statusFilter === "sold-out") {
         if (p.status !== "sold-out") return false;
       }
@@ -1071,6 +1075,17 @@ export default function Promociones() {
     selectedDelivery, selectedCommissions,
   ]);
 
+  /* Helper · precio efectivo · delega en `getPromoStats` que ya
+   * deriva priceMin/priceMax de las unidades DISPONIBLES (status=
+   * available). Sin disponibles, +Infinity (asc) / 0 (desc) → al
+   * final del listado. */
+  const getEffectivePrice = (p: DevPromotion, dir: "min" | "max"): number => {
+    const stats = getPromoStats(p.id, p);
+    const v = dir === "min" ? stats.priceMin : stats.priceMax;
+    if (v > 0) return v;
+    return dir === "min" ? Number.POSITIVE_INFINITY : 0;
+  };
+
   /* ─── Ordenación ─── */
   const sortedAndFiltered = useMemo(() => {
     const arr = [...filtered];
@@ -1084,21 +1099,25 @@ export default function Promociones() {
           return bT - aT;
         });
       case "priceAsc":
-        return arr.sort((a, b) => a.priceMin - b.priceMin);
+        return arr.sort((a, b) => getEffectivePrice(a, "min") - getEffectivePrice(b, "min"));
       case "priceDesc":
-        return arr.sort((a, b) => b.priceMax - a.priceMax);
+        return arr.sort((a, b) => getEffectivePrice(b, "max") - getEffectivePrice(a, "max"));
       case "deliveryAsc":
         return arr.sort((a, b) => getDeliveryYear(a.delivery) - getDeliveryYear(b.delivery));
       case "availability":
         return arr.sort((a, b) => b.availableUnits - a.availableUnits);
       case "recent":
       default:
-        // 'recent' aproximado: las que tienen badge "new" primero, luego por actividad
+        /* "Recientes" · ordenar por timestamp `updatedAt` (ISO o
+         *  número) desc · las recién creadas/editadas primero ·
+         *  fallback secundario por actividad live cuando no hay
+         *  timestamp (promos seed). Antes ordenaba solo por badge
+         *  "new" + actividad · las promos recién creadas (sin
+         *  actividad aún) caían al final · contraintuitivo. */
         return arr.sort((a, b) => {
-          const aNew = a.badge === "new" ? 1 : 0;
-          const bNew = b.badge === "new" ? 1 : 0;
-          if (aNew !== bNew) return bNew - aNew;
-          /* Actividad live (registros + visitas + reservas últimos 14d). */
+          const aT = parseTime(a.updatedAt);
+          const bT = parseTime(b.updatedAt);
+          if (aT !== bT) return bT - aT;
           const aAct = activityByPromo.get(a.id)?.inquiries ?? 0;
           const bAct = activityByPromo.get(b.id)?.inquiries ?? 0;
           return bAct - aAct;
@@ -1308,11 +1327,18 @@ export default function Promociones() {
                *  si la promo no tiene units cargadas. Sustituye el
                *  badge / availableUnits / totalUnits del seed estático. */
               const liveStats = getPromoStats(p.id, p);
-              const badgeLabel = liveStats.badge === "new" ? "Nueva"
-                : liveStats.badge === "last-units" ? "Últimas unidades"
-                : null;
               const status = statusTag(p);
               const { typologies, units: availableUnits, lastUnit, isSingle } = getAvailableData(p.id, unitsByPromotion);
+              /* Badge sobre la foto · REGLA canónica:
+               *  · totalUnits === 1                → "Única unidad"
+               *  · totalUnits > 1 + 1 disponible   → "Última unidad" (singular)
+               *  · totalUnits > 1 + ≤N disponibles → "Últimas unidades" (plural)
+               *  · `live.badge="new"`              → "Nueva". */
+              const badgeLabel = liveStats.badge === "new"
+                ? "Nueva"
+                : liveStats.badge === "last-units"
+                  ? (isSingle ? "Única unidad" : "Última unidad")
+                  : null;
               const trending = isTrending(p);
               const hasMissing = p.missingSteps && p.missingSteps.length > 0;
 
@@ -1369,11 +1395,11 @@ export default function Promociones() {
                           <p className="text-white text-lg sm:text-xl font-semibold tracking-tight drop-shadow-md">
                             {lastUnit ? formatPrice(lastUnit.price) : (
                               <>
-                                {formatPrice(p.priceMin)}
-                                {p.priceMax > p.priceMin && (
+                                {formatPrice(liveStats.priceMin)}
+                                {liveStats.priceMax > liveStats.priceMin && (
                                   <>
                                     <span className="text-white/80"> — </span>
-                                    {formatPrice(p.priceMax)}
+                                    {formatPrice(liveStats.priceMax)}
                                   </>
                                 )}
                               </>
@@ -1557,9 +1583,9 @@ export default function Promociones() {
                     <p className="hidden xl:block text-lg font-bold text-foreground tracking-tight mb-3">
                       {lastUnit ? formatPrice(lastUnit.price) : (
                         <>
-                          {formatPrice(p.priceMin)}
-                          {p.priceMax > p.priceMin && <span className="text-muted-foreground font-normal"> — </span>}
-                          {p.priceMax > p.priceMin && formatPrice(p.priceMax)}
+                          {formatPrice(liveStats.priceMin)}
+                          {liveStats.priceMax > liveStats.priceMin && <span className="text-muted-foreground font-normal"> — </span>}
+                          {liveStats.priceMax > liveStats.priceMin && formatPrice(liveStats.priceMax)}
                         </>
                       )}
                     </p>
@@ -1579,7 +1605,14 @@ export default function Promociones() {
                           <span className="text-xs text-muted-foreground">{lastUnit.bedrooms} hab · {lastUnit.bathrooms} baños</span>
                           <span className="text-xs text-muted-foreground">{lastUnit.builtArea} m² const.</span>
                           {lastUnit.terrace > 0 && <span className="text-xs text-muted-foreground">{lastUnit.terrace} m² terraza</span>}
-                          <span className="text-xs text-muted-foreground">Planta {lastUnit.floor} · {lastUnit.orientation}</span>
+                          {/* REGLA · "Planta" no aplica a unifamiliares (villas
+                            * son una vivienda en parcela · no edificio).
+                            * Solo se muestra para promociones plurifamiliares. */}
+                          {isUnifamiliar(p.buildingType) ? (
+                            <span className="text-xs text-muted-foreground">{lastUnit.orientation}</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Planta {lastUnit.floor} · {lastUnit.orientation}</span>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1623,18 +1656,26 @@ export default function Promociones() {
                           * agencia no debe ver con quién más colabora). */}
                         {!isAgencyUser && (() => {
                           /* Developer · footer según estado:
-                           *    Borrador (incompleto / active+missing)
+                           *    Borrador (status=incomplete/inactive)
                            *      → "Activa para compartir" (warning)
                            *    No visible (canShare=false)
                            *      → "No visible para colaboradores" (muted)
                            *    Visible + 0 agencias
                            *      → "Aún no compartido · 0 agencias" (muted)
                            *    Visible + ≥1 agencia / Vendida
-                           *      → contador real */
+                           *      → contador real
+                           *
+                           * REGLA · El listado confía en `p.status` de DB ·
+                           * NO re-valida con `getMissingForPromotion`. Si
+                           * el user activó la promo (status=active), el
+                           * footer muestra contador · no "Activa para
+                           * compartir". El banner rojo de validación con
+                           * el detalle de campos missing ya vive arriba
+                           * en la ficha. Antes el doble chequeo metía
+                           * promos activas-con-missing en branch borrador
+                           * y nunca aparecía el contador. */
                           const isDraft = !isAgencyUser
-                            && (p.status === "incomplete"
-                                || p.status === "inactive"
-                                || (p.status === "active" && getMissingForPromotion(p).length > 0));
+                            && (p.status === "incomplete" || p.status === "inactive");
                           const realAgenciesNow = countAgenciesForPromotion(p.id);
                           const isNoVisible = !isAgencyUser
                             && p.status === "active"
@@ -1691,9 +1732,9 @@ export default function Promociones() {
                             </span>
                           );
                         })()}
-                        {p.constructionProgress !== undefined && p.constructionProgress < 100 && (
-                          <span>{p.constructionProgress}% obra</span>
-                        )}
+                        {/* "% obra" eliminado del footer · ya se muestra en
+                          * el KPI strip arriba (línea 1523). Evita
+                          * duplicar el mismo dato en la misma card. */}
                         {p.hasShowFlat && <span className="hidden sm:inline">Piso piloto</span>}
                       </div>
                       {/* "Compartir con agencias" es una acción del
@@ -2348,7 +2389,13 @@ function PromoCardCompact({ promo: p, isTrending, isAgencyUser }: { promo: DevPr
         )}
         {liveStats.badge && (
           <Tag variant="overlay" size="sm" shape="pill" className="absolute top-3 left-3 shadow-soft">
-            {liveStats.badge === "new" ? "Nueva" : "Últimas unidades"}
+            {/* REGLA · Total=1 → "Única unidad" · Total>1+1 dispo → "Última
+              * unidad" (singular) · Nueva → "Nueva". */}
+            {liveStats.badge === "new"
+              ? "Nueva"
+              : liveStats.totalUnits === 1
+                ? "Única unidad"
+                : "Última unidad"}
           </Tag>
         )}
       </div>
@@ -2359,8 +2406,8 @@ function PromoCardCompact({ promo: p, isTrending, isAgencyUser }: { promo: DevPr
           {getPromoterDisplayName(p)} · {p.delivery}
         </p>
         <p className="text-lg font-bold text-foreground mt-2 tnum">
-          {fmt(p.priceMin)}
-          {p.priceMax > p.priceMin && <span className="text-muted-foreground font-normal"> — {fmt(p.priceMax)}</span>}
+          {fmt(liveStats.priceMin)}
+          {liveStats.priceMax > liveStats.priceMin && <span className="text-muted-foreground font-normal"> — {fmt(liveStats.priceMax)}</span>}
         </p>
         <div className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[11.5px]">
           <span className="text-muted-foreground"><span className="font-semibold text-foreground tnum">{liveStats.availableUnits}/{liveStats.totalUnits}</span> disp.</span>

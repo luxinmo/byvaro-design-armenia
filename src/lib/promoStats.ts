@@ -32,11 +32,16 @@ export type PromoStats = {
   totalUnits: number;
   /** Etiqueta superior izquierda en card · null si no aplica. */
   badge: "new" | "last-units" | undefined;
+  /** Precio mínimo derivado de unidades disponibles (status=available).
+   *  0 si no hay disponibles · usa seed como fallback si no hay units. */
+  priceMin: number;
+  /** Precio máximo de unidades disponibles · 0 si no hay disponibles. */
+  priceMax: number;
 };
 
 export function getPromoStats(
   promoId: string,
-  seed: { availableUnits: number; totalUnits: number; badge?: string },
+  seed: { availableUnits: number; totalUnits: number; badge?: string; priceMin?: number; priceMax?: number },
 ): PromoStats {
   const units = unitsByPromotion[promoId];
 
@@ -50,11 +55,21 @@ export function getPromoStats(
       availableUnits: seed.availableUnits,
       totalUnits: seed.totalUnits,
       badge,
+      priceMin: seed.priceMin ?? 0,
+      priceMax: seed.priceMax ?? 0,
     };
   }
 
-  const availableUnits = units.filter((u) => u.status === "available").length;
+  const available = units.filter((u) => u.status === "available");
+  const availableUnits = available.length;
   const totalUnits = units.length;
+
+  /* Precios derivados de las unidades DISPONIBLES · regla canónica:
+   *  el rango de la card refleja qué hay realmente a la venta · si la
+   *  unidad barata se vende, el "desde" sube. */
+  const availablePrices = available.map((u) => u.price ?? 0).filter((n) => n > 0);
+  const priceMin = availablePrices.length > 0 ? Math.min(...availablePrices) : 0;
+  const priceMax = availablePrices.length > 0 ? Math.max(...availablePrices) : 0;
 
   /* Badge dinámico · prevalece "last-units" sobre "new" cuando solo
    *  queda 1 unidad (es la señal más urgente para el comercial). */
@@ -62,5 +77,5 @@ export function getPromoStats(
   if (availableUnits === 1) badge = "last-units";
   else if (seed.badge === "new") badge = "new";
 
-  return { availableUnits, totalUnits, badge };
+  return { availableUnits, totalUnits, badge, priceMin, priceMax };
 }

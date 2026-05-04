@@ -1106,9 +1106,18 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
             }}
             label="Ordenar"
             options={[
-              { value: "block-asc", label: "Bloque" },
-              { value: "floor-asc", label: "Planta ↑" },
-              { value: "floor-desc", label: "Planta ↓" },
+              /* En unifamiliares NO mostramos opciones por Bloque /
+               * Planta · son por Parcela. */
+              ...(hasUnifamiliar
+                ? [
+                    { value: "floor-asc",  label: "Parcela ↑" },
+                    { value: "floor-desc", label: "Parcela ↓" },
+                  ]
+                : [
+                    { value: "block-asc",  label: "Bloque" },
+                    { value: "floor-asc",  label: "Planta ↑" },
+                    { value: "floor-desc", label: "Planta ↓" },
+                  ]),
               { value: "price-asc", label: "Precio ↑" },
               { value: "price-desc", label: "Precio ↓" },
               { value: "builtArea-desc", label: "Superficie ↓" },
