@@ -169,6 +169,7 @@ export default function Login() {
       accountType === "agency" ? authData.user.email! : undefined,
       m.organization_id, // ← organization_id real del workspace
       userName,           // ← nombre del JWT metadata
+      authData.user.id,   // ← auth.uid() real
     );
     setSubmitting(false);
 

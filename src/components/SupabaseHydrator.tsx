@@ -24,6 +24,7 @@ import { hydrateDeveloperPacksFromSupabase } from "@/lib/empresaCategories";
 import { hydrateUserPublicRefs } from "@/lib/userPublicRef";
 import { hydratePlanForCurrentUser } from "@/lib/plan";
 import { hydrateTeamFromSupabase } from "@/lib/teamHydrator";
+import { hydrateMyProfile } from "@/lib/meProfileHydrator";
 import { hydrateDraftsFromSupabase } from "@/lib/promotionDrafts";
 import { clearMemCache } from "@/lib/memCache";
 import { loginAs } from "@/lib/accountType";
@@ -42,7 +43,8 @@ async function ensureSessionStorageHydrated(): Promise<void> {
 
     const hasName = sessionStorage.getItem("byvaro.accountType.userName.v1");
     const hasOrgId = sessionStorage.getItem("byvaro.accountType.organizationId.v1");
-    if (hasName && hasOrgId) return; // ya está poblado
+    const hasUserId = sessionStorage.getItem("byvaro.accountType.userId.v1");
+    if (hasName && hasOrgId && hasUserId) return; // ya está poblado
 
     const { data: members } = await supabase
       .from("organization_members")
@@ -67,6 +69,7 @@ async function ensureSessionStorageHydrated(): Promise<void> {
       accountType === "agency" ? user.email! : undefined,
       m.organization_id,
       userName,
+      user.id,
     );
   } catch (e) {
     console.warn("[SupabaseHydrator] ensure session skipped:", e);
@@ -100,6 +103,11 @@ async function hydrateAll(): Promise<void> {
      *  /register no aparecen en /equipo, /ajustes/usuarios/miembros
      *  ni en los selectores de asignación (UserSelect, calendario). */
     hydrateTeamFromSupabase(),
+    /* Perfil canónico del user actual · cubre el caso de no aparecer
+     *  todavía en list_workspace_members (workspace pending, primer
+     *  login). Sin esto, /ajustes/perfil/personal arrancaría con seed
+     *  mock "u1" para users reales con UUID auth.uid() distinto. */
+    hydrateMyProfile(),
     /* Borradores de promoción del user · cross-device. Antes vivían
      *  solo en memCache (in-memory) y se perdían al recargar. */
     hydrateDraftsFromSupabase(),
