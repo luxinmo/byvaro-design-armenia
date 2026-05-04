@@ -152,6 +152,16 @@ function getDeliveryYear(delivery?: string): number {
   return match ? parseInt(match[0], 10) : 9999;
 }
 
+/** Parsea un timestamp ISO ("2026-05-04T20:32:11Z") o numérico a
+ *  millis · 0 si vacío/inválido (orden "Recientes" lo manda al
+ *  final). */
+function parseTime(t?: string | number): number {
+  if (typeof t === "number") return t;
+  if (!t) return 0;
+  const ms = Date.parse(t);
+  return Number.isFinite(ms) ? ms : 0;
+}
+
 /** Traduce un value de propertyType a su label en español */
 function getPropertyTypeLabel(v: string): string {
   return propertyTypeLabels[v] || v;
@@ -1087,12 +1097,16 @@ export default function Promociones() {
         return arr.sort((a, b) => b.availableUnits - a.availableUnits);
       case "recent":
       default:
-        // 'recent' aproximado: las que tienen badge "new" primero, luego por actividad
+        /* "Recientes" · ordenar por timestamp `updatedAt` (ISO o
+         *  número) desc · las recién creadas/editadas primero ·
+         *  fallback secundario por actividad live cuando no hay
+         *  timestamp (promos seed). Antes ordenaba solo por badge
+         *  "new" + actividad · las promos recién creadas (sin
+         *  actividad aún) caían al final · contraintuitivo. */
         return arr.sort((a, b) => {
-          const aNew = a.badge === "new" ? 1 : 0;
-          const bNew = b.badge === "new" ? 1 : 0;
-          if (aNew !== bNew) return bNew - aNew;
-          /* Actividad live (registros + visitas + reservas últimos 14d). */
+          const aT = parseTime(a.updatedAt);
+          const bT = parseTime(b.updatedAt);
+          if (aT !== bT) return bT - aT;
           const aAct = activityByPromo.get(a.id)?.inquiries ?? 0;
           const bAct = activityByPromo.get(b.id)?.inquiries ?? 0;
           return bAct - aAct;
