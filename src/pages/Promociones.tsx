@@ -1630,18 +1630,26 @@ export default function Promociones() {
                           * agencia no debe ver con quién más colabora). */}
                         {!isAgencyUser && (() => {
                           /* Developer · footer según estado:
-                           *    Borrador (incompleto / active+missing)
+                           *    Borrador (status=incomplete/inactive)
                            *      → "Activa para compartir" (warning)
                            *    No visible (canShare=false)
                            *      → "No visible para colaboradores" (muted)
                            *    Visible + 0 agencias
                            *      → "Aún no compartido · 0 agencias" (muted)
                            *    Visible + ≥1 agencia / Vendida
-                           *      → contador real */
+                           *      → contador real
+                           *
+                           * REGLA · El listado confía en `p.status` de DB ·
+                           * NO re-valida con `getMissingForPromotion`. Si
+                           * el user activó la promo (status=active), el
+                           * footer muestra contador · no "Activa para
+                           * compartir". El banner rojo de validación con
+                           * el detalle de campos missing ya vive arriba
+                           * en la ficha. Antes el doble chequeo metía
+                           * promos activas-con-missing en branch borrador
+                           * y nunca aparecía el contador. */
                           const isDraft = !isAgencyUser
-                            && (p.status === "incomplete"
-                                || p.status === "inactive"
-                                || (p.status === "active" && getMissingForPromotion(p).length > 0));
+                            && (p.status === "incomplete" || p.status === "inactive");
                           const realAgenciesNow = countAgenciesForPromotion(p.id);
                           const isNoVisible = !isAgencyUser
                             && p.status === "active"
