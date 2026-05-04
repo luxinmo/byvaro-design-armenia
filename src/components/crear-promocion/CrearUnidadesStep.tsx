@@ -34,7 +34,16 @@ import { UnitSimpleEditDialog } from "./UnitSimpleEditDialog";
 import { UnitPhotosDialog } from "./UnitPhotosDialog";
 import { uploadPromotionImage } from "@/lib/storage";
 import { ensureDraftPersisted } from "@/lib/promotionDrafts";
+import { generatePublicRef } from "@/lib/publicRef";
 import { toast } from "sonner";
+
+/** Genera id canónico de unit · `UN + 8 dígitos` aleatorios ·
+ *  scheme de la organización (publicRef). Sin colisiones globales ·
+ *  reemplaza al patrón legacy `unit-1`, `unit-${counter}` que pisaba
+ *  unidades cross-promo en `promotion_units` (onConflict="id"). */
+function genUnitId(): string {
+  return generatePublicRef("unit");
+}
 
 const orientaciones = ["Norte", "Sur", "Este", "Oeste", "NE", "NO", "SE", "SO"];
 
@@ -59,7 +68,7 @@ function baseUnit(partial: Partial<UnitData>): UnitData {
    * lo puse yo o vino de fábrica?"). El status sigue en "available"
    * porque es el estado inicial real, no un valor inventado. */
   return {
-    id: "unit-x",
+    id: genUnitId(),
     ref: "",
     nombre: "",
     dormitorios: 0, banos: 0,
@@ -126,7 +135,7 @@ function generateEdificio(state: WizardState): UnitData[] {
           const parcela = subtipo === "planta_baja" ? 30 : 0;
           units.push(
             baseUnit({
-              id: `unit-${counter}`,
+              id: genUnitId(),
               ref: `${prefix}-${String(counter).padStart(4, "0")}`,
               nombre: unitLabel(p, floorEnd, letter, namePrefix, state.plantaBajaTipo),
               planta: p,
@@ -165,7 +174,7 @@ function generateSingleUnit(state: WizardState): UnitData[] {
     || state.trasteros > 0;
   return [
     baseUnit({
-      id: "unit-1",
+      id: genUnitId(),
       ref: `${prefix}-0001`,
       nombre: isIndependiente ? "Villa 1" : "V1",
       tipologiaUnifamiliar: state.subVarias ?? undefined,
@@ -206,7 +215,7 @@ function generateMultipleUnifamiliar(state: WizardState): UnitData[] {
       countersByTipo[tipologia.tipo] = idx + 1;
       units.push(
         baseUnit({
-          id: `unit-${counter + 1}`,
+          id: genUnitId(),
           ref: `${prefix}-${String(counter + 1).padStart(4, "0")}`,
           nombre: unifamiliarLabelFor(idx, tipologia.tipo),
           tipologiaUnifamiliar: tipologia.tipo,
@@ -520,7 +529,7 @@ export function CrearUnidadesStep({
       for (let i = 0; i < delta; i++) {
         newUnits.push(
           baseUnit({
-            id: `unit-${now}-${offset}`,
+            id: genUnitId(),
             nombre: unifamiliarLabelFor(startIdx + i, tipo),
             /* CRÍTICO · sin esto la unidad sale como "Sin tipo" /
              * "Apartamento" porque unitDataToUnit cae en el default. */
@@ -568,7 +577,7 @@ export function CrearUnidadesStep({
       for (let i = 0; i < delta; i++) {
         newUnits.push(
           baseUnit({
-            id: `unit-${now}-${offset}`,
+            id: genUnitId(),
             nombre: `${label} ${offset + 1}`,
             subtipo,
             orientacion: orientaciones[offset % orientaciones.length],
