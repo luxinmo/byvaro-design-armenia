@@ -325,7 +325,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     const map: Partial<Record<NonNullable<typeof editOpen>, StepId>> = {
       multimedia: "multimedia",
       basicInfo: "info_basica",
-      structure: "tipo",
+      /* "Estructura" abre el step "estado" · combina estado de
+       * obra + licencia + fase de construcción + tipo de entrega
+       * (incluye meses tras contrato/licencia). El user lo pidió
+       * explícitamente · es lo que más cambia tras crear la promo. */
+      structure: "estado",
       description: "descripcion",
       location: "ubicacion",
       paymentPlan: "plan_pagos",
