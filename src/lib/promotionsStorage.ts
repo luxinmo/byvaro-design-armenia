@@ -89,19 +89,31 @@ export async function createPromotionFromWizard(
   const now = new Date().toISOString();
   const id = `prom-c-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-  /* Extraer campos del WizardState. El shape exacto del wizard
-   * varía · usamos getters defensivos para no acoplar. */
-  const s = state as unknown as Record<string, unknown>;
-  const name = (s.nombrePromocion as string) || "Sin título";
-  const city = (s.ciudad as string) ?? null;
-  const country = (s.pais as string) ?? "ES";
-  const address = (s.direccion as string) ?? null;
-  const description = (s.descripcion as string) ?? null;
-  const totalUnits = Number((s.totalUnidades as number) ?? (s.unidadesTotal as number) ?? 0);
-  const priceFrom = Number((s.precioMin as number) ?? (s.precioDesde as number) ?? 0) || null;
-  const priceTo = Number((s.precioMax as number) ?? (s.precioHasta as number) ?? 0) || null;
-  const delivery = (s.entrega as string) ?? null;
-  const imageUrl = (s.heroImage as string) ?? (s.imagenPrincipal as string) ?? null;
+  /* Extraer campos del WizardState · los nombres reales viven en
+   * `src/components/crear-promocion/types.ts`. Antes este extractor
+   * usaba nombres inventados (s.ciudad, s.totalUnidades, s.precioMin,
+   * s.entrega) que NO existen en WizardState · resultado · cada
+   * campo era null/0 aunque el wizard tuviera los datos · la ficha
+   * mostraba "Sin configurar" en todo. */
+  const name = state.nombrePromocion?.trim() || "Sin título";
+  const city = state.direccionPromocion?.ciudad?.trim() || null;
+  const country = state.direccionPromocion?.pais?.trim() || "ES";
+  const address = state.direccionPromocion?.direccion?.trim() || null;
+  const description = state.descripcion?.trim() || null;
+  /* totalUnits · count de unidades creadas en el wizard. */
+  const totalUnits = state.unidades?.length ?? 0;
+  /* Rango de precios · derivado de las unidades con precio > 0. */
+  const unitPrices = (state.unidades ?? [])
+    .map((u) => u.precio ?? 0)
+    .filter((p) => p > 0);
+  const priceFrom = unitPrices.length > 0 ? Math.min(...unitPrices) : null;
+  const priceTo = unitPrices.length > 0 ? Math.max(...unitPrices) : null;
+  /* Entrega · primero fecha exacta, si no trimestre estimado. */
+  const delivery = state.fechaEntrega?.trim() || state.trimestreEntrega?.trim() || null;
+  /* Imagen principal · primera foto marcada como esPrincipal o la
+   * primera del array. */
+  const heroFoto = state.fotos?.find((f) => f.esPrincipal) ?? state.fotos?.[0];
+  const imageUrl = heroFoto?.url ?? null;
 
   const created: CreatedPromotion = {
     id,
