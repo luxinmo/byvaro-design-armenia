@@ -409,6 +409,33 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     return draftState.unidades.map((u) => unitDataToUnit(u, id ?? ""));
   }, [isDraft, draftState, id]);
 
+  /* Hydration tick · React no se entera cuando seedHydrator MUTA el
+   *  array `developerOnlyPromotions` (no es state · es módulo-level).
+   *  El hydrator dispara `byvaro:seed-hydrated` cada vez que termina
+   *  un pull de Supabase · este state incrementa y fuerza re-render.
+   *  Sin esto · al entrar a la ficha de una promo cuyo cache local
+   *  está vacío (sesión nueva), pintaba "Promoción no encontrada"
+   *  para siempre porque el render no se repetía cuando llegaba la
+   *  data. `hasHydrated` distingue "todavía cargando" vs "ya intenté
+   *  y no existe" · evita el flash de "no encontrada". */
+  const [hydrationTick, setHydrationTick] = useState(0);
+  const [hasHydrated, setHasHydrated] = useState(false);
+  useEffect(() => {
+    const onHydrated = () => {
+      setHydrationTick((t) => t + 1);
+      setHasHydrated(true);
+    };
+    window.addEventListener("byvaro:seed-hydrated", onHydrated);
+    /* Safety net · si el hydrator nunca dispara (por ejemplo Supabase
+     * sin configurar) marcamos hasHydrated tras 4s para que el
+     * mensaje "no encontrada" pueda aparecer. */
+    const safetyTimer = window.setTimeout(() => setHasHydrated(true), 4000);
+    return () => {
+      window.removeEventListener("byvaro:seed-hydrated", onHydrated);
+      window.clearTimeout(safetyTimer);
+    };
+  }, []);
+
   /* Adapter local · `byvaro.promotions.created.v1` (promociones recién
    *  creadas via wizard) → DevPromotion. Sin esto, justo después de
    *  "Activar" + navegar a la ficha la página decía "Promoción no
@@ -454,7 +481,8 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         metadata: c.metadata ?? {},
       } as unknown as DevPromotion;
     });
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrationTick]);
 
   const allPromotions: DevPromotion[] = [
     ...(draftData ? [draftData] : []),
@@ -486,6 +514,22 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   }
 
   if (!p) {
+    /* Loading state mientras el seedHydrator pulla de Supabase. Sin
+     *  esto, al entrar a la ficha de una promo cuyo cache local está
+     *  vacío (sesión nueva o reload) pintaba "Promoción no encontrada"
+     *  durante el flash entre mount y la llegada de la data · el user
+     *  veía el mensaje y se asustaba aunque la promo SÍ existía en
+     *  Supabase. */
+    if (!hasHydrated) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center space-y-3 max-w-md px-4">
+            <div className="inline-block h-6 w-6 rounded-full border-2 border-muted-foreground/30 border-t-foreground animate-spin" />
+            <p className="text-sm text-muted-foreground">Cargando promoción…</p>
+          </div>
+        </div>
+      );
+    }
     // Mensaje contextual: si el id era un borrador, probablemente se
     // descartó desde otra pestaña o se publicó mientras tanto.
     const wasDraft = isDraft;
