@@ -724,15 +724,22 @@ export function hydrateFromSupabase(): Promise<void> {
            *  cambiamos el filtro. */
           type DBPromo = {
             id: string; name: string; status: string;
+            reference: string | null;
             owner_organization_id: string; owner_role: string;
             description: string | null; address: string | null;
             city: string | null; country: string | null;
             total_units: number; available_units: number;
             price_from: number | null; price_to: number | null;
             delivery: string | null; image_url: string | null;
+            metadata: Record<string, unknown> | null;
           };
           const mapped = (promosR.data as DBPromo[]).map((p) => ({
             id: p.id,
+            /* `code` · publicRef canónico para construir URLs
+             *  bonitas (`/promociones/PR12345`). Sin esto, los
+             *  helpers `promotionHref(p)` caen al id interno
+             *  (`prom-c-1234...`) tras la hidratación. */
+            code: p.reference ?? undefined,
             name: p.name,
             ownerOrganizationId: p.owner_organization_id,
             ownerRole: p.owner_role,
@@ -747,7 +754,12 @@ export function hydrateFromSupabase(): Promise<void> {
             priceTo: p.price_to,
             delivery: p.delivery ?? null,
             imageUrl: p.image_url ?? null,
-            metadata: {},
+            /* Metadata · CRÍTICO conservar el wizardSnapshot que el
+             *  adapter `createdAsDev` lee para enriquecer la card
+             *  (propertyTypes, buildingType, comisión, etc.). Si lo
+             *  pisamos a {} la card de la promo recién hidratada
+             *  pierde información. */
+            metadata: p.metadata ?? {},
             createdAt: "",
           }));
           try {

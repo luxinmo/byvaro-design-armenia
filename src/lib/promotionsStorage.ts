@@ -186,6 +186,11 @@ export async function createPromotionFromWizard(
   }
   const { error } = await supabase.from("promotions").insert({
     id: created.id,
+    /* `reference` · publicRef canónico (PR + 5 dígitos) · sin
+     *  esto, al re-hidratar desde DB el code quedaba undefined y
+     *  `promotionHref(p)` caía al id interno (`prom-c-1234...`)
+     *  en vez del PR... bonito. */
+    reference: created.code ?? null,
     owner_organization_id: ownerOrgId,
     owner_role: ownerRole,
     name: created.name,
