@@ -45,14 +45,24 @@ import type { WizardState, EstadoPromocion } from "@/components/crear-promocion/
    Helpers
    ══════════════════════════════════════════════════════════════════ */
 
-/** Reconstruye el string de delivery a partir de los tres campos
- *  del wizard · prioriza fechaEntrega (ISO) > trimestreEntrega >
- *  tipoEntrega · si todos null, devuelve "" para que el validador
- *  reporte el missing. */
+/** Reconstruye el string de delivery a partir de los campos del
+ *  wizard · prioriza fechaEntrega (ISO) > trimestreEntrega >
+ *  modelos relativos (tras_contrato_cv / tras_licencia con sus
+ *  meses) · "" si nada configurado · el validador lo reporta como
+ *  missing. */
 function deliveryString(state: WizardState): string {
   if (state.fechaEntrega) return state.fechaEntrega;
   if (state.trimestreEntrega) return state.trimestreEntrega;
-  if (state.tipoEntrega) return state.tipoEntrega;
+  if (state.tipoEntrega === "tras_contrato_cv") {
+    return state.mesesTrasContrato > 0
+      ? `Tras contrato C/V · ${state.mesesTrasContrato} meses`
+      : "Tras contrato C/V";
+  }
+  if (state.tipoEntrega === "tras_licencia") {
+    return state.mesesTrasLicencia > 0
+      ? `Tras licencia · ${state.mesesTrasLicencia} meses`
+      : "Tras licencia";
+  }
   return "";
 }
 

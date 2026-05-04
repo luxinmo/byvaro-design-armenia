@@ -1548,17 +1548,36 @@ export default function Promociones() {
                       {p.constructionProgress !== undefined && (
                         <Metric label="Obra" value={`${p.constructionProgress}%`} />
                       )}
-                      {/* Chip "Licencia concedida" · señal de garantía
-                          clave que la agencia busca · sello visible en
-                          el listado para que destaque sobre las que no
-                          la tienen. TODO(backend) · leer de un campo
-                          real cuando exista (ahora siempre concedida). */}
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-success">
-                        <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-success/15">
-                          <Check className="h-2 w-2 text-success" strokeWidth={3} />
-                        </span>
-                        Licencia concedida
-                      </span>
+                      {/* Chip "Licencia concedida" · solo cuando el
+                          wizard guardó tieneLicencia=true. Si false ·
+                          mostramos "Sin licencia" en muted para que se
+                          note la diferencia. Si null (no preguntado),
+                          no mostramos chip. */}
+                      {(() => {
+                        const wsTieneLic = (p as { metadata?: { wizardSnapshot?: { tieneLicencia?: boolean | null } } })
+                          .metadata?.wizardSnapshot?.tieneLicencia;
+                        if (wsTieneLic === true) {
+                          return (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-success">
+                              <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-success/15">
+                                <Check className="h-2 w-2 text-success" strokeWidth={3} />
+                              </span>
+                              Licencia concedida
+                            </span>
+                          );
+                        }
+                        if (wsTieneLic === false) {
+                          return (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                              <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-muted">
+                                <X className="h-2 w-2 text-muted-foreground" strokeWidth={3} />
+                              </span>
+                              Sin licencia
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
 
                     {/* Trending activity box · datos LIVE de los últimos 14d */}
@@ -1607,11 +1626,17 @@ export default function Promociones() {
                           {lastUnit.terrace > 0 && <span className="text-xs text-muted-foreground">{lastUnit.terrace} m² terraza</span>}
                           {/* REGLA · "Planta" no aplica a unifamiliares (villas
                             * son una vivienda en parcela · no edificio).
-                            * Solo se muestra para promociones plurifamiliares. */}
+                            * Solo se muestra para promociones plurifamiliares.
+                            * Orientación · solo si el user la marcó (string
+                            * vacío = no defaulteamos a "Sur"). */}
                           {isUnifamiliar(p.buildingType) ? (
-                            <span className="text-xs text-muted-foreground">{lastUnit.orientation}</span>
+                            lastUnit.orientation && (
+                              <span className="text-xs text-muted-foreground">{lastUnit.orientation}</span>
+                            )
                           ) : (
-                            <span className="text-xs text-muted-foreground">Planta {lastUnit.floor} · {lastUnit.orientation}</span>
+                            <span className="text-xs text-muted-foreground">
+                              Planta {lastUnit.floor}{lastUnit.orientation ? ` · ${lastUnit.orientation}` : ""}
+                            </span>
                           )}
                         </div>
                       </div>
