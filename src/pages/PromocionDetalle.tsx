@@ -690,44 +690,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       /* "Eliminar" · solo en promociones creadas via wizard (`prom-c-*`).
        *  Movido del header al rail con `danger: true` para separar
        *  acciones cotidianas de la destructiva. */
-      /* Eliminar · disponible para promos del workspace propio.
-       * Antes el gate era `p.id.startsWith("prom-c-")` · solo
-       * funcionaba para promos creadas via wizard cuyo cache local
-       * estaba caliente. Tras hidratación desde Supabase + sesión
-       * limpia, la misma promo cumple el patrón pero el listado a
-       * veces la mostraba bajo otro id · el botón desaparecía.
-       * Con `ownerOrganizationId === myOrgId` sí cubre todas las
-       * promos del workspace · independientemente de su origen. */
-      ...(!viewAsCollaborator && (() => {
-        const promoOwner = (p as { ownerOrganizationId?: string }).ownerOrganizationId;
-        const myOrgIdSession = sessionStorage.getItem("byvaro.accountType.organizationId.v1");
-        return !!promoOwner && !!myOrgIdSession && promoOwner === myOrgIdSession;
-      })() ? [{
-        icon: Trash2,
-        label: "Eliminar",
-        hint: "Borrar permanentemente esta promoción",
-        onClick: async () => {
-          const ok = await confirm({
-            title: `¿Eliminar "${p.name}"?`,
-            description: "Se borrará la promoción del catálogo y de la base de datos. Esta acción no se puede deshacer.",
-            confirmLabel: "Eliminar",
-            variant: "destructive",
-          });
-          if (!ok) return;
-          const res = await deleteCreatedPromotion(p.id);
-          if (!res.ok) {
-            toast.error("Error al eliminar", { description: res.error });
-            return;
-          }
-          toast.success("Promoción eliminada");
-          /* Navegar tras un pequeño tick · da tiempo a que el evento
-           * `byvaro:promotions-changed` propague el cache vacío al
-           * listado · evita que el user vea brevemente la promo
-           * borrada al aterrizar en /promociones. */
-          setTimeout(() => navigate("/promociones"), 50);
-        },
-        danger: true,
-      }] : []),
+      /* "Eliminar" · MOVIDO de aquí al paso "Revisión" del wizard de
+       * Configuración (al final de la página, en la zona danger).
+       * Razón · agrupar acciones destructivas en un solo lugar para
+       * evitar clicks accidentales desde la ficha. El user que
+       * quiera borrar abre Configuración → scroll al final → botón
+       * Eliminar. */
       { icon: Info, label: "Datos en vivo", hint: "Precios y disponibilidad se actualizan en tiempo real. Confirma antes de cerrar.", info: true },
     ];
     return (

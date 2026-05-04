@@ -38,6 +38,10 @@ import { getMissingForWizard } from "@/lib/publicationRequirements"; // validaci
 interface Props {
   state: WizardState;
   onEditStep: (step: StepId) => void;
+  /** Callback opcional para eliminar la promoción · solo se renderiza
+   *  el bloque danger si está presente (= modo edición de promo
+   *  existente, NO modo creación). */
+  onDeletePromotion?: () => void | Promise<void>;
 }
 
 /* ─── Utils ─── */
@@ -98,7 +102,7 @@ function Row({ label, value, muted = false }: { label: string; value: React.Reac
 }
 
 /* ─── Step principal ─── */
-export function RevisionStep({ state, onEditStep }: Props) {
+export function RevisionStep({ state, onEditStep, onDeletePromotion }: Props) {
   /* ──── Tipología ──── */
   const tipoLabel = tipoOptions.find((o) => o.value === state.tipo)?.label ?? dash;
   const subUniLabel = state.tipo === "unifamiliar"
@@ -559,6 +563,36 @@ export function RevisionStep({ state, onEditStep }: Props) {
           Pulsa <span className="font-medium text-foreground">Activar</span> abajo a la derecha para lanzar la promoción.
         </p>
       </div>
+
+      {/* ═════ Zona danger · Eliminar promoción ═════
+        * Solo visible cuando estamos editando una promo existente
+        * (callback `onDeletePromotion` provisto por el caller). El
+        * botón estaba antes en el rail de la ficha · movido aquí
+        * para agrupar acciones destructivas en un solo sitio
+        * (Configuración) y evitar clicks accidentales en la ficha. */}
+      {onDeletePromotion && (
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-destructive">
+                Eliminar promoción
+              </p>
+              <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-relaxed">
+                Borra la promoción permanentemente del catálogo y de la base
+                de datos. Esta acción NO se puede deshacer · perderás todas
+                las unidades, fotos, colaboradores y registros asociados.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void onDeletePromotion()}
+              className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-full text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors shrink-0"
+            >
+              Eliminar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

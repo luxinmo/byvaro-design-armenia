@@ -41,7 +41,7 @@ import { generatePublicRef } from "@/lib/publicRef";
 import { ExtrasV5 } from "@/components/crear-promocion/extras-v5";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { FileWarning } from "lucide-react";
-import { createPromotionFromWizard } from "@/lib/promotionsStorage";
+import { createPromotionFromWizard, deleteCreatedPromotion } from "@/lib/promotionsStorage";
 import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import { useCurrentUser, isAdmin } from "@/lib/currentUser";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -1520,6 +1520,22 @@ export default function CrearPromocion() {
                 {step === "revision" && (
                   <RevisionStep
                     state={state}
+                    onDeletePromotion={resolvedPromotionId ? async () => {
+                      const ok = await confirm({
+                        title: `¿Eliminar "${state.nombrePromocion || "esta promoción"}"?`,
+                        description: "Se borrará la promoción del catálogo y de la base de datos. Esta acción no se puede deshacer.",
+                        confirmLabel: "Eliminar",
+                        variant: "destructive",
+                      });
+                      if (!ok) return;
+                      const res = await deleteCreatedPromotion(resolvedPromotionId);
+                      if (!res.ok) {
+                        toast.error("Error al eliminar", { description: res.error });
+                        return;
+                      }
+                      toast.success("Promoción eliminada");
+                      setTimeout(() => navigate("/promociones"), 50);
+                    } : undefined}
                     onEditStep={(s) => {
                       /* Steps que necesitan persistencia para subir
                        *  archivos (storage RLS exige draftId real) ·
