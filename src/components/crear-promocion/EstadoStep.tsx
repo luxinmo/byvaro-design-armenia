@@ -1,11 +1,13 @@
 /**
  * EstadoStep · Paso 6/14 del wizard "Crear Promoción".
  *
- * Selecciona el estado de obra (proyecto / en construcción / terminado)
- * y los campos cascada según el estado:
- *   · proyecto       → ¿tiene licencia? + tipo de entrega + meses
- *   · en_construccion → fase de construcción + trimestre estimado de entrega
- *   · terminado      → fecha de terminación
+ * REPLICA EXACTA del step "estado" original que vivía inline en
+ * CrearPromocion.tsx · sin añadir secciones nuevas. Los campos
+ * cascada son los originales:
+ *   · proyecto        → ¿tiene licencia?
+ *   · en_construccion → fase de construcción · cuando hay fase →
+ *                       trimestre estimado de entrega (sub-bloque)
+ *   · terminado       → fecha de terminación
  *
  * Reusable · se usa en:
  *   · `CrearPromocion.tsx` paso 6/14 (wizard).
@@ -85,17 +87,6 @@ export function EstadoStep({ state, update }: Props) {
     update("faseConstruccion", fase);
   };
 
-  /* Selector de trimestre · disponible cuando estado=proyecto o
-   * en_construccion. NO ofrecemos "Tras contrato C/V" ni "Tras
-   * licencia" aquí · el user pidió ir directo a fechas (trimestre).
-   * Auto-set `tipoEntrega = "fecha_definida"` al elegir trimestre. */
-  const canShowTrimestre = state.estado === "proyecto"
-    || state.estado === "en_construccion";
-  const handleTrimestreSelect = (t: string) => {
-    update("tipoEntrega", "fecha_definida");
-    update("trimestreEntrega", t);
-  };
-
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -122,7 +113,9 @@ export function EstadoStep({ state, update }: Props) {
         </div>
       )}
 
-      {/* Fase de construcción (cuando en_construccion) */}
+      {/* Fase de construcción (cuando en_construccion) · IGUAL que el
+       *  wizard original 6/14 · trimestre como sub-bloque dentro,
+       *  visible solo cuando ya hay fase seleccionada. */}
       {state.estado === "en_construccion" && (
         <div className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
           <SectionLabel>Etapa de construcción</SectionLabel>
@@ -134,34 +127,29 @@ export function EstadoStep({ state, update }: Props) {
               />
             ))}
           </div>
-        </div>
-      )}
 
-      {/* Fecha estimada de entrega · grid directo de trimestres
-       *  futuros (próximos 4 años · sin pasados del año actual).
-       *  NO ofrecemos "Tras contrato C/V" ni "Tras licencia" en este
-       *  paso · esos modelos relativos viven en el step "detalles"
-       *  (7/14). Aquí el user va directo a elegir el trimestre. */}
-      {canShowTrimestre && (
-        <div className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
-          <SectionLabel>Fecha estimada de entrega</SectionLabel>
-          <div className="grid grid-cols-4 gap-2">
-            {trimestreOptions.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => handleTrimestreSelect(t)}
-                className={cn(
-                  "rounded-lg border px-2 py-2 text-xs font-medium transition-colors tnum",
-                  state.trimestreEntrega === t
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border bg-background text-muted-foreground hover:border-foreground/20 hover:text-foreground",
-                )}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
+          {state.faseConstruccion && (
+            <div className="pt-3 border-t border-border">
+              <SectionLabel>Fecha estimada de entrega</SectionLabel>
+              <div className="grid grid-cols-4 gap-2">
+                {trimestreOptions.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => update("trimestreEntrega", t)}
+                    className={cn(
+                      "rounded-lg border px-2 py-2 text-xs font-medium transition-colors tnum",
+                      state.trimestreEntrega === t
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-background text-muted-foreground hover:border-foreground/20 hover:text-foreground",
+                    )}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
