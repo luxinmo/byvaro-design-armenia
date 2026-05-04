@@ -402,14 +402,29 @@ export async function createPromotionFromWizard(
       ? saveGalleryToSupabase(created.id, fotos, videos) : Promise.resolve(),
     hitosPago.length > 0 ? savePaymentPlanToSupabase(created.id, hitosPago) : Promise.resolve(),
   ]);
+  const labels = ["units", "gallery", "paymentPlan"];
+  const failures: string[] = [];
   subResults.forEach((r, i) => {
-    const labels = ["units", "gallery", "paymentPlan"];
     if (r.status === "rejected") {
       console.error(`[wizard:create] ❌ sub-entidad ${labels[i]} FALLÓ:`, r.reason);
+      failures.push(`${labels[i]}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`);
     } else {
       console.info(`[wizard:create] ✓ sub-entidad ${labels[i]} OK`);
     }
   });
+  /* CRÍTICO · si alguna sub-entidad falla, marcamos supabaseOk=false ·
+   * el caller (CrearPromocion) muestra toast error y NO borra el draft ·
+   * el user puede reintentar. Antes los fallos eran silenciosos · la
+   * promo quedaba con datos solo en cache local · al limpiar cache,
+   * desaparecían (Villa Belgica + Villa 18 meses · bug confirmado en
+   * producción). */
+  if (failures.length > 0) {
+    return {
+      created,
+      supabaseOk: false,
+      supabaseError: `Sub-entidades no persistidas · ${failures.join(" · ")}`,
+    };
+  }
 
   /* Hidratación local INMEDIATA · `unitsByPromotion` lo popula
    *  `seedHydrator` SOLO al mount inicial de la app. Si no
@@ -513,7 +528,14 @@ export async function saveUnitsToSupabase(
   const { error } = await supabase
     .from("promotion_units")
     .upsert(rows, { onConflict: "id" });
-  if (error) console.warn("[units:save] upsert failed:", error.message);
+  if (error) {
+    /* THROW para que Promise.allSettled del caller marque rejected ·
+     * antes solo loggeaba warn y la promo quedaba con unidades en
+     * cache local pero NO en Supabase · al limpiar cache (sesión
+     * nueva, otro device) las unidades desaparecían silenciosamente. */
+    console.error("[units:save] upsert failed:", error.message);
+    throw new Error(`Unidades no persistidas: ${error.message}`);
+  }
 }
 
 /** Maps las fotos + vídeos del wizard → filas de `promotion_gallery`.
@@ -571,7 +593,10 @@ export async function saveGalleryToSupabase(
   const rows = [...photoRows, ...videoRows];
   if (rows.length === 0) return;
   const { error } = await supabase.from("promotion_gallery").insert(rows);
-  if (error) console.warn("[gallery:save] insert failed:", error.message);
+  if (error) {
+    console.error("[gallery:save] insert failed:", error.message);
+    throw new Error(`Galería no persistida: ${error.message}`);
+  }
 }
 
 /** Maps `HitoPago[]` del wizard → filas de `payment_plans`.
@@ -607,5 +632,8 @@ export async function savePaymentPlanToSupabase(
     metadata: {},
   }));
   const { error } = await supabase.from("payment_plans").insert(rows);
-  if (error) console.warn("[payment_plans:save] insert failed:", error.message);
+  if (error) {
+    console.error("[payment_plans:save] insert failed:", error.message);
+    throw new Error(`Plan de pagos no persistido: ${error.message}`);
+  }
 }
