@@ -36,6 +36,7 @@ import { registros, type Registro } from "@/data/records";
 import type { Promotion } from "@/data/promotions";
 import type { Unit, UnitStatus } from "@/data/units";
 import { seedRef } from "@/lib/publicRef";
+import { composeDelivery } from "./deliveryFormat";
 
 const SEED_HYDRATED_EVENT = "byvaro:seed-hydrated";
 
@@ -111,32 +112,11 @@ function rowToDevPromotion(r: PromotionRow): DevPromotion {
       modoValidacionRegistro?: string;
     };
   };
-  /* Delivery · fallback desde wizardSnapshot cuando la columna está
-   * vacía. Cubre promos legacy creadas antes del fix de
-   * `createPromotionFromWizard` que compone el string para modelos
-   * relativos (tras_contrato_cv / tras_licencia + meses). Sin esto
-   * la card decía "Por definir" aunque el wizardSnapshot tenía la
-   * info completa. */
+  /* Delivery · fallback desde wizardSnapshot vía helper canónico.
+   * Cubre promos legacy con `r.delivery=null`. */
   let derivedDelivery: string | null = r.delivery;
   if (!derivedDelivery && meta.wizardSnapshot) {
-    const ws = meta.wizardSnapshot as {
-      fechaEntrega?: string | null;
-      trimestreEntrega?: string | null;
-      tipoEntrega?: string | null;
-      mesesTrasContrato?: number;
-      mesesTrasLicencia?: number;
-    };
-    if (ws.fechaEntrega) derivedDelivery = ws.fechaEntrega;
-    else if (ws.trimestreEntrega) derivedDelivery = ws.trimestreEntrega;
-    else if (ws.tipoEntrega === "tras_contrato_cv") {
-      derivedDelivery = (ws.mesesTrasContrato ?? 0) > 0
-        ? `Tras contrato C/V · ${ws.mesesTrasContrato} meses`
-        : "Tras contrato C/V";
-    } else if (ws.tipoEntrega === "tras_licencia") {
-      derivedDelivery = (ws.mesesTrasLicencia ?? 0) > 0
-        ? `Tras licencia · ${ws.mesesTrasLicencia} meses`
-        : "Tras licencia";
-    }
+    derivedDelivery = composeDelivery(meta.wizardSnapshot) || null;
   }
 
   /* CollaborationConfig · 2 fuentes en orden de preferencia:

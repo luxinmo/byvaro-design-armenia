@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTabParam } from "@/lib/useTabParam";
 import { getDraft, saveDraft as persistDraft, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
 import { deleteCreatedPromotion, getCreatedPromotions } from "@/lib/promotionsStorage";
+import { composeDelivery } from "@/lib/deliveryFormat";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { WizardState, FotoItem, FotoCategoria } from "@/components/crear-promocion/types";
 import { faseConstruccionOptions, constructionPhaseLabelFromProgress } from "@/components/crear-promocion/options";
@@ -460,25 +461,10 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           mesesTrasLicencia?: number;
         };
       };
-      /* Delivery fallback desde wizardSnapshot · igual lógica que en
-       * Promociones.tsx adapter y seedHydrator.rowToDevPromotion ·
-       * sin esto, promos cuya columna delivery es null muestran
-       * "Por definir" en la ficha aunque el wizard SÍ guardó el
-       * modelo (tras_licencia + 18 meses). */
+      /* Delivery fallback · helper canónico `composeDelivery`. */
       let derivedDelivery: string | null = c.delivery;
       if (!derivedDelivery && meta.wizardSnapshot) {
-        const ws = meta.wizardSnapshot;
-        if (ws.fechaEntrega) derivedDelivery = ws.fechaEntrega;
-        else if (ws.trimestreEntrega) derivedDelivery = ws.trimestreEntrega;
-        else if (ws.tipoEntrega === "tras_contrato_cv") {
-          derivedDelivery = (ws.mesesTrasContrato ?? 0) > 0
-            ? `Tras contrato C/V · ${ws.mesesTrasContrato} meses`
-            : "Tras contrato C/V";
-        } else if (ws.tipoEntrega === "tras_licencia") {
-          derivedDelivery = (ws.mesesTrasLicencia ?? 0) > 0
-            ? `Tras licencia · ${ws.mesesTrasLicencia} meses`
-            : "Tras licencia";
-        }
+        derivedDelivery = composeDelivery(meta.wizardSnapshot) || null;
       }
       return {
         id: c.id,

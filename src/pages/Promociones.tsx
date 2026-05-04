@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { promotions, getBuildingTypeLabel, isUnifamiliar, type Promotion } from "@/data/promotions";
+import { composeDelivery } from "@/lib/deliveryFormat";
 import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import { developerOnlyPromotions, type DevPromotion } from "@/data/developerPromotions";
 import { unitsByPromotion } from "@/data/units";
@@ -586,25 +587,11 @@ export default function Promociones() {
           mesesTrasLicencia?: number;
         };
       };
-      /* Delivery fallback desde wizardSnapshot · igual que en
-       * `seedHydrator.rowToDevPromotion` · cubre promos cuyo
-       * `priceFrom/delivery` es null porque cuando se crearon, el
-       * fix de createPromotionFromWizard que compone los strings
-       * relativos aún no estaba aplicado. */
+      /* Delivery fallback desde wizardSnapshot · helper canónico
+       * `composeDelivery`. */
       let derivedDelivery: string | null = p.delivery;
       if (!derivedDelivery && meta.wizardSnapshot) {
-        const ws = meta.wizardSnapshot;
-        if (ws.fechaEntrega) derivedDelivery = ws.fechaEntrega;
-        else if (ws.trimestreEntrega) derivedDelivery = ws.trimestreEntrega;
-        else if (ws.tipoEntrega === "tras_contrato_cv") {
-          derivedDelivery = (ws.mesesTrasContrato ?? 0) > 0
-            ? `Tras contrato C/V · ${ws.mesesTrasContrato} meses`
-            : "Tras contrato C/V";
-        } else if (ws.tipoEntrega === "tras_licencia") {
-          derivedDelivery = (ws.mesesTrasLicencia ?? 0) > 0
-            ? `Tras licencia · ${ws.mesesTrasLicencia} meses`
-            : "Tras licencia";
-        }
+        derivedDelivery = composeDelivery(meta.wizardSnapshot) || null;
       }
       return {
         id: p.id,

@@ -18,6 +18,7 @@ import type {
 import { memCache } from "./memCache";
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
 import { unitsByPromotion, type Unit } from "@/data/units";
+import { composeDelivery } from "./deliveryFormat";
 
 const CREATED_KEY = "byvaro.promotions.created.v1";
 
@@ -249,24 +250,17 @@ export async function createPromotionFromWizard(
     .filter((p) => p > 0);
   const priceFrom = unitPrices.length > 0 ? Math.min(...unitPrices) : null;
   const priceTo = unitPrices.length > 0 ? Math.max(...unitPrices) : null;
-  /* Entrega · prioridad: fecha exacta → trimestre → modelos
-   *  relativos ("Tras contrato C/V · 18 meses" / "Tras licencia ·
-   *  18 meses"). Antes solo se contemplaba fecha+trimestre · si el
-   *  user elegía un modelo relativo, delivery quedaba null y la
-   *  ficha mostraba "Sin definir" aunque SÍ había información. */
-  let delivery: string | null =
-    state.fechaEntrega?.trim() || state.trimestreEntrega?.trim() || null;
-  if (!delivery) {
-    if (state.tipoEntrega === "tras_contrato_cv" && state.mesesTrasContrato > 0) {
-      delivery = `Tras contrato C/V · ${state.mesesTrasContrato} meses`;
-    } else if (state.tipoEntrega === "tras_licencia" && state.mesesTrasLicencia > 0) {
-      delivery = `Tras licencia · ${state.mesesTrasLicencia} meses`;
-    } else if (state.tipoEntrega === "tras_contrato_cv") {
-      delivery = "Tras contrato C/V";
-    } else if (state.tipoEntrega === "tras_licencia") {
-      delivery = "Tras licencia";
-    }
-  }
+  /* Entrega · helper canónico `composeDelivery` · formato compacto
+   *  ("CPV + 18m" / "Lic. + 18m" / "T2 2026"). Mantener un único
+   *  punto de composición evita strings divergentes en cada
+   *  callsite. */
+  const delivery = composeDelivery({
+    fechaEntrega: state.fechaEntrega,
+    trimestreEntrega: state.trimestreEntrega,
+    tipoEntrega: state.tipoEntrega,
+    mesesTrasContrato: state.mesesTrasContrato,
+    mesesTrasLicencia: state.mesesTrasLicencia,
+  }) || null;
   /* Imagen principal · primera foto marcada como esPrincipal o la
    * primera del array. */
   const heroFoto = state.fotos?.find((f) => f.esPrincipal) ?? state.fotos?.[0];

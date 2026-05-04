@@ -45,25 +45,19 @@ import type { WizardState, EstadoPromocion } from "@/components/crear-promocion/
    Helpers
    ══════════════════════════════════════════════════════════════════ */
 
-/** Reconstruye el string de delivery a partir de los campos del
- *  wizard · prioriza fechaEntrega (ISO) > trimestreEntrega >
- *  modelos relativos (tras_contrato_cv / tras_licencia con sus
- *  meses) · "" si nada configurado · el validador lo reporta como
- *  missing. */
+import { composeDelivery } from "./deliveryFormat";
+
+/** Reconstruye el string de delivery · delega en `composeDelivery`
+ *  helper canónico (formato compacto: "CPV + 18m" / "Lic. + 18m" /
+ *  trimestre / fecha). */
 function deliveryString(state: WizardState): string {
-  if (state.fechaEntrega) return state.fechaEntrega;
-  if (state.trimestreEntrega) return state.trimestreEntrega;
-  if (state.tipoEntrega === "tras_contrato_cv") {
-    return state.mesesTrasContrato > 0
-      ? `Tras contrato C/V · ${state.mesesTrasContrato} meses`
-      : "Tras contrato C/V";
-  }
-  if (state.tipoEntrega === "tras_licencia") {
-    return state.mesesTrasLicencia > 0
-      ? `Tras licencia · ${state.mesesTrasLicencia} meses`
-      : "Tras licencia";
-  }
-  return "";
+  return composeDelivery({
+    fechaEntrega: state.fechaEntrega,
+    trimestreEntrega: state.trimestreEntrega,
+    tipoEntrega: state.tipoEntrega,
+    mesesTrasContrato: state.mesesTrasContrato,
+    mesesTrasLicencia: state.mesesTrasLicencia,
+  });
 }
 
 /** Construye el string de location · "Ciudad, Provincia". */
