@@ -17,7 +17,7 @@
 import { cn } from "@/lib/utils";
 import { Calendar as CalendarIcon, FileCheck, FileX } from "lucide-react";
 import type {
-  WizardState, EstadoPromocion, FaseConstruccion, TipoEntrega,
+  WizardState, EstadoPromocion, FaseConstruccion,
 } from "./types";
 import { OptionCard } from "./SharedWidgets";
 import { estadoOptions, faseConstruccionOptions } from "./options";
@@ -69,9 +69,7 @@ export function EstadoStep({ state, update }: Props) {
   const handleEstadoSelect = (v: string) => {
     const estado = v as EstadoPromocion;
     /* Cascada · al cambiar de estado limpiamos los campos que solo
-     *  aplican al anterior · evita state inconsistente (licencia=true
-     *  con estado=en_construccion, etc.). update() es síncrono+síncrono
-     *  vía getOverride en cascada · ver PromocionDetalle. */
+     *  aplican al anterior · evita state inconsistente. */
     update("estado", estado);
     if (estado !== "proyecto") update("tieneLicencia", null);
     if (estado !== "en_construccion") update("faseConstruccion", null);
@@ -87,9 +85,16 @@ export function EstadoStep({ state, update }: Props) {
     update("faseConstruccion", fase);
   };
 
-  const canShowTipoEntrega = state.estado === "proyecto"
+  /* Selector de trimestre · disponible cuando estado=proyecto o
+   * en_construccion. NO ofrecemos "Tras contrato C/V" ni "Tras
+   * licencia" aquí · el user pidió ir directo a fechas (trimestre).
+   * Auto-set `tipoEntrega = "fecha_definida"` al elegir trimestre. */
+  const canShowTrimestre = state.estado === "proyecto"
     || state.estado === "en_construccion";
-  const canShowTrasLicencia = state.estado === "proyecto" && state.tieneLicencia === false;
+  const handleTrimestreSelect = (t: string) => {
+    update("tipoEntrega", "fecha_definida");
+    update("trimestreEntrega", t);
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -132,114 +137,31 @@ export function EstadoStep({ state, update }: Props) {
         </div>
       )}
 
-      {/* Fecha estimada de entrega · disponible para CUALQUIER fase
-       *  cuando estado = proyecto o en_construccion. Antes solo
-       *  aparecía en "entrega_proxima" · el user puede estimar
-       *  desde el inicio de obra. Trimestres acotados a futuros
-       *  (próximos 4 años · sin pasados del año actual). */}
-      {canShowTipoEntrega && (
+      {/* Fecha estimada de entrega · grid directo de trimestres
+       *  futuros (próximos 4 años · sin pasados del año actual).
+       *  NO ofrecemos "Tras contrato C/V" ni "Tras licencia" en este
+       *  paso · esos modelos relativos viven en el step "detalles"
+       *  (7/14). Aquí el user va directo a elegir el trimestre. */}
+      {canShowTrimestre && (
         <div className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
-          <SectionLabel>Tipo de entrega</SectionLabel>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => update("tipoEntrega", "fecha_definida")}
-              className={cn(
-                "text-left rounded-lg border px-3 py-2.5 transition-colors",
-                state.tipoEntrega === "fecha_definida"
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-primary/30",
-              )}
-            >
-              <p className="text-[12px] font-semibold text-foreground">Fecha definida</p>
-              <p className="text-[10.5px] text-muted-foreground">Trimestre concreto</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => update("tipoEntrega", "tras_contrato_cv")}
-              className={cn(
-                "text-left rounded-lg border px-3 py-2.5 transition-colors",
-                state.tipoEntrega === "tras_contrato_cv"
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-primary/30",
-              )}
-            >
-              <p className="text-[12px] font-semibold text-foreground">Tras contrato C/V</p>
-              <p className="text-[10.5px] text-muted-foreground">X meses después</p>
-            </button>
-            {canShowTrasLicencia && (
+          <SectionLabel>Fecha estimada de entrega</SectionLabel>
+          <div className="grid grid-cols-4 gap-2">
+            {trimestreOptions.map((t) => (
               <button
+                key={t}
                 type="button"
-                onClick={() => update("tipoEntrega", "tras_licencia" as TipoEntrega)}
+                onClick={() => handleTrimestreSelect(t)}
                 className={cn(
-                  "text-left rounded-lg border px-3 py-2.5 transition-colors",
-                  state.tipoEntrega === "tras_licencia"
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/30",
+                  "rounded-lg border px-2 py-2 text-xs font-medium transition-colors tnum",
+                  state.trimestreEntrega === t
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-background text-muted-foreground hover:border-foreground/20 hover:text-foreground",
                 )}
               >
-                <p className="text-[12px] font-semibold text-foreground">Tras licencia</p>
-                <p className="text-[10.5px] text-muted-foreground">X meses después</p>
+                {t}
               </button>
-            )}
+            ))}
           </div>
-
-          {state.tipoEntrega === "fecha_definida" && (
-            <div className="pt-2">
-              <SectionLabel>Trimestre estimado</SectionLabel>
-              <div className="grid grid-cols-4 gap-2">
-                {trimestreOptions.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => update("trimestreEntrega", t)}
-                    className={cn(
-                      "rounded-lg border px-2 py-2 text-xs font-medium transition-colors tnum",
-                      state.trimestreEntrega === t
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-background text-muted-foreground hover:border-foreground/20 hover:text-foreground",
-                    )}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {state.tipoEntrega === "tras_contrato_cv" && (
-            <div className="flex items-center gap-2 pt-1">
-              <input
-                type="text"
-                inputMode="numeric"
-                value={state.mesesTrasContrato > 0 ? String(state.mesesTrasContrato) : ""}
-                placeholder="0"
-                onChange={(e) => {
-                  const digits = e.target.value.replace(/[^0-9]/g, "");
-                  update("mesesTrasContrato", digits === "" ? 0 : Math.min(120, Number(digits)));
-                }}
-                className="rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-colors h-9 w-24 px-2.5 text-[13px] tnum text-right"
-              />
-              <span className="text-[12px] text-muted-foreground">meses tras la firma del contrato</span>
-            </div>
-          )}
-
-          {state.tipoEntrega === "tras_licencia" && (
-            <div className="flex items-center gap-2 pt-1">
-              <input
-                type="text"
-                inputMode="numeric"
-                value={state.mesesTrasLicencia > 0 ? String(state.mesesTrasLicencia) : ""}
-                placeholder="0"
-                onChange={(e) => {
-                  const digits = e.target.value.replace(/[^0-9]/g, "");
-                  update("mesesTrasLicencia", digits === "" ? 0 : Math.min(120, Number(digits)));
-                }}
-                className="rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-colors h-9 w-24 px-2.5 text-[13px] tnum text-right"
-              />
-              <span className="text-[12px] text-muted-foreground">meses tras obtener la licencia</span>
-            </div>
-          )}
         </div>
       )}
 
