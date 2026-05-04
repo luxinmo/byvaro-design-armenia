@@ -640,14 +640,39 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         }] : []),
       ] : []),
       ...(isPublished ? [
+        (() => {
+          /* REGLA · "Brochure" deshabilitado si la promo NO tiene
+           * brochure cargado · ni general (wizardSnapshot.
+           * documentosBrochure) ni por unidad (unit.brochureUrls).
+           * Mantenemos la opción `brochureRemoved` (toggle de la
+           * card) como override manual. */
+          const ws = (p as { metadata?: { wizardSnapshot?: {
+            documentosBrochure?: unknown[];
+            unidades?: { brochureUrls?: string[] }[];
+          } } }).metadata?.wizardSnapshot;
+          const hasGeneralBrochure = (ws?.documentosBrochure?.length ?? 0) > 0;
+          const hasUnitBrochure = (ws?.unidades ?? []).some(
+            (u) => (u.brochureUrls?.length ?? 0) > 0,
+          );
+          const hasBrochure = hasGeneralBrochure || hasUnitBrochure;
+          const disabled = brochureRemoved || !hasBrochure;
+          return {
+            icon: FileText,
+            label: "Brochure",
+            hint: disabled ? "No hay brochure subido" : "Descargar brochure",
+            onClick: disabled ? undefined : downloadBrochure,
+            disabled,
+          };
+        })(),
         {
-          icon: FileText,
-          label: "Brochure",
-          hint: brochureRemoved ? "No hay brochure subido" : "Descargar brochure",
-          onClick: brochureRemoved ? undefined : downloadBrochure,
-          disabled: brochureRemoved,
+          icon: Download,
+          /* Si la promo tiene 1 sola unidad, "Listado de precios" no
+           * tiene sentido (no hay listado · es un solo precio).
+           * Renombramos a "Descargar PDF" · más genérico. */
+          label: p.totalUnits === 1 ? "Descargar PDF" : "Listado de precios",
+          hint: "Descargar en PDF",
+          onClick: () => setPriceListOpen(true),
         },
-        { icon: Download, label: "Listado de precios", hint: "Descargar en PDF", onClick: () => setPriceListOpen(true) },
       ] : []),
       /* "Configuración" · entry-point único a TODA la configuración
        *  de la promoción · abre el wizard en el paso Revisión donde
