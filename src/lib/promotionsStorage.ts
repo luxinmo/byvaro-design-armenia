@@ -178,6 +178,8 @@ export async function createPromotionFromWizard(
    * principal, devolvemos `supabaseOk: false` · el caller NO debe
    * borrar el draft para que el user pueda re-intentar / recuperar. */
   if (!isSupabaseConfigured) {
+    /* Sin Supabase configurado tratamos como OK (entorno dev sin
+     * backend) · el cache local es la fuente. */
     console.warn("[wizard:create] Supabase NO configurado · saltando insert");
     return { created, supabaseOk: true };
   }
