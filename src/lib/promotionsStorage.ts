@@ -45,6 +45,79 @@ export interface CreatedPromotion {
   createdAt: string;
 }
 
+/* Helper canónico · deriva los campos planos de metadata desde un
+ * WizardState. Usado por:
+ *   - createPromotionFromWizard (al crear nueva promo)
+ *   - saveOverride en promotionWizardOverrides.ts (al editar
+ *     existente desde Configuración)
+ * Sin centralizar este derivado · cada save path escribía un subset
+ * distinto · ediciones de comisión/tipo/etc. no se reflejaban en el
+ * listado tras refresh (porque metadata flat seguía con valores
+ * viejos del create inicial). */
+export function deriveFlatMetadata(state: WizardState): {
+  propertyTypes: string[];
+  buildingType: "plurifamiliar" | "unifamiliar-single" | "unifamiliar-multiple" | undefined;
+  constructionProgress: number | undefined;
+  reservationCost: number;
+  commission: number;
+} {
+  const propertyTypes = (state.tipologiasSeleccionadas ?? [])
+    .map((t) => t.tipo)
+    .filter((t): t is string => !!t);
+  if (propertyTypes.length === 0 && state.subVarias) propertyTypes.push(state.subVarias);
+
+  const buildingType =
+    state.tipo === "unifamiliar"
+      ? (state.subUni === "una_sola" ? "unifamiliar-single" : "unifamiliar-multiple")
+      : state.tipo === "plurifamiliar" ? "plurifamiliar"
+      : undefined;
+
+  const FASE_PROGRESS: Record<string, number> = {
+    inicio_obra: 10, estructura: 30, cerramientos: 50, instalaciones: 65,
+    acabados: 80, entrega_proxima: 95, llave_en_mano: 100, definir_mas_tarde: 0,
+  };
+  const ESTADO_PROGRESS: Record<string, number> = {
+    proyecto: 0, en_construccion: 50, terminado: 100,
+  };
+  const constructionProgress: number | undefined =
+    (state.faseConstruccion && FASE_PROGRESS[state.faseConstruccion] != null
+      ? FASE_PROGRESS[state.faseConstruccion]
+      : undefined)
+    ?? (state.estado && ESTADO_PROGRESS[state.estado] != null
+      ? ESTADO_PROGRESS[state.estado]
+      : undefined);
+
+  return {
+    propertyTypes,
+    buildingType,
+    constructionProgress,
+    reservationCost: typeof state.importeReserva === "number" ? state.importeReserva : 0,
+    commission: typeof state.comisionInternacional === "number" ? state.comisionInternacional : 0,
+  };
+}
+
+/** Patcher canónico para el cache local `byvaro.promotions.created.v1`
+ *  · usado por saveOverride al editar desde Configuración. Sin esto
+ *  el listado seguía mostrando comisión/tipologías/etc. viejas hasta
+ *  el siguiente full reload. */
+export function patchCreatedPromotionInCache(
+  promotionId: string,
+  patch: Partial<CreatedPromotion> & { metadata?: Record<string, unknown> },
+): void {
+  const list = readCreated();
+  const idx = list.findIndex((p) => p.id === promotionId);
+  if (idx === -1) return; // no era una promo de las creadas via wizard
+  const existing = list[idx];
+  const next: CreatedPromotion = {
+    ...existing,
+    ...patch,
+    metadata: { ...(existing.metadata ?? {}), ...(patch.metadata ?? {}) },
+  };
+  const newList = [...list];
+  newList[idx] = next;
+  writeCreated(newList);
+}
+
 function readCreated(): CreatedPromotion[] {
   if (typeof window === "undefined") return [];
   try {
@@ -150,45 +223,13 @@ export async function createPromotionFromWizard(
   const heroFoto = state.fotos?.find((f) => f.esPrincipal) ?? state.fotos?.[0];
   const imageUrl = heroFoto?.url ?? null;
 
-  /* Campos derivados para el shape Promotion · el hydrator
-   * (`seedHydrator.rowToDevPromotion`) los lee de `metadata.X` plano
-   * para reconstruir el `DevPromotion` que la ficha consume. Sin
-   * estos campos en metadata, la ficha pintaba TODO en rojo
-   * ("Sin tipologías", "Sin tipo de edificación", etc.) aunque el
-   * wizard los hubiese rellenado. */
-  const propertyTypes = (state.tipologiasSeleccionadas ?? [])
-    .map((t) => t.tipo)
-    .filter((t): t is string => !!t);
-  if (propertyTypes.length === 0 && state.subVarias) propertyTypes.push(state.subVarias);
-  const buildingType: "plurifamiliar" | "unifamiliar-single" | "unifamiliar-multiple" | undefined =
-    state.tipo === "unifamiliar"
-      ? (state.subUni === "una_sola" ? "unifamiliar-single" : "unifamiliar-multiple")
-      : state.tipo === "plurifamiliar" ? "plurifamiliar"
-      : undefined;
-  /* `constructionProgress` · % de obra (0-100) · derivado de la fase
-   *  granular si está, sino del estado conceptual. Sin esto el
-   *  validador marca "Estado de construcción sin definir". */
-  const FASE_PROGRESS: Record<string, number> = {
-    inicio_obra: 10, estructura: 30, cerramientos: 50, instalaciones: 65,
-    acabados: 80, entrega_proxima: 95, llave_en_mano: 100, definir_mas_tarde: 0,
-  };
-  /* `estado` es el ESTADO LEGAL de la promoción (proyecto = tiene
-   *  licencia · en_construccion = obra activa · terminado = entregable).
-   *  NO es % de obra. "Proyecto" = la obra NO ha empezado · 0%. Mostrar
-   *  5% sería engañar al cliente · "ya están construyendo" cuando solo
-   *  hay papeles. El % real granular vive en `faseConstruccion`. */
-  const ESTADO_PROGRESS: Record<string, number> = {
-    proyecto: 0, en_construccion: 50, terminado: 100,
-  };
-  const constructionProgress: number | undefined =
-    (state.faseConstruccion && FASE_PROGRESS[state.faseConstruccion] != null
-      ? FASE_PROGRESS[state.faseConstruccion]
-      : undefined)
-    ?? (state.estado && ESTADO_PROGRESS[state.estado] != null
-      ? ESTADO_PROGRESS[state.estado]
-      : undefined);
-  const reservationCost = typeof state.importeReserva === "number" ? state.importeReserva : 0;
-  const commission = typeof state.comisionInternacional === "number" ? state.comisionInternacional : 0;
+  /* Campos derivados para metadata flat · el hydrator
+   *  (`seedHydrator.rowToDevPromotion`) los lee directamente para
+   *  reconstruir el shape DevPromotion. Lógica centralizada en
+   *  `deriveFlatMetadata` para que tanto el create como el save
+   *  override usen el mismo derivado. */
+  const flat = deriveFlatMetadata(state);
+  const { propertyTypes, buildingType, constructionProgress, reservationCost, commission } = flat;
   const canShareWithAgencies = state.colaboracion === true;
 
   const created: CreatedPromotion = {
