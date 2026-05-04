@@ -1075,6 +1075,20 @@ export default function Promociones() {
     selectedDelivery, selectedCommissions,
   ]);
 
+  /* Helper · precio efectivo · prioriza el campo de la promo ·
+   * fallback al min/max real de unitsByPromotion (cubre el caso
+   * createdAsDev con priceFrom/priceTo null porque el snapshot no
+   * los rellenó). El sort por precio lo necesita para no caer en
+   * empate cuando muchas promos tienen priceMin=0. */
+  const getEffectivePrice = (p: DevPromotion, dir: "min" | "max"): number => {
+    const direct = dir === "min" ? p.priceMin : p.priceMax;
+    if (direct && direct > 0) return direct;
+    const units = unitsByPromotion[p.id] ?? [];
+    const prices = units.map((u) => u.price ?? 0).filter((n) => n > 0);
+    if (prices.length === 0) return dir === "min" ? Number.POSITIVE_INFINITY : 0;
+    return dir === "min" ? Math.min(...prices) : Math.max(...prices);
+  };
+
   /* ─── Ordenación ─── */
   const sortedAndFiltered = useMemo(() => {
     const arr = [...filtered];
@@ -1088,9 +1102,9 @@ export default function Promociones() {
           return bT - aT;
         });
       case "priceAsc":
-        return arr.sort((a, b) => a.priceMin - b.priceMin);
+        return arr.sort((a, b) => getEffectivePrice(a, "min") - getEffectivePrice(b, "min"));
       case "priceDesc":
-        return arr.sort((a, b) => b.priceMax - a.priceMax);
+        return arr.sort((a, b) => getEffectivePrice(b, "max") - getEffectivePrice(a, "max"));
       case "deliveryAsc":
         return arr.sort((a, b) => getDeliveryYear(a.delivery) - getDeliveryYear(b.delivery));
       case "availability":
