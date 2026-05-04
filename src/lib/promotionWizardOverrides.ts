@@ -125,6 +125,14 @@ function buildPromotionPatch(state: WizardState): Record<string, unknown> {
     patch.can_share_with_agencies = (merged as { canShareWithAgencies?: boolean }).canShareWithAgencies;
   }
   if (state.descripcion?.trim()) patch.description = state.descripcion.trim();
+  /* `owner_role` · si el user cambia de Promotor a Comercializador
+   *  desde el modal de Tipología, persistir en la columna canónica
+   *  además del wizard_override · sin esto el listado y otros
+   *  consumidores que leen `owner_role` directo seguían viendo el
+   *  rol viejo aunque la ficha ya mostrara el nuevo. */
+  if (state.role === "promotor" || state.role === "comercializador") {
+    patch.owner_role = state.role;
+  }
 
   return patch;
 }

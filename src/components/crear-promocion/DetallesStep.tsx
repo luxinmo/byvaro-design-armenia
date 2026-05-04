@@ -203,15 +203,86 @@ export function DetallesStep({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ═════ Piso piloto (solo si !isSingleHome) ═════ */}
+      {/* ═════ Piso piloto (solo si !isSingleHome) ═════
+          Toggle + selector de unidad · si activado, lista las
+          unidades creadas para que el promotor elija cuál actúa
+          como piloto. Sin esto el promotor activaba el switch pero
+          no podía indicar qué unidad era · información incompleta
+          que llegaba a la ficha. */}
       {!isSingleHome && (
         <ToggleCard
           icon={HomeIcon}
           title="Piso piloto"
           desc="¿Hay piso piloto disponible para visitas?"
           checked={state.pisoPiloto}
-          onChange={(v) => update("pisoPiloto", v)}
-        />
+          onChange={(v) => {
+            update("pisoPiloto", v);
+            /* Off · limpia la unidad seleccionada para no dejar
+             *  un puntero huérfano. */
+            if (!v && state.pisoPilotoUnidadId) {
+              update("pisoPilotoUnidadId", null);
+            }
+          }}
+        >
+          <div className="flex flex-col gap-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Elige la unidad piloto
+            </p>
+            {state.unidades.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border bg-background px-4 py-6 text-center">
+                <p className="text-xs text-muted-foreground">
+                  Aún no has creado unidades · primero genera el inventario
+                  desde el paso "Unidades".
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5 max-h-[280px] overflow-y-auto pr-1 -mr-1">
+                {state.unidades.map((u) => {
+                  const selected = state.pisoPilotoUnidadId === u.id;
+                  const label = u.nombre || u.ref || u.id;
+                  const meta: string[] = [];
+                  if (u.dormitorios) meta.push(`${u.dormitorios} hab`);
+                  if (u.banos) meta.push(`${u.banos} baños`);
+                  if (u.superficieConstruida) meta.push(`${u.superficieConstruida} m²`);
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => update("pisoPilotoUnidadId", u.id)}
+                      className={`flex items-center justify-between p-3 rounded-xl border transition-all text-left ${
+                        selected
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-foreground/30 hover:bg-muted/20"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-8 w-8 rounded-lg bg-muted/60 flex items-center justify-center shrink-0">
+                          <span className="text-[10px] font-semibold text-muted-foreground">{u.planta ?? "—"}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{label}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">
+                            {meta.length > 0 ? meta.join(" · ") : "Sin datos"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        {u.precio > 0 && (
+                          <p className="text-sm font-bold text-foreground tabular-nums">
+                            {new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(u.precio)}
+                          </p>
+                        )}
+                        {selected && (
+                          <span className="text-[10px] font-semibold text-primary uppercase">Seleccionada</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </ToggleCard>
       )}
 
       {/* ═════ Oficina de ventas ═════ */}

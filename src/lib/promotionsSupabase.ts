@@ -130,7 +130,12 @@ interface UnitRow {
 }
 
 function rowToUnit(r: UnitRow): Unit {
-  const meta = (r.metadata ?? {}) as { block?: string; door?: string; type?: string; usableArea?: number };
+  const meta = (r.metadata ?? {}) as {
+    block?: string; door?: string; type?: string;
+    usableArea?: number; parcela?: number;
+    piscinaPrivada?: boolean;
+    fotosUnidad?: string[];
+  };
   return {
     id: r.id,
     ref: r.reference ?? r.id,
@@ -146,11 +151,12 @@ function rowToUnit(r: UnitRow): Unit {
     usableArea: meta.usableArea ?? 0,
     terrace: r.terrace_m2 ?? 0,
     garden: 0,
-    parcel: 0,
-    hasPool: false,
+    parcel: meta.parcela ?? 0,
+    hasPool: !!meta.piscinaPrivada,
     orientation: r.orientation ?? "Sur",
     price: r.price ?? 0,
     status: (r.status ?? "available") as UnitStatus,
+    fotos: meta.fotosUnidad ?? [],
   };
 }
 

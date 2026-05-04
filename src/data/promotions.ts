@@ -72,11 +72,18 @@ export type Promotion = {
 export function getBuildingTypeLabel(type?: BuildingType): string | null {
   if (!type) return null;
   const map: Record<BuildingType, string> = {
-    "plurifamiliar": "Plurifamiliar",
-    "unifamiliar-single": "Única vivienda",
-    "unifamiliar-multiple": "Varias viviendas",
+    "plurifamiliar": "Edificio plurifamiliar",
+    "unifamiliar-single": "Vivienda unifamiliar",
+    "unifamiliar-multiple": "Viviendas unifamiliares",
   };
   return map[type] ?? null;
+}
+
+/** True si el tipo de edificación es unifamiliar (cualquier variante) ·
+ *  útil para condicionales que decidan si mostrar/ocultar conceptos
+ *  específicos de plurifamiliar como "bloques", "escaleras", etc. */
+export function isUnifamiliar(type?: BuildingType): boolean {
+  return type === "unifamiliar-single" || type === "unifamiliar-multiple";
 }
 
 /* RAW seeds · el campo `code` legacy queda como breadcrumb · el real

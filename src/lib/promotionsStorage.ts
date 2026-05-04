@@ -326,6 +326,9 @@ export async function createPromotionFromWizard(
       orientation: u.orientacion || "Sur",
       price: Number(u.precio) || 0,
       status: (u.status ?? "available") as Unit["status"],
+      /* Fotos propias subidas en el wizard · sin esto la tab
+       *  Disponibilidad muestra placeholder en cada thumbnail. */
+      fotos: u.fotosUnidad ?? [],
     }));
     /* Notifica a consumidores reactivos (Promociones.tsx escucha
      *  byvaro:promotions-changed para refrescar cards). */

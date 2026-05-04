@@ -205,27 +205,19 @@ export default function CrearPromocion() {
   const singleSaveMode = searchParams.get("singleSave") === "1";
   const returnToParam = searchParams.get("returnTo");
 
-  /* Guard · /crear-promocion sin params (`?draft=` ni `?promotionId=`)
-   *  REDIRIGE a /promociones · la única manera de entrar al wizard es
-   *  pulsando el botón "Nueva promoción" que crea el draft + navega
-   *  con `?draft=ID`. Razón · evitar entradas directas a la URL que
-   *  antes generaban un draft fantasma. Hacemos el redirect en un
-   *  effect porque no podemos navegar durante el render. */
-  useEffect(() => {
-    if (!draftIdParam && !promotionIdParam) {
-      navigate("/promociones", { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  /* Guard de `/crear-promocion` sin params · ELIMINADO 2026-05-04 ·
+   *  ahora el wizard puede entrar SIN draft (state in-memory) ·
+   *  el draft se persiste solo cuando el user lo decide (Guardar
+   *  borrador, Activar, Subir imagen). Si entra y sale sin tocar
+   *  nada · cero datos en DB. */
 
   /* Carga inicial · prioridad: ?draft=> ?promotionId=> legacy.
    *
-   *  CAMBIO 2026-05-04 · NUNCA crear draft aquí. El wizard SIEMPRE
-   *  recibe `?draft=ID` (creado por el botón "Nueva promoción" en
-   *  /promociones · ver `createBlankDraft` en promotionDrafts.ts).
-   *  Si llega sin params, el effect de arriba redirige a /promociones.
-   *  Si por race el draftIdParam no carga del cache, devolvemos vacío
-   *  con id=null · el redirect ya disparó · este state nunca se ve. */
+   *  CAMBIO 2026-05-04 · el draft se crea LAZY (`ensureDraftId`)
+   *  cuando el user toca acciones que requieren persistencia
+   *  (Guardar borrador, Activar, Subir imagen). Sin ?draft= en URL
+   *  el wizard arranca con state in-memory · `id: null` · el user
+   *  puede entrar y salir sin generar nada en DB. */
   const initialDraft = useMemo(() => {
     if (draftIdParam) {
       const d = getDraft(draftIdParam);
@@ -352,14 +344,42 @@ export default function CrearPromocion() {
         || initialDraft.state.unidades.length > 0);
   });
 
-  /* `update` · simple setter del state · NUNCA crea draft.
-   *  Razón · desde 2026-05-04 los drafts solo se crean al pulsar
-   *  el botón "Nueva promoción" en /promociones (ver
-   *  `createBlankDraft` en promotionDrafts.ts). El wizard SIEMPRE
-   *  recibe `?draft=ID` en URL · el draft ya existe cuando llega
-   *  aquí. Sin esto, había drafts fantasma cuando el componente
-   *  se montaba más de una vez sin acción del user. */
+  /* `hasChangesRef` · marca si el user ha tocado algo desde mount.
+   *  Usado por handleClose para decidir si pide confirmación o sale
+   *  directo. Ref (no state) porque no necesita re-render. */
+  const hasChangesRef = useRef(false);
+
+  /* `ensureDraftId` · idempotente · crea el draft on-demand cuando
+   *  alguna acción lo necesita (Guardar borrador, Activar, Subir
+   *  imagen). Si ya existe, devuelve el id actual. Sincroniza la
+   *  URL con `?draft=ID` para que un refresh continúe el mismo
+   *  draft. Cuando estamos editando una promo (`resolvedPromotionId`)
+   *  devuelve "" porque el flujo es override, no draft. */
+  const ensureDraftId = useCallback((): string => {
+    if (draftIdRef.current) return draftIdRef.current;
+    if (resolvedPromotionId) return "";
+    /* Si el state ya tiene publicRef (legacy/promo edit) reusamos.
+     *  Si no, lo generamos al vuelo. */
+    const existingRef = state.publicRef;
+    const ref = existingRef || generatePublicRef("promotion");
+    const id = `d-${ref}`;
+    draftIdRef.current = id;
+    setDraftIdState(id);
+    if (!existingRef) {
+      setState(prev => ({ ...prev, publicRef: ref }));
+    }
+    /* Sync URL inmediatamente · refresh durante edición continúa
+     *  el mismo draft en lugar de crear otro. */
+    const next = new URLSearchParams(searchParams);
+    next.set("draft", id);
+    setSearchParams(next, { replace: true });
+    return id;
+  }, [resolvedPromotionId, searchParams, setSearchParams, state.publicRef]);
+
+  /* `update` · setea state + marca hasChanges. NO persiste. La
+   *  persistencia es lazy · ver `ensureDraftId`. */
   const update = useCallback(<K extends keyof WizardState>(key: K, value: WizardState[K]) => {
+    hasChangesRef.current = true;
     setState(prev => ({ ...prev, [key]: value }));
   }, []);
 
@@ -371,6 +391,17 @@ export default function CrearPromocion() {
    *      cuando el user no sabe que hay autosave.
    * Persistencia ahora · solo via botones "Guardar borrador" y
    * "Guardar y salir" · `flushSave()` los maneja de forma síncrona. */
+
+  /* Auto-create draft cuando se entra en pasos que requieren
+   *  uploadScopeId (storage RLS) · sin esto el user llegaba a
+   *  Multimedia o Crear Unidades y los uploaders salían
+   *  desactivados con "guarda primero". Se ejecuta también desde
+   *  el handler de modal en Revisión (onEditStep). */
+  useEffect(() => {
+    const needsDraft = step === "multimedia" || step === "crear_unidades";
+    if (needsDraft) ensureDraftId();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   /* Pasos visibles según ramificación (depende de tipo/subUni) */
   const visibleSteps = useMemo(() => getAllSteps(state).map(s => s.id), [state]);
@@ -680,6 +711,13 @@ export default function CrearPromocion() {
   const handleContinue = async () => {
     const next = getNext();
     if (next) setStep(next);
+    else if (resolvedPromotionId) {
+      /* Editando promo existente desde Configuración · NO crear una
+       *  nueva · solo guardar el override y volver a la ficha. */
+      flushSave();
+      toast.success("Cambios guardados");
+      navigate(returnTo || `/promociones/${resolvedPromotionId}`);
+    }
     else if (onlyMissing && returnTo) {
       // Modo "sólo lo que falta" · al acabar vuelve a la ficha en
       // vez de publicar. El promotor decide publicar desde ahí.
@@ -752,9 +790,11 @@ export default function CrearPromocion() {
     if (prev) setStep(prev);
     else navigate(-1);
   };
-  /** Cancela el autosave pendiente (si hay timer) y guarda síncrono
-   *  con el state actual. Llamado por los botones "Guardar borrador" /
-   *  "Guardar y salir" · sin autosave detrás · save explícito. */
+  /** Persiste el state actual · save explícito · llamado por los
+   *  botones "Guardar borrador", "Guardar y salir" o el "Sí guardar"
+   *  del confirm de salida. Si no había draftId aún, ensureDraftId
+   *  lo crea on-demand · sin esto el primer save de un wizard fresh
+   *  fallaba (no había id donde escribir). */
   const flushSave = (): string => {
     /* Editando promo existente · save al override store · NO crea
      *  draft huérfano. Idempotente (mismo promotionId siempre). */
@@ -762,10 +802,10 @@ export default function CrearPromocion() {
       savePromoWizardOverride(resolvedPromotionId, state);
       return resolvedPromotionId;
     }
-    /* Pasamos `step` para preservar el último paso al reabrir. */
-    const currentId = draftIdRef.current;
-    const res = persistDraft(state, currentId ?? undefined, step);
-    if (!currentId) setDraftId(res.id);
+    /* Asegura draft creado antes de persistir · primera llamada
+     *  genera id+publicRef+URL sync · subsiguientes son no-op. */
+    const currentId = draftIdRef.current ?? ensureDraftId();
+    const res = persistDraft(state, currentId, step);
     if (!res.ok && res.error === "quota") {
       toast.error("No se pudo guardar", { description: "Espacio de almacenamiento lleno." });
     }
@@ -777,24 +817,34 @@ export default function CrearPromocion() {
     setSavedAt(Date.now());
     toast.success("Borrador guardado");
   };
-  const handleSaveAndExit = () => {
-    flushSave();
-    toast.success(
-      state.nombrePromocion?.trim()
-        ? `"${state.nombrePromocion}" guardada en incompletas`
-        : "Borrador guardado en incompletas",
-    );
-    navigate("/promociones?tab=incompletas");
-  };
+  /* `handleSaveAndExit` ELIMINADO · su botón se quitó del header.
+   *  El flujo "salir guardando" ahora va por la X · si hay cambios
+   *  el diálogo ofrece "Guardar borrador" o "Cancelar". */
+  /** Cierre del wizard (botón X).
+   *  - Sin cambios desde mount → salida directa · cero datos en DB.
+   *  - Con cambios → diálogo "Guardar borrador" / "Cancelar":
+   *      · Guardar borrador → flushSave + navega a /incompletas
+   *      · Cancelar (o ESC / X) → navega sin tocar nada · NO crea
+   *        ni actualiza nada en DB.
+   *  Importante · si el user llegó editando un draft existente,
+   *  "Cancelar" NO borra el draft de DB · solo descarta los cambios
+   *  pendientes (nunca se llamó flushSave). */
   const handleClose = async () => {
-    const ok = await confirm({
-      title: "¿Salir del asistente?",
-      description: "El borrador se conserva en incompletas. Podrás continuar cuando quieras.",
-      confirmLabel: "Salir",
+    if (!hasChangesRef.current) {
+      navigate("/promociones");
+      return;
+    }
+    const save = await confirm({
+      title: "Tienes cambios sin guardar",
+      description: "Pulsa \"Guardar borrador\" para conservarlos · \"Cancelar\" sale sin guardar nada.",
+      confirmLabel: "Guardar borrador",
+      cancelLabel: "Cancelar",
     });
-    if (ok) {
+    if (save) {
       flushSave();
       navigate("/promociones?tab=incompletas");
+    } else {
+      navigate("/promociones");
     }
   };
 
@@ -931,7 +981,11 @@ export default function CrearPromocion() {
 
           <div className="flex items-center gap-3 shrink-0">
             <AutoSaveIndicator savedAt={savedAt} saving={saving} className="hidden sm:inline-flex" />
-            {publishReady && (
+            {/* "Activar rápido" · solo en CREACIÓN nueva (sin
+                resolvedPromotionId). Si el user vino desde Configuración
+                de una promo ya existente, el wizard está editando · no
+                tiene sentido "activar" lo que ya está activo. */}
+            {publishReady && !resolvedPromotionId && (
               <button
                 onClick={handleQuickPublish}
                 className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-primary text-primary-foreground text-[12px] font-semibold hover:bg-primary/90 transition-colors shadow-soft"
@@ -942,15 +996,9 @@ export default function CrearPromocion() {
                 <span className="sm:hidden">Activar</span>
               </button>
             )}
-            <button
-              onClick={handleSaveAndExit}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-border bg-card text-[12px] font-medium text-foreground hover:bg-muted transition-colors"
-              title="Guarda el avance y sal del asistente. Volverás a encontrar la promoción en Incompletas."
-            >
-              <FileCheck className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Guardar y salir</span>
-              <span className="sm:hidden">Guardar</span>
-            </button>
+            {/* Botón "Guardar y salir" · ELIMINADO 2026-05-04 ·
+                redundante · al pulsar la X con cambios sin guardar
+                ya sale el diálogo "Guardar borrador / Cancelar". */}
             {draftId && (
               <button
                 onClick={handleDeleteDraft}
@@ -1464,6 +1512,14 @@ export default function CrearPromocion() {
                   <RevisionStep
                     state={state}
                     onEditStep={(s) => {
+                      /* Steps que necesitan persistencia para subir
+                       *  archivos (storage RLS exige draftId real) ·
+                       *  forzamos creación lazy AHORA · sin esto el
+                       *  user abre Multimedia y los uploaders salen
+                       *  desactivados con "guarda primero". */
+                      const needsDraft = s === "multimedia" || s === "crear_unidades"
+                        || s === "planos" || s === "brochure";
+                      if (needsDraft) ensureDraftId();
                       /* Si el paso tiene componente propio · abre modal. */
                       if (isSupportedInModal(s)) setEditModalStep(s);
                       /* Si no (role/tipo/sub_uni/sub_varias/estado) ·
@@ -1529,7 +1585,13 @@ export default function CrearPromocion() {
                 disabled={!canContinue()}
                 className="inline-flex items-center gap-1.5 h-9 px-4 sm:px-5 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {!getNext() ? "Activar" : "Siguiente"}
+                {/* Etiqueta del CTA final · "Activar" solo cuando se
+                    crea una promo nueva (no resolvedPromotionId).
+                    Editando una existente → "Guardar cambios" porque
+                    ya está activa · solo persistimos el override. */}
+                {!getNext()
+                  ? (resolvedPromotionId ? "Guardar cambios" : "Activar")
+                  : "Siguiente"}
                 <ChevronRight className="h-4 w-4" />
               </button>
             )}

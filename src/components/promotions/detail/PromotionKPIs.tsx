@@ -64,8 +64,13 @@ export function PromotionKPIs({ promotion: p }: { promotion: Promotion }) {
     {
       icon: TrendingUp,
       label: "Tu comisión",
-      value: `${p.commission}%`,
-      detail: `~${formatPrice((p.priceMin * p.commission) / 100)} – ${formatPrice((p.priceMax * p.commission) / 100)}`,
+      /* "—" cuando no hay comisión configurada · evita mostrar
+       *  "0%" que se interpreta como "sin comisión negociable" en
+       *  vez de "el promotor aún no la ha definido". */
+      value: p.commission > 0 ? `${p.commission}%` : "—",
+      detail: p.commission > 0
+        ? `~${formatPrice((p.priceMin * p.commission) / 100)} – ${formatPrice((p.priceMax * p.commission) / 100)}`
+        : "Sin configurar",
       iconClass: "text-accent-foreground bg-accent/10",
     },
     {

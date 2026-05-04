@@ -120,7 +120,12 @@ function rowToDevPromotion(r: PromotionRow): DevPromotion {
     canShareWithAgencies: r.can_share_with_agencies,
     ownerOrganizationId: r.owner_organization_id,
     ownerRole: (r.owner_role as DevPromotion["ownerRole"]) ?? undefined,
-  };
+    /* Metadata RAW · contiene `wizardSnapshot` con state completo
+     *  (fotos, videos, descripcion, hitos, etc.). Cast porque el
+     *  tipo Promotion no la declara · pero la ficha la lee
+     *  defensivamente con `(p as ...).metadata?.wizardSnapshot`. */
+    metadata: r.metadata ?? {},
+  } as DevPromotion;
 }
 
 /** MERGE in-place de campos identitarios DB → entry seed existente.
@@ -164,7 +169,17 @@ function mergePromotionFromDb(target: DevPromotion, r: PromotionRow): void {
 }
 
 function rowToUnit(r: UnitRow): Unit {
-  const meta = (r.metadata ?? {}) as { block?: string; door?: string; type?: string; usableArea?: number };
+  /* Metadata · todos los campos no-columna del wizard viajan aquí.
+   *  Crítico mantener `fotosUnidad` para que la tab Disponibilidad
+   *  (`PromotionAvailabilityFull`) muestre fotos por unidad · sin
+   *  esto el thumbnail caía siempre al placeholder. */
+  const meta = (r.metadata ?? {}) as {
+    block?: string; door?: string; type?: string;
+    usableArea?: number; parcela?: number;
+    piscinaPrivada?: boolean;
+    fotosUnidad?: string[];
+    usarFotosPromocion?: boolean;
+  };
   return {
     id: r.id,
     /* `ref` canónico · "UN" + 8 dígitos · viene de DB. Si no está
@@ -187,11 +202,14 @@ function rowToUnit(r: UnitRow): Unit {
     usableArea: meta.usableArea ?? 0,
     terrace: r.terrace_m2 ?? 0,
     garden: 0,
-    parcel: 0,
-    hasPool: false,
+    parcel: meta.parcela ?? 0,
+    hasPool: !!meta.piscinaPrivada,
     orientation: r.orientation ?? "Sur",
     price: r.price ?? 0,
     status: (r.status ?? "available") as UnitStatus,
+    /* Fotos propias subidas en el wizard. Si vacío Y el user marcó
+     *  `usarFotosPromocion`, el render cae a la galería de la promo. */
+    fotos: meta.fotosUnidad ?? [],
   };
 }
 

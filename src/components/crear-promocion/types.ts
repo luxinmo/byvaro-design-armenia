@@ -106,7 +106,17 @@ export type StepId =
   | "crear_unidades"
   | "colaboradores"
   | "plan_pagos"
-  | "revision";
+  | "revision"
+  /* Mini-steps · solo se acceden desde la pantalla de Revisión vía
+   *  modal (EditStepModal) · NO aparecen en la timeline lineal del
+   *  wizard. Cada uno cubre UN dominio limpio: identidad (rol +
+   *  nombre), ubicación (dirección), operativa (piso piloto +
+   *  oficinas). */
+  | "identidad"
+  | "ubicacion"
+  | "operativa"
+  | "planos"
+  | "brochure";
 
 /**
  * 6 fases del wizard (agrupación visual de los pasos en la timeline).
@@ -306,6 +316,11 @@ export interface WizardState {
   faseConstruccion: FaseConstruccion | null;
   trimestreEntrega: string | null;
   pisoPiloto: boolean;
+  /** Id de la unidad que actúa como piso piloto · solo aplica si
+   *  `pisoPiloto = true`. Se asigna desde la pantalla de Revisión
+   *  (modal Operativa) o desde la ficha de la promo. Null cuando
+   *  el promotor activó el toggle pero aún no eligió cuál. */
+  pisoPilotoUnidadId: string | null;
   oficinaVentas: boolean;
   oficinasVentaSeleccionadas: OficinaVenta[];
   fechaEntrega: string | null;
@@ -463,6 +478,7 @@ export const defaultWizardState: WizardState = {
   faseConstruccion: null,
   trimestreEntrega: null,
   pisoPiloto: false,
+  pisoPilotoUnidadId: null,
   oficinaVentas: false,
   oficinasVentaSeleccionadas: [],
   fechaEntrega: null,

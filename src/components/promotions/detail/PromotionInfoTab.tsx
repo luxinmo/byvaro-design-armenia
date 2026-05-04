@@ -120,7 +120,7 @@ function CommissionsContent({ commission }: { commission: number }) {
       <div className="rounded-xl bg-card border border-border/50 p-5 flex items-center justify-between">
         <p className="text-sm font-semibold text-foreground">Comisión de colaboración por venta</p>
         <div className="text-right">
-          <p className="text-xl font-bold text-foreground">{commission}%</p>
+          <p className="text-xl font-bold text-foreground">{commission > 0 ? `${commission}%` : "—"}</p>
           <p className="text-xs text-muted-foreground">IVA incluido</p>
         </div>
       </div>
