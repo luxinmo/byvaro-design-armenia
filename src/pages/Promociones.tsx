@@ -552,13 +552,15 @@ export default function Promociones() {
    *  derivamos todo lo demás. */
   const createdAsDev: DevPromotion[] = useMemo(
     () => createdPromos.map((p) => {
-      const snap = (p.metadata?.wizardSnapshot ?? {}) as Record<string, unknown>;
-      const propertyTypes = Array.isArray(snap.tipologiasSeleccionadas) && snap.tipologiasSeleccionadas.length > 0
-        ? (snap.tipologiasSeleccionadas as Array<{ tipo?: string }>).map((t) => t.tipo).filter((t): t is string => !!t)
-        : (snap.subVarias ? [String(snap.subVarias)] : []);
-      const constructionProgress = typeof snap.faseConstruccion === "string"
-        ? ({ proyecto: 5, "en-construccion": 50, terminado: 100 } as Record<string, number>)[snap.faseConstruccion]
-        : undefined;
+      /* Lee de los campos planos de metadata (los derivamos al crear
+       *  · ver promotionsStorage.ts → createPromotionFromWizard). */
+      const meta = (p.metadata ?? {}) as {
+        propertyTypes?: string[];
+        buildingType?: string;
+        constructionProgress?: number;
+        reservationCost?: number;
+        commission?: number;
+      };
       return {
         id: p.id,
         code: p.code,
@@ -570,19 +572,15 @@ export default function Promociones() {
         availableUnits: p.availableUnits,
         totalUnits: p.totalUnits,
         status: (p.status as DevPromotion["status"]) ?? "active",
-        reservationCost: typeof snap.importeReserva === "number" ? snap.importeReserva : 0,
+        reservationCost: meta.reservationCost ?? 0,
         delivery: p.delivery ?? "",
-        commission: typeof snap.comisionInternacional === "number" ? snap.comisionInternacional : 0,
+        commission: meta.commission ?? 0,
         developer: "",
         agencies: 0,
         agencyAvatars: [] as string[],
-        propertyTypes,
-        buildingType: typeof snap.tipo === "string" ? (snap.tipo as DevPromotion["buildingType"]) : undefined,
-        constructionProgress,
-        canShareWithAgencies: snap.colaboracion === true,
-        collaboration: snap.colaboracion === true ? {
-          comisionInternacional: typeof snap.comisionInternacional === "number" ? snap.comisionInternacional : 0,
-        } as unknown as DevPromotion["collaboration"] : undefined,
+        propertyTypes: meta.propertyTypes ?? [],
+        buildingType: meta.buildingType as DevPromotion["buildingType"] | undefined,
+        constructionProgress: meta.constructionProgress,
         image: p.imageUrl ?? undefined,
         updatedAt: p.createdAt,
       } as unknown as DevPromotion;

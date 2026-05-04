@@ -172,8 +172,13 @@ export async function createPromotionFromWizard(
     inicio_obra: 10, estructura: 30, cerramientos: 50, instalaciones: 65,
     acabados: 80, entrega_proxima: 95, llave_en_mano: 100, definir_mas_tarde: 0,
   };
+  /* `estado` es el ESTADO LEGAL de la promoción (proyecto = tiene
+   *  licencia · en_construccion = obra activa · terminado = entregable).
+   *  NO es % de obra. "Proyecto" = la obra NO ha empezado · 0%. Mostrar
+   *  5% sería engañar al cliente · "ya están construyendo" cuando solo
+   *  hay papeles. El % real granular vive en `faseConstruccion`. */
   const ESTADO_PROGRESS: Record<string, number> = {
-    proyecto: 5, en_construccion: 50, terminado: 100,
+    proyecto: 0, en_construccion: 50, terminado: 100,
   };
   const constructionProgress: number | undefined =
     (state.faseConstruccion && FASE_PROGRESS[state.faseConstruccion] != null
