@@ -150,6 +150,42 @@ export async function createPromotionFromWizard(
   const heroFoto = state.fotos?.find((f) => f.esPrincipal) ?? state.fotos?.[0];
   const imageUrl = heroFoto?.url ?? null;
 
+  /* Campos derivados para el shape Promotion · el hydrator
+   * (`seedHydrator.rowToDevPromotion`) los lee de `metadata.X` plano
+   * para reconstruir el `DevPromotion` que la ficha consume. Sin
+   * estos campos en metadata, la ficha pintaba TODO en rojo
+   * ("Sin tipologías", "Sin tipo de edificación", etc.) aunque el
+   * wizard los hubiese rellenado. */
+  const propertyTypes = (state.tipologiasSeleccionadas ?? [])
+    .map((t) => t.tipo)
+    .filter((t): t is string => !!t);
+  if (propertyTypes.length === 0 && state.subVarias) propertyTypes.push(state.subVarias);
+  const buildingType: "plurifamiliar" | "unifamiliar-single" | "unifamiliar-multiple" | undefined =
+    state.tipo === "unifamiliar"
+      ? (state.subUni === "una_sola" ? "unifamiliar-single" : "unifamiliar-multiple")
+      : state.tipo === "plurifamiliar" ? "plurifamiliar"
+      : undefined;
+  /* `constructionProgress` · % de obra (0-100) · derivado de la fase
+   *  granular si está, sino del estado conceptual. Sin esto el
+   *  validador marca "Estado de construcción sin definir". */
+  const FASE_PROGRESS: Record<string, number> = {
+    inicio_obra: 10, estructura: 30, cerramientos: 50, instalaciones: 65,
+    acabados: 80, entrega_proxima: 95, llave_en_mano: 100, definir_mas_tarde: 0,
+  };
+  const ESTADO_PROGRESS: Record<string, number> = {
+    proyecto: 5, en_construccion: 50, terminado: 100,
+  };
+  const constructionProgress: number | undefined =
+    (state.faseConstruccion && FASE_PROGRESS[state.faseConstruccion] != null
+      ? FASE_PROGRESS[state.faseConstruccion]
+      : undefined)
+    ?? (state.estado && ESTADO_PROGRESS[state.estado] != null
+      ? ESTADO_PROGRESS[state.estado]
+      : undefined);
+  const reservationCost = typeof state.importeReserva === "number" ? state.importeReserva : 0;
+  const commission = typeof state.comisionInternacional === "number" ? state.comisionInternacional : 0;
+  const canShareWithAgencies = state.colaboracion === true;
+
   const created: CreatedPromotion = {
     id,
     code: state.publicRef || undefined,
@@ -167,7 +203,18 @@ export async function createPromotionFromWizard(
     delivery,
     imageUrl,
     description,
-    metadata: { wizardSnapshot: state },
+    metadata: {
+      /* Campos planos · consumidos por seedHydrator + ficha. */
+      propertyTypes,
+      buildingType,
+      constructionProgress,
+      reservationCost,
+      commission,
+      /* Snapshot completo del state · usado por adapters que
+       *  necesitan info granular (Promociones.tsx createdAsDev,
+       *  PromocionDetalle, etc.). Mantener al final · grande. */
+      wizardSnapshot: state,
+    },
     createdAt: now,
   };
 
@@ -205,7 +252,11 @@ export async function createPromotionFromWizard(
     address: created.address,
     city: created.city,
     country: created.country,
-    can_share_with_agencies: true,
+    /* `can_share_with_agencies` · desde el toggle del wizard · si el
+     *  user marcó "Solo uso interno" (colaboracion=false) NO se debe
+     *  compartir con agencias · antes estaba hardcoded a true · el
+     *  validador exigía comisiones aunque el user no quisiera. */
+    can_share_with_agencies: canShareWithAgencies,
     metadata: created.metadata,
   });
   if (error) {
