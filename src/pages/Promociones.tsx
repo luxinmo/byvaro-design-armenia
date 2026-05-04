@@ -601,6 +601,13 @@ export default function Promociones() {
         constructionProgress: meta.constructionProgress,
         image: p.imageUrl ?? undefined,
         updatedAt: p.createdAt,
+        canShareWithAgencies: p.canShareWithAgencies,
+        /* CRÍTICO · pasar metadata RAW al output · sin esto, el chip
+         * de licencia y el delivery fallback (que leen
+         * `p.metadata.wizardSnapshot.X`) no funcionan para promos del
+         * cache local. Bug confirmado en local: hasMeta=false en el
+         * chip aunque la promo en DB tenía la metadata correcta. */
+        metadata: p.metadata ?? {},
       } as unknown as DevPromotion;
     }),
     [createdPromos],
@@ -1565,8 +1572,9 @@ export default function Promociones() {
                           note la diferencia. Si null (no preguntado),
                           no mostramos chip. */}
                       {(() => {
-                        const wsTieneLic = (p as { metadata?: { wizardSnapshot?: { tieneLicencia?: boolean | null } } })
-                          .metadata?.wizardSnapshot?.tieneLicencia;
+                        const meta = (p as { metadata?: Record<string, unknown> }).metadata;
+                        const ws = meta?.wizardSnapshot as { tieneLicencia?: boolean | null } | undefined;
+                        const wsTieneLic = ws?.tieneLicencia;
                         if (wsTieneLic === true) {
                           return (
                             <span className="inline-flex items-center gap-1 text-[11px] font-medium text-success">
