@@ -20,6 +20,7 @@
 import {
   Globe, Home, Handshake, Info, Users, Shield, ClipboardList, Clock,
   Plus, Trash2, AlertTriangle, Handshake as HandshakeIcon,
+  Settings, ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/Switch";
@@ -131,48 +132,40 @@ export function ColaboradoresStep({
       )}
 
       {/* ═════ TOGGLE · activar/desactivar comisiones ═════
-        * Botón de activación/desactivación del módulo entero. Al
-        * desactivar la promoción sigue siendo operable internamente
-        * (el equipo registra y vende) pero queda fuera del marketplace
-        * y no se puede compartir con agencias colaboradoras. */}
-      <div className="rounded-xl border border-border bg-card px-4 py-3 flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground shrink-0">
-            <Handshake className="h-4 w-4" strokeWidth={1.5} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground">
-              {state.colaboracion ? "Comisiones activadas" : "Comisiones desactivadas"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-              {state.colaboracion
-                ? "Puedes activar la promoción y compartirla con agencias colaboradoras."
-                : "La promoción puede seguir funcionando internamente, pero no podrás compartirla con colaboradores."}
-            </p>
-          </div>
-          <Switch
-            checked={state.colaboracion}
-            disabled={!canManage}
-            onCheckedChange={(checked) => {
-              if (!canManage) return;
-              update("colaboracion", checked);
-            }}
-          />
+        * UN SOLO bloque · switch + descripción contextual que cambia
+        * según el state. Antes había 2 avisos (este toggle + un
+        * banner warning aparte cuando estaba OFF) · duplicaban el
+        * mismo mensaje y ocupaban espacio innecesario. */}
+      <div className={cn(
+        "rounded-xl border px-4 py-3 flex items-center gap-3",
+        state.colaboracion ? "border-border bg-card" : "border-warning/30 bg-warning/5",
+      )}>
+        <div className={cn(
+          "flex h-8 w-8 items-center justify-center rounded-lg shrink-0",
+          state.colaboracion ? "bg-primary/10 text-primary" : "bg-warning/15 text-warning",
+        )}>
+          {state.colaboracion
+            ? <Handshake className="h-4 w-4" strokeWidth={1.5} />
+            : <AlertTriangle className="h-4 w-4" strokeWidth={1.75} />}
         </div>
-
-        {/* Warning · desactivado → impacto explícito */}
-        {!state.colaboracion && (
-          <div className="flex items-start gap-2 rounded-lg bg-warning/10 px-3 py-2 text-xs leading-relaxed">
-            <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" strokeWidth={1.75} />
-            <span className="text-foreground">
-              <span className="font-medium">Solo uso interno.</span>
-              <span className="text-muted-foreground"> La promoción puede
-                seguir funcionando para tu equipo (registros, visitas, ventas)
-                pero <strong>no podrás compartirla con colaboradores</strong>.
-                Activa el toggle para abrir colaboración.</span>
-            </span>
-          </div>
-        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-foreground">
+            {state.colaboracion ? "Compartir con colaboradores" : "Solo uso interno"}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+            {state.colaboracion
+              ? "La promoción se podrá compartir con agencias colaboradoras · configura comisiones y forma de pago abajo."
+              : "La promoción funciona para tu equipo pero NO se compartirá con colaboradores. Activa el switch para abrir colaboración."}
+          </p>
+        </div>
+        <Switch
+          checked={state.colaboracion}
+          disabled={!canManage}
+          onCheckedChange={(checked) => {
+            if (!canManage) return;
+            update("colaboracion", checked);
+          }}
+        />
       </div>
 
       {/* Si está desactivado · no mostramos la config de comisiones · cero
@@ -221,10 +214,15 @@ export function ColaboradoresStep({
             </label>
             <div className="flex items-center gap-2 flex-wrap">
               <input
-                type="number"
-                value={state.comisionInternacional}
-                onChange={(e) => update("comisionInternacional", Number(e.target.value))}
-                min={0} max={100}
+                type="text"
+                inputMode="numeric"
+                value={state.comisionInternacional > 0 ? String(state.comisionInternacional) : ""}
+                placeholder="0"
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/[^0-9]/g, "");
+                  const n = digits === "" ? 0 : Math.min(100, Number(digits));
+                  update("comisionInternacional", n);
+                }}
                 className={cn(inputBase, "w-20 h-9 text-center text-sm tnum")}
               />
               <span className="text-sm text-muted-foreground font-medium">
@@ -250,10 +248,15 @@ export function ColaboradoresStep({
               </div>
               <div className="flex items-center gap-2">
                 <input
-                  type="number"
-                  value={state.comisionInternacional}
-                  onChange={(e) => update("comisionInternacional", Number(e.target.value))}
-                  min={0} max={100}
+                  type="text"
+                  inputMode="numeric"
+                  value={state.comisionInternacional > 0 ? String(state.comisionInternacional) : ""}
+                  placeholder="0"
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/[^0-9]/g, "");
+                    const n = digits === "" ? 0 : Math.min(100, Number(digits));
+                    update("comisionInternacional", n);
+                  }}
                   className={cn(inputBase, "w-20 h-9 text-center text-sm tnum")}
                 />
                 <span className="text-sm text-muted-foreground font-medium">
@@ -271,10 +274,15 @@ export function ColaboradoresStep({
               </div>
               <div className="flex items-center gap-2">
                 <input
-                  type="number"
-                  value={state.comisionNacional}
-                  onChange={(e) => update("comisionNacional", Number(e.target.value))}
-                  min={0} max={100}
+                  type="text"
+                  inputMode="numeric"
+                  value={state.comisionNacional > 0 ? String(state.comisionNacional) : ""}
+                  placeholder="0"
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/[^0-9]/g, "");
+                    const n = digits === "" ? 0 : Math.min(100, Number(digits));
+                    update("comisionNacional", n);
+                  }}
                   className={cn(inputBase, "w-20 h-9 text-center text-sm tnum")}
                 />
                 <span className="text-sm text-muted-foreground font-medium">
@@ -402,86 +410,6 @@ export function ColaboradoresStep({
           </div>
         </div>
 
-        {/* Modo de validación del registro · radios "directo" vs "por_visita".
-            TODO(logic): el flag se persiste en `WizardState.modoValidacionRegistro`
-            y en `Promotion`, pero la lógica que actúa sobre él (transición
-            preregistro_activo → aprobado tras visita realizada) NO está
-            implementada todavía. Hoy `Registros.tsx::approve()` formaliza
-            todo registro al instante. Ver `docs/registration-system.md §2`. */}
-        <div className="flex flex-col gap-2.5">
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            <HandshakeIcon className="h-3.5 w-3.5 text-primary" strokeWidth={1.75} />
-            Modo de validación
-          </div>
-          <div className="grid sm:grid-cols-2 gap-2">
-            {/* REGLA CANÓNICA · ninguna opción lleva badge "Recomendado".
-             *  El producto es neutro · NUNCA empujamos a "Tras visita"
-             *  como default ni como recomendación (ver CLAUDE.md +
-             *  memoria `feedback_commissions_no_default_after_visit`). */}
-            {([
-              {
-                value: "directo" as const,
-                label: "Directo al aprobar",
-                desc: "El cliente queda formalmente registrado al aprobar · sin condicionar a visita.",
-              },
-              {
-                value: "por_visita" as const,
-                label: "Tras la visita",
-                desc: "El cliente queda como preregistro reservado a nombre del colaborador · se confirma tras la primera visita realizada.",
-              },
-            ]).map((opt) => {
-              const active = state.modoValidacionRegistro === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => update("modoValidacionRegistro", opt.value)}
-                  className={cn(
-                    "text-left rounded-lg border px-3.5 py-3 transition-colors",
-                    active ? "border-primary bg-primary/5" : "border-border hover:border-primary/30",
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    <div className={cn(
-                      "h-4 w-4 rounded-full border-2 shrink-0 grid place-items-center",
-                      active ? "border-primary" : "border-muted-foreground/30",
-                    )}>
-                      {active && <div className="h-2 w-2 rounded-full bg-primary" />}
-                    </div>
-                    <span className="text-xs font-semibold text-foreground">{opt.label}</span>
-                  </div>
-                  <p className="text-[10.5px] text-muted-foreground leading-relaxed mt-1.5">
-                    {opt.desc}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Copy explicativa contextual · cambia según el modo elegido. */}
-          <div className="rounded-lg bg-primary/5 border border-primary/15 px-4 py-3 flex items-start gap-2.5">
-            <HandshakeIcon className="h-4 w-4 text-primary shrink-0 mt-0.5" strokeWidth={1.5} />
-            <div className="text-[11px] text-foreground leading-relaxed">
-              <p className="font-medium text-foreground mb-0.5">
-                {state.modoValidacionRegistro === "por_visita"
-                  ? "Así funciona el preregistro"
-                  : "Así funciona el registro directo"}
-              </p>
-              <p className="text-muted-foreground">
-                {state.modoValidacionRegistro === "por_visita" ? (
-                  <>
-                    El cliente queda como <span className="text-foreground font-medium">preregistro</span> reservado a nombre del colaborador. La reserva se confirma <span className="text-foreground font-medium">definitivamente tras la primera visita</span>. Mientras tanto, ningún otro colaborador puede registrar al mismo cliente.
-                  </>
-                ) : (
-                  <>
-                    El cliente queda <span className="text-foreground font-medium">formalmente registrado</span> al aprobar el promotor, sin esperar visita. El colaborador queda con la atribución desde ese momento.
-                  </>
-                )}
-              </p>
-            </div>
-          </div>
-        </div>
-
         <div className="flex flex-col gap-2">
           {condicionesOptions.map((cond) => {
             const checked = state.condicionesRegistro.includes(cond.value);
@@ -526,51 +454,122 @@ export function ColaboradoresStep({
           Los campos obligatorios (nombre, 4 cifras y nacionalidad) no se pueden desactivar.
         </p>
 
-        {/* Validez del registro · toggle + desplegable */}
-        <div className="pt-3 border-t border-border flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <Clock className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={1.5} />
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-foreground">Caducidad del registro</p>
-                <p className="text-[10px] text-muted-foreground">Tras ese plazo sin visita, el cliente queda libre para otro colaborador</p>
+        {/* ═════ AVANZADO · Modo de validación + Caducidad ═════
+         *  Estos dos controles son raros (la mayoría de promotores no
+         *  los toca) · los movemos a un <details> colapsado por
+         *  defecto · cero ruido en el flujo principal · el promotor
+         *  que los necesite los abre. */}
+        <details className="group rounded-xl border border-border bg-muted/20 px-4 py-2.5">
+          <summary className="cursor-pointer list-none flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              <Settings className="h-3.5 w-3.5" strokeWidth={1.75} />
+              Opciones avanzadas
+            </div>
+            <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" strokeWidth={1.5} />
+          </summary>
+
+          <div className="flex flex-col gap-5 pt-4 mt-3 border-t border-border">
+            {/* Modo de validación del registro · radios "directo" vs "por_visita".
+                TODO(logic): el flag se persiste en `WizardState.modoValidacionRegistro`
+                y en `Promotion`, pero la lógica que actúa sobre él (transición
+                preregistro_activo → aprobado tras visita realizada) NO está
+                implementada todavía. Hoy `Registros.tsx::approve()` formaliza
+                todo registro al instante. Ver `docs/registration-system.md §2`. */}
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                <HandshakeIcon className="h-3.5 w-3.5 text-primary" strokeWidth={1.75} />
+                Modo de validación
+              </div>
+              <div className="grid sm:grid-cols-2 gap-2">
+                {/* REGLA CANÓNICA · ninguna opción lleva badge "Recomendado". */}
+                {([
+                  {
+                    value: "directo" as const,
+                    label: "Directo al aprobar",
+                    desc: "El cliente queda formalmente registrado al aprobar · sin condicionar a visita.",
+                  },
+                  {
+                    value: "por_visita" as const,
+                    label: "Tras la visita",
+                    desc: "Preregistro reservado a nombre del colaborador · se confirma tras la primera visita.",
+                  },
+                ]).map((opt) => {
+                  const active = state.modoValidacionRegistro === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => update("modoValidacionRegistro", opt.value)}
+                      className={cn(
+                        "text-left rounded-lg border px-3.5 py-3 transition-colors",
+                        active ? "border-primary bg-primary/5" : "border-border hover:border-primary/30",
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className={cn(
+                          "h-4 w-4 rounded-full border-2 shrink-0 grid place-items-center",
+                          active ? "border-primary" : "border-muted-foreground/30",
+                        )}>
+                          {active && <div className="h-2 w-2 rounded-full bg-primary" />}
+                        </div>
+                        <span className="text-xs font-semibold text-foreground">{opt.label}</span>
+                      </div>
+                      <p className="text-[10.5px] text-muted-foreground leading-relaxed mt-1.5">
+                        {opt.desc}
+                      </p>
+                    </button>
+                  );
+                })}
               </div>
             </div>
-            <Switch
-              checked={state.validezRegistroDias > 0}
-              onCheckedChange={(on) => update("validezRegistroDias", on ? 180 : 0)}
-            />
-          </div>
 
-          {state.validezRegistroDias > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
-              {[
-                { days: 30,  label: "1 mes" },
-                { days: 60,  label: "2 meses" },
-                { days: 90,  label: "3 meses" },
-                { days: 180, label: "6 meses" },
-                { days: 360, label: "12 meses" },
-              ].map((opt) => {
-                const active = state.validezRegistroDias === opt.days;
-                return (
-                  <button
-                    key={opt.days}
-                    type="button"
-                    onClick={() => update("validezRegistroDias", opt.days)}
-                    className={cn(
-                      "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                      active
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
+            {/* Caducidad del registro */}
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Clock className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={1.5} />
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-foreground">Caducidad del registro</p>
+                    <p className="text-[10px] text-muted-foreground">Tras ese plazo sin visita, el cliente queda libre para otro colaborador</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={state.validezRegistroDias > 0}
+                  onCheckedChange={(on) => update("validezRegistroDias", on ? 180 : 0)}
+                />
+              </div>
+
+              {state.validezRegistroDias > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  {[
+                    { days: 30,  label: "1 mes" },
+                    { days: 60,  label: "2 meses" },
+                    { days: 90,  label: "3 meses" },
+                    { days: 180, label: "6 meses" },
+                    { days: 360, label: "12 meses" },
+                  ].map((opt) => {
+                    const active = state.validezRegistroDias === opt.days;
+                    return (
+                      <button
+                        key={opt.days}
+                        type="button"
+                        onClick={() => update("validezRegistroDias", opt.days)}
+                        className={cn(
+                          "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                          active
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        </details>
       </div>
 
       {/* ═════ CARD 5 · Forma de pago ═════
@@ -653,27 +652,31 @@ export function ColaboradoresStep({
             {state.hitosComision.map((hito, idx) => (
               <div key={idx} className="flex items-center gap-2">
                 <input
-                  type="number"
-                  value={hito.pagoCliente}
+                  type="text"
+                  inputMode="numeric"
+                  value={hito.pagoCliente > 0 ? String(hito.pagoCliente) : ""}
+                  placeholder="0"
                   onChange={(e) => {
-                    const val = Math.max(0, Math.min(100, Number(e.target.value)));
+                    const digits = e.target.value.replace(/[^0-9]/g, "");
+                    const val = digits === "" ? 0 : Math.min(100, Number(digits));
                     const next = [...state.hitosComision];
                     next[idx] = { ...next[idx], pagoCliente: val };
                     update("hitosComision", next);
                   }}
-                  min={0} max={100}
                   className={cn(inputBase, "h-8 flex-1 text-xs text-center tnum")}
                 />
                 <input
-                  type="number"
-                  value={hito.pagoColaborador}
+                  type="text"
+                  inputMode="numeric"
+                  value={hito.pagoColaborador > 0 ? String(hito.pagoColaborador) : ""}
+                  placeholder="0"
                   onChange={(e) => {
-                    const val = Math.max(0, Math.min(100, Number(e.target.value)));
+                    const digits = e.target.value.replace(/[^0-9]/g, "");
+                    const val = digits === "" ? 0 : Math.min(100, Number(digits));
                     const next = [...state.hitosComision];
                     next[idx] = { ...next[idx], pagoColaborador: val };
                     update("hitosComision", next);
                   }}
-                  min={0} max={100}
                   className={cn(inputBase, "h-8 flex-1 text-xs text-center tnum")}
                 />
                 <button
