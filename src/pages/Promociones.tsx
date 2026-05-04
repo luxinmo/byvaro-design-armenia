@@ -1075,18 +1075,15 @@ export default function Promociones() {
     selectedDelivery, selectedCommissions,
   ]);
 
-  /* Helper · precio efectivo · prioriza el campo de la promo ·
-   * fallback al min/max real de unitsByPromotion (cubre el caso
-   * createdAsDev con priceFrom/priceTo null porque el snapshot no
-   * los rellenó). El sort por precio lo necesita para no caer en
-   * empate cuando muchas promos tienen priceMin=0. */
+  /* Helper · precio efectivo · delega en `getPromoStats` que ya
+   * deriva priceMin/priceMax de las unidades DISPONIBLES (status=
+   * available). Sin disponibles, +Infinity (asc) / 0 (desc) → al
+   * final del listado. */
   const getEffectivePrice = (p: DevPromotion, dir: "min" | "max"): number => {
-    const direct = dir === "min" ? p.priceMin : p.priceMax;
-    if (direct && direct > 0) return direct;
-    const units = unitsByPromotion[p.id] ?? [];
-    const prices = units.map((u) => u.price ?? 0).filter((n) => n > 0);
-    if (prices.length === 0) return dir === "min" ? Number.POSITIVE_INFINITY : 0;
-    return dir === "min" ? Math.min(...prices) : Math.max(...prices);
+    const stats = getPromoStats(p.id, p);
+    const v = dir === "min" ? stats.priceMin : stats.priceMax;
+    if (v > 0) return v;
+    return dir === "min" ? Number.POSITIVE_INFINITY : 0;
   };
 
   /* ─── Ordenación ─── */
@@ -1398,11 +1395,11 @@ export default function Promociones() {
                           <p className="text-white text-lg sm:text-xl font-semibold tracking-tight drop-shadow-md">
                             {lastUnit ? formatPrice(lastUnit.price) : (
                               <>
-                                {formatPrice(p.priceMin)}
-                                {p.priceMax > p.priceMin && (
+                                {formatPrice(liveStats.priceMin)}
+                                {liveStats.priceMax > liveStats.priceMin && (
                                   <>
                                     <span className="text-white/80"> — </span>
-                                    {formatPrice(p.priceMax)}
+                                    {formatPrice(liveStats.priceMax)}
                                   </>
                                 )}
                               </>
@@ -1586,9 +1583,9 @@ export default function Promociones() {
                     <p className="hidden xl:block text-lg font-bold text-foreground tracking-tight mb-3">
                       {lastUnit ? formatPrice(lastUnit.price) : (
                         <>
-                          {formatPrice(p.priceMin)}
-                          {p.priceMax > p.priceMin && <span className="text-muted-foreground font-normal"> — </span>}
-                          {p.priceMax > p.priceMin && formatPrice(p.priceMax)}
+                          {formatPrice(liveStats.priceMin)}
+                          {liveStats.priceMax > liveStats.priceMin && <span className="text-muted-foreground font-normal"> — </span>}
+                          {liveStats.priceMax > liveStats.priceMin && formatPrice(liveStats.priceMax)}
                         </>
                       )}
                     </p>
@@ -2409,8 +2406,8 @@ function PromoCardCompact({ promo: p, isTrending, isAgencyUser }: { promo: DevPr
           {getPromoterDisplayName(p)} · {p.delivery}
         </p>
         <p className="text-lg font-bold text-foreground mt-2 tnum">
-          {fmt(p.priceMin)}
-          {p.priceMax > p.priceMin && <span className="text-muted-foreground font-normal"> — {fmt(p.priceMax)}</span>}
+          {fmt(liveStats.priceMin)}
+          {liveStats.priceMax > liveStats.priceMin && <span className="text-muted-foreground font-normal"> — {fmt(liveStats.priceMax)}</span>}
         </p>
         <div className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[11.5px]">
           <span className="text-muted-foreground"><span className="font-semibold text-foreground tnum">{liveStats.availableUnits}/{liveStats.totalUnits}</span> disp.</span>
