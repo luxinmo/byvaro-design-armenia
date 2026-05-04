@@ -38,7 +38,7 @@ const STEP_TITLES: Partial<Record<StepId, string>> = {
   identidad: "Identidad",
   tipo: "Tipo y estructura",
   extras: "Características por defecto",
-  estado: "Estado, licencia y entrega",
+  estado: "Estructura · estado y entrega",
   detalles: "Construcción y entrega",
   ubicacion: "Ubicación",
   info_basica: "Información básica",
@@ -96,7 +96,9 @@ export function EditStepModal({
     step === "tipo" ? "max-w-2xl" :
     step === "identidad" || step === "ubicacion" || step === "operativa" ? "max-w-xl" :
     step === "planos" || step === "brochure" ? "max-w-2xl" :
-    step === "estado" ? "max-w-2xl" :
+    /* "estado" combina pantallas 6+7 del wizard · necesita más
+     * espacio que un mini-step. */
+    step === "estado" ? "max-w-3xl" :
     "max-w-3xl";
 
   return (
@@ -127,7 +129,22 @@ export function EditStepModal({
             />
           )}
           {step === "tipo" && <TipologiaQuickEdit state={state} />}
-          {step === "estado" && <EstadoStep state={state} update={update} />}
+          {step === "estado" && (
+            /* El step "estado" del wizard (6/14) depende del step
+             *  "detalles" (7/14) · van juntos en flow lineal. En el
+             *  modal de Estructura los renderizamos AMBOS apilados
+             *  para reflejar el mismo dominio (estado de obra +
+             *  entrega + piso piloto). DetallesStep ya respeta
+             *  `state.estado` internamente para sus condicionales. */
+            <div className="flex flex-col gap-6">
+              <EstadoStep state={state} update={update} />
+              <DetallesStep
+                state={state}
+                update={update}
+                trimestreOptions={futureTrimesterOptions()}
+              />
+            </div>
+          )}
           {step === "extras" && <ExtrasV5 state={state} update={update} />}
           {step === "detalles" && (
             <DetallesStep
