@@ -16,7 +16,9 @@
  * cierra con "Hecho" y vuelve directo a la pantalla de revisión.
  */
 
+import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { MapPin, Upload, X, Building2, Home as HomeIcon, ArrowLeft } from "lucide-react";
 import type { StepId, WizardState, RoleOption } from "./types";
 import { ExtrasV5 } from "./extras-v5";
 import { DetallesStep } from "./DetallesStep";
@@ -30,23 +32,31 @@ import { OptionCard } from "./SharedWidgets";
 import { roleOptions, tipoOptions, subUniOptions, subVariasOptions } from "./options";
 
 const STEP_TITLES: Partial<Record<StepId, string>> = {
-  tipo: "Tipología",
+  identidad: "Identidad",
+  tipo: "Tipo y estructura",
   extras: "Características por defecto",
-  detalles: "Detalles finales",
+  detalles: "Construcción y entrega",
+  ubicacion: "Ubicación",
   info_basica: "Información básica",
   descripcion: "Descripción",
   multimedia: "Multimedia",
   crear_unidades: "Unidades",
+  operativa: "Piso piloto y oficinas",
+  planos: "Planos",
+  brochure: "Brochure / Catálogo",
   colaboradores: "Colaboradores",
   plan_pagos: "Plan de pagos",
 };
 
 /* Steps que se pueden editar en modal · si llega otro, el caller
- * cae al onFallbackNavigate. "tipo" englobamos los 4 inline
- * (role/tipo/subUni/subVarias) en una sola vista compacta. */
+ * cae al onFallbackNavigate. Mini-steps `identidad/ubicacion/operativa/
+ * planos/brochure` son fragmentos accesibles solo desde Revisión · no
+ * aparecen en la timeline lineal. */
 const SUPPORTED: StepId[] = [
-  "tipo", "extras", "detalles", "info_basica", "descripcion", "multimedia",
-  "crear_unidades", "colaboradores", "plan_pagos",
+  "identidad", "tipo", "extras", "detalles", "ubicacion", "info_basica",
+  "descripcion", "multimedia", "crear_unidades", "operativa",
+  "planos", "brochure",
+  "colaboradores", "plan_pagos",
 ];
 
 export function isSupportedInModal(step: StepId): boolean {
@@ -74,12 +84,14 @@ export function EditStepModal({
 
   /* Steps con tabla ancha (unidades) necesitan más espacio · sin
    * esto la tabla overflowea horizontalmente y el user tiene que
-   * hacer scroll lateral · feo. El resto cabe bien en max-w-3xl. */
+   * hacer scroll lateral · feo. Los mini-steps caben en xl/lg. */
   const widthClass =
     step === "crear_unidades" ? "max-w-[min(1280px,95vw)]" :
     step === "multimedia" ? "max-w-4xl" :
     step === "extras" ? "max-w-2xl" :
     step === "tipo" ? "max-w-2xl" :
+    step === "identidad" || step === "ubicacion" || step === "operativa" ? "max-w-xl" :
+    step === "planos" || step === "brochure" ? "max-w-2xl" :
     "max-w-3xl";
 
   return (
@@ -90,7 +102,26 @@ export function EditStepModal({
         </DialogHeader>
 
         <div className="px-5 py-4">
-          {step === "tipo" && <TipologiaQuickEdit state={state} update={update} />}
+          {step === "identidad" && <IdentidadQuickEdit state={state} update={update} />}
+          {step === "ubicacion" && <UbicacionQuickEdit state={state} update={update} />}
+          {step === "operativa" && <OperativaQuickEdit state={state} update={update} />}
+          {step === "planos" && (
+            <ArchivosSection
+              kind="planos"
+              description="Plano general de urbanización o planos individuales por unidad."
+              state={state}
+              update={update}
+            />
+          )}
+          {step === "brochure" && (
+            <ArchivosSection
+              kind="brochure"
+              description="Folleto comercial general o uno específico por unidad."
+              state={state}
+              update={update}
+            />
+          )}
+          {step === "tipo" && <TipologiaQuickEdit state={state} />}
           {step === "extras" && <ExtrasV5 state={state} update={update} />}
           {step === "detalles" && (
             <DetallesStep
@@ -134,29 +165,20 @@ export function EditStepModal({
   );
 }
 
-/* ─── TipologiaQuickEdit · solo permite cambiar ROL desde aquí.
- *
- *  El resto (tipo · cantidad · tipología) se muestra como read-only
- *  con un hint indicando dónde cambiarlo. Razón · cambiar de
- *  plurifamiliar a unifamiliar (o al revés) es destructivo · regenera
- *  unidades, resetea estructura del edificio, invalida configuración.
- *  Mejor obligar a entrar al wizard donde el cambio es explícito. */
-function TipologiaQuickEdit({
+/* ─── IdentidadQuickEdit · Rol + Nombre comercial.
+ *  Referencia (publicRef) es immutable · NUNCA editable. Sin ella el
+ *  usuario podría romper enlaces compartidos del microsite. */
+function IdentidadQuickEdit({
   state, update,
 }: {
   state: WizardState;
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
 }) {
-  const isUnifamiliar = state.tipo === "unifamiliar";
-  const tipoLabel = tipoOptions.find((o) => o.value === state.tipo)?.label ?? "—";
-  const subUniLabel = subUniOptions.find((o) => o.value === state.subUni)?.label ?? null;
-  const subVariasLabel = subVariasOptions.find((o) => o.value === state.subVarias)?.label ?? null;
-
   return (
     <div className="flex flex-col gap-5">
-      {/* Rol · ÚNICO editable aquí */}
+      {/* Rol · radio cards */}
       <section>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">Rol</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">Actuamos como</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {roleOptions.map((o) => (
             <OptionCard
@@ -169,7 +191,582 @@ function TipologiaQuickEdit({
         </div>
       </section>
 
-      {/* Resto · read-only + hint */}
+      {/* Nombre comercial */}
+      <section>
+        <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2 block">
+          Nombre comercial
+        </label>
+        <input
+          type="text"
+          value={state.nombrePromocion}
+          onChange={(e) => update("nombrePromocion", e.target.value)}
+          placeholder="Ej. Villa Esmeralda, Residencial Marina…"
+          className="w-full h-10 px-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+        <p className="text-[10.5px] text-muted-foreground/70 mt-1.5">
+          Es el nombre que verá el cliente en el microsite y en la ficha pública.
+        </p>
+      </section>
+
+      {/* Referencia · read-only · sello inmutable */}
+      <section>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">Referencia pública</p>
+        <div className="rounded-xl border border-border bg-muted/30 px-3 py-2.5 flex items-center justify-between">
+          <span className="text-sm font-mono font-medium text-foreground">
+            {state.publicRef || state.refPromocion || "—"}
+          </span>
+          <span className="text-[11px] text-muted-foreground">No se puede cambiar</span>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/* ─── UbicacionQuickEdit · dirección (calle/ciudad/provincia/país)
+ *  + MOCK visual de mapa con pin. El mapa real (Google Maps / Leaflet
+ *  + lat/lng draggable) NO está implementado · esto solo es un
+ *  placeholder visual para validar el diseño. Cuando se cablee la
+ *  API el bloque del mapa se sustituye por el componente real. */
+function UbicacionQuickEdit({
+  state, update,
+}: {
+  state: WizardState;
+  update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
+}) {
+  const dir = state.direccionPromocion;
+  const patch = (k: keyof typeof dir, v: string) =>
+    update("direccionPromocion", { ...dir, [k]: v });
+  const inputCls = "w-full h-10 px-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30";
+  return (
+    <div className="flex flex-col gap-4">
+      {/* MOCK · mapa con pin · diseño placeholder · sin funcionalidad
+          real (no hay lat/lng en state · no hay tile provider · no se
+          puede mover el pin). Cuando se enchufe Google Maps/Leaflet se
+          sustituye el bloque entero. */}
+      <div className="relative h-[200px] rounded-xl overflow-hidden border border-border">
+        {/* Fondo · simula tile de mapa con gradiente + grid sutil */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(135deg, #e8eef5 0%, #dbe4ed 50%, #d2dde7 100%)",
+            backgroundImage:
+              "linear-gradient(135deg, #e8eef5 0%, #dbe4ed 50%, #d2dde7 100%), linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px)",
+            backgroundSize: "auto, 28px 28px, 28px 28px",
+          }}
+        />
+        {/* "Calles" decorativas · diagonales con curvas suaves */}
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 200" preserveAspectRatio="none">
+          <path d="M 0 130 Q 100 100 200 120 T 400 90" stroke="rgba(255,255,255,0.7)" strokeWidth="6" fill="none" />
+          <path d="M 50 0 Q 80 80 60 200" stroke="rgba(255,255,255,0.55)" strokeWidth="4" fill="none" />
+          <path d="M 280 0 L 260 200" stroke="rgba(255,255,255,0.55)" strokeWidth="4" fill="none" />
+        </svg>
+        {/* Pin centrado · sombra para destacar sobre el fondo */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="relative -mt-4">
+            <div className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg">
+              <MapPinSolid />
+            </div>
+            {/* Sombra del pin · pequeña elipse debajo */}
+            <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-1.5 w-3 rounded-full bg-foreground/20 blur-sm" />
+          </div>
+        </div>
+        {/* Etiqueta arriba a la izquierda · marca el placeholder */}
+        <div className="absolute top-2 left-2 inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-background/90 backdrop-blur text-[10px] font-medium text-muted-foreground border border-border">
+          <span className="h-1.5 w-1.5 rounded-full bg-warning" />
+          Vista previa · mapa interactivo próximamente
+        </div>
+      </div>
+
+      {/* Campo único · estilo Google Places autocomplete · una sola
+          búsqueda devuelve calle + ciudad + provincia + país + lat/lng.
+          Para el mock escribimos el texto a `direccion` · cuando se
+          cablee Places el handler parsea el resultado y rellena los
+          4 sub-campos automáticamente. Los inputs separados (ciudad,
+          provincia, país) ya no se ven · el user no los rellena
+          manualmente nunca. */}
+      <div>
+        <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2 block">
+          Dirección
+        </label>
+        <div className="relative">
+          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" strokeWidth={1.75} />
+          <input
+            type="text"
+            value={dir.direccion}
+            onChange={(e) => patch("direccion", e.target.value)}
+            placeholder="Buscar dirección · ej. Calle del Mar 42, Marbella"
+            className={`${inputCls} pl-9`}
+          />
+        </div>
+        <p className="text-[10.5px] text-muted-foreground/70 mt-1.5">
+          Empieza a escribir y elige una sugerencia · Google rellenará
+          ciudad, provincia, país y coordenadas automáticamente.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ─── ArchivosSection · usado por dos steps distintos · `planos` y
+ *  `brochure`. Cada uno abre el mismo componente con `kind` diferente
+ *  · sub-bloques "Para toda la promoción" + "Específicos por unidad"
+ *  visibles a la vez, sin elección obligatoria.
+ *
+ *  Storage paths cuando se cablee Supabase:
+ *   - promotion-public/{promoId}/planos/                · general
+ *   - promotion-public/{promoId}/brochure/              · general
+ *   - promotion-public/{promoId}/units/{unitId}/planos/ · per-unit
+ *   - promotion-public/{promoId}/units/{unitId}/brochure/
+ *  Las "carpetas" por unitId se crean solas al subir el primer
+ *  archivo (Storage usa prefixes virtuales).
+ *
+ *  TODO(backend) · `fakeUpload()` simula upload con URL mock ·
+ *  sustituir por upload real cuando se enchufe Supabase Storage. */
+function ArchivosSection({
+  kind, description, state, update,
+}: {
+  kind: "planos" | "brochure";
+  description: string;
+  state: WizardState;
+  update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
+}) {
+  const generalKey: "documentosPlanos" | "documentosBrochure" =
+    kind === "planos" ? "documentosPlanos" : "documentosBrochure";
+  const unitKey: "planoUrls" | "brochureUrls" =
+    kind === "planos" ? "planoUrls" : "brochureUrls";
+
+  const generalDocs = state[generalKey] ?? [];
+  const hasGeneral = generalDocs.length > 0;
+  const hasAnyIndividual = state.unidades.some((u) => (u[unitKey] ?? []).length > 0);
+  const totalIndividual = state.unidades.reduce((sum, u) => sum + (u[unitKey] ?? []).length, 0);
+
+  /* Mode state machine:
+   *   - "choose"      · pantalla inicial · 2 OptionCards
+   *   - "general"     · vista de planos generales (urbanización)
+   *   - "individual"  · vista de planos por unidad
+   *  Si ya hay datos, arranca directamente en el modo correspondiente. */
+  const initialMode: "choose" | "general" | "individual" =
+    hasGeneral ? "general"
+    : hasAnyIndividual ? "individual"
+    : "choose";
+  const [mode, setMode] = useState<"choose" | "general" | "individual">(initialMode);
+
+  /* TODO(backend) · generador fake hasta que se cablee Storage. */
+  const fakeUpload = () => `mock://${kind}/${Date.now()}.pdf`;
+
+  const addGeneral = () => update(generalKey, [...generalDocs, fakeUpload()]);
+  const removeGeneral = (i: number) => update(generalKey, generalDocs.filter((_, idx) => idx !== i));
+
+  const addToUnit = (unitId: string) => {
+    const next = state.unidades.map((u) =>
+      u.id === unitId ? { ...u, [unitKey]: [...(u[unitKey] ?? []), fakeUpload()] } : u
+    );
+    update("unidades", next);
+  };
+  const removeFromUnit = (unitId: string, idx: number) => {
+    const next = state.unidades.map((u) => {
+      if (u.id !== unitId) return u;
+      const arr = u[unitKey] ?? [];
+      return { ...u, [unitKey]: arr.filter((_, i) => i !== idx) };
+    });
+    update("unidades", next);
+  };
+
+  /* Etiquetas según kind · la pantalla de elección y el subtitle
+   *  del general usan terminología distinta para planos vs brochure. */
+  const labels = kind === "planos"
+    ? {
+        generalTitle: "Planos generales",
+        generalDesc: "Para toda la urbanización · 1 plano común",
+        generalHint: "Planos de la urbanización · zonas comunes, accesos, distribución del solar.",
+        individualTitle: "Planos individuales",
+        individualDesc: "1 plano específico por cada unidad",
+        uploadGeneral: "Subir plano general",
+        uploadUnit: "Subir plano",
+        addUnit: "Añadir plano",
+      }
+    : {
+        generalTitle: "Brochure general",
+        generalDesc: "Catálogo común para toda la promoción",
+        generalHint: "Brochure / catálogo comercial general · presentación global de la promoción.",
+        individualTitle: "Brochures individuales",
+        individualDesc: "1 brochure específico por cada unidad",
+        uploadGeneral: "Subir brochure general",
+        uploadUnit: "Subir brochure",
+        addUnit: "Añadir brochure",
+      };
+
+  /* ═══════════ PANTALLA "CHOOSE" ═══════════ */
+  if (mode === "choose") {
+    return (
+      <div className="flex flex-col gap-4">
+        <p className="text-[12px] text-muted-foreground leading-relaxed">{description}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setMode("general")}
+            className="relative flex flex-col items-center gap-3 rounded-2xl border border-border bg-card p-5 text-center shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 hover:border-primary/30 transition-all"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+              <Building2 className="h-5 w-5" strokeWidth={1.5} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">{labels.generalTitle}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">{labels.generalDesc}</p>
+            </div>
+            {hasGeneral && (
+              <span className="absolute top-2.5 right-2.5 inline-flex items-center justify-center h-5 px-1.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold tnum">
+                {generalDocs.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMode("individual")}
+            disabled={state.unidades.length === 0}
+            className="relative flex flex-col items-center gap-3 rounded-2xl border border-border bg-card p-5 text-center shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 hover:border-primary/30 transition-all disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-soft disabled:hover:border-border disabled:cursor-not-allowed"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+              <HomeIcon className="h-5 w-5" strokeWidth={1.5} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">{labels.individualTitle}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+                {state.unidades.length === 0
+                  ? "Crea primero las unidades"
+                  : `${labels.individualDesc} · ${state.unidades.length} ${state.unidades.length === 1 ? "unidad" : "unidades"}`}
+              </p>
+            </div>
+            {hasAnyIndividual && (
+              <span className="absolute top-2.5 right-2.5 inline-flex items-center justify-center h-5 px-1.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold tnum">
+                {totalIndividual}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ═══════════ PANTALLA "GENERAL" ═══════════ */
+  if (mode === "general") {
+    return (
+      <div className="flex flex-col gap-4">
+        <BackHeader onBack={() => setMode("choose")} title={labels.generalTitle} hint={labels.generalHint} />
+        {generalDocs.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {generalDocs.map((url, i) => (
+              <PdfTile key={i} url={url} onRemove={() => removeGeneral(i)} />
+            ))}
+            <UploadTile onClick={addGeneral} label={labels.addUnit.replace("plano", "Añadir plano").replace("brochure", "Añadir brochure")} />
+          </div>
+        ) : (
+          <UploadTileBig onClick={addGeneral} label={labels.uploadGeneral} />
+        )}
+      </div>
+    );
+  }
+
+  /* ═══════════ PANTALLA "INDIVIDUAL" ═══════════ */
+  return (
+    <div className="flex flex-col gap-4">
+      <BackHeader
+        onBack={() => setMode("choose")}
+        title={labels.individualTitle}
+        hint={`Cada unidad puede tener su propio ${kind === "planos" ? "plano" : "brochure"} · click en "Añadir" para subir uno.`}
+      />
+      <div className="flex flex-col gap-3 max-h-[420px] overflow-y-auto pr-1 -mr-1">
+        {state.unidades.map((u) => {
+          const docs = u[unitKey] ?? [];
+          const thumb = u.fotosUnidad?.[0]?.url;
+          const label = u.nombre || u.ref || u.id;
+          return (
+            <div key={u.id} className="rounded-xl border border-border bg-card p-3">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-10 w-10 rounded-lg overflow-hidden bg-muted shrink-0">
+                  {thumb ? (
+                    <img src={thumb} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-muted flex items-center justify-center">
+                      <HomeIcon className="h-3.5 w-3.5 text-muted-foreground/50" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-foreground truncate">{label}</p>
+                  <p className="text-[11px] text-muted-foreground tabular-nums">
+                    {u.precio > 0
+                      ? new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(u.precio)
+                      : "Sin precio"}
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {docs.map((url, i) => (
+                  <PdfTile key={i} url={url} onRemove={() => removeFromUnit(u.id, i)} />
+                ))}
+                <UploadTile onClick={() => addToUnit(u.id)} label={docs.length === 0 ? labels.uploadUnit : labels.addUnit} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* Header con botón back · usado en pantallas "general" e "individual"
+ *  · idéntico patrón que TipologiaQuickEdit. */
+function BackHeader({
+  onBack, title, hint,
+}: {
+  onBack: () => void;
+  title: string;
+  hint?: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <button
+        type="button"
+        onClick={onBack}
+        className="h-7 w-7 inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 mt-0.5"
+        aria-label="Volver"
+      >
+        <ArrowLeft className="h-4 w-4" />
+      </button>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        {hint && <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-relaxed">{hint}</p>}
+      </div>
+    </div>
+  );
+}
+
+/* Tile grande de PDF · icono visible + nombre + ✕. Reemplaza al
+ *  chip pequeño (`FileChip`) cuando se quiere mostrar bien los
+ *  archivos subidos en el modal de archivos. */
+function PdfTile({ url, onRemove }: { url: string; onRemove: () => void }) {
+  const name = url.split("/").pop() || url;
+  return (
+    <div className="relative rounded-xl border border-border bg-background overflow-hidden hover:border-foreground/30 hover:shadow-soft transition-all group">
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label="Eliminar archivo"
+        className="absolute top-1 right-1 h-6 w-6 inline-flex items-center justify-center rounded-full bg-background/95 backdrop-blur text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all shadow-soft border border-border"
+      >
+        <X className="h-3 w-3" />
+      </button>
+      <div className="aspect-square flex items-center justify-center bg-muted/30">
+        <PdfIconLarge />
+      </div>
+      <div className="px-2 py-1.5 border-t border-border/40">
+        <p className="text-[10.5px] font-medium text-foreground truncate" title={name}>{name}</p>
+      </div>
+    </div>
+  );
+}
+
+/* Tile de upload · misma forma que PdfTile pero con + grande
+ *  + dashed border para indicar "drop zone". Usado al lado de
+ *  los PdfTiles para añadir más archivos. */
+function UploadTile({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-xl border-2 border-dashed border-border bg-background hover:border-foreground/40 hover:bg-muted/30 transition-colors flex flex-col items-center justify-center gap-1.5 aspect-square"
+    >
+      <Upload className="h-4 w-4 text-muted-foreground" />
+      <span className="text-[10.5px] font-medium text-muted-foreground text-center px-2 leading-tight">{label}</span>
+    </button>
+  );
+}
+
+/* Tile grande · empty state cuando no hay archivos subidos en
+ *  general · más prominent que el pequeño UploadTile. */
+function UploadTileBig({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full rounded-2xl border-2 border-dashed border-border bg-muted/20 hover:border-foreground/40 hover:bg-muted/40 transition-colors flex flex-col items-center justify-center gap-2 py-12"
+    >
+      <Upload className="h-6 w-6 text-muted-foreground/60" strokeWidth={1.5} />
+      <span className="text-sm font-medium text-foreground">{label}</span>
+      <span className="text-[10.5px] text-muted-foreground">Click para seleccionar PDF</span>
+    </button>
+  );
+}
+
+/* Icono PDF grande para el tile · más visual que un FileText
+ *  pequeño · cuadrado coloreado con "PDF" en grande. */
+function PdfIconLarge() {
+  return (
+    <svg width="48" height="56" viewBox="0 0 48 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 4h22l10 10v34a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4z" fill="hsl(var(--destructive) / 0.1)" stroke="hsl(var(--destructive))" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M30 4v10h10" stroke="hsl(var(--destructive))" strokeWidth="1.5" strokeLinejoin="round" fill="none" />
+      <text x="24" y="40" textAnchor="middle" fontSize="12" fontWeight="700" fill="hsl(var(--destructive))" fontFamily="system-ui, sans-serif">PDF</text>
+    </svg>
+  );
+}
+
+/* `FileChip` y `FilePdfIcon` (chips pequeños) ELIMINADOS · sustituidos
+ *  por `PdfTile` y `UploadTile` (tiles grandes con icono visible) ·
+ *  el user pidió iconos más grandes y prominentes en el modal de
+ *  archivos. */
+
+/* Pin SVG · más compacto que el de lucide, alineado con el círculo
+ *  del badge para que parezca un único elemento. */
+function MapPinSolid() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z" />
+    </svg>
+  );
+}
+
+/* ─── OperativaQuickEdit · piso piloto + oficinas de venta.
+ *  Toggle pisoPiloto · si Sí, lista de unidades con radio para
+ *  elegir cuál es el piloto. Si vuelve a No, limpia la selección. */
+function OperativaQuickEdit({
+  state, update,
+}: {
+  state: WizardState;
+  update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
+}) {
+  const togglePiloto = (v: boolean) => {
+    update("pisoPiloto", v);
+    /* Off · limpiar el id seleccionado para no dejar un puntero
+     *  huérfano en metadata. */
+    if (!v && state.pisoPilotoUnidadId) {
+      update("pisoPilotoUnidadId", null);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Piso piloto · toggle binario */}
+      <section>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">¿Hay piso piloto?</p>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { value: true, label: "Sí" },
+            { value: false, label: "No" },
+          ].map((o) => (
+            <button
+              key={String(o.value)}
+              type="button"
+              onClick={() => togglePiloto(o.value)}
+              className={`h-11 rounded-xl border text-sm font-medium transition-colors ${
+                state.pisoPiloto === o.value
+                  ? "border-primary/40 bg-primary/5 text-foreground"
+                  : "border-border bg-card text-muted-foreground hover:text-foreground hover:border-foreground/30"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* Selector de unidad · solo cuando pisoPiloto=true. Mismo
+          patrón que el dialog de la ficha (PromocionDetalle.tsx
+          §Show Flat Picker) · radio cards con info compacta de cada
+          unidad. */}
+      {state.pisoPiloto && (
+        <section>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">
+            Elige la unidad que actuará como piso piloto
+          </p>
+          {state.unidades.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-6 text-center">
+              <p className="text-xs text-muted-foreground">
+                Aún no has creado unidades · primero genera el inventario
+                desde el paso "Unidades".
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5 max-h-[320px] overflow-y-auto pr-1 -mr-1">
+              {state.unidades.map((u) => {
+                const selected = state.pisoPilotoUnidadId === u.id;
+                const label = u.nombre || u.ref || u.id;
+                const meta: string[] = [];
+                if (u.dormitorios) meta.push(`${u.dormitorios} hab`);
+                if (u.banos) meta.push(`${u.banos} baños`);
+                if (u.superficieConstruida) meta.push(`${u.superficieConstruida} m²`);
+                return (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => update("pisoPilotoUnidadId", u.id)}
+                    className={`flex items-center justify-between p-3 rounded-xl border transition-all text-left ${
+                      selected
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-foreground/30 hover:bg-muted/20"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-8 w-8 rounded-lg bg-muted/60 flex items-center justify-center shrink-0">
+                        <span className="text-[10px] font-semibold text-muted-foreground">{u.planta ?? "—"}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{label}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {meta.length > 0 ? meta.join(" · ") : "Sin datos"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {u.precio > 0 && (
+                        <p className="text-sm font-bold text-foreground tabular-nums">
+                          {new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(u.precio)}
+                        </p>
+                      )}
+                      {selected && (
+                        <span className="text-[10px] font-semibold text-primary uppercase">Seleccionada</span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Oficinas de venta · count + hint */}
+      <section className="rounded-2xl border border-border bg-muted/20 p-4">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">Oficinas de venta</p>
+        <p className="text-sm font-medium text-foreground">
+          {state.oficinasVentaSeleccionadas.length === 0
+            ? "Sin oficinas asignadas"
+            : `${state.oficinasVentaSeleccionadas.length} ${state.oficinasVentaSeleccionadas.length === 1 ? "oficina" : "oficinas"} asignadas`}
+        </p>
+        <p className="text-[10.5px] text-muted-foreground/70 mt-1.5">
+          Para añadir o quitar oficinas concretas, abre el paso completo
+          desde la timeline lateral del wizard. Aquí solo verás el resumen.
+        </p>
+      </section>
+    </div>
+  );
+}
+
+/* ─── TipologiaQuickEdit · cambios destructivos · todo read-only +
+ *  hint para entrar al wizard si el user quiere cambiarlo.
+ *
+ *  Antes había un toggle de Rol aquí · ahora vive en IdentidadQuickEdit
+ *  para evitar duplicar surfaces. */
+function TipologiaQuickEdit({ state }: { state: WizardState }) {
+  const isUnifamiliar = state.tipo === "unifamiliar";
+  const tipoLabel = tipoOptions.find((o) => o.value === state.tipo)?.label ?? "—";
+  const subUniLabel = subUniOptions.find((o) => o.value === state.subUni)?.label ?? null;
+  const subVariasLabel = subVariasOptions.find((o) => o.value === state.subVarias)?.label ?? null;
+
+  return (
+    <div className="flex flex-col gap-5">
       <section className="rounded-2xl border border-border bg-muted/20 p-4">
         <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-3">
           Estructura de la promoción
@@ -178,11 +775,11 @@ function TipologiaQuickEdit({
           <ReadOnlyRow label="Tipo" value={tipoLabel} />
           {isUnifamiliar && subUniLabel && <ReadOnlyRow label="Cantidad" value={subUniLabel} />}
           {isUnifamiliar && state.subUni === "una_sola" && subVariasLabel && (
-            <ReadOnlyRow label="Tipología" value={subVariasLabel} />
+            <ReadOnlyRow label="Modelo" value={subVariasLabel} />
           )}
           {isUnifamiliar && state.subUni === "varias" && state.tipologiasSeleccionadas.length > 0 && (
             <ReadOnlyRow
-              label="Tipologías"
+              label="Modelos"
               value={
                 <div className="flex flex-wrap gap-1.5">
                   {state.tipologiasSeleccionadas.map((t) => (

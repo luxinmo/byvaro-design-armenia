@@ -1,26 +1,31 @@
 /**
  * RevisionStep · Paso final "Revisión antes de publicar".
  *
- * NO existe en la referencia figgy-friend-forge — se diseña aquí por
- * primera vez. Muestra un resumen navegable de todo el WizardState
- * agrupado por fase, con acceso directo a cada paso para editar.
+ * Resumen navegable de todo el WizardState agrupado por DOMINIO ·
+ * cada bloque representa UNA cosa (no mezcla construcción con
+ * comercialización · no duplica amenities en 2 sitios). Click en
+ * "Editar" abre modal del step correspondiente sin re-navegar
+ * todo el wizard.
  *
- * Bloques:
- *   1. Tipología        → role · tipo · subUni / config edificio
- *   2. Comercialización → estado · entrega · detalles finales
- *   3. Marketing        → info básica · descripción · multimedia (counts)
- *   4. Operativa        → unidades (count + precio medio) · colaboradores
- *                         (% comisión) · plan de pagos (método)
+ * 7 bloques canónicos (orden de arriba abajo):
+ *   1. Identidad                      · rol · nombre · referencia
+ *   2. Tipo y estructura              · tipo · cantidad · modelos · edificio
+ *   3. Construcción y entrega         · estado · fase · cert · entrega
+ *   4. Ubicación                      · dirección
+ *   5. Características                · extras del wizard step 5 (V5)
+ *   6. Multimedia y comunicación      · descripción · fotos · vídeos
+ *   7. Unidades y comercialización    · inventario + comisiones + pagos
+ *                                       + piso piloto + oficinas
  *
- * Al final, checklist de "Lo que se publicará" + hint CTA sobre el
- * botón "Publicar" del footer. El paso no tiene validación propia
- * (el botón Publicar solo se activa si `canContinue()` del padre pasa).
+ * Banners arriba: "Faltan X requisitos" / "Todo listo" + "Solo uso
+ * interno" si aplica. Footer "Lo que se activará" lista qué se
+ * encenderá al pulsar Activar.
  */
 
 import {
   CheckCircle2, AlertCircle, Pencil, Home, Building2, Users, Banknote,
-  Image as ImageIcon, FileText, MapPin, Globe, AlertTriangle, ArrowRight, Check,
-  Sparkles,
+  MapPin, AlertTriangle, FileText,
+  Sparkles, HardHat, Hash, Camera, Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -147,7 +152,7 @@ export function RevisionStep({ state, onEditStep }: Props) {
   /* No es obligatorio · siempre "completo" para no bloquear publicación. */
   const extrasComplete = true;
 
-  /* ──── Operativa ──── */
+  /* ──── Unidades + comercialización ──── */
   const unidadesCount = state.unidades.length;
   const precioMedio = unidadesCount > 0
     ? state.unidades.reduce((s, u) => s + (u.precio || 0), 0) / unidadesCount
@@ -160,12 +165,11 @@ export function RevisionStep({ state, onEditStep }: Props) {
     : state.metodoPago === "manual" ? "Plan manual"
     : state.metodoPago === "certificaciones" ? "Por certificación" : dash;
 
-  const operativaComplete = unidadesCount > 0 && !!state.metodoPago;
-
-  /* ──── Progreso global ──── */
-  const sections = [tipologiaComplete, comercComplete, marketingComplete, operativaComplete];
-  const completedCount = sections.filter(Boolean).length;
-  const percent = Math.round((completedCount / sections.length) * 100);
+  /* ──── Completness por bloque (los 7 nuevos) ──── */
+  const identidadComplete = !!state.role && !!state.nombrePromocion?.trim();
+  const ubicacionComplete = !!direccionCompleta;
+  const multimediaComplete = state.fotos.length > 0;
+  const unidadesComercComplete = unidadesCount > 0 && !!state.metodoPago;
 
   // ══ Requisitos obligatorios para publicar (bloquean el botón) ══
   // Ver src/lib/publicationRequirements.ts
@@ -229,13 +233,30 @@ export function RevisionStep({ state, onEditStep }: Props) {
           requisitos") y con la sección "Lo que se activará" de abajo.
           Tres veces el mismo mensaje en una pantalla = ruido. */}
 
-      {/* ═════ TIPOLOGÍA ═════ */}
-      <SectionCard icon={Home} title="Tipología" complete={tipologiaComplete} onEdit={() => onEditStep("tipo")}>
+      {/* ═════ 1 · IDENTIDAD ═════
+          Editar abre `IdentidadQuickEdit` (mini-modal) · solo Rol +
+          Nombre + Ref(ro) · sin contaminar con campos de otros bloques. */}
+      <SectionCard icon={Hash} title="Identidad" complete={identidadComplete} onEdit={() => onEditStep("identidad")}>
         <Row label="Rol" value={state.role === "promotor" ? "Promotor" : state.role === "comercializador" ? "Comercializador" : null} />
-        <Row label="Tipo de promoción" value={tipoLabel} />
-        {subUniLabel && <Row label="Cantidad" value={subUniLabel} />}
+        <Row label="Nombre comercial" value={state.nombrePromocion || null} />
+        <Row label="Referencia" value={state.publicRef || state.refPromocion || null} />
+      </SectionCard>
+
+      {/* ═════ 2 · TIPO Y ESTRUCTURA ═════
+          Una sola fila "Tipo" que ya incluye unifamiliar/plurifamiliar
+          + cantidad (vivienda/viviendas/edificio). Antes "Tipo de
+          promoción" + "Cantidad" daban la misma info dos veces. */}
+      {(() => {
+        const combinedTipo = state.tipo === "unifamiliar"
+          ? state.subUni === "una_sola" ? "Vivienda unifamiliar"
+            : state.subUni === "varias" ? "Viviendas unifamiliares"
+            : tipoLabel
+          : state.tipo === "plurifamiliar" ? "Edificio plurifamiliar"
+          : tipoLabel;
+        return (
+      <SectionCard icon={Building2} title="Tipo y estructura" complete={tipologiaComplete} onEdit={() => onEditStep("tipo")}>
+        <Row label="Tipo" value={combinedTipo} />
         {subVariasLabel && <Row label="Modelo" value={subVariasLabel} />}
-        {edificioResumen && <Row label="Estructura" value={edificioResumen} />}
         {state.tipologiasSeleccionadas.length > 0 && (
           <Row
             label="Modelos"
@@ -250,10 +271,36 @@ export function RevisionStep({ state, onEditStep }: Props) {
             }
           />
         )}
+        {edificioResumen && <Row label="Edificio" value={edificioResumen} />}
+      </SectionCard>
+        );
+      })()}
+
+      {/* ═════ 3 · CONSTRUCCIÓN Y ENTREGA ═════
+          Antes mezclaba con piso piloto / oficinas (eso es comerciali-
+          zación). Aquí solo lo que toca a la OBRA · estado legal,
+          fase de obra granular y cuando entrega. */}
+      <SectionCard icon={HardHat} title="Construcción y entrega" complete={comercComplete} onEdit={() => onEditStep("detalles")}>
+        <Row label="Estado legal" value={estadoLabel} />
+        {faseLabel && <Row label="Fase de obra" value={faseLabel} />}
+        {state.certificadoEnergetico && <Row label="Cert. energético" value={state.certificadoEnergetico} />}
+        {state.fechaEntrega && <Row label="Fecha entrega" value={state.fechaEntrega} />}
+        {state.trimestreEntrega && <Row label="Trimestre entrega" value={state.trimestreEntrega} />}
       </SectionCard>
 
-      {/* ═════ CARACTERÍSTICAS POR DEFECTO (V5 extras) ═════ */}
-      <SectionCard icon={Sparkles} title="Características por defecto" complete={extrasComplete} onEdit={() => onEditStep("extras")}>
+      {/* ═════ 4 · UBICACIÓN ═════
+          Editar abre `UbicacionQuickEdit` (mini-modal) · solo
+          dirección · sin contaminar con cert. energético, amenities
+          o cualquier otra cosa de info_basica. */}
+      <SectionCard icon={MapPin} title="Ubicación" complete={ubicacionComplete} onEdit={() => onEditStep("ubicacion")}>
+        <Row label="Dirección" value={direccionCompleta || null} />
+      </SectionCard>
+
+      {/* ═════ 5 · CARACTERÍSTICAS ═════
+          Lo del wizard step 5 (V5 extras). Antes había DOS bloques
+          casi iguales · "Características por defecto" + "Amenities/
+          Características" en Información. Unificado aquí. */}
+      <SectionCard icon={Sparkles} title="Características" complete={extrasComplete} onEdit={() => onEditStep("extras")}>
         {extrasActiveLabels.length > 0 ? (
           <Row
             label="Activadas"
@@ -275,77 +322,145 @@ export function RevisionStep({ state, onEditStep }: Props) {
         </p>
       </SectionCard>
 
-      {/* ═════ COMERCIALIZACIÓN ═════
-          onEditStep("detalles") · DetallesStep cubre estado + fase +
-          fecha entrega + piso piloto + oficinas (todo lo de esta
-          sección) · y SÍ tiene componente para abrirse en modal. */}
-      <SectionCard icon={Building2} title="Comercialización" complete={comercComplete} onEdit={() => onEditStep("detalles")}>
-        <Row label="Estado" value={estadoLabel} />
-        {faseLabel && <Row label="Fase de obra" value={faseLabel} />}
-        {state.fechaEntrega && <Row label="Entrega" value={state.fechaEntrega} />}
-        {state.trimestreEntrega && <Row label="Trimestre entrega" value={state.trimestreEntrega} />}
-        <Row label="Piso piloto" value={state.pisoPiloto ? "Sí" : "No"} />
-        <Row label="Oficinas de venta" value={state.oficinasVentaSeleccionadas.length > 0 ? `${state.oficinasVentaSeleccionadas.length}` : "No"} />
+      {/* ═════ 6 · MULTIMEDIA Y COMUNICACIÓN ═════
+          Bloque propio · 2 sub-secciones separadas:
+            - Multimedia · strip de thumbnails reales (no chip count)
+              + count de vídeos · click abre el editor de fotos.
+            - Descripción · preview del texto + idiomas · click abre
+              el editor de descripción. Antes los 3 sub-cards (Desc ·
+              Fotos · Vídeos) eran cajitas con count seco · poco útil
+              para validar de un vistazo qué hay subido. */}
+      <SectionCard icon={Camera} title="Multimedia y comunicación" complete={multimediaComplete} onEdit={() => onEditStep("multimedia")}>
+        {/* Sub-sección 1 · Fotos + Vídeos */}
+        <button
+          type="button"
+          onClick={() => onEditStep("multimedia")}
+          className="w-full rounded-xl border border-border bg-muted/20 px-3 py-3 hover:bg-muted/40 transition-colors text-left mb-3 group"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              Multimedia
+            </p>
+            <span className="text-[10.5px] text-muted-foreground tnum">
+              {state.fotos.length > 0
+                ? `${state.fotos.length} ${state.fotos.length === 1 ? "foto" : "fotos"}`
+                : "Sin fotos"}
+              {state.videos.length > 0 && ` · ${state.videos.length} ${state.videos.length === 1 ? "vídeo" : "vídeos"}`}
+            </span>
+          </div>
+          {state.fotos.length > 0 ? (
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+              {state.fotos.slice(0, 8).map((f, i) => (
+                <div key={f.url ?? i} className="relative h-14 w-14 rounded-md overflow-hidden bg-background shrink-0 border border-border/40">
+                  {f.url ? (
+                    <img src={f.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  ) : (
+                    <div className="w-full h-full bg-muted" />
+                  )}
+                  {f.esPrincipal && (
+                    <span className="absolute top-0.5 left-0.5 inline-flex items-center justify-center h-3 px-1 rounded bg-primary text-primary-foreground text-[8px] font-semibold uppercase">
+                      Principal
+                    </span>
+                  )}
+                </div>
+              ))}
+              {state.fotos.length > 8 && (
+                <div className="h-14 w-14 rounded-md bg-muted/60 shrink-0 flex items-center justify-center border border-border/40">
+                  <span className="text-[11px] font-medium text-muted-foreground">+{state.fotos.length - 8}</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="h-14 rounded-md border border-dashed border-border bg-background/40 flex items-center justify-center">
+              <p className="text-[10.5px] text-muted-foreground/70">Aún no hay fotos · click para subir</p>
+            </div>
+          )}
+        </button>
+
+        {/* Sub-sección 2 · Descripción · separada visualmente */}
+        <button
+          type="button"
+          onClick={() => onEditStep("descripcion")}
+          className="w-full rounded-xl border border-border bg-muted/20 px-3 py-3 hover:bg-muted/40 transition-colors text-left"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              Descripción
+            </p>
+            <span className="text-[10.5px] text-muted-foreground">
+              {state.descripcionMode === "ai"
+                ? "Generar con IA"
+                : state.descripcion
+                  ? `${totalIdiomas} ${totalIdiomas === 1 ? "idioma" : "idiomas"}`
+                  : "Sin redactar"}
+            </span>
+          </div>
+          {state.descripcion ? (
+            <p className="text-xs text-foreground/85 line-clamp-3 leading-relaxed">
+              {state.descripcion}
+            </p>
+          ) : (
+            <p className="text-[10.5px] text-muted-foreground/70">
+              Aún no hay descripción · click para redactar
+            </p>
+          )}
+        </button>
       </SectionCard>
 
-      {/* ═════ INFORMACIÓN ═════ */}
-      <SectionCard icon={MapPin} title="Información" complete={marketingComplete} onEdit={() => onEditStep("info_basica")}>
-        <Row label="Nombre" value={state.nombrePromocion || null} />
-        <Row label="Dirección" value={direccionCompleta || null} />
-        {state.certificadoEnergetico && <Row label="Cert. energético" value={state.certificadoEnergetico} />}
-        <Row
-          label="Amenities"
-          value={state.amenities.length > 0 ? `${state.amenities.length} seleccionadas` : null}
-        />
-        <Row
-          label="Características"
-          value={state.caracteristicasVivienda.length > 0 ? `${state.caracteristicasVivienda.length} seleccionadas` : null}
-        />
-        <div className="mt-2 pt-2 border-t border-border grid grid-cols-1 sm:grid-cols-3 gap-2">
+      {/* ═════ 7 · ARCHIVOS ═════
+          Planos + Brochure (catálogo) · cada uno tiene SU PROPIO
+          modal · sub-cards llevan a `planos` o `brochure` step. */}
+      {(() => {
+        const planosGeneral = state.documentosPlanos?.length ?? 0;
+        const brochureGeneral = state.documentosBrochure?.length ?? 0;
+        const planosPorUnidad = state.unidades.reduce((sum, u) => sum + (u.planoUrls?.length ?? 0), 0);
+        const brochurePorUnidad = state.unidades.reduce((sum, u) => sum + (u.brochureUrls?.length ?? 0), 0);
+        const totalPlanos = planosGeneral + planosPorUnidad;
+        const totalBrochure = brochureGeneral + brochurePorUnidad;
+        const archivosComplete = totalPlanos > 0 || totalBrochure > 0;
+        return (
+      <SectionCard icon={FileText} title="Archivos" complete={archivosComplete} onEdit={() => onEditStep("planos")}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={() => onEditStep("descripcion")}
+            onClick={() => onEditStep("planos")}
             className="rounded-lg border border-border bg-muted/20 px-3 py-2 flex items-center gap-2 hover:bg-muted/40 transition-colors text-left"
           >
             <FileText className="h-4 w-4 text-primary shrink-0" strokeWidth={1.5} />
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Descripción</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Planos</p>
               <p className="text-xs text-foreground truncate">
-                {state.descripcionMode === "ai" ? "Generar con IA" : state.descripcion ? `${totalIdiomas} idioma${totalIdiomas > 1 ? "s" : ""}` : "Sin configurar"}
+                {totalPlanos === 0 ? "Sin planos subidos"
+                  : `${totalPlanos} ${totalPlanos === 1 ? "archivo" : "archivos"}${planosPorUnidad > 0 ? ` · ${planosPorUnidad} por unidad` : ""}`}
               </p>
             </div>
           </button>
           <button
             type="button"
-            onClick={() => onEditStep("multimedia")}
+            onClick={() => onEditStep("brochure")}
             className="rounded-lg border border-border bg-muted/20 px-3 py-2 flex items-center gap-2 hover:bg-muted/40 transition-colors text-left"
           >
-            <ImageIcon className="h-4 w-4 text-primary shrink-0" strokeWidth={1.5} />
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Fotos</p>
-              <p className="text-xs text-foreground truncate tnum">
-                {state.fotos.length > 0 ? `${state.fotos.length} · ${state.fotos.find((f) => f.esPrincipal)?.nombre ?? "sin principal"}` : "Sin fotos"}
-              </p>
-            </div>
-          </button>
-          <button
-            type="button"
-            onClick={() => onEditStep("multimedia")}
-            className="rounded-lg border border-border bg-muted/20 px-3 py-2 flex items-center gap-2 hover:bg-muted/40 transition-colors text-left"
-          >
-            <Globe className="h-4 w-4 text-primary shrink-0" strokeWidth={1.5} />
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Vídeos</p>
-              <p className="text-xs text-foreground truncate tnum">
-                {state.videos.length > 0 ? `${state.videos.length}` : "Sin vídeos"}
+            <FileText className="h-4 w-4 text-primary shrink-0" strokeWidth={1.5} />
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Brochure / Catálogo</p>
+              <p className="text-xs text-foreground truncate">
+                {totalBrochure === 0 ? "Sin brochure subido"
+                  : `${totalBrochure} ${totalBrochure === 1 ? "archivo" : "archivos"}${brochurePorUnidad > 0 ? ` · ${brochurePorUnidad} por unidad` : ""}`}
               </p>
             </div>
           </button>
         </div>
       </SectionCard>
+        );
+      })()}
 
-      {/* ═════ OPERATIVA ═════ */}
-      <SectionCard icon={Users} title="Operativa" complete={operativaComplete} onEdit={() => onEditStep("crear_unidades")}>
+      {/* ═════ 8 · UNIDADES Y COMERCIALIZACIÓN ═════
+          Inventario + ventas. Cada sub-acción tiene su propio modal:
+            · Editar (botón card) → unidades (tabla bulk-edit)
+            · Sub-card Piso piloto/Oficinas → operativa
+            · Sub-card Comisiones → colaboradores
+            · Sub-card Plan de pagos → plan_pagos */}
+      <SectionCard icon={Layers} title="Unidades y comercialización" complete={unidadesComercComplete} onEdit={() => onEditStep("crear_unidades")}>
         {unidadesCount > 0 ? (
           <>
             <Row label="Unidades" value={`${unidadesCount}`} />
@@ -356,7 +471,21 @@ export function RevisionStep({ state, onEditStep }: Props) {
           <Row label="Unidades" value={null} />
         )}
 
-        <div className="mt-3 pt-3 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="mt-3 pt-3 border-t border-border grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => onEditStep("operativa")}
+            className="rounded-lg border border-border bg-muted/20 px-3 py-2 flex items-center gap-2 hover:bg-muted/40 transition-colors text-left"
+          >
+            <Building2 className="h-4 w-4 text-primary shrink-0" strokeWidth={1.5} />
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Piso piloto · Oficinas</p>
+              <p className="text-xs text-foreground truncate">
+                {state.pisoPiloto ? "Con piso piloto" : "Sin piso piloto"}
+                {state.oficinasVentaSeleccionadas.length > 0 && ` · ${state.oficinasVentaSeleccionadas.length} ${state.oficinasVentaSeleccionadas.length === 1 ? "oficina" : "oficinas"}`}
+              </p>
+            </div>
+          </button>
           <button
             type="button"
             onClick={() => onEditStep("colaboradores")}
@@ -364,7 +493,7 @@ export function RevisionStep({ state, onEditStep }: Props) {
           >
             <Users className="h-4 w-4 text-primary shrink-0" strokeWidth={1.5} />
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Colaboradores</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Comisiones</p>
               <p className="text-xs text-foreground truncate tnum">
                 {!state.colaboracion
                   ? "Uso interno · sin colaboración"

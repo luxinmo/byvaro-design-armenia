@@ -26,7 +26,7 @@ import { PromocionesMap } from "@/components/promociones/PromocionesMap";
 import { cn } from "@/lib/utils";
 import { MinimalSort } from "@/components/ui/MinimalSort";
 import { ViewToggle } from "@/components/ui/ViewToggle";
-import { listDrafts, deleteDraft, deleteAllDrafts, draftToPromotionData, DRAFT_ID_PREFIX, createBlankDraft, type PromotionDraft } from "@/lib/promotionDrafts";
+import { listDrafts, deleteDraft, deleteAllDrafts, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
 import { getCreatedPromotions } from "@/lib/promotionsStorage";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
@@ -414,18 +414,13 @@ export default function Promociones() {
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
 
-  /* Handler ÚNICO para "Nueva promoción" · usa un ref como lock
-   *  para evitar que un doble click rápido (200ms) genere 2 drafts
-   *  con publicRef distinto. El ref se mantiene true hasta que la
-   *  navegación deshecha el componente · si por alguna razón el
-   *  user vuelve sin navegar, no hay forma de re-disparar (el page
-   *  unmount limpia todo). */
-  const creatingDraftRef = useRef(false);
-  const handleCreateNewPromotion = async () => {
-    if (creatingDraftRef.current) return;
-    creatingDraftRef.current = true;
-    const id = await createBlankDraft();
-    navigate(`/crear-promocion?draft=${id}`);
+  /* "Nueva promoción" · simple navigate · ya NO crea draft aquí.
+   *  Razón · ver CrearPromocion.tsx · el wizard arranca con state
+   *  in-memory · solo persiste a Supabase cuando el user lo decide
+   *  (Guardar borrador, Activar, Subir imagen). Entrar y salir sin
+   *  tocar nada = 0 drafts huérfanos. */
+  const handleCreateNewPromotion = () => {
+    navigate("/crear-promocion");
   };
 
   /* Source of truth · `seedHydrator` muta in-place los arrays seed
@@ -552,13 +547,15 @@ export default function Promociones() {
    *  derivamos todo lo demás. */
   const createdAsDev: DevPromotion[] = useMemo(
     () => createdPromos.map((p) => {
-      const snap = (p.metadata?.wizardSnapshot ?? {}) as Record<string, unknown>;
-      const propertyTypes = Array.isArray(snap.tipologiasSeleccionadas) && snap.tipologiasSeleccionadas.length > 0
-        ? (snap.tipologiasSeleccionadas as Array<{ tipo?: string }>).map((t) => t.tipo).filter((t): t is string => !!t)
-        : (snap.subVarias ? [String(snap.subVarias)] : []);
-      const constructionProgress = typeof snap.faseConstruccion === "string"
-        ? ({ proyecto: 5, "en-construccion": 50, terminado: 100 } as Record<string, number>)[snap.faseConstruccion]
-        : undefined;
+      /* Lee de los campos planos de metadata (los derivamos al crear
+       *  · ver promotionsStorage.ts → createPromotionFromWizard). */
+      const meta = (p.metadata ?? {}) as {
+        propertyTypes?: string[];
+        buildingType?: string;
+        constructionProgress?: number;
+        reservationCost?: number;
+        commission?: number;
+      };
       return {
         id: p.id,
         code: p.code,
@@ -570,19 +567,15 @@ export default function Promociones() {
         availableUnits: p.availableUnits,
         totalUnits: p.totalUnits,
         status: (p.status as DevPromotion["status"]) ?? "active",
-        reservationCost: typeof snap.importeReserva === "number" ? snap.importeReserva : 0,
+        reservationCost: meta.reservationCost ?? 0,
         delivery: p.delivery ?? "",
-        commission: typeof snap.comisionInternacional === "number" ? snap.comisionInternacional : 0,
+        commission: meta.commission ?? 0,
         developer: "",
         agencies: 0,
         agencyAvatars: [] as string[],
-        propertyTypes,
-        buildingType: typeof snap.tipo === "string" ? (snap.tipo as DevPromotion["buildingType"]) : undefined,
-        constructionProgress,
-        canShareWithAgencies: snap.colaboracion === true,
-        collaboration: snap.colaboracion === true ? {
-          comisionInternacional: typeof snap.comisionInternacional === "number" ? snap.comisionInternacional : 0,
-        } as unknown as DevPromotion["collaboration"] : undefined,
+        propertyTypes: meta.propertyTypes ?? [],
+        buildingType: meta.buildingType as DevPromotion["buildingType"] | undefined,
+        constructionProgress: meta.constructionProgress,
         image: p.imageUrl ?? undefined,
         updatedAt: p.createdAt,
       } as unknown as DevPromotion;
@@ -1518,10 +1511,25 @@ export default function Promociones() {
                       * Mobile gap-6 · sm gap-8 · xl gap-10. */}
                     <div className="flex items-center gap-6 sm:gap-8 xl:gap-10 mb-3 xl:mb-4">
                       <Metric label="Disponibles" value={`${liveStats.availableUnits} / ${liveStats.totalUnits}`} />
-                      <Metric label="Comisión" value={`${p.commission}%`} />
+                      {/* Comisión "—" cuando no hay configurada · evita
+                          mostrar "0%" que se interpreta como "sin
+                          margen" en vez de "el promotor no la ha
+                          definido". */}
+                      <Metric label="Comisión" value={p.commission > 0 ? `${p.commission}%` : "—"} />
                       {p.constructionProgress !== undefined && (
                         <Metric label="Obra" value={`${p.constructionProgress}%`} />
                       )}
+                      {/* Chip "Licencia concedida" · señal de garantía
+                          clave que la agencia busca · sello visible en
+                          el listado para que destaque sobre las que no
+                          la tienen. TODO(backend) · leer de un campo
+                          real cuando exista (ahora siempre concedida). */}
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-success">
+                        <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-success/15">
+                          <Check className="h-2 w-2 text-success" strokeWidth={3} />
+                        </span>
+                        Licencia concedida
+                      </span>
                     </div>
 
                     {/* Trending activity box · datos LIVE de los últimos 14d */}
@@ -2353,7 +2361,9 @@ function PromoCardCompact({ promo: p, isTrending, isAgencyUser }: { promo: DevPr
         </p>
         <div className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[11.5px]">
           <span className="text-muted-foreground"><span className="font-semibold text-foreground tnum">{liveStats.availableUnits}/{liveStats.totalUnits}</span> disp.</span>
-          <span className="text-muted-foreground"><span className="font-semibold text-foreground tnum">{p.commission}%</span> com.</span>
+          <span className="text-muted-foreground">
+            <span className="font-semibold text-foreground tnum">{p.commission > 0 ? `${p.commission}%` : "—"}</span> com.
+          </span>
           {isAgencyUser ? (
             /* Lado AGENCIA · NUNCA contador de agencias colaborando ·
              *  info privada del promotor que revela su red comercial.

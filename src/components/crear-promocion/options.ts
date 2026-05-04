@@ -61,7 +61,7 @@ export const estadoOptions: CardOption<EstadoPromocion>[] = [
  *  coherentes con la copy del label (visible), la description (subline)
  *  y los buckets del helper `constructionPhaseFromProgress` de abajo. */
 export const faseConstruccionOptions: CardOption<FaseConstruccion>[] = [
-  { value: "inicio_obra", label: "Inicio de obra · 0–10%", description: "Fase inicial de la construcción", icon: Hammer },
+  { value: "inicio_obra", label: "Obra no iniciada", description: "Aún no se han movido máquinas en el solar", icon: Hammer },
   { value: "estructura", label: "Estructura · 20–40%", description: "Levantamiento de la estructura del edificio", icon: Columns3 },
   { value: "cerramientos", label: "Cerramientos · 40–60%", description: "Fachada y cerramientos exteriores", icon: BrickWall },
   { value: "instalaciones", label: "Instalaciones · 60–75%", description: "Instalaciones interiores y servicios", icon: Plug },

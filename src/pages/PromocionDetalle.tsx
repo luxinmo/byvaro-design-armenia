@@ -8,7 +8,7 @@ import type { WizardState, FotoItem, FotoCategoria } from "@/components/crear-pr
 import { faseConstruccionOptions, constructionPhaseLabelFromProgress } from "@/components/crear-promocion/options";
 import { unitDataToUnit, mergeUnitIntoUnitData } from "@/lib/unitDataAdapter";
 import type { Unit } from "@/data/units";
-import { promotions, getBuildingTypeLabel } from "@/data/promotions";
+import { promotions, getBuildingTypeLabel, isUnifamiliar } from "@/data/promotions";
 import { developerOnlyPromotions, type DevPromotion, type Comercial, type ComercialPermissions } from "@/data/developerPromotions";
 import { findPromotionByParam, promotionHref, contactHref, registroHref, leadHref } from "@/lib/urls";
 import { agencies, countAgenciesForPromotion, getAgencyShareStats, type Agency } from "@/data/agencies";
@@ -544,6 +544,44 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         },
         { icon: Download, label: "Listado de precios", hint: "Descargar en PDF", onClick: () => setPriceListOpen(true) },
       ] : []),
+      /* "Configuración" · entry-point único a TODA la configuración
+       *  de la promoción · abre el wizard en el paso Revisión donde
+       *  el promotor ve un resumen navegable y puede editar cualquier
+       *  bloque (tipología, comisiones, plan de pagos, multimedia,
+       *  uso interno vs colaboración, etc.) sin tener que adivinar
+       *  dónde vive cada cosa. Antes había mensajes "Solo uso interno"
+       *  duplicados en 3 sitios del header · ahora consolidados aquí. */
+      ...(!viewAsCollaborator ? [{
+        icon: Settings,
+        label: "Configuración",
+        hint: "Edita comisiones, plan de pagos, colaboración, etc.",
+        onClick: () => navigate(getWizardUrl("revision", returnPath, rawDraftId, promoIdForWizard)),
+      }] : []),
+      /* "Eliminar" · solo en promociones creadas via wizard (`prom-c-*`).
+       *  Movido del header al rail con `danger: true` para separar
+       *  acciones cotidianas de la destructiva. */
+      ...(!viewAsCollaborator && p.id.startsWith("prom-c-") ? [{
+        icon: Trash2,
+        label: "Eliminar",
+        hint: "Borrar permanentemente esta promoción",
+        onClick: async () => {
+          const ok = await confirm({
+            title: `¿Eliminar "${p.name}"?`,
+            description: "Se borrará la promoción del catálogo y de la base de datos. Esta acción no se puede deshacer.",
+            confirmLabel: "Eliminar",
+            variant: "destructive",
+          });
+          if (!ok) return;
+          const res = await deleteCreatedPromotion(p.id);
+          if (!res.ok) {
+            toast.error("Error al eliminar", { description: res.error });
+            return;
+          }
+          toast.success("Promoción eliminada");
+          navigate("/promociones");
+        },
+        danger: true,
+      }] : []),
       { icon: Info, label: "Datos en vivo", hint: "Precios y disponibilidad se actualizan en tiempo real. Confirma antes de cerrar.", info: true },
     ];
     return (
@@ -662,14 +700,14 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const constructionPhaseLabel = constructionPhaseLabelFromProgress(p.constructionProgress)
     ?? "Fase de proyecto";
 
-  /* Galería · construida SOLO con fotos reales:
+  /* Galería · construida SOLO con fotos reales.
    *  - Draft → todas las fotos del wizard (state.fotos) con orden.
-   *  - Promo · solo el hero `p.image` (galería completa de
-   *    promotion_gallery aún no cableada en este componente).
-   *  Antes había 8 URLs hardcoded de Unsplash que aparecían en TODAS
-   *  las promociones (incluso borradores recién creados sin fotos) ·
-   *  generaba la falsa impresión de que la promo tenía un portfolio
-   *  completo. */
+   *  - Promo creada via wizard (`prom-c-*`) → leemos del
+   *    `metadata.wizardSnapshot.fotos` (el snapshot completo persiste
+   *    el wizard al crear · es la fuente más fiel a lo que subió el
+   *    user · la tabla `promotion_gallery` también las tiene pero
+   *    hidratarla aquí requiere otra query).
+   *  - Promo seed legacy → solo el hero `p.image`. */
   const galleryImages: string[] = (() => {
     if (isDraft && draftState) {
       const fotos = (draftState.fotos ?? [])
@@ -680,7 +718,35 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       if (fotos.length > 0) return fotos;
       return p.image ? [p.image] : [];
     }
+    /* Promo creada via wizard · leemos fotos del snapshot. */
+    if (p.id.startsWith("prom-c-")) {
+      const snap = ((p as unknown as { metadata?: { wizardSnapshot?: { fotos?: Array<{ url?: string; orden?: number; esPrincipal?: boolean }> } } }).metadata?.wizardSnapshot) ?? null;
+      if (snap?.fotos && snap.fotos.length > 0) {
+        const fotos = snap.fotos
+          .slice()
+          .sort((a, b) => {
+            /* Foto principal primero · luego por orden ascendente. */
+            if (a.esPrincipal && !b.esPrincipal) return -1;
+            if (!a.esPrincipal && b.esPrincipal) return 1;
+            return (a.orden ?? 0) - (b.orden ?? 0);
+          })
+          .map((f) => f.url)
+          .filter((u): u is string => !!u && u.trim().length > 0);
+        if (fotos.length > 0) return fotos;
+      }
+    }
     return p.image ? [p.image] : [];
+  })();
+
+  /* Count de vídeos · idéntica fuente que galería · antes estaba
+   *  HARDCODED a "2 vídeos" en el JSX → siempre mentía. */
+  const videosCount: number = (() => {
+    if (isDraft && draftState) return draftState.videos?.length ?? 0;
+    if (p.id.startsWith("prom-c-")) {
+      const snap = ((p as unknown as { metadata?: { wizardSnapshot?: { videos?: unknown[] } } }).metadata?.wizardSnapshot) ?? null;
+      return Array.isArray(snap?.videos) ? snap.videos.length : 0;
+    }
+    return 0;
   })();
 
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -691,31 +757,45 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   // KPI data with optional click handler to switch tabs.
   // Para borradores (priceMin=0) y otros estados incompletos, mostramos
   // "Sin configurar" en lugar de valores engañosos.
-  const priceRangeValue = p.priceMin > 0
-    ? `${formatPrice(p.priceMin)}${p.priceMax > p.priceMin ? ` – ${formatPrice(p.priceMax)}` : ""}`
-    : "Sin configurar";
-  const priceRangeDetail = p.reservationCost > 0
-    ? `${formatPrice(p.reservationCost)} de reserva`
-    : "Añade precios en las unidades";
   const availabilityValue = p.totalUnits > 0 ? `${p.availableUnits} / ${p.totalUnits}` : "Sin configurar";
   const availabilityDetail = p.totalUnits > 0 ? `${occupancy}% vendido` : "Añade unidades";
 
+  /* Uso interno · `canShareWithAgencies === false` significa que el
+   *  promotor marcó "Solo uso interno" en el wizard · NO va a compartir
+   *  con agencias · KPIs de Comisión y Agencias no aplican · los
+   *  ocultamos para no ensuciar la vista con datos sin sentido. */
+  const isUsoInterno = (p as { canShareWithAgencies?: boolean }).canShareWithAgencies === false;
+
   const allKpis = [
-    { icon: Euro, label: "Rango de precios", value: priceRangeValue, detail: priceRangeDetail, color: "text-primary bg-primary/10", empty: p.priceMin === 0 },
+    /* "Rango de precios" · ELIMINADO del strip · ahora vive como
+     *  overlay grande sobre la galería con degradado · evita duplicar
+     *  el mismo dato 2 veces en la misma vista. */
     { icon: Home, label: "Disponibilidad", value: availabilityValue, detail: availabilityDetail, color: "text-primary bg-primary/10", progress: p.totalUnits > 0 ? occupancy : 0, empty: p.totalUnits === 0 },
-    { icon: TrendingUp, label: "Comisión", value: p.commission > 0 ? `${p.commission}%` : "—", detail: p.commission > 0 ? (p.priceMin > 0 ? `~${formatPrice(p.priceMin * p.commission / 100)}` : "—") : "Sin configurar", color: "text-warning bg-warning/10", onClick: () => setActiveTab(visibleTabs.indexOf("Comisiones")), empty: p.commission === 0 },
-    { icon: Calendar, label: "Entrega", value: p.delivery || "Por definir", detail: p.delivery ? "Estimada" : "Añádela en Información básica", color: "text-accent-foreground bg-accent/10", empty: !p.delivery },
-    { icon: HardHat, label: "Construcción", value: p.constructionProgress !== undefined ? `${p.constructionProgress}%` : "—", detail: constructionPhaseLabel || "Sin configurar", color: "text-destructive bg-destructive/10", empty: p.constructionProgress === undefined },
+    ...(!isUsoInterno ? [
+      { icon: TrendingUp, label: "Comisión", value: p.commission > 0 ? `${p.commission}%` : "—", detail: p.commission > 0 ? (p.priceMin > 0 ? `~${formatPrice(p.priceMin * p.commission / 100)}` : "—") : "Sin configurar", color: "text-warning bg-warning/10", onClick: () => setActiveTab(visibleTabs.indexOf("Comisiones")), empty: p.commission === 0 },
+    ] : []),
+    /* Color tokens canónicos · Entrega y Construcción son
+     *  informativos, no son errores ni warnings · usar tonos neutros
+     *  que se vean bien sobre el fondo claro de la card.
+     *  Antes · Entrega `text-accent-foreground` era casi blanco · no
+     *  se veía. Construcción `text-destructive` (rojo) parecía
+     *  error · falsa alarma para algo que es estado normal. */
+    { icon: Calendar, label: "Entrega", value: p.delivery || "Por definir", detail: p.delivery ? "Estimada" : "Añádela en Información básica", color: "text-primary bg-primary/10", empty: !p.delivery },
+    { icon: HardHat, label: "Construcción", value: p.constructionProgress !== undefined ? `${p.constructionProgress}%` : "—", detail: constructionPhaseLabel || "Sin configurar", color: "text-primary bg-primary/10", empty: p.constructionProgress === undefined },
     ...(!viewAsCollaborator ? (() => {
       const realAgencies = countAgenciesForPromotion(p.id);
       return [{
         icon: Users,
         label: "Agencias",
-        value: `${realAgencies}`,
-        detail: realAgencies > 0 ? "Colaborando" : "Ninguna aún",
+        value: `${realAgencies} ${realAgencies === 1 ? "agencia" : "agencias"}`,
+        detail: realAgencies > 0 ? "Colaborando" : "Invita a tu red",
         color: "text-primary bg-primary/10",
         onClick: () => tryInvite(),
-        empty: realAgencies === 0,
+        /* `empty: false` siempre · no es un dato "obligatorio" que
+         *  bloquee publicación · 0 agencias es estado válido (la promo
+         *  puede vivir sin colaboradores). Mostrar "Falta" en rojo
+         *  era ruidoso y daba la sensación de que algo está mal. */
+        empty: false,
       }];
     })() : []),
   ];
@@ -830,11 +910,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   );
                 }
                 if (p.status === "active") {
-                  /* Modelo simplificado · todo active es "Activa".
-                   *  El atributo "se está compartiendo o no" es info
-                   *  separada · ya no es un estado distinto. */
+                  /* Versión minimalista · solo dot verde + texto ·
+                   *  sin pill, sin border, sin background. La promo
+                   *  "Activa" es el estado normal · no necesita
+                   *  destacarse como un evento. */
                   return (
-                    <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full border border-success/30 bg-success/10 text-success text-[11px] font-semibold">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-success">
                       <span className="h-1.5 w-1.5 rounded-full bg-success" />
                       Activa
                     </span>
@@ -857,93 +938,58 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               {(() => {
                 const promoterName = getPromoterDisplayName(p);
                 if (!promoterName) return null;
-                // Si quien mira es una agencia, el nombre del promotor
-                // es clicable · destino lo decide `developerHref`
-                // (panel operativo si ya colabora, ficha pública si no).
+                /* Verbo según rol · "Comercializado por:" cuando
+                 *  ownerRole=comercializador · "Promovido por:" para
+                 *  promotor (default). */
+                const ownerRole = (p as { ownerRole?: "promotor" | "comercializador" }).ownerRole;
+                const verbo = ownerRole === "comercializador" ? "Comercializado por:" : "Promovido por:";
+
+                /* Destino del link · sigue el patrón de otras vistas:
+                 *   - Agencia mirando promo de promotor → /promotor/:id
+                 *     · panel operativo si ya colaboran, ficha pública
+                 *     si no (lo decide `developerHref` internamente).
+                 *   - Promotor mirando SU PROPIA promo → /empresa
+                 *     · su propia home/preview pública.
+                 *   - Promotor mirando promo de OTRO promotor (caso
+                 *     marketplace, futuro) → /promotor/:id ficha
+                 *     pública. Fallback a developerHref. */
+                const promoOwnerOrgId = (p as { ownerOrganizationId?: string }).ownerOrganizationId;
+                const myOrgId = sessionStorage.getItem("byvaro.accountType.organizationId.v1");
+                const isOwnPromo = !!promoOwnerOrgId && !!myOrgId && promoOwnerOrgId === myOrgId;
+
+                let href: string;
+                if (viewAsCollaborator) {
+                  href = developerHref(currentUser, { fromPromoId: p.id });
+                } else if (isOwnPromo) {
+                  href = "/empresa";
+                } else {
+                  href = developerHref(currentUser, {
+                    developerId: promoOwnerOrgId,
+                    fromPromoId: p.id,
+                  });
+                }
+
                 return (
                   <>
                     <span className="hidden sm:inline text-border">·</span>
-                    {viewAsCollaborator ? (
-                      <Link
-                        to={developerHref(currentUser, { fromPromoId: p.id })}
-                        className="inline-flex items-center gap-1 hover:text-foreground transition-colors group"
-                      >
-                        <Building2 className="h-3.5 w-3.5 shrink-0" />
-                        <span className="underline-offset-2 group-hover:underline">{promoterName}</span>
-                      </Link>
-                    ) : (
-                      <span className="inline-flex items-center gap-1">
-                        <Building2 className="h-3.5 w-3.5 shrink-0" />
-                        {promoterName}
-                      </span>
-                    )}
+                    <Link
+                      to={href}
+                      className="inline-flex items-center gap-1 hover:text-foreground transition-colors group"
+                    >
+                      <Building2 className="h-3.5 w-3.5 shrink-0" />
+                      <span>{verbo} <span className="font-medium text-foreground underline-offset-2 group-hover:underline">{promoterName}</span></span>
+                    </Link>
                   </>
                 );
               })()}
-              {p.delivery && (
-                <>
-                  <span className="hidden sm:inline text-border">·</span>
-                  <span className="hidden sm:inline-flex items-center gap-1">
-                    <Calendar className="h-3.5 w-3.5 shrink-0" />
-                    Entrega {p.delivery}
-                  </span>
-                </>
-              )}
-              {/* Chip · "Visible para colaboradores" / "No visible".
-                * Visible en móvil y desktop · en móvil usamos label
-                * corto para no romper el layout. Click cambia el
-                * estado · al pasar visible → no visible pedimos
-                * confirmación porque afecta a agencias que ya operan
-                * con la promoción (mantienen acceso pero no pueden
-                * crear nuevos registros). */}
-              {!viewAsCollaborator && p.status !== "incomplete" && (
-                <>
-                  <span className="text-border">·</span>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (sharingEnabledForPromo) {
-                        const ok = await confirm({
-                          title: "¿Marcar como No visible para colaboradores?",
-                          description:
-                            "Las agencias dejarán de ver esta promoción y no podrán crear nuevos registros, visitas ni reservas. " +
-                            "Los colaboradores que ya tengan registros, ventas o visitas en curso seguirán viendo la promoción pero NO podrán hacer registros nuevos hasta que la vuelvas a marcar como visible. " +
-                            "Puedes revertirlo en cualquier momento.",
-                          confirmLabel: "Marcar No visible",
-                          cancelLabel: "Cancelar",
-                          variant: "destructive",
-                        });
-                        if (!ok) return;
-                        setCanShareOverride(false);
-                        toast.success("Promoción marcada como No visible", {
-                          description: `${p.name} ya no es visible para nuevos colaboradores.`,
-                        });
-                        return;
-                      }
-                      setCanShareOverride(true);
-                      toast.success("Promoción marcada como Visible", {
-                        description: `${p.name} ya es visible para colaboradores.`,
-                      });
-                    }}
-                    className="inline-flex items-center gap-1 hover:text-foreground transition-colors shrink-0"
-                    title={sharingEnabledForPromo
-                      ? "Click para marcar como No visible (las agencias dejarán de verla)"
-                      : "Click para marcar como Visible (las agencias podrán verla)"}
-                  >
-                    {sharingEnabledForPromo ? (
-                      <Eye className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-                    ) : (
-                      <EyeOff className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-                    )}
-                    <span className="hidden md:inline">
-                      {sharingEnabledForPromo ? "Visible para colaboradores" : "No visible para colaboradores"}
-                    </span>
-                    <span className="md:hidden">
-                      {sharingEnabledForPromo ? "Visible" : "No visible"}
-                    </span>
-                  </button>
-                </>
-              )}
+              {/* Chip "Entrega {fecha}" · ELIMINADO 2026-05-04 ·
+                  duplicaba el KPI "Entrega" de la fila de KPIs · el
+                  user veía la fecha 2 veces en la misma vista. */}
+              {/* Chip "Visible / No visible para colaboradores" ·
+                  ELIMINADO 2026-05-04 · el toggle de visibilidad vive
+                  ahora dentro de Configuración (Acciones rápidas →
+                  Configuración → tab Comisiones del wizard) · evita
+                  duplicar surfaces y limpia el header de chips. */}
             </div>
           </div>
 
@@ -985,35 +1031,10 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               >
                 <Eye className="h-3.5 w-3.5" strokeWidth={1.5} /> Vista colaborador
               </Button>
-              {/* Eliminar promoción · disponible solo en promociones
-                  creadas localmente (las de seed `prom-1`...`prom-3`
-                  no se borran · son demo). Útil para limpiar promos
-                  rotas o de prueba. */}
-              {p.id.startsWith("prom-c-") && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={async () => {
-                    const ok = await confirm({
-                      title: `¿Eliminar "${p.name}"?`,
-                      description: "Se borrará la promoción del catálogo y de la base de datos. Esta acción no se puede deshacer.",
-                      confirmLabel: "Eliminar",
-                      variant: "destructive",
-                    });
-                    if (!ok) return;
-                    const res = await deleteCreatedPromotion(p.id);
-                    if (!res.ok) {
-                      toast.error("Error al eliminar", { description: res.error });
-                      return;
-                    }
-                    toast.success("Promoción eliminada");
-                    navigate("/promociones");
-                  }}
-                  className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/5 hidden sm:inline-flex"
-                >
-                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} /> Eliminar
-                </Button>
-              )}
+              {/* Botón Eliminar · MOVIDO al rail de Acciones rápidas
+                  (icono Trash2 · marcado danger). Mantener acciones
+                  destructivas fuera del header donde están las acciones
+                  cotidianas (Activar, Registrar cliente, etc.). */}
               {/* Enviar · sólo si la promoción está publicada (active +
                   sin requisitos pendientes). No tiene sentido enviar a
                   un cliente un borrador sin datos. */}
@@ -1052,25 +1073,10 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 </Button>
               )}
 
-              {/* Pill "Solo uso interno" · cuando la promoción está activa
-                  pero el promotor marcó No compartir. Click navega al
-                  wizard al paso de Colaboradores · activación tiene varias
-                  opciones (estructura, forma de pago, validez…) · no es
-                  un toggle modal. */}
-              {p.status === "active" && !isIncomplete && !sharingEnabledForPromo && (
-                <Button
-                  asChild
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 hidden sm:inline-flex"
-                  title="Configurar comisiones para colaborar con agencias"
-                >
-                  <Link to={getWizardUrl("Collaborators", returnPath, rawDraftId, promoIdForWizard)}>
-                    <Handshake className="h-3.5 w-3.5" strokeWidth={1.5} />
-                    Solo uso interno
-                  </Link>
-                </Button>
-              )}
+              {/* Pill "Solo uso interno" · ELIMINADO 2026-05-04 ·
+                  duplicaba info que ya vive en el dock de Acciones
+                  rápidas (botón Configuración) · había 3 surfaces
+                  hablando de uso interno · ahora consolidado en una. */}
 
               {/* Registrar cliente · también requiere promoción publicada. */}
               {p.status === "active" && !isIncomplete && (
@@ -1275,36 +1281,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               </div>
             )}
 
-            {/* Aviso "Solo uso interno" · la promoción está completa
-                y activa, pero el promotor marcó "No compartir" → no
-                aparece para agencias. La activación tiene varias
-                opciones (estructura de comisiones, forma de pago,
-                condiciones de registro, validez…) · NO es un toggle
-                · es una pantalla de configuración entera.
-                Ofrecemos un text-link al paso del wizard, no un
-                botón modal. */}
-            {!viewAsCollaborator && p.status === "active" && !isIncomplete && !sharingEnabledForPromo && (
-              <div className="mb-5 rounded-2xl border border-border bg-muted/30 p-5">
-                <div className="flex items-start gap-3">
-                  <Handshake className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" strokeWidth={1.5} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground">
-                      Solo uso interno
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                      Esta promoción está activa para tu equipo pero no se comparte con agencias
-                      colaboradoras.{" "}
-                      <Link
-                        to={getWizardUrl("Collaborators", returnPath, rawDraftId, promoIdForWizard)}
-                        className="font-semibold text-primary underline-offset-2 hover:underline"
-                      >
-                        Configurar comisiones para colaborar →
-                      </Link>
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* Banner "Solo uso interno" · ELIMINADO 2026-05-04 ·
+                consolidado en el botón Configuración del rail de
+                Acciones rápidas (gear icon · ahí está el toggle de
+                colaboración + plan de pagos + comisiones · todo lo
+                que antes el banner intentaba resumir). */}
 
             {/* Aviso "Activa sin agencias" · la promoción está completa,
                 activa y configurada para compartir · pero ninguna agencia
@@ -1362,7 +1343,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   type="button"
                   onClick={() => setEditOpen("multimedia")}
                   disabled={viewAsCollaborator}
-                  className="w-full h-[280px] sm:h-[320px] rounded-lg border-2 border-dashed border-border bg-muted/30 hover:border-primary/30 hover:bg-muted/50 transition-colors flex flex-col items-center justify-center gap-2 text-center px-6 disabled:cursor-default"
+                  className="w-full h-[280px] sm:h-[380px] rounded-lg border-2 border-dashed border-border bg-muted/30 hover:border-primary/30 hover:bg-muted/50 transition-colors flex flex-col items-center justify-center gap-2 text-center px-6 disabled:cursor-default"
                 >
                   <Image className="h-10 w-10 text-muted-foreground/40" strokeWidth={1.25} />
                   <p className="text-sm font-medium text-muted-foreground">
@@ -1390,54 +1371,152 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 </button>
                 <Tag variant="overlay" size="sm" className="absolute bottom-3 left-3 pointer-events-none"><Image className="h-3 w-3" /> {galleryImages.length} fotos</Tag>
               </div>
-              <div className="hidden sm:grid grid-cols-4 grid-rows-2 gap-1.5 h-[320px] relative">
-                <button
-                  type="button"
-                  onClick={() => openLightbox(0)}
-                  className="col-span-2 row-span-2 relative group cursor-pointer overflow-hidden"
-                >
-                  <img src={galleryImages[0]} alt={p.name} className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                </button>
-                {galleryImages.slice(1, 4).map((src, i) => (
+              {/* Layout adaptativo según número de fotos · evita celdas
+                  vacías feas cuando hay 2/3/4 imágenes:
+                    · 1 foto  → hero full-width
+                    · 2 fotos → 50/50 horizontal
+                    · 3 fotos → hero + 2 thumbs stacked
+                    · 4 fotos → hero + 3 thumbs stacked
+                    · 5+      → mosaico 4×2 (hero + 3 thumbs + slot 5/videos) */}
+              {/* Desktop · wrapper relative para poder superponer
+                  la price overlay (degradado + precio grande abajo
+                  izquierda) sobre el hero. La overlay vive una sola
+                  vez · independiente del layout interno (1·2·3·4·5+).
+                  En móvil sigue rendering aparte (sm:hidden arriba). */}
+              <div className="hidden sm:block relative">
+              {galleryImages.length === 1 ? (
+                <div className="block h-[380px] rounded-lg overflow-hidden">
                   <button
                     type="button"
-                    key={i}
-                    onClick={() => openLightbox(i + 1)}
-                    className="overflow-hidden cursor-pointer group"
+                    onClick={() => openLightbox(0)}
+                    className="w-full h-full relative group cursor-pointer overflow-hidden"
                   >
-                    <img src={src} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <img src={galleryImages[0]} alt={p.name} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
                   </button>
-                ))}
-                {galleryImages[4] ? (
+                </div>
+              ) : galleryImages.length === 2 ? (
+                <div className="grid grid-cols-2 gap-1.5 h-[380px]">
+                  {galleryImages.map((src, i) => (
+                    <button
+                      type="button"
+                      key={i}
+                      onClick={() => openLightbox(i)}
+                      className="overflow-hidden cursor-pointer group"
+                    >
+                      <img src={src} alt={i === 0 ? p.name : ""} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    </button>
+                  ))}
+                </div>
+              ) : galleryImages.length === 3 ? (
+                <div className="grid grid-cols-3 grid-rows-2 gap-1.5 h-[380px]">
                   <button
                     type="button"
-                    onClick={() => openLightbox(4)}
-                    className="relative overflow-hidden cursor-pointer group"
+                    onClick={() => openLightbox(0)}
+                    className="col-span-2 row-span-2 relative group cursor-pointer overflow-hidden"
                   >
-                    <img src={galleryImages[4]} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                    {galleryImages.length > 5 && (
-                      <div className="absolute inset-0 bg-foreground/55 flex items-center justify-center">
-                        <span className="text-background text-xs font-semibold">+{galleryImages.length - 5} fotos</span>
+                    <img src={galleryImages[0]} alt={p.name} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                  </button>
+                  {galleryImages.slice(1, 3).map((src, i) => (
+                    <button
+                      type="button"
+                      key={i}
+                      onClick={() => openLightbox(i + 1)}
+                      className="overflow-hidden cursor-pointer group"
+                    >
+                      <img src={src} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    </button>
+                  ))}
+                </div>
+              ) : galleryImages.length === 4 ? (
+                <div className="grid grid-cols-3 grid-rows-3 gap-1.5 h-[380px]">
+                  <button
+                    type="button"
+                    onClick={() => openLightbox(0)}
+                    className="col-span-2 row-span-3 relative group cursor-pointer overflow-hidden"
+                  >
+                    <img src={galleryImages[0]} alt={p.name} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                  </button>
+                  {galleryImages.slice(1, 4).map((src, i) => (
+                    <button
+                      type="button"
+                      key={i}
+                      onClick={() => openLightbox(i + 1)}
+                      className="overflow-hidden cursor-pointer group"
+                    >
+                      <img src={src} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-4 grid-rows-2 gap-1.5 h-[380px] relative">
+                  <button
+                    type="button"
+                    onClick={() => openLightbox(0)}
+                    className="col-span-2 row-span-2 relative group cursor-pointer overflow-hidden"
+                  >
+                    <img src={galleryImages[0]} alt={p.name} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                  </button>
+                  {galleryImages.slice(1, 4).map((src, i) => (
+                    <button
+                      type="button"
+                      key={i}
+                      onClick={() => openLightbox(i + 1)}
+                      className="overflow-hidden cursor-pointer group"
+                    >
+                      <img src={src} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    </button>
+                  ))}
+                  {galleryImages[4] ? (
+                    <button
+                      type="button"
+                      onClick={() => openLightbox(4)}
+                      className="relative overflow-hidden cursor-pointer group"
+                    >
+                      <img src={galleryImages[4]} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      {galleryImages.length > 5 && (
+                        <div className="absolute inset-0 bg-foreground/55 flex items-center justify-center">
+                          <span className="text-background text-xs font-semibold">+{galleryImages.length - 5} fotos</span>
+                        </div>
+                      )}
+                    </button>
+                  ) : videosCount > 0 ? (
+                    <div className="relative overflow-hidden cursor-pointer group bg-muted/30 flex items-center justify-center">
+                      <div className="text-center">
+                        <Video className="h-5 w-5 text-muted-foreground/40 mx-auto mb-1" />
+                        <span className="text-xs text-muted-foreground">{videosCount} {videosCount === 1 ? "vídeo" : "vídeos"}</span>
                       </div>
-                    )}
-                  </button>
-                ) : (
-                  <div className="relative overflow-hidden cursor-pointer group bg-muted/30 flex items-center justify-center">
-                    <div className="text-center">
-                      <Video className="h-5 w-5 text-muted-foreground/40 mx-auto mb-1" />
-                      <span className="text-xs text-muted-foreground">2 vídeos</span>
                     </div>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => openLightbox(0)}
-                  className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-background/95 backdrop-blur border border-border text-xs font-semibold text-foreground hover:bg-background shadow-soft-lg transition-colors"
-                >
-                  <Image className="h-3.5 w-3.5" strokeWidth={1.75} />
-                  Ver todas las fotos ({galleryImages.length})
-                </button>
+                  ) : (
+                    <div className="relative overflow-hidden bg-muted/20" />
+                  )}
+                </div>
+              )}
+
+              {/* Price overlay · degradado vertical bottom→top que
+                  cubre TODO el ancho · sin cortes visibles. Texto
+                  alineado a la izquierda. Pointer-events-none para
+                  que el click siga abriendo el lightbox. Formato
+                  completo "100.000 € a 200.000 €" (no compacto). */}
+              {p.priceMin > 0 && (
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 pt-16 px-5 sm:px-7 pb-5 bg-gradient-to-t from-black/75 via-black/35 to-transparent rounded-b-lg">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-white/75 font-medium mb-1">
+                    Rango de precios
+                  </p>
+                  <p className="text-lg sm:text-xl font-bold text-white tabular-nums drop-shadow-md">
+                    {formatPrice(p.priceMin)}
+                    {p.priceMax > p.priceMin && (
+                      <>
+                        <span className="text-white/85 font-semibold mx-2">a</span>
+                        {formatPrice(p.priceMax)}
+                      </>
+                    )}
+                  </p>
+                </div>
+              )}
               </div>
                 </>
               )}
@@ -1500,34 +1579,92 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                  8. ContactFooter (contactos, al final)
             */}
 
-            {/* ── 1. ESTRUCTURA Y CONSTRUCCIÓN ── */}
-            <SectionCard title="Estructura y construcción" stepName="Basic info" missing={realMissing.has("estado")} softMissing={isDraft} onEdit={() => setEditOpen("structure")} hideEdit={viewAsCollaborator}>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* ── 1. ESTRUCTURA Y CONSTRUCCIÓN ──
+                  - Tipo: usa el label canónico de getBuildingTypeLabel
+                    ("Vivienda unifamiliar" / "Viviendas unifamiliares"
+                    / "Edificio plurifamiliar")
+                  - Estructura · solo aparece en plurifamiliar (en
+                    unifamiliar no tiene sentido hablar de bloques).
+                  - Parking / Trastero · "Incluido" / "Opcional" / "No
+                    incluido" leído del wizardSnapshot · evita el
+                    hardcoded "Incluido en el precio" que mentía cuando
+                    en realidad eran opcionales. */}
+            {(() => {
+              const snap = (p as unknown as {
+                metadata?: {
+                  wizardSnapshot?: {
+                    promotionDefaults?: {
+                      parking?: { enabled?: boolean; spaces?: number; priceMode?: "included" | "optional" | "not_included" | null };
+                      storageRoom?: { enabled?: boolean; priceMode?: "included" | "optional" | "not_included" | null };
+                    };
+                  };
+                };
+              }).metadata?.wizardSnapshot?.promotionDefaults;
+              const PRICE_MODE_LABEL: Record<string, string> = {
+                included: "Incluido en el precio",
+                optional: "Opcional · coste extra",
+                not_included: "No incluido",
+              };
+              /* Parking · si NO está activado en el wizard, valor "—"
+               *  y sin subline. NUNCA inventar "X plazas · Incluido"
+               *  como hacíamos antes hardcoded. Sin esto el promotor
+               *  publicaba sin saber que la ficha mentía a la agencia. */
+              const parkingEnabled = !!snap?.parking?.enabled;
+              const parkingSpaces = snap?.parking?.spaces ?? 1;
+              const parkingValue = parkingEnabled
+                ? `${p.totalUnits * parkingSpaces} ${parkingSpaces > 1 ? "plazas" : "plaza"}${p.totalUnits > 1 ? "" : ""}`
+                : "—";
+              const parkingSub = parkingEnabled && snap?.parking?.priceMode
+                ? PRICE_MODE_LABEL[snap.parking.priceMode]
+                : (parkingEnabled ? "Sin definir si incluye" : undefined);
+              /* Trastero · misma lógica · 1 trastero por unidad cuando
+               *  está activado · "—" cuando no. */
+              const trasteroEnabled = !!snap?.storageRoom?.enabled;
+              const trasteroValue = trasteroEnabled
+                ? `${p.totalUnits} ${p.totalUnits === 1 ? "trastero" : "trasteros"}`
+                : "—";
+              const trasteroSub = trasteroEnabled && snap?.storageRoom?.priceMode
+                ? PRICE_MODE_LABEL[snap.storageRoom.priceMode]
+                : (trasteroEnabled ? "Sin definir si incluye" : undefined);
+              const showEstructura = !isUnifamiliar(p.buildingType);
+              return (
+            <SectionCard title="Estructura" stepName="Basic info" missing={realMissing.has("estado")} softMissing={isDraft} onEdit={() => setEditOpen("structure")} hideEdit={viewAsCollaborator}>
+              {/* Construcción y Entrega · ELIMINADOS de aquí · ya
+                  viven en el KPI strip de arriba (Construcción
+                  con %  + Entrega con fecha). Mostramos solo los
+                  datos estructurales · una fila de 6 items en
+                  plurifamiliar (Tipo · Estructura · Unidades · Parking
+                  · Trastero · Licencia) y 5 en unifamiliar (sin
+                  Estructura). Grid-cols-3 en md+ · alineación limpia
+                  con 2 filas equilibradas. */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-5">
                 <InfoItem icon={Building2} label="Tipo" value={typeLabel || "Sin definir"} />
-                <InfoItem icon={Layers} label="Estructura" value={p.totalUnits > 10 ? "Multibloque" : "Bloque único"} />
-                <InfoItem icon={HardHat} label="Construcción" value={constructionPhaseLabel} sub={p.constructionProgress !== undefined ? `${p.constructionProgress}% completado` : undefined} />
-                <InfoItem icon={Calendar} label="Entrega" value={p.delivery || "Por definir"} />
-              </div>
-              <div className="h-px bg-border/40 my-4" />
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {showEstructura && (
+                  <InfoItem icon={Layers} label="Estructura" value={p.totalUnits > 10 ? "Multibloque" : "Bloque único"} />
+                )}
                 <InfoItem icon={Home} label="Unidades totales" value={`${p.totalUnits}`} />
-                <InfoItem icon={Car} label="Parking" value={p.totalUnits > 0 ? `${p.totalUnits} plazas` : "—"} sub="Incluido en el precio" />
-                <InfoItem icon={Archive} label="Trastero" value={p.totalUnits > 0 ? `${Math.floor(p.totalUnits * 0.8)} unidades` : "—"} sub="Incluido en el precio" />
-                <InfoItem icon={Shield} label="Licencia" value="Concedida" />
-              </div>
-              {p.constructionProgress !== undefined && (
-                <>
-                  <div className="h-px bg-border/40 my-4" />
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs text-muted-foreground">Progreso de construcción</span>
-                      <span className="text-xs font-semibold text-foreground">{p.constructionProgress}%</span>
-                    </div>
-                    <Progress value={p.constructionProgress} className="h-2" />
+                <InfoItem icon={Car} label="Parking" value={parkingValue} sub={parkingSub} />
+                <InfoItem icon={Archive} label="Trastero" value={trasteroValue} sub={trasteroSub} />
+                {/* Licencia · sello de garantía · mismo estilo que
+                    el chip del listado de promociones para coherencia
+                    visual · "Licencia concedida" full · sin label
+                    "Licencia" arriba · check verde dentro de círculo. */}
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Shield className="h-3 w-3 text-success" strokeWidth={2} />
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Estado legal</p>
                   </div>
-                </>
-              )}
+                  <p className="text-sm font-semibold text-success inline-flex items-center gap-1.5">
+                    <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-success/15">
+                      <Check className="h-2.5 w-2.5 text-success" strokeWidth={3} />
+                    </span>
+                    Licencia concedida
+                  </p>
+                </div>
+              </div>
             </SectionCard>
+              );
+            })()}
 
             {/* ── 2. PAGO Y DISPONIBILIDAD (Unidades + Plan de pagos) ── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1536,67 +1673,115 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               </SectionCard>
 
               <SectionCard title="Plan de pagos" stepName="Payment plan" missing={missingSet.has("Payment plan") || realMissing.has("paymentPlan")} softMissing={isDraft} onEdit={() => setEditOpen("paymentPlan")} hideEdit={viewAsCollaborator}>
-                {p.reservationCost > 0 ? (
-                  <div className="space-y-4">
-                    {/* Summary row */}
-                    <div className="grid grid-cols-3 gap-3 pb-3 border-b border-border">
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Reserva</p>
-                        <p className="text-sm font-semibold text-foreground tabular-nums">{formatPrice(p.reservationCost)}</p>
+                {(() => {
+                  /* Lectura REAL del wizardSnapshot · antes esta sección
+                   *  era HARDCODED (60 días · "Hitos" · 4 hitos demo ·
+                   *  aval=true) e ignoraba lo que el promotor marcase.
+                   *  Ahora lee · validezReserva · metodoPago · hitosPago
+                   *  · avalBancario · avalEntidad · todos del snapshot. */
+                  const snap = (p as unknown as {
+                    metadata?: { wizardSnapshot?: {
+                      validezReserva?: number;
+                      metodoPago?: "contrato" | "manual" | "certificaciones" | null;
+                      hitosPago?: Array<{ id?: string; nombre?: string; porcentaje?: number; momento?: string }>;
+                      avalBancario?: boolean | null;
+                      avalEntidad?: string;
+                    } };
+                  }).metadata?.wizardSnapshot;
+                  const validezReserva = snap?.validezReserva ?? null;
+                  const metodoPago = snap?.metodoPago ?? null;
+                  const hitos = snap?.hitosPago ?? [];
+                  const avalBancario = snap?.avalBancario ?? null;
+                  const avalEntidad = snap?.avalEntidad?.trim() || "";
+
+                  if (p.reservationCost <= 0 && !metodoPago) {
+                    return <EmptyState icon={CreditCard} message="Sin plan de pagos definido" sub="Define cómo pagarán los compradores" />;
+                  }
+
+                  const validezLabel = validezReserva == null
+                    ? "—"
+                    : validezReserva === 0
+                      ? "No expira"
+                      : `${validezReserva} días`;
+                  const METODO_LABEL: Record<string, string> = {
+                    contrato: "Definido en contrato",
+                    manual: "Plan manual",
+                    certificaciones: "Por hitos / certificación",
+                  };
+                  const metodoLabel = metodoPago ? METODO_LABEL[metodoPago] : "—";
+                  const avalLabel = avalBancario === true
+                    ? "Con aval bancario"
+                    : avalBancario === false
+                      ? "Sin aval bancario"
+                      : "Aval sin definir";
+
+                  return (
+                    <div className="space-y-4">
+                      {/* Summary row · 3 datos clave del wizard. */}
+                      <div className="grid grid-cols-3 gap-3 pb-3 border-b border-border">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Reserva</p>
+                          <p className="text-sm font-semibold text-foreground tabular-nums">
+                            {p.reservationCost > 0 ? formatPrice(p.reservationCost) : "—"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Validez</p>
+                          <p className="text-sm font-semibold text-foreground">{validezLabel}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Método</p>
+                          <p className="text-sm font-semibold text-foreground">{metodoLabel}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Validez</p>
-                        <p className="text-sm font-semibold text-foreground">60 días</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Método</p>
-                        <p className="text-sm font-semibold text-foreground">Hitos</p>
+
+                      {/* Hitos · solo si el método los requiere Y hay
+                          datos. Si el promotor eligió "Definido en
+                          contrato" no hay hitos · mostramos un hint
+                          en vez de una lista vacía o inventada. */}
+                      {hitos.length > 0 ? (
+                        <div className="space-y-2">
+                          {hitos.map((m, i) => (
+                            <div key={m.id ?? i} className="flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-2.5">
+                                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+                                <span className="text-foreground">{m.nombre || `Hito ${i + 1}`}</span>
+                              </div>
+                              <span className="font-medium text-foreground tabular-nums">
+                                {typeof m.porcentaje === "number" ? `${m.porcentaje}%` : "—"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : metodoPago === "manual" || metodoPago === "certificaciones" ? (
+                        <p className="text-xs text-muted-foreground italic">
+                          El método requiere hitos · aún no hay ninguno definido.
+                        </p>
+                      ) : metodoPago === "contrato" ? (
+                        <p className="text-xs text-muted-foreground italic">
+                          Las condiciones de pago se definen directamente en el contrato.
+                        </p>
+                      ) : null}
+
+                      {/* Aval bancario · estado real del snapshot. */}
+                      <div className="w-full flex items-center justify-between pt-3 border-t border-border">
+                        <div className="flex items-center gap-2">
+                          <span className={`h-1.5 w-1.5 rounded-full ${
+                            avalBancario === true ? "bg-primary"
+                              : avalBancario === false ? "bg-muted-foreground/40"
+                              : "bg-warning"
+                          }`} />
+                          <span className="text-xs text-muted-foreground">{avalLabel}</span>
+                        </div>
+                        {avalBancario === true && avalEntidad && (
+                          <span className="text-xs font-medium text-foreground tabular-nums">
+                            {avalEntidad}
+                          </span>
+                        )}
                       </div>
                     </div>
-
-                    {/* Milestones — minimal list */}
-                    <div className="space-y-2">
-                      {[
-                        { pct: "10%", label: "Firma de reserva" },
-                        { pct: "20%", label: "Finalización de estructura" },
-                        { pct: "30%", label: "Instalaciones" },
-                        { pct: "40%", label: "Notaría (llaves)" },
-                      ].map((m, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2.5">
-                            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
-                            <span className="text-foreground">{m.label}</span>
-                          </div>
-                          <span className="font-medium text-foreground tabular-nums">{m.pct}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Aval bancario · estado resumido */}
-                    {(() => {
-                      // TODO(backend): leer p.avalBancario cuando exista.
-                      const hasAval = true;
-                      const entidad = ""; // p.avalEntidad
-                      return (
-                        <div className="w-full flex items-center justify-between pt-3 border-t border-border">
-                          <div className="flex items-center gap-2">
-                            <span className={`h-1.5 w-1.5 rounded-full ${hasAval ? "bg-primary" : "bg-muted-foreground/40"}`} />
-                            <span className="text-xs text-muted-foreground">
-                              {hasAval ? "Con aval bancario" : "Sin aval bancario"}
-                            </span>
-                          </div>
-                          {hasAval && entidad && (
-                            <span className="text-xs font-medium text-foreground tabular-nums">
-                              {entidad}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                ) : (
-                  <EmptyState icon={CreditCard} message="Sin plan de pagos definido" sub="Define cómo pagarán los compradores" />
-                )}
+                  );
+                })()}
               </SectionCard>
             </div>
 
@@ -1620,161 +1805,65 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               </div>
             </SectionCard>
 
-            {/* ── 4. DOCUMENTACIÓN: Memoria + Planos + Brochure ── */}
-            <div className={`grid grid-cols-1 ${p.totalUnits > 1 ? "lg:grid-cols-3" : "lg:grid-cols-2"} gap-4`}>
-              {/* Memoria de calidades */}
-              <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden group/section relative">
-                <div className="px-5 pt-4 pb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                    <h2 className="text-base font-semibold text-foreground">Memoria de calidades</h2>
-                  </div>
-                  {!viewAsCollaborator && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          aria-label="Acciones memoria"
-                          className="h-7 w-7 rounded-full inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100 transition-opacity"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem onClick={() => setEditOpen("memoria")}>
-                          <RefreshCw className="h-3.5 w-3.5 mr-2" /> Reemplazar archivo
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={downloadBrochure}>
-                          <Download className="h-3.5 w-3.5 mr-2" /> Descargar
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => toast.success("Memoria eliminada")}
-                        >
-                          <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
-                <div className="px-5 pb-5">
-                  <div className="flex items-center gap-4 p-4 rounded-xl border border-border bg-background/50 hover:border-border/50 hover:shadow-soft transition-all cursor-pointer" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("calidades"); }}>
-                    <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                      <FileText className="h-6 w-6 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground">Memoria_Calidades.pdf</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">PDF · 4.2 MB</p>
-                    </div>
-                    <Download className="h-4 w-4 text-muted-foreground/40 shrink-0" />
-                  </div>
-                </div>
+            {/* ── 4. DOCUMENTACIÓN: Memoria + Planos + Brochure ──
+                  Lectura REAL del wizardSnapshot · antes era 100%
+                  hardcoded ("Memoria_Calidades.pdf · 4.2 MB",
+                  "3 archivos", imágenes Unsplash, etc.) · le mentíamos
+                  al promotor + al cliente. Ahora · si el array está
+                  vacío, empty state con CTA "Subir". */}
+            {(() => {
+              const docs = (p as unknown as {
+                metadata?: { wizardSnapshot?: {
+                  documentosMemoria?: string[];
+                  documentosPlanos?: string[];
+                  documentosBrochure?: string[];
+                } };
+              }).metadata?.wizardSnapshot;
+              const memoria = docs?.documentosMemoria ?? [];
+              const planos = docs?.documentosPlanos ?? [];
+              const brochure = docs?.documentosBrochure ?? [];
+              const showBrochure = !brochureRemoved && brochure.length > 0;
+              return (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Memoria de calidades */}
+                <DocCard
+                  icon={FileText}
+                  title="Memoria de calidades"
+                  files={memoria}
+                  emptyHint="Sube la memoria de calidades en PDF"
+                  onUpload={() => setEditOpen("memoria")}
+                  onManage={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("calidades"); }}
+                  viewAsCollaborator={viewAsCollaborator}
+                />
+                {/* Planos generales */}
+                <DocCard
+                  icon={Layers}
+                  title="Planos generales"
+                  files={planos}
+                  emptyHint="Planos de planta y distribución"
+                  shareable
+                  onUpload={() => setEditOpen("planos")}
+                  onManage={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("planos"); }}
+                  viewAsCollaborator={viewAsCollaborator}
+                />
+                {/* Brochure */}
+                {!brochureRemoved && (
+                  <DocCard
+                    icon={BookOpen}
+                    title="Brochure"
+                    files={brochure}
+                    emptyHint="Sube el brochure comercial"
+                    shareable
+                    onUpload={() => setEditOpen("brochure")}
+                    onManage={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("brochure"); }}
+                    onDownload={showBrochure ? downloadBrochure : undefined}
+                    onRemove={() => { setBrochureRemoved(true); toast.success("Brochure eliminado"); }}
+                    viewAsCollaborator={viewAsCollaborator}
+                  />
+                )}
               </div>
-
-              {/* Planos generales — only multi-unit */}
-              {p.totalUnits > 1 && (
-                <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden group/section relative">
-                  <div className="px-5 pt-4 pb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Layers className="h-3.5 w-3.5 text-muted-foreground" />
-                      <h2 className="text-base font-semibold text-foreground">Planos generales</h2>
-                      {!viewAsCollaborator && <Share2 className="h-3 w-3 text-primary/60" />}
-                    </div>
-                    {!viewAsCollaborator && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            aria-label="Acciones planos"
-                            className="h-7 w-7 rounded-full inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100 transition-opacity"
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem onClick={() => setEditOpen("planos")}>
-                            <Upload className="h-3.5 w-3.5 mr-2" /> Añadir archivos
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("planos"); }}>
-                            <FolderOpen className="h-3.5 w-3.5 mr-2" /> Gestionar archivos
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => toast.success("Carpeta de planos vaciada")}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 mr-2" /> Vaciar carpeta
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
-                  </div>
-                  <div className="px-5 pb-5">
-                    <div className="rounded-xl overflow-hidden border border-border bg-background/50 cursor-pointer group hover:shadow-soft transition-all" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("planos"); }}>
-                      <img src="https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=600&h=200&fit=crop" alt="Planos" className="w-full h-[120px] object-cover group-hover:scale-[1.02] transition-transform duration-300" />
-                      <div className="p-3 flex items-center justify-between">
-                        <div>
-                          <p className="text-xs font-medium text-foreground">3 archivos</p>
-                          <p className="text-[10px] text-muted-foreground">Planos de planta y distribución</p>
-                        </div>
-                        <FolderOpen className="h-3.5 w-3.5 text-muted-foreground/40" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Brochure · oculto si se eliminó */}
-              {!brochureRemoved && (
-              <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden group/section relative">
-                <div className="px-5 pt-4 pb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                      <h2 className="text-base font-semibold text-foreground">Brochure</h2>
-                      {!viewAsCollaborator && <Share2 className="h-3 w-3 text-primary/60" />}
-                    </div>
-                  {!viewAsCollaborator && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          aria-label="Acciones brochure"
-                          className="h-7 w-7 rounded-full inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100 transition-opacity"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem onClick={() => setEditOpen("brochure")}>
-                          <RefreshCw className="h-3.5 w-3.5 mr-2" /> Reemplazar archivo
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={downloadBrochure}>
-                          <Download className="h-3.5 w-3.5 mr-2" /> Descargar
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => { setBrochureRemoved(true); toast.success("Brochure eliminado"); }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
-                <div className="px-5 pb-5">
-                  <div className="rounded-xl overflow-hidden border border-border bg-background/50 cursor-pointer group hover:shadow-soft transition-all" onClick={() => { setActiveTab(visibleTabs.indexOf("Documents")); setOpenDocFolder("brochure"); }}>
-                    <img src="https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=600&h=200&fit=crop" alt="Brochure" className="w-full h-[120px] object-cover group-hover:scale-[1.02] transition-transform duration-300" />
-                    <div className="p-3 flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-medium text-foreground">Brochure comercial</p>
-                        <p className="text-[10px] text-muted-foreground">PDF · 8.5 MB</p>
-                      </div>
-                      <Download className="h-3.5 w-3.5 text-muted-foreground/40" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              )}
-            </div>
+              );
+            })()}
 
 
 
@@ -1814,35 +1903,116 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               </div>
             </SectionCard>
 
-            {/* ── 6. INFORMACIÓN BÁSICA (tipologías + amenities) ── */}
+            {/* ── 6. INFORMACIÓN BÁSICA (tipologías + amenities) ──
+                  Lectura REAL del wizardSnapshot · antes Amenities y
+                  Características del hogar eran 9 chips HARDCODED
+                  (Piscina, Gimnasio, Jardín, Cocina equipada, Aire,
+                  Terraza, Smart home...) · todos inventados aunque
+                  el promotor no marcase nada en el wizard. */}
             <SectionCard title="Información básica" stepName="Basic info" missing={missingSet.has("Basic info")} softMissing={isDraft} onEdit={() => setEditOpen("basicInfo")} hideEdit={viewAsCollaborator}>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Tipologías</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(p.propertyTypes.length > 0 ? p.propertyTypes : ["Sin definir"]).map(t => (
-                      <Tag key={t} variant="default" size="sm">{t}</Tag>
-                    ))}
+              {(() => {
+                const snap = (p as unknown as {
+                  metadata?: { wizardSnapshot?: {
+                    urbanizacion?: boolean;
+                    zonasComunes?: string[];
+                    promotionDefaults?: {
+                      equipment?: {
+                        airConditioning?: boolean; airConditioningType?: string | null;
+                        heating?: boolean; heatingType?: string | null;
+                        domotics?: boolean; solarPanels?: boolean;
+                        electricBlinds?: boolean; doubleGlazing?: boolean;
+                        equippedKitchen?: boolean; kitchenType?: string | null;
+                      };
+                      security?: { alarm?: boolean; reinforcedDoor?: boolean; videoSurveillance?: boolean };
+                      views?: { sea?: boolean; mountain?: boolean; golf?: boolean; panoramic?: boolean };
+                      terraces?: { enabled?: boolean; covered?: boolean; uncovered?: boolean };
+                    };
+                  } };
+                }).metadata?.wizardSnapshot;
+
+                /* Amenities · zonasComunes son ids · los pasamos al
+                 *  label canónico via diccionario (mantenido en una
+                 *  línea por simpleza · si crece, mover a options.ts). */
+                const ZONA_LABEL: Record<string, string> = {
+                  piscina: "Piscina", piscina_climatizada: "Piscina climatizada",
+                  spa: "Spa", sauna: "Sauna", gimnasio: "Gimnasio",
+                  padel: "Pádel", tenis: "Tenis", pista_deportiva: "Pista deportiva",
+                  jardines: "Jardines", area_juegos: "Zona infantil",
+                  conserje: "Conserje", videovigilancia: "Videovigilancia 24h",
+                  acceso_controlado: "Acceso controlado",
+                  bar: "Bar", restaurante: "Restaurante", sala_eventos: "Sala de eventos",
+                  coworking: "Coworking", aparcamiento_visitas: "Parking visitas",
+                  cargador_vehiculo: "Carga vehículo eléctrico",
+                };
+                const amenities = (snap?.zonasComunes ?? [])
+                  .map((id) => ZONA_LABEL[id] ?? id);
+
+                /* Características del hogar · derivamos labels reales
+                 *  desde los flags del promotionDefaults. */
+                const eq = snap?.promotionDefaults?.equipment;
+                const sec = snap?.promotionDefaults?.security;
+                const views = snap?.promotionDefaults?.views;
+                const terr = snap?.promotionDefaults?.terraces;
+                const features: string[] = [];
+                if (eq?.airConditioning) features.push("Aire acondicionado");
+                if (eq?.heating) features.push("Calefacción");
+                if (eq?.equippedKitchen) features.push("Cocina equipada");
+                if (eq?.domotics) features.push("Domótica");
+                if (eq?.solarPanels) features.push("Paneles solares");
+                if (eq?.electricBlinds) features.push("Persianas eléctricas");
+                if (eq?.doubleGlazing) features.push("Doble acristalamiento");
+                if (terr?.covered) features.push("Terraza cubierta");
+                if (terr?.uncovered) features.push("Terraza descubierta");
+                if (sec?.alarm) features.push("Alarma");
+                if (sec?.reinforcedDoor) features.push("Puerta blindada");
+                if (sec?.videoSurveillance) features.push("Videovigilancia");
+                if (views?.sea) features.push("Vistas al mar");
+                if (views?.mountain) features.push("Vistas a montaña");
+                if (views?.golf) features.push("Vistas a golf");
+                if (views?.panoramic) features.push("Vistas panorámicas");
+
+                return (
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Tipologías</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {p.propertyTypes.length > 0
+                          ? p.propertyTypes.map(t => <Tag key={t} variant="default" size="sm">{t}</Tag>)
+                          : <p className="text-xs text-muted-foreground italic">Sin tipologías marcadas</p>}
+                      </div>
+                    </div>
+                    {/* Amenities · solo si está dentro de urbanización
+                        Y hay zonas marcadas. Si no aplica, oculto el
+                        bloque entero (no es un dato obligatorio). */}
+                    {snap?.urbanizacion && amenities.length > 0 && (
+                      <>
+                        <div className="h-px bg-border/40" />
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Amenities de la urbanización</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {amenities.map(a => <Tag key={a} variant="default" size="sm">{a}</Tag>)}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    {/* Características del hogar · solo si hay alguna
+                        marcada. Si vacío, hint para invitar a editar. */}
+                    <div className="h-px bg-border/40" />
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Características del hogar</p>
+                      {features.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {features.map(f => <Tag key={f} variant="default" size="sm">{f}</Tag>)}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic">
+                          Sin características marcadas · edítalas desde Configuración
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="h-px bg-border/40" />
-                <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Amenities</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {["Piscina", "Gimnasio", "Jardín", "Seguridad", "Parking"].map(a => (
-                      <Tag key={a} variant="default" size="sm">{a}</Tag>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Características del hogar</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {["Cocina equipada", "Aire acondicionado", "Terraza", "Smart home"].map(f => (
-                      <Tag key={f} variant="default" size="sm">{f}</Tag>
-                    ))}
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
             </SectionCard>
 
             {/* ── 7. PISO PILOTO ── */}
@@ -1979,6 +2149,16 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               <PromotionAvailabilityFull
                 promotionId={p.id}
                 isCollaboratorView={viewAsCollaborator}
+                /* Resolver per-unit · usa primero las fotos propias
+                 *  de la unidad (subidas en el wizard) · si vacío,
+                 *  cae al thumbnail (la primera foto de la promo).
+                 *  Antes esto no se pasaba · todas las cards salían
+                 *  con el placeholder neutro aunque hubiera fotos. */
+                getUnitPhoto={(u) => {
+                  const own = (u as { fotos?: string[] }).fotos;
+                  if (own && own.length > 0) return own[0];
+                  return galleryImages[0];
+                }}
                 {...(isDraft && draftState && draftUnitsForView
                   ? {
                       units: draftUnitsForView,
@@ -1996,6 +2176,9 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   nombrePromocion: p.name,
                   ciudad: p.location?.split(",")[0]?.trim(),
                   provincia: p.location?.split(",")[1]?.trim(),
+                  /* Galería de la promo · fallback cuando una unidad
+                   *  no tiene fotos propias. */
+                  fotos: galleryImages,
                   ...(isDraft && draftState
                     ? {
                         deliveryYear: draftState.fechaEntrega ?? draftState.trimestreEntrega ?? undefined,
@@ -3831,6 +4014,120 @@ function InfoItem({ icon: Icon, label, value, sub }: { icon: typeof Home; label:
       </div>
       <p className="text-sm font-medium text-foreground">{value}</p>
       {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+/* `DocCard` · card para Memoria · Planos · Brochure. Lee el array
+ *  de URLs del wizardSnapshot · si vacío muestra empty state con
+ *  CTA "Subir" · si tiene archivos muestra count + lista compacta.
+ *  Antes cada uno era un bloque hardcoded inflado de 60+ líneas
+ *  con datos inventados (Memoria_Calidades.pdf · 4.2 MB, etc.). */
+function DocCard({
+  icon: Icon,
+  title,
+  files,
+  emptyHint,
+  shareable,
+  onUpload,
+  onManage,
+  onDownload,
+  onRemove,
+  viewAsCollaborator,
+}: {
+  icon: typeof Home;
+  title: string;
+  files: string[];
+  emptyHint: string;
+  shareable?: boolean;
+  onUpload?: () => void;
+  onManage?: () => void;
+  onDownload?: () => void;
+  onRemove?: () => void;
+  viewAsCollaborator: boolean;
+}) {
+  const hasFiles = files.length > 0;
+  return (
+    <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
+      <div className="px-5 pt-4 pb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+          <h2 className="text-base font-semibold text-foreground">{title}</h2>
+          {shareable && hasFiles && !viewAsCollaborator && <Share2 className="h-3 w-3 text-primary/60" />}
+        </div>
+        {!viewAsCollaborator && hasFiles && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                aria-label={`Acciones ${title}`}
+                className="h-7 w-7 rounded-full inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {onUpload && (
+                <DropdownMenuItem onClick={onUpload}>
+                  <RefreshCw className="h-3.5 w-3.5 mr-2" /> Reemplazar / añadir
+                </DropdownMenuItem>
+              )}
+              {onManage && (
+                <DropdownMenuItem onClick={onManage}>
+                  <FolderOpen className="h-3.5 w-3.5 mr-2" /> Gestionar archivos
+                </DropdownMenuItem>
+              )}
+              {onDownload && (
+                <DropdownMenuItem onClick={onDownload}>
+                  <Download className="h-3.5 w-3.5 mr-2" /> Descargar
+                </DropdownMenuItem>
+              )}
+              {onRemove && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onRemove}>
+                    <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+      <div className="px-5 pb-5">
+        {hasFiles ? (
+          <button
+            type="button"
+            onClick={onManage}
+            className="w-full flex items-center gap-3 p-4 rounded-xl border border-border bg-background/50 hover:border-foreground/20 hover:shadow-soft transition-all text-left cursor-pointer"
+          >
+            <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <Icon className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">
+                {files.length === 1 ? "1 archivo" : `${files.length} archivos`}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">PDF · Click para gestionar</p>
+            </div>
+            <FolderOpen className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={viewAsCollaborator ? undefined : onUpload}
+            disabled={viewAsCollaborator}
+            className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border-2 border-dashed border-border bg-muted/20 hover:border-foreground/30 hover:bg-muted/40 transition-colors text-center disabled:cursor-default disabled:opacity-60"
+          >
+            <Icon className="h-6 w-6 text-muted-foreground/40" strokeWidth={1.5} />
+            <p className="text-xs text-muted-foreground">
+              {viewAsCollaborator ? "Aún no hay archivos" : emptyHint}
+            </p>
+            {!viewAsCollaborator && (
+              <p className="text-[10px] text-muted-foreground/70">Click para subir</p>
+            )}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

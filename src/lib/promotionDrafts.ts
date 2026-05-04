@@ -186,31 +186,10 @@ export function deleteDraft(id: string): void {
   void deleteDraftFromSupabase(id);
 }
 
-/** Crea UN draft nuevo en blanco · pensado para ser llamado desde el
- *  botón "Crear nueva promoción" en /promociones · UNA SOLA VEZ por
- *  click. Devuelve el id (`d-${publicRef}`) para que el caller navegue
- *  inmediatamente a `/crear-promocion?draft=${id}`. El wizard NUNCA
- *  debe crear drafts por sí solo · esta es la única puerta de entrada.
- *
- *  Por qué · antes el wizard creaba el draft en su useMemo · cada
- *  mount sin `?draft=` en URL = un draft nuevo · si el wizard se
- *  montaba 2 veces (refresh, route remount, race) salían 2 drafts
- *  fantasma. Mover la creación al CLICK del botón garantiza
- *  exactamente 1 draft por click · sin sorpresas. */
-export async function createBlankDraft(): Promise<string> {
-  const { generatePublicRef } = await import("./publicRef");
-  const { defaultWizardState } = await import("@/components/crear-promocion/types");
-  const ref = generatePublicRef("promotion");
-  const id = `d-${ref}`;
-  const state = { ...defaultWizardState, publicRef: ref };
-  /* saveDraft hace cache local sync + Supabase async · al navegar
-   *  inmediatamente, el wizard ya encuentra el draft en cache local
-   *  cuando el useMemo corre. Supabase llega después · el upload de
-   *  imágenes hace `ensureDraftPersisted` que espera la confirmación
-   *  antes de subir a storage. */
-  saveDraft(state, id);
-  return id;
-}
+/** `createBlankDraft` · ELIMINADO 2026-05-04 · ya no se llama
+ *  desde ningún sitio. El wizard arranca con state in-memory y solo
+ *  persiste cuando el user pulsa "Guardar borrador" (ver
+ *  `ensureDraftId` en `CrearPromocion.tsx`). */
 
 /** Borra TODOS los borradores del usuario actual · memCache + Supabase.
  *  Útil para purgar huérfanos generados por el bug pre-fix de id no
