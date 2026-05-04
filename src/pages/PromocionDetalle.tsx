@@ -1411,26 +1411,24 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               && !isIncomplete
               && sharingEnabledForPromo
               && countAgenciesForPromotion(p.id) === 0 && (
-              <div className="mb-5 rounded-2xl border border-warning/30 bg-warning/5 p-5">
-                <div className="flex items-start gap-3">
-                  <Users className="h-5 w-5 text-warning shrink-0 mt-0.5" strokeWidth={1.5} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground">
-                      Esta promoción aún no se está compartiendo
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                      Está activa y lista para colaborar · pero ninguna agencia la tiene
-                      en su cartera todavía.{" "}
-                      <button
-                        type="button"
-                        onClick={() => tryInvite()}
-                        className="inline-flex items-center gap-1 font-semibold text-foreground hover:underline underline-offset-2"
-                      >
-                        Invitar agencias
-                        <ArrowRight className="h-3 w-3" strokeWidth={2} />
-                      </button>
-                    </p>
-                  </div>
+              <div className="mb-5 rounded-xl border border-warning/30 bg-warning/5 px-4 py-2.5">
+                {/* Aviso · UNA SOLA LÍNEA · ocupa menos espacio. Antes
+                  * eran 2 líneas con título + descripción · agrupadas
+                  * en una sola con el CTA a la derecha. */}
+                <div className="flex items-center gap-2.5">
+                  <Users className="h-4 w-4 text-warning shrink-0" strokeWidth={1.75} />
+                  <p className="text-[12.5px] text-foreground flex-1 min-w-0 truncate">
+                    <span className="font-semibold">Aún no se comparte</span>
+                    <span className="text-muted-foreground"> · ninguna agencia en cartera</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => tryInvite()}
+                    className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-foreground hover:underline underline-offset-2 shrink-0"
+                  >
+                    Invitar agencias
+                    <ArrowRight className="h-3 w-3" strokeWidth={2} />
+                  </button>
                 </div>
               </div>
             )}
