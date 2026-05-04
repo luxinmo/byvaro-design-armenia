@@ -133,6 +133,12 @@ export function UnitDetailPanel({ unit, onUpdateUnit, isCollaboratorView = false
   const sc = statusConfig[unit.status];
   const pricePerM2 = Math.round(unit.price / unit.builtArea);
   const displayId = getUnitDisplayId(unit);
+  /* REGLA · "Planta" no aplica a unifamiliares (villas, chalets,
+   * pareados, adosados son una vivienda en parcela, no edificio).
+   * Detectamos por el tipo de unidad ya que el panel no recibe la
+   * promo. Para plurifamiliares (apartamento, ático, dúplex, etc.)
+   * sí mostramos planta. */
+  const isUni = /^(villa|chalet|unifamiliar|pareado|adosado)$/i.test(unit.type ?? "");
 
   // Highlights con tokens Byvaro. El original usaba blue/cyan/emerald hardcoded.
   const highlights = [
@@ -202,11 +208,13 @@ export function UnitDetailPanel({ unit, onUpdateUnit, isCollaboratorView = false
                   <Bed className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
                   <span className="text-foreground font-medium">{unit.bedrooms} hab. · {unit.bathrooms} baños</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Building2 className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
-                  <span className="text-muted-foreground">Planta:</span>
-                  <span className="text-foreground font-medium">{unit.floor}ª</span>
-                </div>
+                {!isUni && (
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
+                    <span className="text-muted-foreground">Planta:</span>
+                    <span className="text-foreground font-medium">{unit.floor}ª</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -336,6 +344,7 @@ const mockPromoVideos = [
 
 /* ── Edit Unit Form ── */
 function EditUnitForm({ unit, onClose, onSave }: { unit: Unit; onClose: () => void; onSave: (updates: Partial<Unit>) => void }) {
+  const isUni = /^(villa|chalet|unifamiliar|pareado|adosado)$/i.test(unit.type ?? "");
   const [price, setPrice] = useState(unit.price);
   const [builtArea, setBuiltArea] = useState(unit.builtArea);
   const [usableArea, setUsableArea] = useState(unit.usableArea);
@@ -479,20 +488,26 @@ function EditUnitForm({ unit, onClose, onSave }: { unit: Unit; onClose: () => vo
           <TabsContent value="datos" className="mt-0 space-y-4">
             <div className="space-y-2">
               <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Datos básicos</p>
-              <div className="grid grid-cols-4 gap-2.5">
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium">Planta</label>
-                  <select value={planta} onChange={e => setPlanta(Number(e.target.value))} className={selectClass}>
-                    {Array.from({ length: 10 }, (_, i) => (
-                      <option key={i} value={i}>{i === 0 ? "Planta Baja" : `Planta ${i}`}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium">Puerta</label>
-                  <Input value={door} onChange={e => setDoor(e.target.value.toUpperCase())}
-                    className="h-8 text-xs mt-0.5 rounded-xl border-border/40 bg-muted/20 focus:bg-background" maxLength={4} />
-                </div>
+              <div className={cn("grid gap-2.5", isUni ? "grid-cols-2" : "grid-cols-4")}>
+                {/* Planta + Puerta solo en plurifamiliares · una villa
+                  * no tiene planta ni puerta. */}
+                {!isUni && (
+                  <>
+                    <div>
+                      <label className="text-xs text-muted-foreground font-medium">Planta</label>
+                      <select value={planta} onChange={e => setPlanta(Number(e.target.value))} className={selectClass}>
+                        {Array.from({ length: 10 }, (_, i) => (
+                          <option key={i} value={i}>{i === 0 ? "Planta Baja" : `Planta ${i}`}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground font-medium">Puerta</label>
+                      <Input value={door} onChange={e => setDoor(e.target.value.toUpperCase())}
+                        className="h-8 text-xs mt-0.5 rounded-xl border-border/40 bg-muted/20 focus:bg-background" maxLength={4} />
+                    </div>
+                  </>
+                )}
                 <div>
                   <label className="text-xs text-muted-foreground font-medium">Subtipo</label>
                   <select value={subtipo} onChange={e => setSubtipo(e.target.value)} className={selectClass}>

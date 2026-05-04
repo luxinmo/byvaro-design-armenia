@@ -15,7 +15,7 @@ import {
   List, Map as MapIcon, LayoutGrid, Mail, ArrowRight, EyeOff, HardHat,
   type LucideIcon,
 } from "lucide-react";
-import { promotions, getBuildingTypeLabel, type Promotion } from "@/data/promotions";
+import { promotions, getBuildingTypeLabel, isUnifamiliar, type Promotion } from "@/data/promotions";
 import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import { developerOnlyPromotions, type DevPromotion } from "@/data/developerPromotions";
 import { unitsByPromotion } from "@/data/units";
@@ -1579,7 +1579,14 @@ export default function Promociones() {
                           <span className="text-xs text-muted-foreground">{lastUnit.bedrooms} hab · {lastUnit.bathrooms} baños</span>
                           <span className="text-xs text-muted-foreground">{lastUnit.builtArea} m² const.</span>
                           {lastUnit.terrace > 0 && <span className="text-xs text-muted-foreground">{lastUnit.terrace} m² terraza</span>}
-                          <span className="text-xs text-muted-foreground">Planta {lastUnit.floor} · {lastUnit.orientation}</span>
+                          {/* REGLA · "Planta" no aplica a unifamiliares (villas
+                            * son una vivienda en parcela · no edificio).
+                            * Solo se muestra para promociones plurifamiliares. */}
+                          {isUnifamiliar(p) ? (
+                            <span className="text-xs text-muted-foreground">{lastUnit.orientation}</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Planta {lastUnit.floor} · {lastUnit.orientation}</span>
+                          )}
                         </div>
                       </div>
                     )}
