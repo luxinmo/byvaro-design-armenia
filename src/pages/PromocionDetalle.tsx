@@ -652,7 +652,19 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
       /* "Eliminar" · solo en promociones creadas via wizard (`prom-c-*`).
        *  Movido del header al rail con `danger: true` para separar
        *  acciones cotidianas de la destructiva. */
-      ...(!viewAsCollaborator && p.id.startsWith("prom-c-") ? [{
+      /* Eliminar · disponible para promos del workspace propio.
+       * Antes el gate era `p.id.startsWith("prom-c-")` · solo
+       * funcionaba para promos creadas via wizard cuyo cache local
+       * estaba caliente. Tras hidratación desde Supabase + sesión
+       * limpia, la misma promo cumple el patrón pero el listado a
+       * veces la mostraba bajo otro id · el botón desaparecía.
+       * Con `ownerOrganizationId === myOrgId` sí cubre todas las
+       * promos del workspace · independientemente de su origen. */
+      ...(!viewAsCollaborator && (() => {
+        const promoOwner = (p as { ownerOrganizationId?: string }).ownerOrganizationId;
+        const myOrgIdSession = sessionStorage.getItem("byvaro.accountType.organizationId.v1");
+        return !!promoOwner && !!myOrgIdSession && promoOwner === myOrgIdSession;
+      })() ? [{
         icon: Trash2,
         label: "Eliminar",
         hint: "Borrar permanentemente esta promoción",
@@ -670,7 +682,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             return;
           }
           toast.success("Promoción eliminada");
-          navigate("/promociones");
+          /* Navegar tras un pequeño tick · da tiempo a que el evento
+           * `byvaro:promotions-changed` propague el cache vacío al
+           * listado · evita que el user vea brevemente la promo
+           * borrada al aterrizar en /promociones. */
+          setTimeout(() => navigate("/promociones"), 50);
         },
         danger: true,
       }] : []),
