@@ -111,6 +111,34 @@ function rowToDevPromotion(r: PromotionRow): DevPromotion {
       modoValidacionRegistro?: string;
     };
   };
+  /* Delivery · fallback desde wizardSnapshot cuando la columna está
+   * vacía. Cubre promos legacy creadas antes del fix de
+   * `createPromotionFromWizard` que compone el string para modelos
+   * relativos (tras_contrato_cv / tras_licencia + meses). Sin esto
+   * la card decía "Por definir" aunque el wizardSnapshot tenía la
+   * info completa. */
+  let derivedDelivery: string | null = r.delivery;
+  if (!derivedDelivery && meta.wizardSnapshot) {
+    const ws = meta.wizardSnapshot as {
+      fechaEntrega?: string | null;
+      trimestreEntrega?: string | null;
+      tipoEntrega?: string | null;
+      mesesTrasContrato?: number;
+      mesesTrasLicencia?: number;
+    };
+    if (ws.fechaEntrega) derivedDelivery = ws.fechaEntrega;
+    else if (ws.trimestreEntrega) derivedDelivery = ws.trimestreEntrega;
+    else if (ws.tipoEntrega === "tras_contrato_cv") {
+      derivedDelivery = (ws.mesesTrasContrato ?? 0) > 0
+        ? `Tras contrato C/V · ${ws.mesesTrasContrato} meses`
+        : "Tras contrato C/V";
+    } else if (ws.tipoEntrega === "tras_licencia") {
+      derivedDelivery = (ws.mesesTrasLicencia ?? 0) > 0
+        ? `Tras licencia · ${ws.mesesTrasLicencia} meses`
+        : "Tras licencia";
+    }
+  }
+
   /* CollaborationConfig · 2 fuentes en orden de preferencia:
    *  1. `meta.collaboration` (escrito por createPromotionFromWizard
    *     desde el fix del PR #95).
@@ -148,7 +176,7 @@ function rowToDevPromotion(r: PromotionRow): DevPromotion {
     totalUnits: r.total_units,
     status: status as DevPromotion["status"],
     reservationCost: meta.reservationCost ?? 0,
-    delivery: r.delivery ?? "",
+    delivery: derivedDelivery ?? "",
     commission: meta.commission ?? 0,
     developer: "",
     agencies: 0,

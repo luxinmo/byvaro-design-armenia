@@ -489,8 +489,16 @@ export async function saveUnitsToSupabase(
   unidades: UnitData[],
 ): Promise<void> {
   if (!isSupabaseConfigured || unidades.length === 0) return;
+  /* CRÍTICO · scoping del id por promo · si el wizard usa ids
+   * genéricos (`unit-1`, `unit-2`) y el upsert tiene
+   * onConflict="id", la unit-1 de una promo nueva PISA la unit-1
+   * de cualquier otra promo previa (cross-tenant en el peor caso).
+   * Bug confirmado en producción: Villa 18 meses pisó la unit de
+   * Villa Belgica · esta última quedó sin filas en promotion_units.
+   * Prefijamos `${promotionId}::` para garantizar unicidad global
+   * sin tocar los ids del wizard (que se quedan en metadata.ref). */
   const rows = unidades.map((u) => ({
-    id: u.id,
+    id: u.id?.startsWith(`${promotionId}::`) ? u.id : `${promotionId}::${u.id}`,
     promotion_id: promotionId,
     label: u.nombre || u.ref || u.id,
     rooms: Number(u.dormitorios) || null,
