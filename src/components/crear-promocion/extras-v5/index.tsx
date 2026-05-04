@@ -74,6 +74,13 @@ const ESSENTIAL_KEYS = new Set<CategoryKey>([
   "privatePool", "parking", "storageRoom", "plot", "terraces",
 ]);
 
+/* Categorías que tienen el control "Aplicar a" (Todas/Algunas/Decidir
+ * luego). Se usa para auto-rellenar `appliesTo: "all"` cuando estamos
+ * en single-home mode y el control no se renderiza. */
+const APPLIES_TO_KEYS = new Set<CategoryKey>([
+  "privatePool", "parking", "storageRoom", "solarium", "plot",
+]);
+
 /* Derivado · ¿la categoría tiene algún campo configurado? Si sí, se
  * mantiene visible aunque el user no la haya "añadido" manualmente
  * (cubre el caso de reabrir un draft con datos). */
@@ -110,6 +117,14 @@ export function ExtrasV5({ state, update }: Props) {
 
   const defaults = state.promotionDefaults ?? defaultPromotionDefaults;
 
+  /* Single-home mode · una sola vivienda unifamiliar.
+   *  - Oculta el control "Aplicar a" (Todas/Algunas/Decidir luego) ·
+   *    no tiene sentido elegir "algunas" cuando solo hay UNA.
+   *  - Cuando se activa una categoría auto-set `appliesTo = "all"`
+   *    para que el validador `canContinue` no bloquee.
+   *  - Copy del header en singular ("la vivienda" vs "las viviendas"). */
+  const isSingleHome = state.tipo === "unifamiliar" && state.subUni === "una_sola";
+
   /* Set local · qué categorías ha añadido el user que aún no tienen
    * datos. Las que SÍ tienen datos son visibles via `isConfigured`. */
   const [manualAdded, setManualAdded] = useState<Set<CategoryKey>>(new Set());
@@ -126,6 +141,15 @@ export function ExtrasV5({ state, update }: Props) {
 
   function add(k: CategoryKey) {
     setManualAdded((prev) => new Set(prev).add(k));
+    /* Single-home · si la categoría tiene `appliesTo` y el control no
+     * se renderiza, lo dejamos en "all" desde el principio para que
+     * el validador `canContinue` no se quede esperando un valor. */
+    if (isSingleHome && APPLIES_TO_KEYS.has(k)) {
+      update("promotionDefaults", {
+        ...defaults,
+        [k]: { ...defaults[k], appliesTo: "all" },
+      } as PromotionDefaults);
+    }
   }
 
   function remove(k: CategoryKey) {
@@ -165,13 +189,15 @@ export function ExtrasV5({ state, update }: Props) {
       <div className="flex flex-col gap-5 max-w-[760px] mx-auto w-full">
         <header className="mb-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Características por defecto
+            Características
           </p>
           <h2 className="text-[19px] sm:text-[22px] font-semibold text-foreground tracking-tight mt-1">
-            ¿Qué incluyen las viviendas?
+            {isSingleHome ? "¿Qué incluye la vivienda?" : "¿Qué incluyen las viviendas?"}
           </h2>
           <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
-            Activa lo esencial de cada vivienda · podrás añadir opciones avanzadas en la siguiente pantalla.
+            {isSingleHome
+              ? "Activa lo esencial · podrás añadir opciones avanzadas en la siguiente pantalla."
+              : "Activa lo esencial de cada vivienda · podrás añadir opciones avanzadas en la siguiente pantalla."}
           </p>
         </header>
 
@@ -183,6 +209,7 @@ export function ExtrasV5({ state, update }: Props) {
               defaults={defaults}
               patch={patch}
               update={update}
+              isSingleHome={isSingleHome}
             />
           ))}
         </div>
@@ -256,6 +283,7 @@ export function ExtrasV5({ state, update }: Props) {
               patch={patch}
               update={update}
               onRemove={() => remove(c.key)}
+              isSingleHome={isSingleHome}
             />
           ))}
         </div>
@@ -279,11 +307,13 @@ function EssentialRow({
   defaults,
   patch,
   update,
+  isSingleHome,
 }: {
   def: CategoryDef;
   defaults: PromotionDefaults;
   patch: <K extends keyof PromotionDefaults>(key: K, sub: Partial<PromotionDefaults[K]>) => void;
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
+  isSingleHome: boolean;
 }) {
   const Icon = def.icon;
   const configured = isConfigured(defaults, def.key);
@@ -317,7 +347,14 @@ function EssentialRow({
           [def.key]: defaultPromotionDefaults[def.key],
         } as PromotionDefaults);
       } else {
-        patch(def.key, { enabled: v } as Partial<PromotionDefaults[typeof def.key]>);
+        /* Single-home · auto-set `appliesTo = "all"` cuando se activa
+         * la categoría · el control "Aplicar a" no se renderiza, así
+         * que sin esto el validador `canContinue` se queda esperando
+         * un valor que nunca llega. */
+        const extra = isSingleHome
+          ? ({ appliesTo: "all" } as Partial<PromotionDefaults[typeof def.key]>)
+          : ({} as Partial<PromotionDefaults[typeof def.key]>);
+        patch(def.key, { enabled: v, ...extra } as Partial<PromotionDefaults[typeof def.key]>);
       }
     }
     setOpen(v);
@@ -379,7 +416,13 @@ function EssentialRow({
       </button>
       {open && (
         <div className="border-t border-border/60 p-4 sm:p-5 flex flex-col gap-3">
-          <CategoryBody def={def} defaults={defaults} patch={patchAuto} update={update} />
+          <CategoryBody
+            def={def}
+            defaults={defaults}
+            patch={patchAuto}
+            update={update}
+            isSingleHome={isSingleHome}
+          />
         </div>
       )}
     </div>
@@ -428,12 +471,14 @@ function CategoryCard({
   patch,
   update,
   onRemove,
+  isSingleHome,
 }: {
   def: CategoryDef;
   defaults: PromotionDefaults;
   patch: <K extends keyof PromotionDefaults>(key: K, sub: Partial<PromotionDefaults[K]>) => void;
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
   onRemove: () => void;
+  isSingleHome: boolean;
 }) {
   const Icon = def.icon;
   return (
@@ -453,7 +498,13 @@ function CategoryCard({
         </button>
       </div>
       <div className="p-4 sm:p-5 flex flex-col gap-3">
-        <CategoryBody def={def} defaults={defaults} patch={patch} update={update} />
+        <CategoryBody
+          def={def}
+          defaults={defaults}
+          patch={patch}
+          update={update}
+          isSingleHome={isSingleHome}
+        />
       </div>
     </div>
   );
@@ -466,20 +517,24 @@ function CategoryBody({
   defaults,
   patch,
   update,
+  isSingleHome,
 }: {
   def: CategoryDef;
   defaults: PromotionDefaults;
   patch: <K extends keyof PromotionDefaults>(key: K, sub: Partial<PromotionDefaults[K]>) => void;
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
+  isSingleHome: boolean;
 }) {
   switch (def.key) {
     case "privatePool":
       return (
         <>
-          <AppliesToControl
-            value={defaults.privatePool.appliesTo}
-            onChange={(v) => patch("privatePool", { appliesTo: v })}
-          />
+          {!isSingleHome && (
+            <AppliesToControl
+              value={defaults.privatePool.appliesTo}
+              onChange={(v) => patch("privatePool", { appliesTo: v })}
+            />
+          )}
           <PriceModeControl
             value={defaults.privatePool.priceMode}
             onChange={(v) => patch("privatePool", { priceMode: v })}
@@ -490,7 +545,7 @@ function CategoryBody({
     case "parking":
       return (
         <>
-          <Row label="Plazas por vivienda">
+          <Row label={isSingleHome ? "Plazas" : "Plazas por vivienda"}>
             <NumberStepper
               value={defaults.parking.spaces}
               min={1}
@@ -511,20 +566,24 @@ function CategoryBody({
             value={defaults.parking.priceMode}
             onChange={(v) => patch("parking", { priceMode: v })}
           />
-          <AppliesToControl
-            value={defaults.parking.appliesTo}
-            onChange={(v) => patch("parking", { appliesTo: v })}
-          />
+          {!isSingleHome && (
+            <AppliesToControl
+              value={defaults.parking.appliesTo}
+              onChange={(v) => patch("parking", { appliesTo: v })}
+            />
+          )}
         </>
       );
 
     case "storageRoom":
       return (
         <>
-          <AppliesToControl
-            value={defaults.storageRoom.appliesTo}
-            onChange={(v) => patch("storageRoom", { appliesTo: v })}
-          />
+          {!isSingleHome && (
+            <AppliesToControl
+              value={defaults.storageRoom.appliesTo}
+              onChange={(v) => patch("storageRoom", { appliesTo: v })}
+            />
+          )}
           <PriceModeControl
             value={defaults.storageRoom.priceMode}
             onChange={(v) => patch("storageRoom", { priceMode: v })}
@@ -535,10 +594,12 @@ function CategoryBody({
     case "solarium":
       return (
         <>
-          <AppliesToControl
-            value={defaults.solarium.appliesTo}
-            onChange={(v) => patch("solarium", { appliesTo: v })}
-          />
+          {!isSingleHome && (
+            <AppliesToControl
+              value={defaults.solarium.appliesTo}
+              onChange={(v) => patch("solarium", { appliesTo: v })}
+            />
+          )}
           <PriceModeControl
             value={defaults.solarium.priceMode}
             onChange={(v) => patch("solarium", { priceMode: v })}
@@ -569,10 +630,12 @@ function CategoryBody({
             />
             <span className="text-[12px] text-muted-foreground tnum">m²</span>
           </Row>
-          <AppliesToControl
-            value={defaults.plot.appliesTo}
-            onChange={(v) => patch("plot", { appliesTo: v })}
-          />
+          {!isSingleHome && (
+            <AppliesToControl
+              value={defaults.plot.appliesTo}
+              onChange={(v) => patch("plot", { appliesTo: v })}
+            />
+          )}
         </>
       );
 
