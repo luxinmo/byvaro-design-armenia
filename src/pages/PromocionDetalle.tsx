@@ -452,7 +452,34 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         reservationCost?: number;
         commission?: number;
         collaboration?: unknown;
+        wizardSnapshot?: {
+          fechaEntrega?: string | null;
+          trimestreEntrega?: string | null;
+          tipoEntrega?: string | null;
+          mesesTrasContrato?: number;
+          mesesTrasLicencia?: number;
+        };
       };
+      /* Delivery fallback desde wizardSnapshot · igual lógica que en
+       * Promociones.tsx adapter y seedHydrator.rowToDevPromotion ·
+       * sin esto, promos cuya columna delivery es null muestran
+       * "Por definir" en la ficha aunque el wizard SÍ guardó el
+       * modelo (tras_licencia + 18 meses). */
+      let derivedDelivery: string | null = c.delivery;
+      if (!derivedDelivery && meta.wizardSnapshot) {
+        const ws = meta.wizardSnapshot;
+        if (ws.fechaEntrega) derivedDelivery = ws.fechaEntrega;
+        else if (ws.trimestreEntrega) derivedDelivery = ws.trimestreEntrega;
+        else if (ws.tipoEntrega === "tras_contrato_cv") {
+          derivedDelivery = (ws.mesesTrasContrato ?? 0) > 0
+            ? `Tras contrato C/V · ${ws.mesesTrasContrato} meses`
+            : "Tras contrato C/V";
+        } else if (ws.tipoEntrega === "tras_licencia") {
+          derivedDelivery = (ws.mesesTrasLicencia ?? 0) > 0
+            ? `Tras licencia · ${ws.mesesTrasLicencia} meses`
+            : "Tras licencia";
+        }
+      }
       return {
         id: c.id,
         code: c.code,
@@ -466,7 +493,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
         totalUnits: c.totalUnits,
         status: (c.status as DevPromotion["status"]) ?? "active",
         reservationCost: meta.reservationCost ?? 0,
-        delivery: c.delivery ?? "",
+        delivery: derivedDelivery ?? "",
         commission: meta.commission ?? 0,
         developer: "",
         agencies: 0,
