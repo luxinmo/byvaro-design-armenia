@@ -26,7 +26,7 @@ import { PromocionesMap } from "@/components/promociones/PromocionesMap";
 import { cn } from "@/lib/utils";
 import { MinimalSort } from "@/components/ui/MinimalSort";
 import { ViewToggle } from "@/components/ui/ViewToggle";
-import { listDrafts, deleteDraft, deleteAllDrafts, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
+import { listDrafts, deleteDraft, deleteAllDrafts, draftToPromotionData, DRAFT_ID_PREFIX, createBlankDraft, type PromotionDraft } from "@/lib/promotionDrafts";
 import { getCreatedPromotions } from "@/lib/promotionsStorage";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
@@ -1149,7 +1149,14 @@ export default function Promociones() {
 
             {!isAgencyUser && (
               <button
-                onClick={() => navigate("/crear-promocion")}
+                onClick={async () => {
+                  /* ÚNICA fuente de creación de drafts · genera el id
+                   *  AQUÍ y navega con `?draft=` ya en URL · garantiza
+                   *  1 draft por click · el wizard nunca crea por sí
+                   *  solo (ver promotionDrafts.ts → createBlankDraft). */
+                  const id = await createBlankDraft();
+                  navigate(`/crear-promocion?draft=${id}`);
+                }}
                 className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft shrink-0"
               >
                 <Plus className="h-3.5 w-3.5" strokeWidth={2} />
@@ -1249,7 +1256,10 @@ export default function Promociones() {
         <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
           <div className="max-w-content mx-auto">
             {sortedAndFiltered.length === 0 ? (
-              <EmptyState mode={emptyMode} onCreate={() => navigate("/crear-promocion")} />
+              <EmptyState mode={emptyMode} onCreate={async () => {
+              const id = await createBlankDraft();
+              navigate(`/crear-promocion?draft=${id}`);
+            }} />
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {sortedAndFiltered.map(p => {
@@ -1277,7 +1287,10 @@ export default function Promociones() {
       <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
         <div className="max-w-content mx-auto flex flex-col gap-3 lg:gap-4">
           {sortedAndFiltered.length === 0 ? (
-            <EmptyState mode={emptyMode} onCreate={() => navigate("/crear-promocion")} />
+            <EmptyState mode={emptyMode} onCreate={async () => {
+              const id = await createBlankDraft();
+              navigate(`/crear-promocion?draft=${id}`);
+            }} />
           ) : (
             sortedAndFiltered.map((p) => {
               /* Stats LIVE · derivados de unidades reales · cae a seed

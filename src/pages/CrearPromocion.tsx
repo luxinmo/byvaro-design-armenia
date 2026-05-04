@@ -204,7 +204,28 @@ export default function CrearPromocion() {
    *  primero") · sólo necesita resolver ese campo concreto. */
   const singleSaveMode = searchParams.get("singleSave") === "1";
   const returnToParam = searchParams.get("returnTo");
-  // Carga inicial · prioridad: draft > promotionId hydration > legacy > default
+
+  /* Guard · /crear-promocion sin params (`?draft=` ni `?promotionId=`)
+   *  REDIRIGE a /promociones · la única manera de entrar al wizard es
+   *  pulsando el botón "Nueva promoción" que crea el draft + navega
+   *  con `?draft=ID`. Razón · evitar entradas directas a la URL que
+   *  antes generaban un draft fantasma. Hacemos el redirect en un
+   *  effect porque no podemos navegar durante el render. */
+  useEffect(() => {
+    if (!draftIdParam && !promotionIdParam) {
+      navigate("/promociones", { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* Carga inicial · prioridad: ?draft=> ?promotionId=> legacy.
+   *
+   *  CAMBIO 2026-05-04 · NUNCA crear draft aquí. El wizard SIEMPRE
+   *  recibe `?draft=ID` (creado por el botón "Nueva promoción" en
+   *  /promociones · ver `createBlankDraft` en promotionDrafts.ts).
+   *  Si llega sin params, el effect de arriba redirige a /promociones.
+   *  Si por race el draftIdParam no carga del cache, devolvemos vacío
+   *  con id=null · el redirect ya disparó · este state nunca se ve. */
   const initialDraft = useMemo(() => {
     if (draftIdParam) {
       const d = getDraft(draftIdParam);
@@ -221,56 +242,20 @@ export default function CrearPromocion() {
       const found = all.find((p) => p.id === promotionIdParam || p.code === promotionIdParam);
       if (found) {
         const override = getPromoWizardOverride(found.id);
-        if (override) return { id: null, state: override };
+        if (override) return { id: null as string | null, state: override };
         const units = unitsByPromotion[found.id] ?? [];
-        return { id: null, state: promotionToWizardState(found, units) };
+        return { id: null as string | null, state: promotionToWizardState(found, units) };
       }
     }
     const legacy = loadLegacyDraft(); // se consume y borra la legacy key
     if (legacy) {
-      /* Si el legacy ya trae publicRef, derivamos su id determinista ·
-       * si no, lo generamos al vuelo (también para legacys sin ref). */
       const ref = legacy.publicRef ?? generatePublicRef("promotion");
-      return { id: `d-${ref}`, state: { ...legacy, publicRef: ref } };
+      return { id: `d-${ref}` as string | null, state: { ...legacy, publicRef: ref } };
     }
-    /* REUSE de borrador en curso · si el user ya tiene un borrador
-     * SIN nombre (señal clara de "abandoné el wizard antes de
-     * empezar a etiquetar"), reusamos ese mismo en vez de crear uno
-     * nuevo. Evita la fuga de "cada entrada fresca = otro draft".
-     * Cuando el user termina de etiquetar la promoción (pone nombre),
-     * el draft pasa a ser "real" y la siguiente entrada al wizard sí
-     * crea uno nuevo · porque el filtro deja de matchearlo.
-     *
-     * Si hay flag de variante en la URL · igual reusamos, pero
-     * forzamos el currentStep al que muestra la variante para que
-     * sea visible inmediatamente (manejado abajo en `initialStep`). */
-    const inProgress = listDrafts()
-      .filter((d) => !(d.state.nombrePromocion ?? "").trim())
-      .sort((a, b) => b.updatedAt - a.updatedAt);
-    if (inProgress.length > 0) {
-      const d = inProgress[0];
-      return { id: d.id, state: d.state, currentStep: d.currentStep };
-    }
-    /* Wizard nuevo · genera publicRef de inmediato. El draft se
-     * identifica por `d-${publicRef}` (determinista) · cualquier
-     * autosave/refresh actualiza el MISMO borrador en el listado.
-     *
-     * IMPORTANTE · persistimos AQUÍ (en el useMemo, no en useEffect).
-     * Razón · React StrictMode (dev) monta el componente dos veces ·
-     * la 2ª pasada por el useMemo no veía el draft de la 1ª en caché
-     * porque la persistencia (que vivía en useEffect) corre DESPUÉS
-     * del mount. Resultado · 2 publicRefs distintos → 2 drafts. Al
-     * persistir aquí, la 2ª pasada SÍ encuentra el draft de la 1ª
-     * vía el branch de in-progress de arriba y lo reusa.
-     *
-     * Side-effect en useMemo se considera anti-pattern, pero React
-     * lo permite explícitamente para "lazy initialization" como esta
-     * (similar a `useState(() => initFn())`). */
-    const newRef = generatePublicRef("promotion");
-    const id = `d-${newRef}`;
-    const newState = { ...defaultWizardState, publicRef: newRef };
-    persistDraft(newState, id);
-    return { id, state: newState };
+    /* Sin params · el effect de redirect ya disparó · este state
+     *  no se llega a renderizar. Devolvemos shape vacío para que TS
+     *  no se queje. */
+    return { id: null as string | null, state: defaultWizardState };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -367,6 +352,13 @@ export default function CrearPromocion() {
         || initialDraft.state.unidades.length > 0);
   });
 
+  /* `update` · simple setter del state · NUNCA crea draft.
+   *  Razón · desde 2026-05-04 los drafts solo se crean al pulsar
+   *  el botón "Nueva promoción" en /promociones (ver
+   *  `createBlankDraft` en promotionDrafts.ts). El wizard SIEMPRE
+   *  recibe `?draft=ID` en URL · el draft ya existe cuando llega
+   *  aquí. Sin esto, había drafts fantasma cuando el componente
+   *  se montaba más de una vez sin acción del user. */
   const update = useCallback(<K extends keyof WizardState>(key: K, value: WizardState[K]) => {
     setState(prev => ({ ...prev, [key]: value }));
   }, []);
