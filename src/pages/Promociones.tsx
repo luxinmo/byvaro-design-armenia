@@ -400,6 +400,20 @@ export default function Promociones() {
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
 
+  /* Handler ÚNICO para "Nueva promoción" · usa un ref como lock
+   *  para evitar que un doble click rápido (200ms) genere 2 drafts
+   *  con publicRef distinto. El ref se mantiene true hasta que la
+   *  navegación deshecha el componente · si por alguna razón el
+   *  user vuelve sin navegar, no hay forma de re-disparar (el page
+   *  unmount limpia todo). */
+  const creatingDraftRef = useRef(false);
+  const handleCreateNewPromotion = async () => {
+    if (creatingDraftRef.current) return;
+    creatingDraftRef.current = true;
+    const id = await createBlankDraft();
+    navigate(`/crear-promocion?draft=${id}`);
+  };
+
   /* Source of truth · `seedHydrator` muta in-place los arrays seed
    *  con los datos vivos de Supabase (preservando campos no migrados
    *  del seed). Aquí solo nos suscribimos al evento para forzar
@@ -1149,14 +1163,7 @@ export default function Promociones() {
 
             {!isAgencyUser && (
               <button
-                onClick={async () => {
-                  /* ÚNICA fuente de creación de drafts · genera el id
-                   *  AQUÍ y navega con `?draft=` ya en URL · garantiza
-                   *  1 draft por click · el wizard nunca crea por sí
-                   *  solo (ver promotionDrafts.ts → createBlankDraft). */
-                  const id = await createBlankDraft();
-                  navigate(`/crear-promocion?draft=${id}`);
-                }}
+                onClick={handleCreateNewPromotion}
                 className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors shadow-soft shrink-0"
               >
                 <Plus className="h-3.5 w-3.5" strokeWidth={2} />
@@ -1256,10 +1263,7 @@ export default function Promociones() {
         <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
           <div className="max-w-content mx-auto">
             {sortedAndFiltered.length === 0 ? (
-              <EmptyState mode={emptyMode} onCreate={async () => {
-              const id = await createBlankDraft();
-              navigate(`/crear-promocion?draft=${id}`);
-            }} />
+<EmptyState mode={emptyMode} onCreate={handleCreateNewPromotion} />
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {sortedAndFiltered.map(p => {
@@ -1287,10 +1291,7 @@ export default function Promociones() {
       <div className="flex-1 px-3 sm:px-6 lg:px-8 pb-8">
         <div className="max-w-content mx-auto flex flex-col gap-3 lg:gap-4">
           {sortedAndFiltered.length === 0 ? (
-            <EmptyState mode={emptyMode} onCreate={async () => {
-              const id = await createBlankDraft();
-              navigate(`/crear-promocion?draft=${id}`);
-            }} />
+<EmptyState mode={emptyMode} onCreate={handleCreateNewPromotion} />
           ) : (
             sortedAndFiltered.map((p) => {
               /* Stats LIVE · derivados de unidades reales · cae a seed
