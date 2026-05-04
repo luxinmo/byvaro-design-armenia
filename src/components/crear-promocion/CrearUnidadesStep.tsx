@@ -302,7 +302,10 @@ function unitDataToUnit(u: UnitData): Unit {
     hasStorage: u.trastero ?? false,
     hasSolarium: u.solarium ?? false,
     hasBasement: u.sotano ?? false,
-    orientation: u.orientacion ?? "Sur",
+    /* REGLA · NO defaultear a "Sur" cuando el user no marcó
+     * orientación · vacío significa "no definida" · evita pintar
+     * "Sur" en el listado/ficha como si lo hubiera elegido. */
+    orientation: u.orientacion ?? "",
     price: u.precio ?? 0,
     status: u.status ?? "available",
     clientName: u.clientName,

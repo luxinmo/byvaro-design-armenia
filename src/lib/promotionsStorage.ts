@@ -142,15 +142,35 @@ export function getCreatedPromotions(): CreatedPromotion[] {
   return readCreated();
 }
 
-/** Borra una promoción creada · cache local + Supabase. Usado por el
- *  botón "Eliminar" de la ficha cuando el user creó una promo
- *  incompleta o quiere descartarla. */
+/** Borra una promoción · 3 lugares:
+ *   1. Cache local `byvaro.promotions.created.v1` (síncrono).
+ *   2. Cache hidratado `developerOnlyPromotions` (módulo-level array
+ *      mutado por seedHydrator). Sin esto, la promo desaparece del
+ *      cache local pero sigue en el listado al volver hasta el
+ *      próximo full hydrate.
+ *   3. Tabla `promotions` en Supabase (write-through async).
+ *  Dispara `byvaro:promotions-changed` para refrescar listados
+ *  reactivos. */
 export async function deleteCreatedPromotion(id: string): Promise<{ ok: boolean; error?: string }> {
-  /* Borra del cache local primero (sync) · UI refresca al instante. */
+  /* 1 · cache local */
   const list = readCreated();
   const next = list.filter((p) => p.id !== id);
   writeCreated(next);
-  /* Write-through async a Supabase. */
+
+  /* 2 · cache hidratado · in-place mutation con splice para mantener
+   * la misma referencia de array (consumers que importaron el array
+   * la siguen viendo viva). */
+  try {
+    const { developerOnlyPromotions } = await import("@/data/developerPromotions");
+    const idx = developerOnlyPromotions.findIndex((p) => p.id === id);
+    if (idx !== -1) {
+      developerOnlyPromotions.splice(idx, 1);
+    }
+  } catch (e) {
+    console.warn("[promotions:delete] no se pudo limpiar cache hidratado:", e);
+  }
+
+  /* 3 · Supabase */
   if (!isSupabaseConfigured) return { ok: true };
   const { error } = await supabase.from("promotions").delete().eq("id", id);
   if (error) {
@@ -221,8 +241,24 @@ export async function createPromotionFromWizard(
     .filter((p) => p > 0);
   const priceFrom = unitPrices.length > 0 ? Math.min(...unitPrices) : null;
   const priceTo = unitPrices.length > 0 ? Math.max(...unitPrices) : null;
-  /* Entrega · primero fecha exacta, si no trimestre estimado. */
-  const delivery = state.fechaEntrega?.trim() || state.trimestreEntrega?.trim() || null;
+  /* Entrega · prioridad: fecha exacta → trimestre → modelos
+   *  relativos ("Tras contrato C/V · 18 meses" / "Tras licencia ·
+   *  18 meses"). Antes solo se contemplaba fecha+trimestre · si el
+   *  user elegía un modelo relativo, delivery quedaba null y la
+   *  ficha mostraba "Sin definir" aunque SÍ había información. */
+  let delivery: string | null =
+    state.fechaEntrega?.trim() || state.trimestreEntrega?.trim() || null;
+  if (!delivery) {
+    if (state.tipoEntrega === "tras_contrato_cv" && state.mesesTrasContrato > 0) {
+      delivery = `Tras contrato C/V · ${state.mesesTrasContrato} meses`;
+    } else if (state.tipoEntrega === "tras_licencia" && state.mesesTrasLicencia > 0) {
+      delivery = `Tras licencia · ${state.mesesTrasLicencia} meses`;
+    } else if (state.tipoEntrega === "tras_contrato_cv") {
+      delivery = "Tras contrato C/V";
+    } else if (state.tipoEntrega === "tras_licencia") {
+      delivery = "Tras licencia";
+    }
+  }
   /* Imagen principal · primera foto marcada como esPrincipal o la
    * primera del array. */
   const heroFoto = state.fotos?.find((f) => f.esPrincipal) ?? state.fotos?.[0];
