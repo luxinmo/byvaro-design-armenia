@@ -17,6 +17,7 @@ import type {
 } from "@/components/crear-promocion/types";
 import { memCache } from "./memCache";
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
+import { unitsByPromotion, type Unit } from "@/data/units";
 
 const CREATED_KEY = "byvaro.promotions.created.v1";
 
@@ -235,6 +236,42 @@ export async function createPromotionFromWizard(
       console.info(`[wizard:create] ✓ sub-entidad ${labels[i]} OK`);
     }
   });
+
+  /* Hidratación local INMEDIATA · `unitsByPromotion` lo popula
+   *  `seedHydrator` SOLO al mount inicial de la app. Si no
+   *  inyectamos las unidades aquí, el listado y la ficha de la
+   *  promo recién creada salen "sin datos" hasta el próximo
+   *  refresh (cuando seedHydrator vuelve a correr). Mejor sembrar
+   *  ahora · esto es CACHE LOCAL · el source of truth ya está en
+   *  Supabase. */
+  if (unidades.length > 0) {
+    unitsByPromotion[created.id] = unidades.map((u): Unit => ({
+      id: u.id,
+      ref: u.ref ?? u.id,
+      promotionId: created.id,
+      block: "",
+      floor: typeof u.planta === "number" ? u.planta : 0,
+      door: "",
+      publicId: u.nombre || u.ref || u.id,
+      type: typeof u.subtipo === "string" ? u.subtipo : "",
+      bedrooms: Number(u.dormitorios) || 0,
+      bathrooms: Number(u.banos) || 0,
+      builtArea: Number(u.superficieConstruida) || 0,
+      usableArea: Number(u.superficieUtil) || 0,
+      terrace: Number(u.superficieTerraza) || 0,
+      garden: 0,
+      parcel: Number(u.parcela) || 0,
+      hasPool: !!u.piscinaPrivada,
+      orientation: u.orientacion || "Sur",
+      price: Number(u.precio) || 0,
+      status: (u.status ?? "available") as Unit["status"],
+    }));
+    /* Notifica a consumidores reactivos (Promociones.tsx escucha
+     *  byvaro:promotions-changed para refrescar cards). */
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("byvaro:promotions-changed"));
+    }
+  }
   console.info("[wizard:create] DONE", { id: created.id, name: created.name });
   return { created, supabaseOk: true };
 }
