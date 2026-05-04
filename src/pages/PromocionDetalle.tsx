@@ -29,7 +29,7 @@ import {
   Megaphone,
 } from "lucide-react";
 import { getMissingForPromotion } from "@/lib/publicationRequirements"; // fuente única de verdad de requisitos para publicar
-import { useOverride, saveOverride } from "@/lib/promotionWizardOverrides";
+import { useOverride, saveOverride, getOverride } from "@/lib/promotionWizardOverrides";
 import { wizardStateToPromotion } from "@/lib/wizardStateToPromotion";
 import { promotionToWizardState } from "@/lib/promotionToWizardState";
 import { EditStepModal, isSupportedInModal } from "@/components/crear-promocion/EditStepModal";
@@ -580,8 +580,18 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   }, [pBase, wizardOverride]);
 
   const updateWizardField = <K extends keyof WizardState>(key: K, value: WizardState[K]) => {
-    if (!pBase || !wizardStateForModal) return;
-    const next = { ...wizardStateForModal, [key]: value };
+    if (!pBase) return;
+    /* CRÍTICO · leer del cache MÁS FRESCO (`getOverride`) en cada
+     * llamada. Antes usaba `wizardStateForModal` del closure · si en
+     * el mismo tick venían varias updates encadenadas (ej. el
+     * onSelect del estado dispara update de estado + update de
+     * tieneLicencia + update de faseConstruccion), las llamadas 2-3
+     * pisaban a la 1 porque todas leían el mismo state stale. Con
+     * getOverride() leemos lo que acaba de escribir el saveOverride
+     * SÍNCRONO inmediatamente anterior. */
+    const current = getOverride(pBase.id) ?? wizardStateForModal;
+    if (!current) return;
+    const next = { ...current, [key]: value };
     saveOverride(pBase.id, next);
   };
 
