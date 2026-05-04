@@ -106,6 +106,22 @@ export async function createPromotionFromWizard(
 ): Promise<CreatePromotionResult> {
   const now = new Date().toISOString();
   const id = `prom-c-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  console.info("[wizard:create] start", {
+    id,
+    ownerOrgId,
+    ownerRole,
+    status,
+    state: {
+      nombre: state.nombrePromocion,
+      tipo: state.tipo,
+      ciudad: state.direccionPromocion?.ciudad,
+      unidades: state.unidades?.length ?? 0,
+      fotos: state.fotos?.length ?? 0,
+      videos: state.videos?.length ?? 0,
+      hitosPago: state.hitosPago?.length ?? 0,
+      publicRef: state.publicRef,
+    },
+  });
 
   /* Extraer campos del WizardState · los nombres reales viven en
    * `src/components/crear-promocion/types.ts`. Antes este extractor
@@ -135,7 +151,7 @@ export async function createPromotionFromWizard(
 
   const created: CreatedPromotion = {
     id,
-    code: (s.publicRef as string) || undefined,
+    code: state.publicRef || undefined,
     name,
     ownerOrganizationId: ownerOrgId,
     ownerRole,
@@ -156,13 +172,13 @@ export async function createPromotionFromWizard(
 
   const list = readCreated();
   writeCreated([created, ...list]);
+  console.info("[wizard:create] cache local OK · ahora intento Supabase");
 
   /* Write-through SÍNCRONO (await) a Supabase · si falla el insert
    * principal, devolvemos `supabaseOk: false` · el caller NO debe
    * borrar el draft para que el user pueda re-intentar / recuperar. */
   if (!isSupabaseConfigured) {
-    /* Sin Supabase configurado tratamos como OK (entorno dev sin
-     * backend) · el cache local es la fuente. */
+    console.warn("[wizard:create] Supabase NO configurado · saltando insert");
     return { created, supabaseOk: true };
   }
   const { error } = await supabase.from("promotions").insert({
@@ -185,24 +201,39 @@ export async function createPromotionFromWizard(
     metadata: created.metadata,
   });
   if (error) {
-    console.warn("[promotions:create] insert failed:", error.message);
+    console.error("[wizard:create] ❌ insert principal Supabase FALLÓ:", error.message, error);
     return { created, supabaseOk: false, supabaseError: error.message };
   }
+  console.info("[wizard:create] ✓ insert principal Supabase OK · ahora sub-entidades");
   /* Promo creada · ahora persistir las sub-entidades a sus tablas
    * dedicadas. Si alguna falla NO marcamos supabaseOk=false (la promo
    * principal sí está) · solo loggeamos. El user puede re-subir
    * desde la ficha. */
-  const s = state as unknown as Record<string, unknown>;
-  const unidades = (s.unidades as UnitData[] | undefined) ?? [];
-  const fotos = (s.fotos as FotoItem[] | undefined) ?? [];
-  const videos = (s.videos as VideoItem[] | undefined) ?? [];
-  const hitosPago = (s.hitosPago as HitoPago[] | undefined) ?? [];
-  await Promise.all([
-    unidades.length > 0 ? saveUnitsToSupabase(created.id, unidades) : null,
+  const unidades = state.unidades ?? [];
+  const fotos = state.fotos ?? [];
+  const videos = state.videos ?? [];
+  const hitosPago = state.hitosPago ?? [];
+  console.info("[wizard:create] sub-entidades a persistir:", {
+    unidades: unidades.length,
+    fotos: fotos.length,
+    videos: videos.length,
+    hitosPago: hitosPago.length,
+  });
+  const subResults = await Promise.allSettled([
+    unidades.length > 0 ? saveUnitsToSupabase(created.id, unidades) : Promise.resolve(),
     (fotos.length > 0 || videos.length > 0)
-      ? saveGalleryToSupabase(created.id, fotos, videos) : null,
-    hitosPago.length > 0 ? savePaymentPlanToSupabase(created.id, hitosPago) : null,
+      ? saveGalleryToSupabase(created.id, fotos, videos) : Promise.resolve(),
+    hitosPago.length > 0 ? savePaymentPlanToSupabase(created.id, hitosPago) : Promise.resolve(),
   ]);
+  subResults.forEach((r, i) => {
+    const labels = ["units", "gallery", "paymentPlan"];
+    if (r.status === "rejected") {
+      console.error(`[wizard:create] ❌ sub-entidad ${labels[i]} FALLÓ:`, r.reason);
+    } else {
+      console.info(`[wizard:create] ✓ sub-entidad ${labels[i]} OK`);
+    }
+  });
+  console.info("[wizard:create] DONE", { id: created.id, name: created.name });
   return { created, supabaseOk: true };
 }
 
