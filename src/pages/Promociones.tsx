@@ -266,8 +266,22 @@ function formatPrice(n: number) {
  * etc. — ya no permitimos esa contradicción.
  */
 function statusTag(
-  p: { status: string; canShareWithAgencies?: boolean } & Promotion,
+  p: { status: string; canShareWithAgencies?: boolean; id?: string } & Promotion,
 ): { label: string; variant: "success" | "warning" | "muted" | "danger" } {
+  /* Promos creadas via wizard (`prom-c-*`) · confiamos en el status
+   *  de DB sin re-validar getMissingForPromotion · el wizard YA hizo
+   *  esa validación antes de permitir Activar (canPublishWizard).
+   *  Sin esto, el adapter `createdAsDev` necesitaría replicar
+   *  exactamente el shape del Promotion legacy con todos sus campos
+   *  derivados · cualquier discrepancia (ej. constructionProgress
+   *  con keys distintas) marcaba la promo como Borrador aunque DB
+   *  dijera "active". */
+  if (typeof p.id === "string" && p.id.startsWith("prom-c-")) {
+    if (p.status === "sold-out")   return { label: "Vendida",  variant: "danger" };
+    if (p.status === "incomplete") return { label: "Borrador", variant: "muted" };
+    if (p.status === "active")     return { label: "Activa",   variant: "success" };
+    return { label: "Borrador", variant: "muted" };
+  }
   /* Modelo de estados · simplificado 2026-05-02:
    *
    *    BORRADOR · status === "incomplete" · status === "inactive" · O
