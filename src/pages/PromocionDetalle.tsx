@@ -561,14 +561,21 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     return wizardStateToPromotion(wizardOverride, pBase);
   }, [pBase, wizardOverride]);
 
-  /* WizardState efectivo para el `EditStepModal` embebido · prioriza
-   * el override (si existe) · fallback a derivar de la promo + units.
-   * Cualquier edición del modal se persiste vía `saveOverride` y la
-   * promo `p` recalcula vía wizardStateToPromotion en el siguiente
-   * render. */
+  /* WizardState efectivo para el `EditStepModal` embebido · prioridad:
+   *  1. `wizardOverride` (lo que el user editó en sesión actual).
+   *  2. `metadata.wizardSnapshot` · state ORIGINAL guardado al
+   *     crear la promo · contiene tieneLicencia, mesesTrasLicencia,
+   *     faseConstruccion, etc. que `promotionToWizardState` no
+   *     deriva (queda como defaults · falsa licencia=true).
+   *  3. Fallback · derivar de la promo + units (legacy seed).
+   * Cualquier edición se persiste vía `saveOverride` · la promo `p`
+   * recalcula vía wizardStateToPromotion en el siguiente render. */
   const wizardStateForModal = useMemo<WizardState | null>(() => {
     if (!pBase) return null;
     if (wizardOverride) return wizardOverride;
+    const snapshot = (pBase as { metadata?: { wizardSnapshot?: WizardState } })
+      .metadata?.wizardSnapshot;
+    if (snapshot) return snapshot;
     return promotionToWizardState(pBase, unitsByPromotion[pBase.id] ?? []);
   }, [pBase, wizardOverride]);
 
