@@ -45,6 +45,11 @@ export interface PromotionDefaults {
     priceMode: PriceMode | null;
   };
   terraces: {
+    /** Master switch · si true, exigimos que el user marque al menos
+     *  uno de covered/uncovered antes de avanzar (el "Siguiente" del
+     *  wizard valida esa coherencia). Sin enabled flag no podríamos
+     *  distinguir "no he tocado" vs "he tocado y dejé sin marcar". */
+    enabled: boolean;
     covered: boolean;
     uncovered: boolean;
   };
@@ -78,7 +83,12 @@ export interface PromotionDefaults {
     golf: boolean;
     panoramic: boolean;
   };
-  orientation: "north" | "south" | "east" | "west" | null;
+  /** Rosa de los vientos completa · 8 puntos cardinales · estándar
+   *  en fichas inmobiliarias españolas (Idealista, Fotocasa, etc.). */
+  orientation:
+    | "north" | "northeast" | "east" | "southeast"
+    | "south" | "southwest" | "west" | "northwest"
+    | null;
 }
 
 export const defaultPromotionDefaults: PromotionDefaults = {
@@ -92,7 +102,7 @@ export const defaultPromotionDefaults: PromotionDefaults = {
   },
   storageRoom: { enabled: false, appliesTo: null, priceMode: null },
   solarium: { enabled: false, appliesTo: null, priceMode: null },
-  terraces: { covered: false, uncovered: false },
+  terraces: { enabled: false, covered: false, uncovered: false },
   plot: {
     enabled: false,
     appliesTo: null,

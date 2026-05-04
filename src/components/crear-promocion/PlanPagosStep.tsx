@@ -449,20 +449,24 @@ export function PlanPagosStep({
           </div>
         </div>
 
+        {/* `selected = true|false|null` · null = ninguna opción
+         *  marcada (estado inicial · obliga al user a elegir). Antes
+         *  era `boolean` con default false → "Sin aval" salía
+         *  preseleccionado · publicabas sin querer. */}
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={() => update("avalBancario", true)}
             className={cn(
               "flex items-center gap-3 p-3 rounded-xl border transition-colors text-left",
-              state.avalBancario
+              state.avalBancario === true
                 ? "border-primary/40 bg-primary/5"
                 : "border-border hover:border-foreground/30"
             )}
           >
             <div className={cn(
               "flex h-8 w-8 items-center justify-center rounded-lg shrink-0",
-              state.avalBancario ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+              state.avalBancario === true ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
             )}>
               <ShieldCheck className="h-4 w-4" strokeWidth={1.5} />
             </div>
@@ -477,14 +481,14 @@ export function PlanPagosStep({
             onClick={() => update("avalBancario", false)}
             className={cn(
               "flex items-center gap-3 p-3 rounded-xl border transition-colors text-left",
-              !state.avalBancario
+              state.avalBancario === false
                 ? "border-primary/40 bg-primary/5"
                 : "border-border hover:border-foreground/30"
             )}
           >
             <div className={cn(
               "flex h-8 w-8 items-center justify-center rounded-lg shrink-0",
-              !state.avalBancario ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+              state.avalBancario === false ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
             )}>
               <ShieldOff className="h-4 w-4" strokeWidth={1.5} />
             </div>
@@ -495,7 +499,7 @@ export function PlanPagosStep({
           </button>
         </div>
 
-        {state.avalBancario && (
+        {state.avalBancario === true && (
           <div className="flex flex-col gap-1.5 pt-3 mt-3 border-t border-border">
             <label className="text-xs font-medium text-muted-foreground">Entidad emisora (opcional)</label>
             <input

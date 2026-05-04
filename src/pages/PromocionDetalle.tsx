@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTabParam } from "@/lib/useTabParam";
 import { getDraft, saveDraft as persistDraft, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
+import { deleteCreatedPromotion } from "@/lib/promotionsStorage";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { WizardState, FotoItem, FotoCategoria } from "@/components/crear-promocion/types";
 import { faseConstruccionOptions, constructionPhaseLabelFromProgress } from "@/components/crear-promocion/options";
@@ -984,6 +985,35 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               >
                 <Eye className="h-3.5 w-3.5" strokeWidth={1.5} /> Vista colaborador
               </Button>
+              {/* Eliminar promoción · disponible solo en promociones
+                  creadas localmente (las de seed `prom-1`...`prom-3`
+                  no se borran · son demo). Útil para limpiar promos
+                  rotas o de prueba. */}
+              {p.id.startsWith("prom-c-") && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: `¿Eliminar "${p.name}"?`,
+                      description: "Se borrará la promoción del catálogo y de la base de datos. Esta acción no se puede deshacer.",
+                      confirmLabel: "Eliminar",
+                      variant: "destructive",
+                    });
+                    if (!ok) return;
+                    const res = await deleteCreatedPromotion(p.id);
+                    if (!res.ok) {
+                      toast.error("Error al eliminar", { description: res.error });
+                      return;
+                    }
+                    toast.success("Promoción eliminada");
+                    navigate("/promociones");
+                  }}
+                  className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/5 hidden sm:inline-flex"
+                >
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} /> Eliminar
+                </Button>
+              )}
               {/* Enviar · sólo si la promoción está publicada (active +
                   sin requisitos pendientes). No tiene sentido enviar a
                   un cliente un borrador sin datos. */}

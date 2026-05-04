@@ -406,22 +406,9 @@ export function InfoBasicaStep({
                 </div>
               </div>
 
-              {/* Nombre */}
-              <div>
-                <label className="text-[11.5px] font-medium text-muted-foreground mb-1.5 block">
-                  Nombre de la urbanización
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ej. Urb. Los Flamingos, Nueva Andalucía…"
-                  className={cn(inputClass, "w-full")}
-                  value={state.urbanizacionNombre}
-                  onChange={(e) => update("urbanizacionNombre", e.target.value)}
-                />
-                <p className="text-[10px] text-muted-foreground/70 mt-1">
-                  Opcional. Si no la sabes, solo marca las amenities disponibles.
-                </p>
-              </div>
+              {/* Nombre de la urbanización · ocultado de momento ·
+               *  el campo `urbanizacionNombre` sigue en el modelo como
+               *  cadena vacía por compat con drafts antiguos. */}
 
               {/* Amenities agrupadas */}
               <div className="flex flex-col gap-4">

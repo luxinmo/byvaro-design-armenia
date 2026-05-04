@@ -20,7 +20,7 @@ import { supabase, isSupabaseConfigured } from "./supabaseClient";
 
 const CREATED_KEY = "byvaro.promotions.created.v1";
 
-interface CreatedPromotion {
+export interface CreatedPromotion {
   id: string;
   /** Referencia pública canónica `PR + 5 dígitos`. Heredada del
    *  borrador (WizardState.publicRef) · garantiza que la promoción
@@ -63,6 +63,24 @@ export function getCreatedPromotions(): CreatedPromotion[] {
   return readCreated();
 }
 
+/** Borra una promoción creada · cache local + Supabase. Usado por el
+ *  botón "Eliminar" de la ficha cuando el user creó una promo
+ *  incompleta o quiere descartarla. */
+export async function deleteCreatedPromotion(id: string): Promise<{ ok: boolean; error?: string }> {
+  /* Borra del cache local primero (sync) · UI refresca al instante. */
+  const list = readCreated();
+  const next = list.filter((p) => p.id !== id);
+  writeCreated(next);
+  /* Write-through async a Supabase. */
+  if (!isSupabaseConfigured) return { ok: true };
+  const { error } = await supabase.from("promotions").delete().eq("id", id);
+  if (error) {
+    console.warn("[promotions:delete]", error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
 /** Resultado de la creación · indica si la sincronización a Supabase
  *  tuvo éxito · el caller decide qué hacer si falla (NO borrar el
  *  draft, mostrar toast, etc.). El cache local SIEMPRE se escribe
@@ -88,24 +106,52 @@ export async function createPromotionFromWizard(
 ): Promise<CreatePromotionResult> {
   const now = new Date().toISOString();
   const id = `prom-c-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  console.info("[wizard:create] start", {
+    id,
+    ownerOrgId,
+    ownerRole,
+    status,
+    state: {
+      nombre: state.nombrePromocion,
+      tipo: state.tipo,
+      ciudad: state.direccionPromocion?.ciudad,
+      unidades: state.unidades?.length ?? 0,
+      fotos: state.fotos?.length ?? 0,
+      videos: state.videos?.length ?? 0,
+      hitosPago: state.hitosPago?.length ?? 0,
+      publicRef: state.publicRef,
+    },
+  });
 
-  /* Extraer campos del WizardState. El shape exacto del wizard
-   * varía · usamos getters defensivos para no acoplar. */
-  const s = state as unknown as Record<string, unknown>;
-  const name = (s.nombrePromocion as string) || "Sin título";
-  const city = (s.ciudad as string) ?? null;
-  const country = (s.pais as string) ?? "ES";
-  const address = (s.direccion as string) ?? null;
-  const description = (s.descripcion as string) ?? null;
-  const totalUnits = Number((s.totalUnidades as number) ?? (s.unidadesTotal as number) ?? 0);
-  const priceFrom = Number((s.precioMin as number) ?? (s.precioDesde as number) ?? 0) || null;
-  const priceTo = Number((s.precioMax as number) ?? (s.precioHasta as number) ?? 0) || null;
-  const delivery = (s.entrega as string) ?? null;
-  const imageUrl = (s.heroImage as string) ?? (s.imagenPrincipal as string) ?? null;
+  /* Extraer campos del WizardState · los nombres reales viven en
+   * `src/components/crear-promocion/types.ts`. Antes este extractor
+   * usaba nombres inventados (s.ciudad, s.totalUnidades, s.precioMin,
+   * s.entrega) que NO existen en WizardState · resultado · cada
+   * campo era null/0 aunque el wizard tuviera los datos · la ficha
+   * mostraba "Sin configurar" en todo. */
+  const name = state.nombrePromocion?.trim() || "Sin título";
+  const city = state.direccionPromocion?.ciudad?.trim() || null;
+  const country = state.direccionPromocion?.pais?.trim() || "ES";
+  const address = state.direccionPromocion?.direccion?.trim() || null;
+  const description = state.descripcion?.trim() || null;
+  /* totalUnits · count de unidades creadas en el wizard. */
+  const totalUnits = state.unidades?.length ?? 0;
+  /* Rango de precios · derivado de las unidades con precio > 0. */
+  const unitPrices = (state.unidades ?? [])
+    .map((u) => u.precio ?? 0)
+    .filter((p) => p > 0);
+  const priceFrom = unitPrices.length > 0 ? Math.min(...unitPrices) : null;
+  const priceTo = unitPrices.length > 0 ? Math.max(...unitPrices) : null;
+  /* Entrega · primero fecha exacta, si no trimestre estimado. */
+  const delivery = state.fechaEntrega?.trim() || state.trimestreEntrega?.trim() || null;
+  /* Imagen principal · primera foto marcada como esPrincipal o la
+   * primera del array. */
+  const heroFoto = state.fotos?.find((f) => f.esPrincipal) ?? state.fotos?.[0];
+  const imageUrl = heroFoto?.url ?? null;
 
   const created: CreatedPromotion = {
     id,
-    code: (s.publicRef as string) || undefined,
+    code: state.publicRef || undefined,
     name,
     ownerOrganizationId: ownerOrgId,
     ownerRole,
@@ -126,6 +172,7 @@ export async function createPromotionFromWizard(
 
   const list = readCreated();
   writeCreated([created, ...list]);
+  console.info("[wizard:create] cache local OK · ahora intento Supabase");
 
   /* Write-through SÍNCRONO (await) a Supabase · si falla el insert
    * principal, devolvemos `supabaseOk: false` · el caller NO debe
@@ -133,6 +180,7 @@ export async function createPromotionFromWizard(
   if (!isSupabaseConfigured) {
     /* Sin Supabase configurado tratamos como OK (entorno dev sin
      * backend) · el cache local es la fuente. */
+    console.warn("[wizard:create] Supabase NO configurado · saltando insert");
     return { created, supabaseOk: true };
   }
   const { error } = await supabase.from("promotions").insert({
@@ -155,23 +203,39 @@ export async function createPromotionFromWizard(
     metadata: created.metadata,
   });
   if (error) {
-    console.warn("[promotions:create] insert failed:", error.message);
+    console.error("[wizard:create] ❌ insert principal Supabase FALLÓ:", error.message, error);
     return { created, supabaseOk: false, supabaseError: error.message };
   }
+  console.info("[wizard:create] ✓ insert principal Supabase OK · ahora sub-entidades");
   /* Promo creada · ahora persistir las sub-entidades a sus tablas
    * dedicadas. Si alguna falla NO marcamos supabaseOk=false (la promo
    * principal sí está) · solo loggeamos. El user puede re-subir
    * desde la ficha. */
-  const unidades = (s.unidades as UnitData[] | undefined) ?? [];
-  const fotos = (s.fotos as FotoItem[] | undefined) ?? [];
-  const videos = (s.videos as VideoItem[] | undefined) ?? [];
-  const hitosPago = (s.hitosPago as HitoPago[] | undefined) ?? [];
-  await Promise.all([
-    unidades.length > 0 ? saveUnitsToSupabase(created.id, unidades) : null,
+  const unidades = state.unidades ?? [];
+  const fotos = state.fotos ?? [];
+  const videos = state.videos ?? [];
+  const hitosPago = state.hitosPago ?? [];
+  console.info("[wizard:create] sub-entidades a persistir:", {
+    unidades: unidades.length,
+    fotos: fotos.length,
+    videos: videos.length,
+    hitosPago: hitosPago.length,
+  });
+  const subResults = await Promise.allSettled([
+    unidades.length > 0 ? saveUnitsToSupabase(created.id, unidades) : Promise.resolve(),
     (fotos.length > 0 || videos.length > 0)
-      ? saveGalleryToSupabase(created.id, fotos, videos) : null,
-    hitosPago.length > 0 ? savePaymentPlanToSupabase(created.id, hitosPago) : null,
+      ? saveGalleryToSupabase(created.id, fotos, videos) : Promise.resolve(),
+    hitosPago.length > 0 ? savePaymentPlanToSupabase(created.id, hitosPago) : Promise.resolve(),
   ]);
+  subResults.forEach((r, i) => {
+    const labels = ["units", "gallery", "paymentPlan"];
+    if (r.status === "rejected") {
+      console.error(`[wizard:create] ❌ sub-entidad ${labels[i]} FALLÓ:`, r.reason);
+    } else {
+      console.info(`[wizard:create] ✓ sub-entidad ${labels[i]} OK`);
+    }
+  });
+  console.info("[wizard:create] DONE", { id: created.id, name: created.name });
   return { created, supabaseOk: true };
 }
 

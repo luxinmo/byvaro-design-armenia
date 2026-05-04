@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { MinimalSort } from "@/components/ui/MinimalSort";
 import { ViewToggle } from "@/components/ui/ViewToggle";
 import { listDrafts, deleteDraft, deleteAllDrafts, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
+import { getCreatedPromotions } from "@/lib/promotionsStorage";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -468,10 +469,61 @@ export default function Promociones() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
+  /* ─── Promociones creadas via wizard (id `prom-c-*`) ───
+   *  Source · `byvaro.promotions.created.v1` (memCache) · hidratado
+   *  desde Supabase por SupabaseHydrator al login. Sin esta lectura
+   *  el promotor publicaba una promo y NO la veía en el listado ·
+   *  bug crítico de visibilidad pre-2026-05-04. */
+  const [createdPromos, setCreatedPromos] = useState(() => getCreatedPromotions());
+  useEffect(() => {
+    const refresh = () => setCreatedPromos(getCreatedPromotions());
+    /* Storage · cualquier write a memCache.byvaro.promotions.created.v1
+     *  dispara un StorageEvent (compat) · refrescamos el state. */
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "byvaro.promotions.created.v1") refresh();
+    };
+    /* Custom event · `writeCreated()` lo dispara explícitamente
+     *  además del StorageEvent · doble safety net. */
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("byvaro:promotions-changed", refresh);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("byvaro:promotions-changed", refresh);
+    };
+  }, []);
+
   /* ─── Dataset combinado (developer-only + legacy + borradores) ─── */
   const draftPromotions: DevPromotion[] = useMemo(
     () => drafts.map((d) => draftToPromotionData(d) as DevPromotion),
     [drafts],
+  );
+
+  /* CreatedPromotion → DevPromotion · adapta el shape para que las
+   *  cards del listado renderen como cualquier otra promoción. Status
+   *  viene de DB · respetamos `incomplete | active | sold-out`. */
+  const createdAsDev: DevPromotion[] = useMemo(
+    () => createdPromos.map((p) => ({
+      id: p.id,
+      code: p.code,
+      name: p.name,
+      ownerOrganizationId: p.ownerOrganizationId,
+      location: [p.city, p.country].filter(Boolean).join(", ") || "Sin ubicación",
+      priceMin: p.priceFrom ?? 0,
+      priceMax: p.priceTo ?? 0,
+      availableUnits: p.availableUnits,
+      totalUnits: p.totalUnits,
+      status: (p.status as DevPromotion["status"]) ?? "active",
+      reservationCost: 0,
+      delivery: p.delivery ?? "",
+      commission: 0,
+      developer: "",
+      agencies: 0,
+      agencyAvatars: [] as string[],
+      propertyTypes: [],
+      image: p.imageUrl ?? undefined,
+      updatedAt: p.createdAt,
+    } as unknown as DevPromotion)),
+    [createdPromos],
   );
 
   /* En modo agencia, el listado sólo contiene las promociones donde la
@@ -562,8 +614,14 @@ export default function Promociones() {
     const ownLegacy = promotions.filter(
       (p) => (p.ownerOrganizationId ?? "developer-default") === myOrgId,
     );
-    return [...draftPromotions, ...ownPromotions, ...ownLegacy.map((p) => ({ ...p } as DevPromotion))];
-  }, [draftPromotions, isAgencyUser, activeAgency, pendingInvitationPromoIds, currentUser]);
+    /* Promociones creadas via wizard del workspace actual · filtramos
+     *  por ownerOrganizationId para que un developer no vea promos
+     *  de otro developer si el cache local quedara contaminado. */
+    const ownCreated = createdAsDev.filter(
+      (p) => (p.ownerOrganizationId ?? "developer-default") === myOrgId,
+    );
+    return [...draftPromotions, ...ownCreated, ...ownPromotions, ...ownLegacy.map((p) => ({ ...p } as DevPromotion))];
+  }, [draftPromotions, createdAsDev, isAgencyUser, activeAgency, pendingInvitationPromoIds, currentUser]);
 
   /* ─── Opciones de filtros de GESTIÓN (fijas) ─── */
   const activityOptions = [
@@ -1272,29 +1330,13 @@ export default function Promociones() {
                         <Building2 className="h-10 w-10 text-muted-foreground/15" />
                       </div>
                     )}
-                    {isDraft && (
-                      <button
-                        type="button"
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          const ok = await confirm({
-                            title: "¿Descartar borrador?",
-                            description: `"${p.name}" se eliminará permanentemente.`,
-                            confirmLabel: "Descartar",
-                            variant: "destructive",
-                          });
-                          if (!ok) return;
-                          const rawId = p.id.slice(DRAFT_ID_PREFIX.length);
-                          deleteDraft(rawId);
-                          setDrafts(listDrafts());
-                        }}
-                        className="absolute top-3 right-3 h-8 w-8 inline-flex items-center justify-center rounded-full bg-background/85 backdrop-blur-sm text-muted-foreground hover:text-destructive hover:bg-background opacity-0 group-hover:opacity-100 transition-all shadow-soft"
-                        aria-label="Descartar borrador"
-                        title="Descartar borrador"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-                      </button>
-                    )}
+                    {/* Botón "Descartar borrador" movido AL WIZARD ·
+                     *  vive ahora en el header de /crear-promocion?draft=...
+                     *  · se reduce el ruido visual del listado y se acerca
+                     *  la acción al contexto donde el user decide
+                     *  realmente si quiere descartar (tras revisar el
+                     *  contenido). Bulk "Eliminar borradores (N)" sigue
+                     *  arriba para limpiar de golpe. */}
                   </div>
 
                   {/* Content */}
