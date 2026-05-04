@@ -521,8 +521,18 @@ export default function Promociones() {
    *  el promotor publicaba una promo y NO la veía en el listado ·
    *  bug crítico de visibilidad pre-2026-05-04. */
   const [createdPromos, setCreatedPromos] = useState(() => getCreatedPromotions());
+  /* Tick que fuerza re-evaluación de `allPromotions` cuando algo
+   *  muta `developerOnlyPromotions` (array de módulo · no state ·
+   *  React no re-renderiza solo). Lo incrementa el listener de
+   *  `byvaro:promotions-changed` y lo metemos como dep del useMemo
+   *  de allPromotions. Sin esto, tras borrar una promo splice-ada
+   *  del cache hidratado, el listado seguía mostrándola. */
+  const [promosTick, setPromosTick] = useState(0);
   useEffect(() => {
-    const refresh = () => setCreatedPromos(getCreatedPromotions());
+    const refresh = () => {
+      setCreatedPromos(getCreatedPromotions());
+      setPromosTick((t) => t + 1);
+    };
     /* Storage · cualquier write a memCache.byvaro.promotions.created.v1
      *  dispara un StorageEvent (compat) · refrescamos el state. */
     const onStorage = (e: StorageEvent) => {
@@ -703,7 +713,8 @@ export default function Promociones() {
       seen.add(p.id);
       return true;
     });
-  }, [draftPromotions, createdAsDev, isAgencyUser, activeAgency, pendingInvitationPromoIds, currentUser]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftPromotions, createdAsDev, isAgencyUser, activeAgency, pendingInvitationPromoIds, currentUser, promosTick]);
 
   /* ─── Opciones de filtros de GESTIÓN (fijas) ─── */
   const activityOptions = [

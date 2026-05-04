@@ -170,6 +170,14 @@ export async function deleteCreatedPromotion(id: string): Promise<{ ok: boolean;
     console.warn("[promotions:delete] no se pudo limpiar cache hidratado:", e);
   }
 
+  /* Dispara el evento SIEMPRE (no solo cuando cambió el cache local) ·
+   * cubre el caso de promo que vivía solo en developerOnlyPromotions ·
+   * el listado se suscribe a este evento para refrescar `promosTick`
+   * y re-evaluar `allPromotions`. */
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("byvaro:promotions-changed"));
+  }
+
   /* 3 · Supabase */
   if (!isSupabaseConfigured) return { ok: true };
   const { error } = await supabase.from("promotions").delete().eq("id", id);
