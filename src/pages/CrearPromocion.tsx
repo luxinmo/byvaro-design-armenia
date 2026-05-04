@@ -69,6 +69,7 @@ import { ConfiguracionEdificioV4 } from "@/components/crear-promocion/configurac
 import { Switch } from "@/components/ui/Switch";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { cn } from "@/lib/utils";
+import { futureTrimesterOptions } from "@/lib/futureTrimesters";
 import {
   FileCheck, FileX, Calendar as CalendarIconLucide, Home as HomeIcon, Store as StoreIcon,
   Minus, Archive, Car, Waves, Building2, Trash2,
@@ -461,13 +462,10 @@ export default function CrearPromocion() {
     { label: "plazas parking", count: state.parkings },
   ];
 
-  /* Opciones de trimestre (año actual +2) */
-  const currentYear = new Date().getFullYear();
-  const trimestreOptions = [
-    `T1 ${currentYear}`, `T2 ${currentYear}`, `T3 ${currentYear}`, `T4 ${currentYear}`,
-    `T1 ${currentYear + 1}`, `T2 ${currentYear + 1}`, `T3 ${currentYear + 1}`, `T4 ${currentYear + 1}`,
-    `T1 ${currentYear + 2}`, `T2 ${currentYear + 2}`, `T3 ${currentYear + 2}`, `T4 ${currentYear + 2}`,
-  ];
+  /* Opciones de trimestre · próximos 4 años desde HOY · filtra los
+   *  que ya pasaron en el año en curso · es ilógico ofrecer
+   *  "T1 2026" cuando estamos en Q2 2026. */
+  const trimestreOptions = futureTrimesterOptions();
 
   /* Handlers auxiliares (multi-select con cantidades, estado con cascada) */
   const toggleTipologia = (tipo: SubVarias) => {
@@ -1395,7 +1393,11 @@ export default function CrearPromocion() {
                           ))}
                         </div>
 
-                        {state.faseConstruccion === "entrega_proxima" && (
+                        {/* Fecha estimada de entrega · disponible para CUALQUIER
+                          * fase (Obra no iniciada → Entrega próxima). El user
+                          * puede estimar cuándo entregará desde el momento que
+                          * inicia la obra, no solo cuando esté próximo. */}
+                        {state.faseConstruccion && (
                           <div className="pt-3 border-t border-border">
                             <SectionLabel>Fecha estimada de entrega</SectionLabel>
                             <div className="grid grid-cols-4 gap-2">

@@ -31,6 +31,7 @@ import { PlanPagosStep } from "./PlanPagosStep";
 import { OptionCard } from "./SharedWidgets";
 import { roleOptions, tipoOptions, subUniOptions, subVariasOptions, estadoOptions, faseConstruccionOptions } from "./options";
 import { FileCheck, FileX } from "lucide-react";
+import { futureTrimesterOptions } from "@/lib/futureTrimesters";
 
 const STEP_TITLES: Partial<Record<StepId, string>> = {
   identidad: "Identidad",
@@ -131,14 +132,7 @@ export function EditStepModal({
             <DetallesStep
               state={state}
               update={update}
-              trimestreOptions={(() => {
-                const y = new Date().getFullYear();
-                return [
-                  `T1 ${y}`, `T2 ${y}`, `T3 ${y}`, `T4 ${y}`,
-                  `T1 ${y + 1}`, `T2 ${y + 1}`, `T3 ${y + 1}`, `T4 ${y + 1}`,
-                  `T1 ${y + 2}`, `T2 ${y + 2}`, `T3 ${y + 2}`, `T4 ${y + 2}`,
-                ];
-              })()}
+              trimestreOptions={futureTrimesterOptions()}
             />
           )}
           {step === "info_basica" && (
@@ -830,14 +824,7 @@ function EstadoQuickEdit({
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
 }) {
   const inputBase = "rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-colors";
-  const trimestreOptions = (() => {
-    const y = new Date().getFullYear();
-    return [
-      `T1 ${y}`, `T2 ${y}`, `T3 ${y}`, `T4 ${y}`,
-      `T1 ${y + 1}`, `T2 ${y + 1}`, `T3 ${y + 1}`, `T4 ${y + 1}`,
-      `T1 ${y + 2}`, `T2 ${y + 2}`, `T3 ${y + 2}`, `T4 ${y + 2}`,
-    ];
-  })();
+  const trimestreOptions = futureTrimesterOptions();
 
   return (
     <div className="flex flex-col gap-5">
