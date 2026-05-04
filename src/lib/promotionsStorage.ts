@@ -162,7 +162,6 @@ export async function createPromotionFromWizard(
    * dedicadas. Si alguna falla NO marcamos supabaseOk=false (la promo
    * principal sí está) · solo loggeamos. El user puede re-subir
    * desde la ficha. */
-  const s = state as unknown as Record<string, unknown>;
   const unidades = (s.unidades as UnitData[] | undefined) ?? [];
   const fotos = (s.fotos as FotoItem[] | undefined) ?? [];
   const videos = (s.videos as VideoItem[] | undefined) ?? [];
