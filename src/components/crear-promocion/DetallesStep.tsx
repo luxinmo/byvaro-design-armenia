@@ -148,10 +148,16 @@ export function DetallesStep({
   state,
   update,
   trimestreOptions,
+  hideOfficesSection = false,
 }: {
   state: WizardState;
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
   trimestreOptions: string[];
+  /** Oculta el bloque "Oficinas de venta propias" · útil cuando el
+   *  componente se embebe en el modal de Estructura, ya que las
+   *  oficinas tienen su propio bloque/popup en la ficha
+   *  (`step="operativa"`). Evita duplicación. */
+  hideOfficesSection?: boolean;
 }) {
   const { oficinas, addOficina } = useOficinas();
   const [showCreate, setShowCreate] = useState(false);
@@ -285,7 +291,10 @@ export function DetallesStep({
         </ToggleCard>
       )}
 
-      {/* ═════ Oficina de ventas ═════ */}
+      {/* ═════ Oficina de ventas ═════ · oculto si caller lo pide ·
+        * el modal de Estructura tiene su propio popup "operativa"
+        * para oficinas · evita duplicación. */}
+      {!hideOfficesSection && (
       <ToggleCard
         icon={StoreIcon}
         title="Oficinas de venta propias"
@@ -413,6 +422,7 @@ export function DetallesStep({
           )}
         </div>
       </ToggleCard>
+      )}
 
       {/* ═════ Tipo de entrega ═════ */}
       {canShowTipoEntrega && (

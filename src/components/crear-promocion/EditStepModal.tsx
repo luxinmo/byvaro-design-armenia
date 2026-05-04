@@ -134,14 +134,16 @@ export function EditStepModal({
              *  "detalles" (7/14) · van juntos en flow lineal. En el
              *  modal de Estructura los renderizamos AMBOS apilados
              *  para reflejar el mismo dominio (estado de obra +
-             *  entrega + piso piloto). DetallesStep ya respeta
-             *  `state.estado` internamente para sus condicionales. */
+             *  entrega + piso piloto). `hideOfficesSection` evita
+             *  duplicar oficinas (ya tienen su propio popup
+             *  `operativa` desde otro bloque de la ficha). */
             <div className="flex flex-col gap-6">
               <EstadoStep state={state} update={update} />
               <DetallesStep
                 state={state}
                 update={update}
                 trimestreOptions={futureTrimesterOptions()}
+                hideOfficesSection
               />
             </div>
           )}

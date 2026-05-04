@@ -113,9 +113,10 @@ export function EstadoStep({ state, update }: Props) {
         </div>
       )}
 
-      {/* Fase de construcción (cuando en_construccion) · IGUAL que el
-       *  wizard original 6/14 · trimestre como sub-bloque dentro,
-       *  visible solo cuando ya hay fase seleccionada. */}
+      {/* Fase de construcción (cuando en_construccion) · solo la
+       *  selección de etapa. La fecha estimada de entrega se ofrece
+       *  abajo en el modal vía DetallesStep · evita duplicar el
+       *  selector de trimestre. */}
       {state.estado === "en_construccion" && (
         <div className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
           <SectionLabel>Etapa de construcción</SectionLabel>
@@ -127,29 +128,6 @@ export function EstadoStep({ state, update }: Props) {
               />
             ))}
           </div>
-
-          {state.faseConstruccion && (
-            <div className="pt-3 border-t border-border">
-              <SectionLabel>Fecha estimada de entrega</SectionLabel>
-              <div className="grid grid-cols-4 gap-2">
-                {trimestreOptions.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => update("trimestreEntrega", t)}
-                    className={cn(
-                      "rounded-lg border px-2 py-2 text-xs font-medium transition-colors tnum",
-                      state.trimestreEntrega === t
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-background text-muted-foreground hover:border-foreground/20 hover:text-foreground",
-                    )}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
