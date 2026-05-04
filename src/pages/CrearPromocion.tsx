@@ -365,16 +365,25 @@ export default function CrearPromocion() {
     const id = `d-${ref}`;
     draftIdRef.current = id;
     setDraftIdState(id);
+    /* Persist el draft INMEDIATAMENTE en memCache (+ write-through a
+     *  Supabase) · sin esto, el siguiente `ensureDraftPersisted()` que
+     *  hace MultimediaEditor antes de subir foto falla con
+     *  "draft d-PRxxx not found in cache" porque el id existe en el ref
+     *  pero la fila nunca se escribió. Necesitamos un state con el
+     *  publicRef ya seteado · lo construimos in-line para no depender
+     *  del flush async de setState. */
+    const stateWithRef = existingRef ? state : { ...state, publicRef: ref };
     if (!existingRef) {
       setState(prev => ({ ...prev, publicRef: ref }));
     }
+    persistDraft(stateWithRef, id, step);
     /* Sync URL inmediatamente · refresh durante edición continúa
      *  el mismo draft en lugar de crear otro. */
     const next = new URLSearchParams(searchParams);
     next.set("draft", id);
     setSearchParams(next, { replace: true });
     return id;
-  }, [resolvedPromotionId, searchParams, setSearchParams, state.publicRef]);
+  }, [resolvedPromotionId, searchParams, setSearchParams, state, step]);
 
   /* `update` · setea state + marca hasChanges. NO persiste. La
    *  persistencia es lazy · ver `ensureDraftId`. */
