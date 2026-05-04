@@ -1757,22 +1757,37 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 <InfoItem icon={Home} label="Unidades totales" value={`${p.totalUnits}`} />
                 <InfoItem icon={Car} label="Parking" value={parkingValue} sub={parkingSub} />
                 <InfoItem icon={Archive} label="Trastero" value={trasteroValue} sub={trasteroSub} />
-                {/* Licencia · sello de garantía · mismo estilo que
-                    el chip del listado de promociones para coherencia
-                    visual · "Licencia concedida" full · sin label
-                    "Licencia" arriba · check verde dentro de círculo. */}
-                <div>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Shield className="h-3 w-3 text-success" strokeWidth={2} />
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Estado legal</p>
-                  </div>
-                  <p className="text-sm font-semibold text-success inline-flex items-center gap-1.5">
-                    <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-success/15">
-                      <Check className="h-2.5 w-2.5 text-success" strokeWidth={3} />
-                    </span>
-                    Licencia concedida
-                  </p>
-                </div>
+                {/* Licencia · lee `metadata.wizardSnapshot.tieneLicencia`
+                    real · NO hardcoded. true → verde · false → muted ·
+                    null/undefined → no se renderiza el bloque. */}
+                {(() => {
+                  const wsTieneLic = (p as { metadata?: { wizardSnapshot?: { tieneLicencia?: boolean | null } } })
+                    .metadata?.wizardSnapshot?.tieneLicencia;
+                  if (wsTieneLic == null) return null;
+                  const granted = wsTieneLic === true;
+                  return (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Shield className={cn("h-3 w-3", granted ? "text-success" : "text-muted-foreground")} strokeWidth={2} />
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Estado legal</p>
+                      </div>
+                      <p className={cn(
+                        "text-sm font-semibold inline-flex items-center gap-1.5",
+                        granted ? "text-success" : "text-muted-foreground",
+                      )}>
+                        <span className={cn(
+                          "inline-flex items-center justify-center h-4 w-4 rounded-full",
+                          granted ? "bg-success/15" : "bg-muted",
+                        )}>
+                          {granted
+                            ? <Check className="h-2.5 w-2.5 text-success" strokeWidth={3} />
+                            : <X className="h-2.5 w-2.5 text-muted-foreground" strokeWidth={3} />}
+                        </span>
+                        {granted ? "Licencia concedida" : "Sin licencia"}
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
             </SectionCard>
               );

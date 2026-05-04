@@ -578,7 +578,34 @@ export default function Promociones() {
         constructionProgress?: number;
         reservationCost?: number;
         commission?: number;
+        wizardSnapshot?: {
+          fechaEntrega?: string | null;
+          trimestreEntrega?: string | null;
+          tipoEntrega?: string | null;
+          mesesTrasContrato?: number;
+          mesesTrasLicencia?: number;
+        };
       };
+      /* Delivery fallback desde wizardSnapshot · igual que en
+       * `seedHydrator.rowToDevPromotion` · cubre promos cuyo
+       * `priceFrom/delivery` es null porque cuando se crearon, el
+       * fix de createPromotionFromWizard que compone los strings
+       * relativos aún no estaba aplicado. */
+      let derivedDelivery: string | null = p.delivery;
+      if (!derivedDelivery && meta.wizardSnapshot) {
+        const ws = meta.wizardSnapshot;
+        if (ws.fechaEntrega) derivedDelivery = ws.fechaEntrega;
+        else if (ws.trimestreEntrega) derivedDelivery = ws.trimestreEntrega;
+        else if (ws.tipoEntrega === "tras_contrato_cv") {
+          derivedDelivery = (ws.mesesTrasContrato ?? 0) > 0
+            ? `Tras contrato C/V · ${ws.mesesTrasContrato} meses`
+            : "Tras contrato C/V";
+        } else if (ws.tipoEntrega === "tras_licencia") {
+          derivedDelivery = (ws.mesesTrasLicencia ?? 0) > 0
+            ? `Tras licencia · ${ws.mesesTrasLicencia} meses`
+            : "Tras licencia";
+        }
+      }
       return {
         id: p.id,
         code: p.code,
@@ -591,7 +618,7 @@ export default function Promociones() {
         totalUnits: p.totalUnits,
         status: (p.status as DevPromotion["status"]) ?? "active",
         reservationCost: meta.reservationCost ?? 0,
-        delivery: p.delivery ?? "",
+        delivery: derivedDelivery ?? "",
         commission: meta.commission ?? 0,
         developer: "",
         agencies: 0,
