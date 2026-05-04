@@ -2441,6 +2441,35 @@ function PromoCardCompact({ promo: p, isTrending, isAgencyUser }: { promo: DevPr
         <p className="text-[11.5px] text-muted-foreground mt-0.5 truncate">
           {getPromoterDisplayName(p)} · {p.delivery}
         </p>
+        {/* Chip "Licencia" · lee tieneLicencia real del wizardSnapshot ·
+            true → "Licencia concedida" verde · false → "Sin licencia"
+            muted · null/undefined → no aparece. Coherencia con la list
+            view del listado. */}
+        {(() => {
+          const wsTieneLic = (p as { metadata?: { wizardSnapshot?: { tieneLicencia?: boolean | null } } })
+            .metadata?.wizardSnapshot?.tieneLicencia;
+          if (wsTieneLic === true) {
+            return (
+              <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-success mt-1">
+                <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-success/15">
+                  <Check className="h-2 w-2 text-success" strokeWidth={3} />
+                </span>
+                Licencia concedida
+              </span>
+            );
+          }
+          if (wsTieneLic === false) {
+            return (
+              <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-muted-foreground mt-1">
+                <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-muted">
+                  <X className="h-2 w-2 text-muted-foreground" strokeWidth={3} />
+                </span>
+                Sin licencia
+              </span>
+            );
+          }
+          return null;
+        })()}
         <p className="text-lg font-bold text-foreground mt-2 tnum">
           {fmt(liveStats.priceMin)}
           {liveStats.priceMax > liveStats.priceMin && <span className="text-muted-foreground font-normal"> — {fmt(liveStats.priceMax)}</span>}
