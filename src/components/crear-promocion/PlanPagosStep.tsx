@@ -403,7 +403,7 @@ export function PlanPagosStep({
                 <input
                   type="text"
                   inputMode="numeric"
-                  value={Number(state.importeReserva || 0).toLocaleString("es-ES")}
+                  value={state.importeReserva > 0 ? state.importeReserva.toLocaleString("es-ES") : ""}
                   onChange={(e) => {
                     const digits = e.target.value.replace(/[^0-9]/g, "");
                     update("importeReserva", digits === "" ? 0 : Number(digits));
