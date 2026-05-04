@@ -171,9 +171,14 @@ function rowToUnit(r: UnitRow): Unit {
      *  (legacy), fallback al id interno. */
     ref: r.reference ?? r.id,
     promotionId: r.promotion_id,
-    block: meta.block ?? "11A",
+    /* Block / door · vacíos cuando es unifamiliar (las villas no
+     *  tienen bloque ni puerta). Antes había hardcode "11A"/"A"
+     *  que producía labels absurdos como "11A-0A · 3 Hab" en cards
+     *  de villas. Ahora cadena vacía · el render decide qué mostrar
+     *  (publicId si existe, fallback al pattern si no). */
+    block: meta.block ?? "",
     floor: r.floor ? Number(r.floor) : 0,
-    door: meta.door ?? "A",
+    door: meta.door ?? "",
     publicId: r.label,
     type: meta.type ?? "Apartamento",
     bedrooms: r.rooms ?? 0,

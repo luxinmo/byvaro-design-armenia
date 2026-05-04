@@ -309,9 +309,19 @@ type LastUnitDetail = {
   orientation: string;
 };
 
+/* Devuelve un id legible · prefiere `publicId` (label real ·
+ *  "Villa 1", "Ático", "1ºA") y solo cae al pattern bloque-piso·puerta
+ *  cuando publicId está vacío. Antes salía siempre el pattern · para
+ *  villas unifamiliares (sin block/door reales) producía "11A-0A". */
+function unitDisplayId(u: { publicId?: string; block: string; floor: number; door: string }): string {
+  if (u.publicId?.trim()) return u.publicId.trim();
+  const parts = [u.block, `${u.floor}${u.door}`].filter((s) => s && s.trim());
+  return parts.length > 0 ? parts.join("-") : "—";
+}
+
 function getAvailableData(
   promotionId: string,
-  unitsMap: Record<string, Array<{ status: string; bedrooms: number; price: number; type: string; block: string; floor: number; door: string; orientation: string }>>,
+  unitsMap: Record<string, Array<{ status: string; bedrooms: number; price: number; type: string; block: string; floor: number; door: string; orientation: string; publicId?: string }>>,
 ) {
   const units = unitsMap[promotionId];
   if (!units) return { typologies: [], units: [], lastUnit: null as LastUnitDetail | null };
@@ -321,7 +331,7 @@ function getAvailableData(
   if (available.length === 1) {
     const u = available[0];
     const lastUnit: LastUnitDetail = {
-      id: `${u.block}-${u.floor}${u.door}`,
+      id: unitDisplayId(u),
       label: u.type === "Ático" ? "Ático" : `${u.bedrooms} Hab`,
       price: u.price,
       bedrooms: u.bedrooms,
@@ -371,7 +381,7 @@ function getAvailableData(
     .sort((a, b) => a.price - b.price)
     .slice(0, 3)
     .map((u) => ({
-      id: `${u.block}-${u.floor}${u.door}`,
+      id: unitDisplayId(u),
       label: u.type === "Ático" ? "Ático" : `${u.bedrooms} Hab`,
       price: u.price,
     }));
@@ -499,30 +509,56 @@ export default function Promociones() {
   );
 
   /* CreatedPromotion → DevPromotion · adapta el shape para que las
-   *  cards del listado renderen como cualquier otra promoción. Status
-   *  viene de DB · respetamos `incomplete | active | sold-out`. */
+   *  cards del listado renderen como cualquier otra promoción.
+   *
+   *  Importante · `getMissingForPromotion(p)` (usado por `statusTag`)
+   *  requiere bastantes campos para considerar la promo "completa":
+   *  code · image · propertyTypes · buildingType · priceMin/Max ·
+   *  delivery · constructionProgress · reservationCost · y comisión
+   *  si `canShareWithAgencies !== false`. Sin enriquecer todos esos
+   *  campos desde el wizard snapshot, las promos creadas aparecían
+   *  con tag "Borrador" aunque DB dijera "active" · feo para el user.
+   *
+   *  Source · `metadata.wizardSnapshot` guarda el WizardState completo
+   *  en el moment del create (ver promotionsStorage.ts) · de ahí
+   *  derivamos todo lo demás. */
   const createdAsDev: DevPromotion[] = useMemo(
-    () => createdPromos.map((p) => ({
-      id: p.id,
-      code: p.code,
-      name: p.name,
-      ownerOrganizationId: p.ownerOrganizationId,
-      location: [p.city, p.country].filter(Boolean).join(", ") || "Sin ubicación",
-      priceMin: p.priceFrom ?? 0,
-      priceMax: p.priceTo ?? 0,
-      availableUnits: p.availableUnits,
-      totalUnits: p.totalUnits,
-      status: (p.status as DevPromotion["status"]) ?? "active",
-      reservationCost: 0,
-      delivery: p.delivery ?? "",
-      commission: 0,
-      developer: "",
-      agencies: 0,
-      agencyAvatars: [] as string[],
-      propertyTypes: [],
-      image: p.imageUrl ?? undefined,
-      updatedAt: p.createdAt,
-    } as unknown as DevPromotion)),
+    () => createdPromos.map((p) => {
+      const snap = (p.metadata?.wizardSnapshot ?? {}) as Record<string, unknown>;
+      const propertyTypes = Array.isArray(snap.tipologiasSeleccionadas) && snap.tipologiasSeleccionadas.length > 0
+        ? (snap.tipologiasSeleccionadas as Array<{ tipo?: string }>).map((t) => t.tipo).filter((t): t is string => !!t)
+        : (snap.subVarias ? [String(snap.subVarias)] : []);
+      const constructionProgress = typeof snap.faseConstruccion === "string"
+        ? ({ proyecto: 5, "en-construccion": 50, terminado: 100 } as Record<string, number>)[snap.faseConstruccion]
+        : undefined;
+      return {
+        id: p.id,
+        code: p.code,
+        name: p.name,
+        ownerOrganizationId: p.ownerOrganizationId,
+        location: [p.city, p.country].filter(Boolean).join(", ") || "Sin ubicación",
+        priceMin: p.priceFrom ?? 0,
+        priceMax: p.priceTo ?? 0,
+        availableUnits: p.availableUnits,
+        totalUnits: p.totalUnits,
+        status: (p.status as DevPromotion["status"]) ?? "active",
+        reservationCost: typeof snap.importeReserva === "number" ? snap.importeReserva : 0,
+        delivery: p.delivery ?? "",
+        commission: typeof snap.comisionInternacional === "number" ? snap.comisionInternacional : 0,
+        developer: "",
+        agencies: 0,
+        agencyAvatars: [] as string[],
+        propertyTypes,
+        buildingType: typeof snap.tipo === "string" ? (snap.tipo as DevPromotion["buildingType"]) : undefined,
+        constructionProgress,
+        canShareWithAgencies: snap.colaboracion === true,
+        collaboration: snap.colaboracion === true ? {
+          comisionInternacional: typeof snap.comisionInternacional === "number" ? snap.comisionInternacional : 0,
+        } as unknown as DevPromotion["collaboration"] : undefined,
+        image: p.imageUrl ?? undefined,
+        updatedAt: p.createdAt,
+      } as unknown as DevPromotion;
+    }),
     [createdPromos],
   );
 
@@ -620,7 +656,19 @@ export default function Promociones() {
     const ownCreated = createdAsDev.filter(
       (p) => (p.ownerOrganizationId ?? "developer-default") === myOrgId,
     );
-    return [...draftPromotions, ...ownCreated, ...ownPromotions, ...ownLegacy.map((p) => ({ ...p } as DevPromotion))];
+    const all = [...draftPromotions, ...ownCreated, ...ownPromotions, ...ownLegacy.map((p) => ({ ...p } as DevPromotion))];
+    /* Dedupe defensivo · si el cache local tuviera la misma promo
+     *  varias veces por algún race condition (write optimista local +
+     *  hidratación que no overwrite limpio + duplicación de mounts),
+     *  el listing pintaba 2 cards iguales. Conservamos la primera
+     *  ocurrencia por id (createdAsDev viene antes que ownLegacy ·
+     *  prioridad: data del wizard sobre seed antiguo). */
+    const seen = new Set<string>();
+    return all.filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
   }, [draftPromotions, createdAsDev, isAgencyUser, activeAgency, pendingInvitationPromoIds, currentUser]);
 
   /* ─── Opciones de filtros de GESTIÓN (fijas) ─── */
