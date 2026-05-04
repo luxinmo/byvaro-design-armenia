@@ -95,7 +95,48 @@ function rowToDevPromotion(r: PromotionRow): DevPromotion {
     commission?: number;
     reservationCost?: number;
     collaboration?: unknown;
+    wizardSnapshot?: {
+      colaboracion?: boolean;
+      comisionInternacional?: number;
+      comisionNacional?: number;
+      diferenciarNacionalInternacional?: boolean;
+      diferenciarComisiones?: boolean;
+      agenciasRefusarNacional?: boolean;
+      clasificacionCliente?: string;
+      formaPagoComision?: string | null;
+      hitosComision?: unknown[];
+      ivaIncluido?: boolean;
+      condicionesRegistro?: unknown[];
+      validezRegistroDias?: number;
+      modoValidacionRegistro?: string;
+    };
   };
+  /* CollaborationConfig · 2 fuentes en orden de preferencia:
+   *  1. `meta.collaboration` (escrito por createPromotionFromWizard
+   *     desde el fix del PR #95).
+   *  2. Fallback · reconstruir desde `meta.wizardSnapshot` para
+   *     promos creadas ANTES del fix (PR07696 y similares) ·
+   *     wizardSnapshot.colaboracion=true significa que el user
+   *     activó colaboración · sin este fallback, el validador dice
+   *     "Sin estructura de comisiones definida" para siempre. */
+  const collaboration = meta.collaboration ?? (
+    meta.wizardSnapshot?.colaboracion === true
+      ? {
+          comisionInternacional: meta.wizardSnapshot.comisionInternacional ?? 0,
+          comisionNacional: meta.wizardSnapshot.comisionNacional ?? 0,
+          diferenciarNacionalInternacional: meta.wizardSnapshot.diferenciarNacionalInternacional ?? false,
+          diferenciarComisiones: meta.wizardSnapshot.diferenciarComisiones ?? false,
+          agenciasRefusarNacional: meta.wizardSnapshot.agenciasRefusarNacional ?? false,
+          clasificacionCliente: meta.wizardSnapshot.clasificacionCliente,
+          formaPagoComision: meta.wizardSnapshot.formaPagoComision,
+          hitosComision: meta.wizardSnapshot.hitosComision ?? [],
+          ivaIncluido: meta.wizardSnapshot.ivaIncluido ?? false,
+          condicionesRegistro: meta.wizardSnapshot.condicionesRegistro ?? [],
+          validezRegistroDias: meta.wizardSnapshot.validezRegistroDias ?? 0,
+          modoValidacionRegistro: meta.wizardSnapshot.modoValidacionRegistro,
+        }
+      : undefined
+  );
   return {
     id: r.id,
     code: r.reference ?? r.id,
@@ -121,12 +162,7 @@ function rowToDevPromotion(r: PromotionRow): DevPromotion {
     canShareWithAgencies: r.can_share_with_agencies,
     ownerOrganizationId: r.owner_organization_id,
     ownerRole: (r.owner_role as DevPromotion["ownerRole"]) ?? undefined,
-    /* CollaborationConfig reconstruida desde metadata · escrita por
-     *  `createPromotionFromWizard` cuando colaboracion=true. Sin esto
-     *  el validador de la ficha decía "Sin estructura de comisiones
-     *  definida" tras refresh aunque la promo SÍ tuviera estructura
-     *  guardada en DB. */
-    ...(meta.collaboration ? { collaboration: meta.collaboration } : {}),
+    ...(collaboration ? { collaboration } : {}),
     /* Metadata RAW · contiene `wizardSnapshot` con state completo
      *  (fotos, videos, descripcion, hitos, etc.). Cast porque el
      *  tipo Promotion no la declara · pero la ficha la lee
