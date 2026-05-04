@@ -661,6 +661,10 @@ export default function CrearPromocion() {
         if (d.storageRoom.enabled && (!d.storageRoom.appliesTo || !d.storageRoom.priceMode)) return false;
         if (d.solarium.enabled && (!d.solarium.appliesTo || !d.solarium.priceMode)) return false;
         if (d.plot.enabled && !d.plot.appliesTo) return false;
+        /* Parcela activada · exige superficie mínima · sin m² la
+         *  card queda incompleta · la unidad heredaría parcela "0
+         *  m²" que se renderiza raro en la ficha. */
+        if (d.plot.enabled && (!d.plot.minSizeSqm || d.plot.minSizeSqm <= 0)) return false;
         /* Terrazas activadas pero sin tipo elegido · bloquea avanzar
          *  hasta que el user marque cubierta y/o descubierta. Razón ·
          *  el user activó "tengo terrazas" pero no especificó cuáles
