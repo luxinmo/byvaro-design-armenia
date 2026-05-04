@@ -41,6 +41,11 @@ export interface CreatedPromotion {
   delivery: string | null;
   imageUrl: string | null;
   description: string | null;
+  /** Flag de visibilidad cross-tenant · idéntico al campo de DB.
+   *  Persistirlo en el cache local evita que el adapter del detail
+   *  page tenga que abrir `metadata.wizardSnapshot.colaboracion` para
+   *  saber si la promo es uso interno o compartida. */
+  canShareWithAgencies?: boolean;
   metadata: Record<string, unknown>;
   createdAt: string;
 }
@@ -231,6 +236,27 @@ export async function createPromotionFromWizard(
   const flat = deriveFlatMetadata(state);
   const { propertyTypes, buildingType, constructionProgress, reservationCost, commission } = flat;
   const canShareWithAgencies = state.colaboracion === true;
+  /* CollaborationConfig completa · solo cuando se comparte con
+   *  agencias. Sin esto, al refrescar la ficha tras crear, el
+   *  validador `getMissingForPromotion` decía "Sin estructura de
+   *  comisiones definida" porque la promo se hidrataba desde DB sin
+   *  collaboration · banner falso de "no publicable". Con esto el
+   *  seedHydrator + adapter local pueden reconstruirla desde
+   *  metadata.collaboration. */
+  const collaboration = canShareWithAgencies ? {
+    comisionInternacional: state.comisionInternacional,
+    comisionNacional: state.comisionNacional,
+    diferenciarNacionalInternacional: state.diferenciarNacionalInternacional,
+    diferenciarComisiones: state.diferenciarComisiones,
+    agenciasRefusarNacional: state.agenciasRefusarNacional,
+    clasificacionCliente: state.clasificacionCliente,
+    formaPagoComision: state.formaPagoComision,
+    hitosComision: state.hitosComision,
+    ivaIncluido: state.ivaIncluido,
+    condicionesRegistro: state.condicionesRegistro,
+    validezRegistroDias: state.validezRegistroDias,
+    modoValidacionRegistro: state.modoValidacionRegistro,
+  } : undefined;
 
   const created: CreatedPromotion = {
     id,
@@ -249,6 +275,7 @@ export async function createPromotionFromWizard(
     delivery,
     imageUrl,
     description,
+    canShareWithAgencies,
     metadata: {
       /* Campos planos · consumidos por seedHydrator + ficha. */
       propertyTypes,
@@ -256,6 +283,7 @@ export async function createPromotionFromWizard(
       constructionProgress,
       reservationCost,
       commission,
+      collaboration,
       /* Snapshot completo del state · usado por adapters que
        *  necesitan info granular (Promociones.tsx createdAsDev,
        *  PromocionDetalle, etc.). Mantener al final · grande. */

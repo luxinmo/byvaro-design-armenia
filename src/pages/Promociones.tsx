@@ -338,7 +338,7 @@ function getAvailableData(
   unitsMap: Record<string, Array<{ status: string; bedrooms: number; price: number; type: string; block: string; floor: number; door: string; orientation: string; publicId?: string }>>,
 ) {
   const units = unitsMap[promotionId];
-  if (!units) return { typologies: [], units: [], lastUnit: null as LastUnitDetail | null };
+  if (!units) return { typologies: [], units: [], lastUnit: null as LastUnitDetail | null, isSingle: false };
 
   const available = units.filter((u) => u.status === "available");
 
@@ -355,7 +355,10 @@ function getAvailableData(
       floor: u.floor,
       orientation: u.orientation,
     };
-    return { typologies: [], units: [], lastUnit };
+    /* REGLA CANÓNICA · si la promoción TIENE una sola unidad en total
+     * (no "última de N vendidas"), es "única unidad", NO "última". */
+    const isSingle = units.length === 1;
+    return { typologies: [], units: [], lastUnit, isSingle };
   }
 
   const byType = new Map<string, { price: number; unit: typeof available[0] }[]>();
@@ -400,7 +403,7 @@ function getAvailableData(
       price: u.price,
     }));
 
-  return { typologies, units: unitsList, lastUnit: null as LastUnitDetail | null };
+  return { typologies, units: unitsList, lastUnit: null as LastUnitDetail | null, isSingle: false };
 }
 
 const TRENDING_THRESHOLD = 50;
@@ -1309,7 +1312,7 @@ export default function Promociones() {
                 : liveStats.badge === "last-units" ? "Últimas unidades"
                 : null;
               const status = statusTag(p);
-              const { typologies, units: availableUnits, lastUnit } = getAvailableData(p.id, unitsByPromotion);
+              const { typologies, units: availableUnits, lastUnit, isSingle } = getAvailableData(p.id, unitsByPromotion);
               const trending = isTrending(p);
               const hasMissing = p.missingSteps && p.missingSteps.length > 0;
 
@@ -1566,7 +1569,7 @@ export default function Promociones() {
                       <div className="hidden sm:block rounded-xl border border-border bg-muted/20 p-4 mb-4">
                         <div className="flex items-center justify-between mb-3">
                           <div>
-                            <p className="text-xs font-medium text-foreground">Última unidad disponible</p>
+                            <p className="text-xs font-medium text-foreground">{isSingle ? "Única unidad" : "Última unidad disponible"}</p>
                             <p className="text-xs text-muted-foreground">{lastUnit.label} · Unidad {lastUnit.id}</p>
                           </div>
                           <p className="text-sm font-semibold text-foreground">{formatPrice(lastUnit.price)}</p>

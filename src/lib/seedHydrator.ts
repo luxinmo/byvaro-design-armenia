@@ -94,6 +94,7 @@ function rowToDevPromotion(r: PromotionRow): DevPromotion {
     hasShowFlat?: boolean;
     commission?: number;
     reservationCost?: number;
+    collaboration?: unknown;
   };
   return {
     id: r.id,
@@ -120,6 +121,12 @@ function rowToDevPromotion(r: PromotionRow): DevPromotion {
     canShareWithAgencies: r.can_share_with_agencies,
     ownerOrganizationId: r.owner_organization_id,
     ownerRole: (r.owner_role as DevPromotion["ownerRole"]) ?? undefined,
+    /* CollaborationConfig reconstruida desde metadata · escrita por
+     *  `createPromotionFromWizard` cuando colaboracion=true. Sin esto
+     *  el validador de la ficha decía "Sin estructura de comisiones
+     *  definida" tras refresh aunque la promo SÍ tuviera estructura
+     *  guardada en DB. */
+    ...(meta.collaboration ? { collaboration: meta.collaboration } : {}),
     /* Metadata RAW · contiene `wizardSnapshot` con state completo
      *  (fotos, videos, descripcion, hitos, etc.). Cast porque el
      *  tipo Promotion no la declara · pero la ficha la lee

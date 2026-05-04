@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTabParam } from "@/lib/useTabParam";
 import { getDraft, saveDraft as persistDraft, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
-import { deleteCreatedPromotion } from "@/lib/promotionsStorage";
+import { deleteCreatedPromotion, getCreatedPromotions } from "@/lib/promotionsStorage";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { WizardState, FotoItem, FotoCategoria } from "@/components/crear-promocion/types";
 import { faseConstruccionOptions, constructionPhaseLabelFromProgress } from "@/components/crear-promocion/options";
@@ -409,8 +409,56 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     return draftState.unidades.map((u) => unitDataToUnit(u, id ?? ""));
   }, [isDraft, draftState, id]);
 
+  /* Adapter local · `byvaro.promotions.created.v1` (promociones recién
+   *  creadas via wizard) → DevPromotion. Sin esto, justo después de
+   *  "Activar" + navegar a la ficha la página decía "Promoción no
+   *  encontrada" porque el seedHydrator de Supabase aún no había
+   *  refrescado `developerOnlyPromotions` (solo aparecía tras el
+   *  refresh manual). El cache local SÍ tiene la promo desde el
+   *  primer instante · leerlo aquí cierra el gap. */
+  const createdAsDev: DevPromotion[] = useMemo(() => {
+    return getCreatedPromotions().map((c) => {
+      const meta = (c.metadata ?? {}) as {
+        propertyTypes?: string[];
+        buildingType?: string;
+        constructionProgress?: number;
+        reservationCost?: number;
+        commission?: number;
+        collaboration?: unknown;
+      };
+      return {
+        id: c.id,
+        code: c.code,
+        name: c.name,
+        ownerOrganizationId: c.ownerOrganizationId,
+        ownerRole: c.ownerRole,
+        location: [c.city, c.country].filter(Boolean).join(", ") || "Sin ubicación",
+        priceMin: c.priceFrom ?? 0,
+        priceMax: c.priceTo ?? 0,
+        availableUnits: c.availableUnits,
+        totalUnits: c.totalUnits,
+        status: (c.status as DevPromotion["status"]) ?? "active",
+        reservationCost: meta.reservationCost ?? 0,
+        delivery: c.delivery ?? "",
+        commission: meta.commission ?? 0,
+        developer: "",
+        agencies: 0,
+        agencyAvatars: [] as string[],
+        propertyTypes: meta.propertyTypes ?? [],
+        buildingType: meta.buildingType as DevPromotion["buildingType"] | undefined,
+        constructionProgress: meta.constructionProgress,
+        image: c.imageUrl ?? undefined,
+        updatedAt: c.createdAt,
+        canShareWithAgencies: c.canShareWithAgencies,
+        ...(meta.collaboration ? { collaboration: meta.collaboration } : {}),
+        metadata: c.metadata ?? {},
+      } as unknown as DevPromotion;
+    });
+  }, []);
+
   const allPromotions: DevPromotion[] = [
     ...(draftData ? [draftData] : []),
+    ...createdAsDev,
     ...developerOnlyPromotions,
     ...promotions.map(p => ({ ...p } as DevPromotion)),
   ];
@@ -1503,8 +1551,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   completo "100.000 € a 200.000 €" (no compacto). */}
               {p.priceMin > 0 && (
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 pt-16 px-5 sm:px-7 pb-5 bg-gradient-to-t from-black/75 via-black/35 to-transparent rounded-b-lg">
+                  {/* Etiqueta dinámica · "Precio" cuando hay 1 sola
+                   *  unidad o el rango es un solo valor (priceMin ===
+                   *  priceMax). "Rango de precios" cuando hay banda
+                   *  real. Evita decir "rango" si no hay rango. */}
                   <p className="text-[10px] uppercase tracking-[0.14em] text-white/75 font-medium mb-1">
-                    Rango de precios
+                    {p.priceMax > p.priceMin ? "Rango de precios" : "Precio"}
                   </p>
                   <p className="text-lg sm:text-xl font-bold text-white tabular-nums drop-shadow-md">
                     {formatPrice(p.priceMin)}
