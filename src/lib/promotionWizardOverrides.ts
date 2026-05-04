@@ -95,7 +95,9 @@ function clearCache(promotionId: string): void {
 /** Mapper · WizardState → columnas canónicas de `public.promotions`.
  *  Los campos sin columna propia (hitos comisión, condiciones registro,
  *  videos, planos…) van en `metadata.wizard_override` para reabrir
- *  el wizard idéntico. */
+ *  el wizard idéntico. Los campos planos de metadata (commission,
+ *  propertyTypes, etc.) los añade el caller (saveOverride) con
+ *  `deriveFlatMetadata`. */
 function buildPromotionPatch(state: WizardState): Record<string, unknown> {
   /* `wizardStateToPromotion(state, base)` construye un objeto Promotion
    *  shape · de ahí extraemos las columnas que existen en DB. Usamos
@@ -186,10 +188,36 @@ export function saveOverride(promotionId: string, state: WizardState): void {
    *  esté caído. Es solo cache, no fuente de verdad. */
   writeCache(promotionId, state);
 
+  /* CRÍTICO · actualizamos también `byvaro.promotions.created.v1`
+   *  con los campos planos derivados del state. Sin esto el listado
+   *  de promociones no reflejaba ediciones (comisión, tipologías,
+   *  etc.) hasta el siguiente full reload · el cache mantenía los
+   *  valores del create inicial. */
+  import("./promotionsStorage").then(({ deriveFlatMetadata, patchCreatedPromotionInCache }) => {
+    const flat = deriveFlatMetadata(state);
+    patchCreatedPromotionInCache(promotionId, {
+      name: state.nombrePromocion?.trim() || undefined,
+      ownerRole: state.role === "comercializador" ? "comercializador" : "promotor",
+      city: state.direccionPromocion?.ciudad?.trim() || undefined,
+      address: state.direccionPromocion?.direccion?.trim() || undefined,
+      delivery: state.fechaEntrega?.trim() || state.trimestreEntrega?.trim() || undefined,
+      description: state.descripcion?.trim() || undefined,
+      metadata: {
+        propertyTypes: flat.propertyTypes,
+        buildingType: flat.buildingType,
+        constructionProgress: flat.constructionProgress,
+        reservationCost: flat.reservationCost,
+        commission: flat.commission,
+        wizardSnapshot: state,
+      },
+    });
+  });
+
   /* Write-through · async fire-and-forget · canonical pattern. */
   void (async () => {
     try {
       const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
+      const { deriveFlatMetadata } = await import("./promotionsStorage");
       if (!isSupabaseConfigured) return;
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -206,7 +234,21 @@ export function saveOverride(promotionId: string, state: WizardState): void {
         return;
       }
       const currentMeta = (row?.metadata ?? {}) as Record<string, unknown>;
-      const nextMeta = { ...currentMeta, wizard_override: state };
+      /* Metadata flat fields actualizados desde state · sin esto el
+       *  hydrator tras refresh seguía leyendo valores viejos del
+       *  create inicial · ediciones se "perdían" hasta editar otra
+       *  vez. */
+      const flat = deriveFlatMetadata(state);
+      const nextMeta = {
+        ...currentMeta,
+        wizard_override: state,
+        propertyTypes: flat.propertyTypes,
+        buildingType: flat.buildingType,
+        constructionProgress: flat.constructionProgress,
+        reservationCost: flat.reservationCost,
+        commission: flat.commission,
+        wizardSnapshot: state,
+      };
 
       const patch = buildPromotionPatch(state);
       patch.metadata = nextMeta;

@@ -184,8 +184,15 @@ export function wizardStateToPromotion<T extends Promotion>(
     (merged as DevPromotion).canShareWithAgencies = true;
   } else {
     /* Uso interno · explicito · valida `willShare===false` en
-     *  publicationRequirements.ts y excluye los comisión-missings. */
+     *  publicationRequirements.ts y excluye los comisión-missings.
+     *  CRÍTICO · LIMPIA `commission` y `collaboration` que pudieran
+     *  venir del base seed o de un override anterior · sin esto, si
+     *  el user pasa de "compartir con agencias" → "uso interno", la
+     *  ficha seguía mostrando los % de comisión + estructura de
+     *  colaboración fantasma. */
     (merged as DevPromotion).canShareWithAgencies = false;
+    merged.commission = 0;
+    delete (merged as { collaboration?: unknown }).collaboration;
   }
 
   /* ─── Modo de validación de registro ─── */
