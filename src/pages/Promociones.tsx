@@ -1698,9 +1698,9 @@ export default function Promociones() {
                             </span>
                           );
                         })()}
-                        {p.constructionProgress !== undefined && p.constructionProgress < 100 && (
-                          <span>{p.constructionProgress}% obra</span>
-                        )}
+                        {/* "% obra" eliminado del footer · ya se muestra en
+                          * el KPI strip arriba (línea 1523). Evita
+                          * duplicar el mismo dato en la misma card. */}
                         {p.hasShowFlat && <span className="hidden sm:inline">Piso piloto</span>}
                       </div>
                       {/* "Compartir con agencias" es una acción del
