@@ -203,6 +203,27 @@ export function RevisionStep({ state, onEditStep }: Props) {
         </div>
       )}
 
+      {/* ═════ Banner "uso interno" ═════
+            Cuando colaboracion=false la promo NO se comparte con
+            agencias · queda activa solo para uso interno del workspace
+            (catálogo propio + microsite si lo activan luego). Lo
+            llamamos explícitamente para que el user sepa qué publica. */}
+      {!state.colaboracion && missing.length === 0 && (
+        <div className="rounded-xl border border-foreground/15 bg-muted/30 px-5 py-4 flex items-start gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-foreground/5 text-foreground shrink-0">
+            <Home className="h-4 w-4" strokeWidth={1.6} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-foreground">Solo para uso interno</p>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+              No has activado la colaboración con agencias · esta promoción
+              queda en tu catálogo interno y <span className="font-medium text-foreground">no se compartirá con tu red de colaboradores</span>.
+              Podrás activar la colaboración más adelante desde la ficha.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Card de progreso global ELIMINADA · era redundante con el
           banner de arriba (que ya dice "todo listo" o "faltan X
           requisitos") y con la sección "Lo que se activará" de abajo.

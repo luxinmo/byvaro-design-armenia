@@ -441,8 +441,19 @@ export function draftToPromotionData(d: PromotionDraft) {
   /* Show flat · si el promotor ha activado el toggle. */
   const hasShowFlat = !!s.pisoPiloto;
 
+  /* OwnerOrganizationId · los drafts se guardan SIEMPRE bajo el
+   * workspace activo (sessionStorage[byvaro.accountType.organizationId.v1]
+   * · ver saveDraftToSupabase línea ~275). Sin esta línea, el listing
+   * caía a "developer-default" → cargaba el LUXINMO_PROFILE fixture →
+   * mostraba el logo de Luxinmo en vez del logo real del promotor. */
+  const ownerOrgId =
+    typeof window !== "undefined"
+      ? sessionStorage.getItem("byvaro.accountType.organizationId.v1") || undefined
+      : undefined;
+
   return {
     id: `${DRAFT_ID_PREFIX}${d.id}`,
+    ownerOrganizationId: ownerOrgId,
     /* `code` vacío para borradores · si lo seteamos a "DRAFT" o
      * cualquier otro literal, `promotionHref()` lo prefiere sobre el
      * id y todos los drafts navegan a la MISMA URL (/promociones/DRAFT)

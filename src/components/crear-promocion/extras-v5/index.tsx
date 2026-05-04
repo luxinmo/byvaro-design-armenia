@@ -83,7 +83,7 @@ function isConfigured(d: PromotionDefaults, k: CategoryKey): boolean {
     case "parking":       return d.parking.enabled;
     case "storageRoom":   return d.storageRoom.enabled;
     case "solarium":      return d.solarium.enabled;
-    case "terraces":      return d.terraces.covered || d.terraces.uncovered;
+    case "terraces":      return d.terraces.enabled || d.terraces.covered || d.terraces.uncovered;
     case "plot":          return d.plot.enabled;
     case "equipment":     return Object.values(d.equipment).some((v) =>
       v !== null && v !== false && v !== undefined,
@@ -293,7 +293,7 @@ function EssentialRow({
    * visual refleja el estado real cuando el user abre la card sin
    * haber chequeado nada todavía. */
   const TOGGLE_KEYS = new Set<CategoryKey>([
-    "privatePool", "parking", "storageRoom", "solarium", "plot",
+    "privatePool", "parking", "storageRoom", "solarium", "plot", "terraces",
   ]);
   const hasEnabledFlag = TOGGLE_KEYS.has(def.key);
   const active = configured || (!hasEnabledFlag && open);
@@ -306,15 +306,19 @@ function EssentialRow({
 
   function toggleEnabled(v: boolean) {
     if (hasEnabledFlag) {
-      patch(def.key, { enabled: v } as Partial<PromotionDefaults[typeof def.key]>);
-    } else if (!v) {
-      /* Categoría sin `enabled` (terraces) · "desactivar" = resetear
-       * todos sus flags al default (todo en false). Sin esto, los
-       * checkboxes se quedan marcados aunque el row aparezca off. */
-      update("promotionDefaults", {
-        ...defaults,
-        [def.key]: defaultPromotionDefaults[def.key],
-      } as PromotionDefaults);
+      /* Si la categoría se desactiva · reset COMPLETO al default ·
+       * evita que checkboxes hijos (terraces.covered/uncovered) se
+       * queden marcados con la card en off · y para el resto
+       * (privatePool, parking, etc.) limpia appliesTo/priceMode
+       * residuales si los hubiera. */
+      if (!v) {
+        update("promotionDefaults", {
+          ...defaults,
+          [def.key]: defaultPromotionDefaults[def.key],
+        } as PromotionDefaults);
+      } else {
+        patch(def.key, { enabled: v } as Partial<PromotionDefaults[typeof def.key]>);
+      }
     }
     setOpen(v);
   }
@@ -681,15 +685,19 @@ function CategoryBody({
         <SegmentedControl
           value={defaults.orientation ?? ""}
           options={[
-            { value: "north", label: "Norte" },
-            { value: "south", label: "Sur" },
-            { value: "east",  label: "Este" },
-            { value: "west",  label: "Oeste" },
+            { value: "north",     label: "Norte" },
+            { value: "northeast", label: "Noreste" },
+            { value: "east",      label: "Este" },
+            { value: "southeast", label: "Sureste" },
+            { value: "south",     label: "Sur" },
+            { value: "southwest", label: "Suroeste" },
+            { value: "west",      label: "Oeste" },
+            { value: "northwest", label: "Noroeste" },
           ]}
           onChange={(v) =>
             update("promotionDefaults", {
               ...defaults,
-              orientation: v as "north" | "south" | "east" | "west",
+              orientation: v as PromotionDefaults["orientation"],
             })
           }
         />

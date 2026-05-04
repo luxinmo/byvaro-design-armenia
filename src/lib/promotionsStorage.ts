@@ -20,7 +20,7 @@ import { supabase, isSupabaseConfigured } from "./supabaseClient";
 
 const CREATED_KEY = "byvaro.promotions.created.v1";
 
-interface CreatedPromotion {
+export interface CreatedPromotion {
   id: string;
   /** Referencia pública canónica `PR + 5 dígitos`. Heredada del
    *  borrador (WizardState.publicRef) · garantiza que la promoción

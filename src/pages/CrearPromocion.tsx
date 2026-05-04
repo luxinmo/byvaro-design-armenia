@@ -71,7 +71,7 @@ import { Checkbox } from "@/components/ui/Checkbox";
 import { cn } from "@/lib/utils";
 import {
   FileCheck, FileX, Calendar as CalendarIconLucide, Home as HomeIcon, Store as StoreIcon,
-  Minus, Archive, Car, Waves, Building2,
+  Minus, Archive, Car, Waves, Building2, Trash2,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -661,6 +661,12 @@ export default function CrearPromocion() {
         if (d.storageRoom.enabled && (!d.storageRoom.appliesTo || !d.storageRoom.priceMode)) return false;
         if (d.solarium.enabled && (!d.solarium.appliesTo || !d.solarium.priceMode)) return false;
         if (d.plot.enabled && !d.plot.appliesTo) return false;
+        /* Terrazas activadas pero sin tipo elegido · bloquea avanzar
+         *  hasta que el user marque cubierta y/o descubierta. Razón ·
+         *  el user activó "tengo terrazas" pero no especificó cuáles
+         *  · sin esa info la card queda incompleta y la unidad se
+         *  generaría sin tipo de terraza heredado. */
+        if (d.terraces.enabled && !d.terraces.covered && !d.terraces.uncovered) return false;
       }
       return true;
     }
@@ -727,6 +733,18 @@ export default function CrearPromocion() {
         return;
       }
       if (draftId) deleteDraft(draftId);
+      /* Cleanup defensivo · al activar, eliminamos TODOS los drafts
+       *  vacíos (sin nombrePromocion) que el user pudiera tener.
+       *  Razón · cada vez que el wizard monta sin `?draft=` en URL
+       *  se crea un draft nuevo · si por alguna razón hubo varios
+       *  mounts (navegación, refresh, race en hidratación), quedaban
+       *  drafts huérfanos en el listado tras la activación. Limpiar
+       *  aquí garantiza que tras "Activar" el listado solo enseña la
+       *  promo recién creada · no fantasmas. */
+      const ghostDrafts = listDrafts().filter(
+        (d) => !(d.state.nombrePromocion ?? "").trim() && d.id !== draftId,
+      );
+      ghostDrafts.forEach((d) => deleteDraft(d.id));
       toast.success("Promoción creada correctamente", {
         description: `${result.created.name} · publicada en /promociones`,
       });
@@ -782,6 +800,27 @@ export default function CrearPromocion() {
       flushSave();
       navigate("/promociones?tab=incompletas");
     }
+  };
+
+  /* "Eliminar borrador" · acción destructiva movida desde el listing
+   *  · solo visible cuando hay un draftId activo. Borra del cache local
+   *  + Supabase y navega de vuelta. Antes vivía como botón hover en
+   *  cada card del listado · era ruidoso y se confundía con
+   *  "Guardar y salir". */
+  const handleDeleteDraft = async () => {
+    if (!draftId) return;
+    const ok = await confirm({
+      title: "¿Descartar este borrador?",
+      description: state.nombrePromocion?.trim()
+        ? `"${state.nombrePromocion}" se eliminará permanentemente.`
+        : "El borrador se eliminará permanentemente.",
+      confirmLabel: "Descartar",
+      variant: "destructive",
+    });
+    if (!ok) return;
+    deleteDraft(draftId);
+    toast.success("Borrador eliminado");
+    navigate("/promociones?tab=incompletas");
   };
 
   /* "Omitir" — salta el paso actual sin validación. Útil en pasos
@@ -916,6 +955,17 @@ export default function CrearPromocion() {
               <span className="hidden sm:inline">Guardar y salir</span>
               <span className="sm:hidden">Guardar</span>
             </button>
+            {draftId && (
+              <button
+                onClick={handleDeleteDraft}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-border bg-card text-[12px] font-medium text-muted-foreground hover:text-destructive hover:border-destructive/40 hover:bg-destructive/5 transition-colors"
+                title="Elimina permanentemente este borrador."
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Eliminar borrador</span>
+                <span className="sm:hidden">Eliminar</span>
+              </button>
+            )}
             <button
               onClick={handleClose}
               className="p-2 -mr-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"

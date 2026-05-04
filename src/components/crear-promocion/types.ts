@@ -385,8 +385,11 @@ export interface WizardState {
   requiereReserva: boolean | null;
   importeReserva: number;
   validezReserva: number;
-  // Aval bancario (Ley 38/1999) — garantía sobre cantidades anticipadas.
-  avalBancario: boolean;
+  /** Aval bancario (Ley 38/1999) · `null` = el user no ha elegido aún
+   *  (default fresh draft). Forzamos elección explícita · sin default
+   *  preseleccionado · evita publicar "Sin aval" por inercia cuando
+   *  la promoción sí lo tiene constituido. */
+  avalBancario: boolean | null;
   avalEntidad: string; // nombre del banco emisor (opcional)
   // Contactos públicos (aparecen en microsite y en ficha pública).
   contactoWeb: string;
@@ -507,7 +510,7 @@ export const defaultWizardState: WizardState = {
   requiereReserva: null,
   importeReserva: 0,
   validezReserva: 0,
-  avalBancario: false,
+  avalBancario: null,
   avalEntidad: "",
   contactoWeb: "",
   contactoTelefono: "",
