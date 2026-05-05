@@ -75,6 +75,8 @@ export function EditStepModal({
   uploadScopeId,
   onClose,
   infoBasicaSection,
+  extrasOnlyCategory,
+  extrasPane,
 }: {
   open: boolean;
   step: StepId | null;
@@ -91,6 +93,15 @@ export function EditStepModal({
    *  útil para mini-modales del bloque "Extras y opcionales" de la
    *  ficha (Piscina · Parking · Trastero · Sótano · Solárium). */
   extrasOnlyCategory?: "privatePool" | "parking" | "storageRoom" | "basement" | "solarium";
+  /** Cuando step="extras" sin `extrasOnlyCategory`, controla qué pane
+   *  abre por defecto:
+   *  · "essentials" · esenciales (piscina/parking/trastero/sótano/
+   *    solárium/parcela/terrazas) · botón "Editar" del bloque
+   *    "Extras y opcionales" de la ficha.
+   *  · "extras" (default) · adicionales (equipamiento, seguridad,
+   *    vistas, orientación) · botón "Editar" del bloque
+   *    "Características y amenidades". */
+  extrasPane?: "essentials" | "extras";
 }) {
   if (!step) return null;
 
@@ -197,7 +208,7 @@ export function EditStepModal({
               <ExtrasV5
                 state={state}
                 update={update}
-                lockToPane="extras"
+                lockToPane={extrasPane ?? "extras"}
                 hideCategoryKeys={["plot"]}
               />
             )
