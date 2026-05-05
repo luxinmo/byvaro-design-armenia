@@ -169,6 +169,12 @@ const URBANIZACION_TIPOS: { value: "cerrada" | "resort" | "abierta"; label: stri
   { value: "abierta", label: "Abierta" },
 ];
 
+/** Estilos arquitectónicos que SOLO aplican a villa unifamiliar.
+ *  Un edificio plurifamiliar no es ni "finca rural" ni "rústico de
+ *  piedra/madera" · son típicos de casa con terreno. Filtrado en el
+ *  render del paso "Estilo arquitectónico" según `state.tipo`. */
+const ESTILOS_SOLO_UNIFAMILIAR = new Set<EstiloVivienda>(["finca", "rustico"]);
+
 /* ═══════════════════════════════════════════════════════════════════
    InfoBasicaStep
    ═══════════════════════════════════════════════════════════════════ */
@@ -283,19 +289,25 @@ export function InfoBasicaStep({
       )}
 
       {/* ═════ Estilo arquitectónico · solo plurifamiliar/mixto
-             (unifamiliar ya lo elige en el paso sub_varias). ═════ */}
+             (unifamiliar ya lo elige en el paso sub_varias).
+
+             Filtro · `finca` y `rustico` SOLO aplican a villa
+             unifamiliar · un edificio plurifamiliar no es ni "finca
+             rural" ni de piedra/madera rústica. ═════ */}
       {showSection("estilo") && !isUnifamiliar && state.estiloVivienda == null && (
         <div>
           <SectionLabel>Estilo arquitectónico</SectionLabel>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {estiloViviendaOptions.map((o) => (
-              <OptionCard
-                key={o.value}
-                option={o}
-                selected={state.estiloVivienda === o.value}
-                onSelect={(v) => update("estiloVivienda", v as EstiloVivienda)}
-              />
-            ))}
+            {estiloViviendaOptions
+              .filter((o) => !ESTILOS_SOLO_UNIFAMILIAR.has(o.value))
+              .map((o) => (
+                <OptionCard
+                  key={o.value}
+                  option={o}
+                  selected={state.estiloVivienda === o.value}
+                  onSelect={(v) => update("estiloVivienda", v as EstiloVivienda)}
+                />
+              ))}
           </div>
         </div>
       )}
