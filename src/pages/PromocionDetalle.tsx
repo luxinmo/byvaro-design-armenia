@@ -328,6 +328,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
    * (Piscina · Parking · Trastero · Sótano · Solárium). */
   const [wizardModalExtrasCategory, setWizardModalExtrasCategory] =
     useState<"privatePool" | "parking" | "storageRoom" | "basement" | "solarium" | null>(null);
+  /* Pane que abre por defecto cuando step="extras" sin filtrar ·
+   * "essentials" para el botón del bloque "Extras y opcionales" ·
+   * "extras" (default) para el botón de "Características y amenidades". */
+  const [wizardModalExtrasPane, setWizardModalExtrasPane] =
+    useState<"essentials" | "extras" | null>(null);
 
   /* Mapping editOpen-key → StepId para abrir el EditStepModal canónico
    * en lugar del Edit*Dialog antiguo. Si el step NO está soportado en
@@ -1938,6 +1943,16 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               promotion={p}
               hideEdit={viewAsCollaborator}
               onEdit={openExtraCategory}
+              onEditAll={() => {
+                /* Abre el step "extras" sin filtrar con pane=essentials
+                 *  · modal grande con piscina/parking/trastero/sótano/
+                 *  solárium/parcela/terrazas · permite añadir/quitar/
+                 *  editar todas a la vez. */
+                setWizardModalStep("extras");
+                setWizardModalInfoSection(null);
+                setWizardModalExtrasCategory(null);
+                setWizardModalExtrasPane("essentials");
+              }}
             />
 
             {/* ── 2. PAGO Y DISPONIBILIDAD (Unidades + Plan de pagos) ── */}
@@ -3143,10 +3158,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           uploadScopeId={p?.id}
           infoBasicaSection={wizardModalInfoSection ?? undefined}
           extrasOnlyCategory={wizardModalExtrasCategory ?? undefined}
+          extrasPane={wizardModalExtrasPane ?? undefined}
           onClose={() => {
             setWizardModalStep(null);
             setWizardModalInfoSection(null);
             setWizardModalExtrasCategory(null);
+            setWizardModalExtrasPane(null);
           }}
         />
       )}
