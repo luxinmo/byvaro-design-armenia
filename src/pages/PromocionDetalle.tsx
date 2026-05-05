@@ -605,7 +605,22 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const p = useMemo(() => {
     if (!pBase) return null;
     if (!wizardOverride) return pBase;
-    return wizardStateToPromotion(wizardOverride, pBase);
+    /* `wizardStateToPromotion` mapea los campos canónicos (name,
+     *  delivery, ownerRole, etc.) PERO algunas secciones de la ficha
+     *  leen DIRECTAMENTE `metadata.wizardSnapshot.*` (tieneLicencia,
+     *  promotionDefaults.*, etc.). Sin sobreescribir el snapshot, esos
+     *  reads quedan stale tras editar y la UI parece "tarda en cambiar".
+     *  Solución · pisamos el snapshot del metadata con el override
+     *  actual ANTES de derivar `p` · así toda la ficha ve los cambios
+     *  instantáneamente desde el primer render post-save. */
+    const merged = wizardStateToPromotion(wizardOverride, pBase);
+    return {
+      ...merged,
+      metadata: {
+        ...((merged as { metadata?: Record<string, unknown> }).metadata ?? {}),
+        wizardSnapshot: wizardOverride,
+      },
+    } as typeof merged;
   }, [pBase, wizardOverride]);
 
   /* WizardState efectivo para el `EditStepModal` embebido · prioridad:
