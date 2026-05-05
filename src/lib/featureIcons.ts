@@ -90,8 +90,11 @@ const FEATURE_CATALOG: Record<string, { icon: LucideIcon; label: string }> = {
   jacuzzi:            { icon: Bath,            label: "Jacuzzi" },
   hammam:             { icon: Bath,            label: "Hammam" },
   bbq:                { icon: Flame,           label: "Barbacoa (BBQ)" },
+  /* `tenis` mantiene su catálogo legacy para promos viejas que ya
+   *  lo tenían marcado · NO aparece en el wizard nuevo (eliminada
+   *  de "Exterior y ocio" porque es amenity comunitaria, no anejo). */
   tenis:              { icon: Trophy,          label: "Pista de tenis" },
-  ascensor:           { icon: ArrowUpDown,     label: "Ascensor" },
+  ascensor:           { icon: ArrowUpDown,     label: "Ascensor privado" },
 
   /* Vistas (ExtrasV5.views) ampliadas */
   sea:        { icon: Waves,    label: "Vistas al mar" },

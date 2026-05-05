@@ -2288,7 +2288,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   "domotics", "solarPanels", "chargingPoint", "electricBlinds", "doubleGlazing",
                   "lavanderia", "bodega", "armariosEmpotrados", "vestidor", "chimenea",
                   "gym", "sauna", "jacuzzi", "hammam",
-                  "bbq", "tenis", "padel", "ascensor",
+                  /* `tenis`/`padel` ELIMINADOS · son amenidades de la
+                   *  urbanización (info_basica → Amenities), no anejos
+                   *  per-vivienda. Se mantienen en featureIcons.ts como
+                   *  catálogo legacy para chips de promos viejas. */
+                  "bbq", "ascensor",
                 ];
                 for (const k of EQUIPMENT_KEYS) if (eq[k]) featureIds.push(k);
                 if (terr?.covered || terr?.uncovered) featureIds.push("terraza");

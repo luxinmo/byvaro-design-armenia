@@ -23,7 +23,7 @@ import {
   ChevronRight, ChevronLeft,
   /* Equipment ampliado · iconos para nuevas opciones */
   Shirt, Wine, Dumbbell, Bath, Flame, UtensilsCrossed,
-  ArrowUpDown, LayoutPanelLeft, Cpu, Volleyball, Trophy,
+  ArrowUpDown, LayoutPanelLeft, Cpu, Trophy,
   BatteryCharging, PackageOpen,
   /* Views ampliadas */
   Mountain, Building, Sunrise, Sunset, Maximize, Ship,
@@ -677,9 +677,11 @@ function CategoryBody({
             value={defaults.parking.type}
             options={[
               { value: "outdoor", label: "Exterior" },
+              { value: "subterraneo", label: "Subterráneo" },
               { value: "closed_garage", label: "Garaje cerrado" },
+              { value: "mixto", label: "Todo tipo" },
             ]}
-            onChange={(v) => patch("parking", { type: v as "outdoor" | "closed_garage" })}
+            onChange={(v) => patch("parking", { type: v as "outdoor" | "subterraneo" | "closed_garage" | "mixto" })}
           />
           <PriceModeControl
             value={defaults.parking.priceMode}
@@ -863,7 +865,7 @@ function CategoryBody({
                 { key: "lavanderia", label: "Lavandería",   icon: Shirt, checked: eq.lavanderia, onChange: (v) => eqPatch({ lavanderia: v }) },
                 { key: "bodega",     label: "Bodega",       icon: Wine,  checked: eq.bodega,    onChange: (v) => eqPatch({ bodega: v }) },
                 { key: "chimenea",   label: "Chimenea",     icon: Flame, checked: eq.chimenea,  onChange: (v) => eqPatch({ chimenea: v }) },
-                { key: "ascensor",   label: "Ascensor",     icon: ArrowUpDown, checked: eq.ascensor, onChange: (v) => eqPatch({ ascensor: v }) },
+                { key: "ascensor",   label: "Ascensor privado", icon: ArrowUpDown, checked: eq.ascensor, onChange: (v) => eqPatch({ ascensor: v }) },
               ]}
             />
           </SubGroup>
@@ -880,13 +882,13 @@ function CategoryBody({
             />
           </SubGroup>
 
-          {/* Exterior y ocio · BBQ, tenis, pádel */}
+          {/* Exterior y ocio · BBQ · tenis/padel ELIMINADOS · son
+           *  amenidades comunitarias de la urbanización, no anejos
+           *  per-vivienda. Configurarlos en `info_basica` → "Amenities". */}
           <SubGroup label="Exterior y ocio">
             <IconCheckboxGrid
               items={[
-                { key: "bbq",   label: "Barbacoa (BBQ)", icon: Flame,      checked: eq.bbq,   onChange: (v) => eqPatch({ bbq: v }) },
-                { key: "tenis", label: "Pista de tenis", icon: Trophy,     checked: eq.tenis, onChange: (v) => eqPatch({ tenis: v }) },
-                { key: "padel", label: "Pista de pádel", icon: Volleyball, checked: eq.padel, onChange: (v) => eqPatch({ padel: v }) },
+                { key: "bbq", label: "Barbacoa (BBQ)", icon: Flame, checked: eq.bbq, onChange: (v) => eqPatch({ bbq: v }) },
               ]}
             />
           </SubGroup>
