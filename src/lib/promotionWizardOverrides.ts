@@ -155,15 +155,22 @@ export async function hydrateOverrideFromSupabase(
       .eq("id", promotionId)
       .maybeSingle();
     if (error) {
-      console.warn("[promoWizardOverride:hydrate]", error.message);
+      console.error(`[hydrateOverride:${promotionId}] READ falló:`, error);
       return null;
     }
     const meta = (data?.metadata ?? null) as { wizard_override?: WizardState } | null;
     const state = meta?.wizard_override ?? null;
-    if (state) writeCache(promotionId, state);
+    if (state) {
+      writeCache(promotionId, state);
+      console.info(`[hydrateOverride:${promotionId}] OK · override hidratado desde DB`);
+    } else if (data) {
+      console.info(`[hydrateOverride:${promotionId}] sin overrides en DB · usando state base`);
+    } else {
+      console.warn(`[hydrateOverride:${promotionId}] promo NO existe en DB`);
+    }
     return state;
   } catch (e) {
-    console.warn("[promoWizardOverride:hydrate] skipped:", e);
+    console.error(`[hydrateOverride:${promotionId}] excepción:`, e);
     return null;
   }
 }
@@ -226,14 +233,22 @@ export function saveOverride(promotionId: string, state: WizardState): void {
     });
   });
 
-  /* Write-through · async fire-and-forget · canonical pattern. */
+  /* Write-through · async fire-and-forget · canonical pattern.
+   * Logs verbosos en cada paso para diagnosticar pérdidas tras
+   * recarga (cache local OK pero Supabase falló silenciosamente). */
   void (async () => {
     try {
       const { supabase, isSupabaseConfigured } = await import("./supabaseClient");
       const { deriveFlatMetadata } = await import("./promotionsStorage");
-      if (!isSupabaseConfigured) return;
+      if (!isSupabaseConfigured) {
+        console.warn(`[saveOverride:${promotionId}] Supabase NO configurado · cambios solo en cache local`);
+        return;
+      }
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.warn(`[saveOverride:${promotionId}] sin usuario auth · cambios solo en cache local`);
+        return;
+      }
 
       /* Read-modify-write del campo metadata para no pisar otros
        *  campos que conviven en el JSONB. */
@@ -243,14 +258,14 @@ export function saveOverride(promotionId: string, state: WizardState): void {
         .eq("id", promotionId)
         .maybeSingle();
       if (readErr) {
-        console.warn("[promoWizardOverride:save:read]", readErr.message);
+        console.error(`[saveOverride:${promotionId}] READ falló · cambios NO persisten:`, readErr);
+        return;
+      }
+      if (!row) {
+        console.warn(`[saveOverride:${promotionId}] promo NO existe en DB · cambios solo en cache local · ¿draft o seed?`);
         return;
       }
       const currentMeta = (row?.metadata ?? {}) as Record<string, unknown>;
-      /* Metadata flat fields actualizados desde state · sin esto el
-       *  hydrator tras refresh seguía leyendo valores viejos del
-       *  create inicial · ediciones se "perdían" hasta editar otra
-       *  vez. */
       const flat = deriveFlatMetadata(state);
       const nextMeta = {
         ...currentMeta,
@@ -266,13 +281,22 @@ export function saveOverride(promotionId: string, state: WizardState): void {
       const patch = buildPromotionPatch(state);
       patch.metadata = nextMeta;
 
-      const { error: updErr } = await supabase
+      const { data: updRows, error: updErr } = await supabase
         .from("promotions")
         .update(patch)
-        .eq("id", promotionId);
-      if (updErr) console.warn("[promoWizardOverride:save:update]", updErr.message);
+        .eq("id", promotionId)
+        .select("id");
+      if (updErr) {
+        console.error(`[saveOverride:${promotionId}] UPDATE falló · cambios NO persisten:`, updErr);
+        return;
+      }
+      if (!updRows || updRows.length === 0) {
+        console.warn(`[saveOverride:${promotionId}] UPDATE 0 rows afectadas · ¿RLS bloqueando? ¿id incorrecto?`);
+        return;
+      }
+      console.info(`[saveOverride:${promotionId}] OK · ${Object.keys(patch).length} campos persistidos`);
     } catch (e) {
-      console.warn("[promoWizardOverride:save] skipped:", e);
+      console.error(`[saveOverride:${promotionId}] excepción · cambios NO persisten:`, e);
     }
   })();
 }
