@@ -64,20 +64,27 @@ function getAllSteps(state: WizardState): TimelineStep[] {
     });
   }
 
-  // Extras (trasteros / parking / locales si aplica) para TODOS los tipos.
-  // En unifamiliar solo tiene sentido trastero y parking (no locales).
-  steps.push({
-    id: "extras",
-    label: "Extras",
-    getSummary: (s) => {
-      const parts: string[] = [];
-      if ((s.locales ?? 0) > 0) parts.push(`${s.locales} loc.`);
-      if ((s.trasteros ?? 0) > 0) parts.push(`${s.trasteros} trast.`);
-      if ((s.parkings ?? 0) > 0) parts.push(`${s.parkings} park.`);
-      return parts.length > 0 ? parts.join(" · ") : null;
-    },
-  });
+  /* Orden canónico · BLOQUE EDIFICIO antes que BLOQUE VIVIENDA.
+   *
+   * Antes el flujo era zigzag · config_edificio (edificio) → extras
+   * (vivienda) → estado/detalles (edificio) → info_basica (edificio
+   * + un sub-bloque de vivienda) → … → crear_unidades (vivienda).
+   * El user empezaba a configurar viviendas antes de terminar de
+   * describir el edificio.
+   *
+   * Orden nuevo · agrupa por dominio comercial:
+   *   1. Estructura del edificio · config_edificio
+   *   2. Estado y entrega · estado · detalles
+   *   3. Qué ofrece la promoción · info_basica (amenidades,
+   *      urbanización, estilo, energía)
+   *   4. Las viviendas · qué incluyen · extras (anejos,
+   *      equipamiento, vistas, orientación, seguridad)
+   *   5. Crear las viviendas · crear_unidades
+   *   6. Marketing · multimedia · descripcion
+   *   7. Comercial · colaboradores · plan_pagos · revision
+   */
 
+  // 1. Estado de obra del edificio · estado y entrega
   steps.push({
     id: "estado",
     label: "Estado",
@@ -110,12 +117,34 @@ function getAllSteps(state: WizardState): TimelineStep[] {
     },
   });
 
+  // 2. Qué ofrece la promoción · amenidades del edificio + urbanización
   steps.push({
     id: "info_basica",
     label: "Información básica",
     getSummary: (s) => s.nombrePromocion || null,
   });
 
+  // 3. Las viviendas · anejos per-unidad + equipamiento + vistas + …
+  steps.push({
+    id: "extras",
+    label: "Las viviendas",
+    getSummary: (s) => {
+      const parts: string[] = [];
+      if ((s.locales ?? 0) > 0) parts.push(`${s.locales} loc.`);
+      if ((s.trasteros ?? 0) > 0) parts.push(`${s.trasteros} trast.`);
+      if ((s.parkings ?? 0) > 0) parts.push(`${s.parkings} park.`);
+      return parts.length > 0 ? parts.join(" · ") : null;
+    },
+  });
+
+  // 4. Crear las viviendas · tabla de unidades con precios
+  steps.push({
+    id: "crear_unidades",
+    label: "Crear unidades",
+    getSummary: (s) => (s.unidades?.length ?? 0) > 0 ? `${s.unidades.length} uds.` : null,
+  });
+
+  // 5. Marketing · multimedia + descripción
   steps.push({
     id: "multimedia",
     label: "Multimedia",
@@ -135,12 +164,6 @@ function getAllSteps(state: WizardState): TimelineStep[] {
       if (s.descripcionMode === "manual") return s.descripcion ? "Manual" : null;
       return null;
     },
-  });
-
-  steps.push({
-    id: "crear_unidades",
-    label: "Crear unidades",
-    getSummary: (s) => (s.unidades?.length ?? 0) > 0 ? `${s.unidades.length} uds.` : null,
   });
 
   steps.push({
