@@ -47,6 +47,7 @@ import { resolveConstructionProgress } from "./constructionProgress";
    ══════════════════════════════════════════════════════════════════ */
 
 import { composeDelivery } from "./deliveryFormat";
+import { resolvePriceRange } from "./priceRange";
 import { resolvePropertyTypes } from "./propertyTypes";
 
 /** Reconstruye el string de delivery · delega en `composeDelivery`
@@ -153,12 +154,12 @@ export function wizardStateToPromotion<T extends Promotion>(
     merged.availableUnits = state.unidades.filter(
       (u) => u.status !== "reserved" && u.status !== "sold",
     ).length;
-    /* Rango de precios · derivado de las unidades cuando hay datos */
-    const precios = state.unidades.map((u) => u.precio).filter((n) => typeof n === "number" && n > 0);
-    if (precios.length > 0) {
-      merged.priceMin = Math.min(...precios);
-      merged.priceMax = Math.max(...precios);
-    }
+    /* Rango de precios · helper canónico. Snapshot all-units (no
+     *  filtra available) · es el dato persistido en DB. Las cards
+     *  recomputan en runtime con `availableOnly: true`. */
+    const range = resolvePriceRange(state.unidades);
+    if (range.min > 0) merged.priceMin = range.min;
+    if (range.max > 0) merged.priceMax = range.max;
   }
 
   /* ─── Plan de pagos ─── */

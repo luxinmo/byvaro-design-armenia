@@ -19,6 +19,7 @@
 import type { WizardState, StepId } from "@/components/crear-promocion/types";
 import { memCache } from "./memCache";
 import { resolveConstructionProgress } from "./constructionProgress";
+import { resolvePriceRange } from "./priceRange";
 
 const DRAFTS_KEY = "byvaro-promotion-drafts";
 /** Clave histórica (single-draft) · se migra la primera vez que se carga la lista. */
@@ -398,12 +399,9 @@ const SUBTIPO_LABEL: Record<string, string> = {
 export function draftToPromotionData(d: PromotionDraft) {
   const s = d.state;
 
-  /* Precios · derivados de las unidades si existen. */
-  const unitPrices = (s.unidades ?? [])
-    .map((u) => u.precio || 0)
-    .filter((n) => n > 0);
-  const priceMin = unitPrices.length > 0 ? Math.min(...unitPrices) : 0;
-  const priceMax = unitPrices.length > 0 ? Math.max(...unitPrices) : 0;
+  /* Precios · helper canónico (snapshot all-units · cards filtran
+   *  available en runtime con `promoStats`). */
+  const { min: priceMin, max: priceMax } = resolvePriceRange(s.unidades ?? []);
 
   /* Disponibilidad · sumamos available si tienen status; si no, todas available. */
   const totalUnits = s.unidades?.length ?? 0;
