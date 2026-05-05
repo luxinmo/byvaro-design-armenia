@@ -268,6 +268,7 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane }: P
               patch={patch}
               update={update}
               isSingleHome={isSingleHome}
+              recordSelection={recordSelection}
             />
           ))}
         </div>
@@ -345,6 +346,7 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane }: P
               update={update}
               onRemove={() => remove(c.key)}
               isSingleHome={isSingleHome}
+              recordSelection={recordSelection}
             />
           ))}
         </div>
@@ -369,12 +371,14 @@ function EssentialRow({
   patch,
   update,
   isSingleHome,
+  recordSelection,
 }: {
   def: CategoryDef;
   defaults: PromotionDefaults;
   patch: <K extends keyof PromotionDefaults>(key: K, sub: Partial<PromotionDefaults[K]>) => void;
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
   isSingleHome: boolean;
+  recordSelection?: (key: string, checked: boolean) => void;
 }) {
   const Icon = def.icon;
   const configured = isConfigured(defaults, def.key);
@@ -483,6 +487,7 @@ function EssentialRow({
             patch={patchAuto}
             update={update}
             isSingleHome={isSingleHome}
+            recordSelection={recordSelection}
           />
         </div>
       )}
@@ -533,6 +538,7 @@ function CategoryCard({
   update,
   onRemove,
   isSingleHome,
+  recordSelection,
 }: {
   def: CategoryDef;
   defaults: PromotionDefaults;
@@ -540,6 +546,7 @@ function CategoryCard({
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
   onRemove: () => void;
   isSingleHome: boolean;
+  recordSelection?: (key: string, checked: boolean) => void;
 }) {
   const Icon = def.icon;
   return (
@@ -565,6 +572,7 @@ function CategoryCard({
           patch={patch}
           update={update}
           isSingleHome={isSingleHome}
+          recordSelection={recordSelection}
         />
       </div>
     </div>
@@ -579,12 +587,14 @@ function CategoryBody({
   patch,
   update,
   isSingleHome,
+  recordSelection,
 }: {
   def: CategoryDef;
   defaults: PromotionDefaults;
   patch: <K extends keyof PromotionDefaults>(key: K, sub: Partial<PromotionDefaults[K]>) => void;
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
   isSingleHome: boolean;
+  recordSelection?: (key: string, checked: boolean) => void;
 }) {
   switch (def.key) {
     case "privatePool":
