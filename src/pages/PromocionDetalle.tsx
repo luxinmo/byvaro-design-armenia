@@ -4,6 +4,7 @@ import { useTabParam } from "@/lib/useTabParam";
 import { getDraft, saveDraft as persistDraft, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
 import { deleteCreatedPromotion, getCreatedPromotions } from "@/lib/promotionsStorage";
 import { composeDelivery, resolveDelivery } from "@/lib/deliveryFormat";
+import { getPropertyTypeLabel } from "@/lib/propertyTypes";
 import { feature } from "@/lib/featureIcons";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { WizardState, FotoItem, FotoCategoria } from "@/components/crear-promocion/types";
@@ -1944,7 +1945,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Tipologías</p>
                 <div className="flex flex-wrap gap-1.5">
                   {p.propertyTypes.length > 0
-                    ? p.propertyTypes.map(t => <Tag key={t} variant="default" size="sm">{t}</Tag>)
+                    ? p.propertyTypes.map(t => <Tag key={t} variant="default" size="sm">{getPropertyTypeLabel(t)}</Tag>)
                     : <p className="text-xs text-muted-foreground italic">Sin tipologías marcadas</p>}
                 </div>
               </div>
@@ -2108,7 +2109,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     return promoterName ? ` Desarrollada por ${promoterName}.` : "";
                   })()}
                   {p.totalUnits > 0 && ` El proyecto consta de ${p.totalUnits} unidades con entrega estimada para ${resolveDelivery(p) || "por definir"}.`}
-                  {p.propertyTypes.length > 0 && ` Las tipologías incluyen ${p.propertyTypes.join(", ").toLowerCase()}.`}
+                  {p.propertyTypes.length > 0 && ` Las tipologías incluyen ${p.propertyTypes.map(getPropertyTypeLabel).join(", ").toLowerCase()}.`}
                 </p>
               </div>
             </SectionCard>
