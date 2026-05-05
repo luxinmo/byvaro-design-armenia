@@ -98,8 +98,6 @@ function ExtraTile({
         "flex flex-col items-center justify-start gap-2 rounded-xl border p-3 text-center transition-all",
         priceMode === "optional"
           ? "border-primary/40 bg-primary/[0.03]"
-          : priceMode === "included"
-          ? "border-success/30 bg-success/[0.03]"
           : "border-border bg-background",
         disabled
           ? "cursor-default"
@@ -110,9 +108,7 @@ function ExtraTile({
         "flex h-10 w-10 items-center justify-center rounded-xl shrink-0",
         priceMode === "optional"
           ? "bg-primary/15 text-primary"
-          : priceMode === "included"
-          ? "bg-success/15 text-success"
-          : "bg-muted text-muted-foreground",
+          : "bg-muted text-foreground/80",
       )}>
         <Icon className="h-5 w-5" strokeWidth={1.6} />
       </div>
@@ -124,7 +120,7 @@ function ExtraTile({
 
 function PriceTag({ mode, price }: { mode: PriceMode; price: number | null }) {
   if (mode === "included") {
-    return <p className="text-[10.5px] font-medium text-success">Incluido</p>;
+    return <p className="text-[10.5px] font-medium text-foreground">Incluido</p>;
   }
   if (mode === "not_included") {
     return <p className="text-[10.5px] text-muted-foreground">No incluido</p>;
