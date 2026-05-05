@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { resolveDelivery } from "@/lib/deliveryFormat";
 import { agencies, type Agency } from "@/data/agencies";
 import { developerOnlyPromotions } from "@/data/developerPromotions";
 import { promotions } from "@/data/promotions";
@@ -115,7 +116,7 @@ function usePromoCatalog() {
         totalUnits: p.totalUnits,
         priceMin: p.priceMin,
         priceMax: p.priceMax,
-        delivery: p.delivery,
+        delivery: resolveDelivery(p),
         constructionProgress: p.constructionProgress,
       });
     }
@@ -141,7 +142,7 @@ function usePromoCatalog() {
         totalUnits: p.totalUnits,
         priceMin: p.priceMin,
         priceMax: p.priceMax,
-        delivery: p.delivery,
+        delivery: resolveDelivery(p),
         constructionProgress: p.constructionProgress,
       });
     }
@@ -947,7 +948,7 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false, developerOrgId
                                 }
                               />
                               <MetricStat label="Precio" value={fmtPriceRange(p.priceMin, p.priceMax)} />
-                              <MetricStat label="Entrega" value={p.delivery || "—"} />
+                              <MetricStat label="Entrega" value={resolveDelivery(p) || "—"} />
                               <MetricStat
                                 label="Obra"
                                 value={typeof p.constructionProgress === "number" ? `${p.constructionProgress}%` : "—"}
@@ -1087,7 +1088,7 @@ export function ResumenTab({ agency: a, onGoTo, readOnly = false, developerOrgId
                         }
                       />
                       <MetricStat label="Precio" value={fmtPriceRange(p.priceMin, p.priceMax)} />
-                      <MetricStat label="Entrega" value={p.delivery || "—"} />
+                      <MetricStat label="Entrega" value={resolveDelivery(p) || "—"} />
                       <MetricStat
                         label="Obra"
                         value={typeof p.constructionProgress === "number" ? `${p.constructionProgress}%` : "—"}

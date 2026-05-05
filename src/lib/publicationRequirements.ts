@@ -38,6 +38,7 @@
 import type { WizardState, StepId } from "@/components/crear-promocion/types";
 import type { Promotion } from "@/data/promotions";
 import { loadEmpresa } from "./empresa";
+import { resolveDelivery } from "./deliveryFormat";
 
 /** Devuelve true si la empresa del workspace tiene mínimamente
  *  identificada su entidad legal (nombre comercial o razón social).
@@ -225,7 +226,7 @@ export function getMissingForPromotion(p: Promotion): MissingRequirement[] {
   if (!p.priceMin || p.priceMin <= 0 || !p.priceMax || p.priceMax <= 0) {
     missing.push({ key: "rango-precios", label: "Sin rango de precios", ficha: "basicInfo" });
   }
-  if (!p.delivery || !p.delivery.trim()) {
+  if (!resolveDelivery(p).trim()) {
     missing.push({ key: "entrega", label: "Falta fecha de entrega", ficha: "delivery" });
   }
   if (p.constructionProgress === undefined || p.constructionProgress === null) {

@@ -17,6 +17,7 @@ import {
   useInvitaciones, getEmailPreview, getInvitacionHtml, buildInvitacionUrl, type Invitacion,
 } from "@/lib/invitaciones";
 import { promotions } from "@/data/promotions";
+import { resolveDelivery } from "@/lib/deliveryFormat";
 import { recordSentInvitationEmail } from "@/lib/sentEmails";
 import { ensurePromoterContactForAgency } from "@/lib/invitationContacts";
 import { agencies } from "@/data/agencies";
@@ -115,7 +116,7 @@ export function InvitarAgenciaModal({ onClose }: { onClose: () => void }) {
       promocionFoto: promo?.image,
       precioDesde: promo?.priceMin,
       precioHasta: promo?.priceMax,
-      entrega: promo?.delivery,
+      entrega: promo ? resolveDelivery(promo) : undefined,
       unidadesDisponibles: promo?.availableUnits,
       unidadesTotales: promo?.totalUnits,
       comisionOfrecida: creada.comisionOfrecida,
@@ -406,7 +407,7 @@ export function InvitarAgenciaModal({ onClose }: { onClose: () => void }) {
                         promocionFoto: promo?.image,
                         precioDesde: promo?.priceMin,
                         precioHasta: promo?.priceMax,
-                        entrega: promo?.delivery,
+                        entrega: promo ? resolveDelivery(promo) : undefined,
                         unidadesDisponibles: promo?.availableUnits,
                         unidadesTotales: promo?.totalUnits,
                         comisionOfrecida: creada.comisionOfrecida,

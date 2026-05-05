@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTabParam } from "@/lib/useTabParam";
 import { getDraft, saveDraft as persistDraft, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
 import { deleteCreatedPromotion, getCreatedPromotions } from "@/lib/promotionsStorage";
-import { composeDelivery } from "@/lib/deliveryFormat";
+import { composeDelivery, resolveDelivery } from "@/lib/deliveryFormat";
 import { feature } from "@/lib/featureIcons";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { WizardState, FotoItem, FotoCategoria } from "@/components/crear-promocion/types";
@@ -549,11 +549,15 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           mesesTrasLicencia?: number;
         };
       };
-      /* Delivery fallback · helper canónico `composeDelivery`. */
-      let derivedDelivery: string | null = c.delivery;
-      if (!derivedDelivery && meta.wizardSnapshot) {
+      /* Delivery · ÚNICA fuente · recompute desde wizardSnapshot
+       * SIEMPRE que exista. Solo cae al plano si no hay snapshot.
+       * Sin esto, promos creadas antes de PR #112 muestran trimestre
+       * stale aunque tipoEntrega real sea "tras_licencia". */
+      let derivedDelivery: string | null = null;
+      if (meta.wizardSnapshot) {
         derivedDelivery = composeDelivery(meta.wizardSnapshot) || null;
       }
+      if (!derivedDelivery) derivedDelivery = c.delivery;
       return {
         id: c.id,
         code: c.code,
@@ -1031,7 +1035,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
      *  Antes · Entrega `text-accent-foreground` era casi blanco · no
      *  se veía. Construcción `text-destructive` (rojo) parecía
      *  error · falsa alarma para algo que es estado normal. */
-    { icon: Calendar, label: "Entrega", value: p.delivery || "Por definir", detail: p.delivery ? "Estimada" : "Añádela en Información básica", color: "text-primary bg-primary/10", empty: !p.delivery },
+    { icon: Calendar, label: "Entrega", value: resolveDelivery(p) || "Por definir", detail: resolveDelivery(p) ? "Estimada" : "Añádela en Información básica", color: "text-primary bg-primary/10", empty: !resolveDelivery(p) },
     { icon: HardHat, label: "Construcción", value: p.constructionProgress !== undefined ? `${p.constructionProgress}%` : "—", detail: constructionPhaseLabel || "Sin configurar", color: "text-primary bg-primary/10", empty: p.constructionProgress === undefined },
     ...(!viewAsCollaborator ? (() => {
       const realAgencies = countAgenciesForPromotion(p.id);
@@ -2103,7 +2107,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     const promoterName = getPromoterDisplayName(p);
                     return promoterName ? ` Desarrollada por ${promoterName}.` : "";
                   })()}
-                  {p.totalUnits > 0 && ` El proyecto consta de ${p.totalUnits} unidades con entrega estimada para ${p.delivery || "por definir"}.`}
+                  {p.totalUnits > 0 && ` El proyecto consta de ${p.totalUnits} unidades con entrega estimada para ${resolveDelivery(p) || "por definir"}.`}
                   {p.propertyTypes.length > 0 && ` Las tipologías incluyen ${p.propertyTypes.join(", ").toLowerCase()}.`}
                 </p>
               </div>

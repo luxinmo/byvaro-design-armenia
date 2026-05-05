@@ -52,6 +52,7 @@ import { useEffect, useState } from "react";
 import { memCache } from "./memCache";
 import type { WizardState } from "@/components/crear-promocion/types";
 import { wizardStateToPromotion } from "./wizardStateToPromotion";
+import { composeDelivery } from "./deliveryFormat";
 import type { Promotion } from "@/data/promotions";
 
 const KEY_PREFIX = "byvaro.promotion.wizard-override.v1::";
@@ -195,12 +196,24 @@ export function saveOverride(promotionId: string, state: WizardState): void {
    *  valores del create inicial. */
   import("./promotionsStorage").then(({ deriveFlatMetadata, patchCreatedPromotionInCache }) => {
     const flat = deriveFlatMetadata(state);
+    /* Delivery · helper canónico `composeDelivery` (respeta
+     * `tipoEntrega`). Antes este path tenía una fórmula adhoc
+     * que ignoraba tipoEntrega y leía trimestreEntrega/fechaEntrega
+     * en orden · escribía valores stale (T2 2026 cuando era
+     * tras_licencia 12m). */
+    const composedDelivery = composeDelivery({
+      fechaEntrega: state.fechaEntrega,
+      trimestreEntrega: state.trimestreEntrega,
+      tipoEntrega: state.tipoEntrega,
+      mesesTrasContrato: state.mesesTrasContrato,
+      mesesTrasLicencia: state.mesesTrasLicencia,
+    });
     patchCreatedPromotionInCache(promotionId, {
       name: state.nombrePromocion?.trim() || undefined,
       ownerRole: state.role === "comercializador" ? "comercializador" : "promotor",
       city: state.direccionPromocion?.ciudad?.trim() || undefined,
       address: state.direccionPromocion?.direccion?.trim() || undefined,
-      delivery: state.fechaEntrega?.trim() || state.trimestreEntrega?.trim() || undefined,
+      delivery: composedDelivery || undefined,
       description: state.descripcion?.trim() || undefined,
       metadata: {
         propertyTypes: flat.propertyTypes,

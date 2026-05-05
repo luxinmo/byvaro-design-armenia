@@ -17,6 +17,7 @@ import { MapPin, ArrowUpRight, Flame } from "lucide-react";
 import type { DevPromotion } from "@/data/developerPromotions";
 import { cn } from "@/lib/utils";
 import { getPromoterDisplayName } from "@/lib/promotionRole";
+import { resolveDelivery } from "@/lib/deliveryFormat";
 
 /* ─── Geocodificador mock: ciudad → [lat, lng] ─── */
 const cityCoords: Record<string, [number, number]> = {
@@ -162,7 +163,8 @@ export function PromocionesMap({ promotions: promos }: { promotions: DevPromotio
                       <p className="text-[11px] text-gray-500 mt-0.5 mb-2 m-0">
                         {(() => {
                           const n = getPromoterDisplayName(promo);
-                          return n ? `${n} · Entrega ${promo.delivery}` : `Entrega ${promo.delivery}`;
+                          const d = resolveDelivery(promo);
+                          return n ? `${n} · Entrega ${d}` : `Entrega ${d}`;
                         })()}
                       </p>
                       <p className="text-sm font-bold text-gray-900 m-0">

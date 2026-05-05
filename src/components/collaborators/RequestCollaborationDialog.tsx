@@ -23,6 +23,7 @@ import { Send, MapPin, Home as HomeIcon, Coins, Calendar, Construction } from "l
 import { toast } from "sonner";
 import { crearSolicitud } from "@/lib/solicitudesColaboracion";
 import { useCurrentUser } from "@/lib/currentUser";
+import { resolveDelivery } from "@/lib/deliveryFormat";
 import { recordRequestReceived } from "@/lib/companyEvents";
 
 interface RequestCollabPromo {
@@ -156,7 +157,7 @@ export function RequestCollaborationDialog({ open, onOpenChange, agencyId, promo
                   }
                 />
                 <Stat icon={Coins} label="Precio" value={fmtPriceRange(promo.priceMin, promo.priceMax)} />
-                <Stat icon={Calendar} label="Entrega" value={promo.delivery || "—"} />
+                <Stat icon={Calendar} label="Entrega" value={resolveDelivery(promo) || "—"} />
                 <Stat
                   icon={Construction}
                   label="Obra"
