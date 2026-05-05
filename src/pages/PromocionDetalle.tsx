@@ -2115,7 +2115,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   (Piscina, Gimnasio, Jardín, Cocina equipada, Aire,
                   Terraza, Smart home...) · todos inventados aunque
                   el promotor no marcase nada en el wizard. */}
-            <SectionCard title="Información básica" stepName="Basic info" missing={missingSet.has("Basic info")} softMissing={isDraft} onEdit={() => openEdit("basicInfo")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Características y amenidades" stepName="Basic info" missing={missingSet.has("Basic info")} softMissing={isDraft} onEdit={() => openEdit("basicInfo")} hideEdit={viewAsCollaborator}>
               {(() => {
                 const snap = (p as unknown as {
                   metadata?: { wizardSnapshot?: {

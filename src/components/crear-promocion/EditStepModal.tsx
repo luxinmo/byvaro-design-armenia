@@ -41,7 +41,7 @@ const STEP_TITLES: Partial<Record<StepId, string>> = {
   estado: "Estructura · estado y entrega",
   detalles: "Construcción y entrega",
   ubicacion: "Ubicación",
-  info_basica: "Información básica",
+  info_basica: "Características y amenidades",
   descripcion: "Descripción",
   multimedia: "Multimedia",
   crear_unidades: "Unidades",
@@ -156,7 +156,15 @@ export function EditStepModal({
             />
           )}
           {step === "info_basica" && (
-            <InfoBasicaStep state={state} update={update} defaultsCapturedInExtras />
+            /* Modal "Características y amenidades" · oculta nombre
+             * (Identidad) + ubicación (su propio bloque/popup). */
+            <InfoBasicaStep
+              state={state}
+              update={update}
+              defaultsCapturedInExtras
+              hideNameSection
+              hideLocationSection
+            />
           )}
           {step === "descripcion" && <DescripcionStep state={state} update={update} />}
           {step === "multimedia" && (

@@ -176,6 +176,8 @@ export function InfoBasicaStep({
   state,
   update,
   defaultsCapturedInExtras = false,
+  hideNameSection = false,
+  hideLocationSection = false,
 }: {
   state: WizardState;
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
@@ -186,6 +188,15 @@ export function InfoBasicaStep({
    *  para no duplicar entrada · solo quedan nombre, dirección,
    *  estilo (plurifamiliar) y certificado energético. */
   defaultsCapturedInExtras?: boolean;
+  /** Oculta la sección "Cómo se llama tu promoción" · útil cuando
+   *  el componente se embebe en el modal "Características y
+   *  amenidades" de la ficha · el nombre se edita desde el bloque
+   *  Identidad. Default false (wizard standalone lo muestra). */
+  hideNameSection?: boolean;
+  /** Oculta la sección "Ubicación" (AddressAutocomplete) · igual
+   *  que arriba · la ubicación tiene su propio bloque + popup en
+   *  la ficha. */
+  hideLocationSection?: boolean;
 }) {
   const isPlurifamiliar = state.tipo === "plurifamiliar" || state.tipo === "mixto";
   const isUnifamiliar = state.tipo === "unifamiliar";
@@ -218,36 +229,43 @@ export function InfoBasicaStep({
 
   return (
     <div className="flex flex-col gap-7">
-      {/* ═════ Nombre ═════ */}
-      <div>
-        <SectionLabel>Cómo se llama tu promoción</SectionLabel>
-        <input
-          type="text"
-          autoFocus
-          value={state.nombrePromocion}
-          onChange={(e) => update("nombrePromocion", e.target.value)}
-          placeholder="Ej. Residencial Mar Azul"
-          className={cn(inputClass, "h-12 text-[16px] font-semibold w-full")}
-          maxLength={80}
-        />
-        <p className="text-[10.5px] text-muted-foreground mt-1.5">
-          Este nombre aparecerá en el listado de agencias y en tu microsite público.
-        </p>
-      </div>
+      {/* ═════ Nombre ═════ · oculto cuando se embebe en el modal
+        * "Características y amenidades" (se edita desde Identidad). */}
+      {!hideNameSection && (
+        <div>
+          <SectionLabel>Cómo se llama tu promoción</SectionLabel>
+          <input
+            type="text"
+            autoFocus
+            value={state.nombrePromocion}
+            onChange={(e) => update("nombrePromocion", e.target.value)}
+            placeholder="Ej. Residencial Mar Azul"
+            className={cn(inputClass, "h-12 text-[16px] font-semibold w-full")}
+            maxLength={80}
+          />
+          <p className="text-[10.5px] text-muted-foreground mt-1.5">
+            Este nombre aparecerá en el listado de agencias y en tu microsite público.
+          </p>
+        </div>
+      )}
 
-      {/* ═════ Dirección Google-style ═════ */}
-      <div>
-        <SectionLabel hint="Escribe la ciudad, urbanización o dirección y selecciona una sugerencia.">
-          <span className="inline-flex items-center gap-1.5">
-            <MapPin className="h-3 w-3" />
-            Ubicación
-          </span>
-        </SectionLabel>
-        <AddressAutocomplete
-          value={state.direccionPromocion}
-          onChange={(v) => update("direccionPromocion", v)}
-        />
-      </div>
+      {/* ═════ Dirección Google-style ═════ · oculto cuando se
+        * embebe en el modal "Características y amenidades" (la
+        * ubicación tiene su propio bloque y popup en la ficha). */}
+      {!hideLocationSection && (
+        <div>
+          <SectionLabel hint="Escribe la ciudad, urbanización o dirección y selecciona una sugerencia.">
+            <span className="inline-flex items-center gap-1.5">
+              <MapPin className="h-3 w-3" />
+              Ubicación
+            </span>
+          </SectionLabel>
+          <AddressAutocomplete
+            value={state.direccionPromocion}
+            onChange={(v) => update("direccionPromocion", v)}
+          />
+        </div>
+      )}
 
       {/* ═════ Estilo arquitectónico · solo plurifamiliar/mixto
              (unifamiliar ya lo elige en el paso sub_varias). ═════ */}
