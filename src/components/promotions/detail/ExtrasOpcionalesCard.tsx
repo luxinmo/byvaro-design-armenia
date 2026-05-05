@@ -53,11 +53,8 @@ export function ExtrasOpcionalesCard({
 
   return (
     <section className="rounded-2xl border border-border bg-card shadow-soft p-4 sm:p-5">
-      <header className="flex items-baseline justify-between mb-4">
+      <header className="mb-4">
         <h2 className="text-base font-semibold text-foreground">Extras y opcionales</h2>
-        {!hideEdit && (
-          <p className="text-[11px] text-muted-foreground">Click para editar</p>
-        )}
       </header>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
         {activeKeys.map((k) => (
