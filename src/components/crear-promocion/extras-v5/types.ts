@@ -121,6 +121,11 @@ export interface PromotionDefaults {
     | "north" | "northeast" | "east" | "southeast"
     | "south" | "southwest" | "west" | "northwest"
     | null;
+  /** Orden de selección · cada vez que el user marca una flag de
+   *  equipment/views/security/etc., su id se añade al INICIO de
+   *  este array. Al desmarcar, se quita. La ficha pinta los chips
+   *  en este orden · el último marcado aparece primero. */
+  selectedOrder: string[];
 }
 
 export const defaultPromotionDefaults: PromotionDefaults = {
@@ -158,4 +163,5 @@ export const defaultPromotionDefaults: PromotionDefaults = {
     amanecer: false, atardecer: false, abiertas: false,
   },
   orientation: null,
+  selectedOrder: [],
 };
