@@ -160,6 +160,18 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane }: P
     } as PromotionDefaults);
   }
 
+  /* Registra orden de selección · cada vez que el user toggle una
+   *  feature, su id se mete al INICIO de selectedOrder. Al desmarcar,
+   *  se quita. La ficha pinta los chips en este orden · el último
+   *  marcado aparece primero. */
+  function recordSelection(key: string, checked: boolean) {
+    const current = defaults.selectedOrder ?? [];
+    const next = checked
+      ? [key, ...current.filter((k) => k !== key)]
+      : current.filter((k) => k !== key);
+    update("promotionDefaults", { ...defaults, selectedOrder: next });
+  }
+
   function add(k: CategoryKey) {
     setManualAdded((prev) => new Set(prev).add(k));
     /* Single-home · si la categoría tiene `appliesTo` y el control no
