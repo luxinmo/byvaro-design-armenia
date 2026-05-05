@@ -228,6 +228,8 @@ export function saveOverride(promotionId: string, state: WizardState): void {
         constructionProgress: flat.constructionProgress,
         reservationCost: flat.reservationCost,
         commission: flat.commission,
+        licenseGranted: flat.licenseGranted,
+        extras: flat.extras,
         wizardSnapshot: state,
       },
     });
@@ -275,6 +277,8 @@ export function saveOverride(promotionId: string, state: WizardState): void {
         constructionProgress: flat.constructionProgress,
         reservationCost: flat.reservationCost,
         commission: flat.commission,
+        licenseGranted: flat.licenseGranted,
+        extras: flat.extras,
         wizardSnapshot: state,
       };
 
