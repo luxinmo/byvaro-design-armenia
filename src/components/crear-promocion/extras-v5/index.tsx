@@ -105,6 +105,15 @@ const APPLIES_TO_KEYS = new Set<CategoryKey>([
   "privatePool", "parking", "storageRoom", "basement", "solarium", "plot",
 ]);
 
+/* Categorías que SOLO tienen sentido en villa unifamiliar · NO se
+ *  renderizan cuando `state.tipo === "plurifamiliar"`. Una piscina
+ *  privada de cada apartamento no existe (sería comunitaria, que va
+ *  en amenidades). El sótano es del edificio entero, no per-vivienda.
+ *  La parcela aplica solo a casa con terreno propio. */
+const UNIFAMILIAR_ONLY_KEYS = new Set<CategoryKey>([
+  "privatePool", "basement", "plot",
+]);
+
 /* Derivado · ¿la categoría tiene algún campo configurado? Si sí, se
  * mantiene visible aunque el user no la haya "añadido" manualmente
  * (cubre el caso de reabrir un draft con datos). */
@@ -135,13 +144,22 @@ function resetCategory(d: PromotionDefaults, k: CategoryKey): PromotionDefaults 
 }
 
 export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane, onlyCategory }: Props) {
+  /* En plurifamiliar · ocultar las categorías que solo aplican a
+   *  villa unifamiliar (piscina privada, sótano, parcela). Para
+   *  apartamentos esas opciones no tienen sentido como anejo
+   *  per-unit. */
+  const isPlurifamiliar = state.tipo === "plurifamiliar";
+  const tipoHiddenKeys: CategoryKey[] = isPlurifamiliar
+    ? Array.from(UNIFAMILIAR_ONLY_KEYS)
+    : [];
+
   /* `onlyCategory` se traduce a "ocultar todas las categorías excepto
    *  la solicitada" · reusa el mecanismo `hidden` existente. */
   const hidden = onlyCategory
     ? new Set<CategoryKey>(
         (CATEGORIES.map((c) => c.key) as CategoryKey[]).filter((k) => k !== onlyCategory),
       )
-    : new Set(hideCategoryKeys);
+    : new Set([...hideCategoryKeys, ...tipoHiddenKeys]);
   /* Hidratación lazy para drafts pre-V5. */
   useEffect(() => {
     if (!state.promotionDefaults) {
