@@ -156,15 +156,23 @@ export function EditStepModal({
             />
           )}
           {step === "info_basica" && (
-            /* Modal "Características y amenidades" · oculta nombre
-             * (Identidad) + ubicación (su propio bloque/popup). */
-            <InfoBasicaStep
-              state={state}
-              update={update}
-              defaultsCapturedInExtras
-              hideNameSection
-              hideLocationSection
-            />
+            /* Modal "Características y amenidades" · combina las
+             * pantallas 5/14 (extras V5 · características por
+             * defecto: piscina, parking, trastero, parcela, terrazas,
+             * solárium, equipamiento, seguridad, vistas, orientación)
+             * y 8/14 (info básica sin nombre ni ubicación · estilo
+             * arquitectónico, tipologías, amenities, características
+             * de vivienda, urbanización, certificado energético). */}
+            <div className="flex flex-col gap-6">
+              <ExtrasV5 state={state} update={update} />
+              <InfoBasicaStep
+                state={state}
+                update={update}
+                defaultsCapturedInExtras
+                hideNameSection
+                hideLocationSection
+              />
+            </div>
           )}
           {step === "descripcion" && <DescripcionStep state={state} update={update} />}
           {step === "multimedia" && (
