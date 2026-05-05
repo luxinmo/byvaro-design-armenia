@@ -41,7 +41,7 @@ const STEP_TITLES: Partial<Record<StepId, string>> = {
   estado: "Estructura · estado y entrega",
   detalles: "Construcción y entrega",
   ubicacion: "Ubicación",
-  info_basica: "Información básica",
+  info_basica: "Características y amenidades",
   descripcion: "Descripción",
   multimedia: "Multimedia",
   crear_unidades: "Unidades",
@@ -74,6 +74,7 @@ export function EditStepModal({
   update,
   uploadScopeId,
   onClose,
+  infoBasicaSection,
 }: {
   open: boolean;
   step: StepId | null;
@@ -81,10 +82,24 @@ export function EditStepModal({
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
   uploadScopeId?: string;
   onClose: () => void;
+  /** Cuando step="info_basica", filtra el render para mostrar SOLO
+   *  esa sub-sección · permite mini-modales por feature (amenidades
+   *  sola, características solas, urbanización sola). Si no se pasa,
+   *  muestra todo el step (modal grande). */
+  infoBasicaSection?: "amenidades" | "caracteristicas" | "urbanizacion" | "estilo" | "energia";
 }) {
   if (!step) return null;
 
-  const title = STEP_TITLES[step] ?? "Editar";
+  const SECTION_TITLES: Record<string, string> = {
+    amenidades: "Amenities de la urbanización",
+    caracteristicas: "Características de la vivienda",
+    urbanizacion: "Urbanización",
+    estilo: "Estilo arquitectónico",
+    energia: "Certificado energético",
+  };
+  const title = (step === "info_basica" && infoBasicaSection)
+    ? (SECTION_TITLES[infoBasicaSection] ?? "Editar")
+    : (STEP_TITLES[step] ?? "Editar");
 
   /* Steps con tabla ancha (unidades) necesitan más espacio · sin
    * esto la tabla overflowea horizontalmente y el user tiene que
@@ -147,7 +162,21 @@ export function EditStepModal({
               />
             </div>
           )}
-          {step === "extras" && <ExtrasV5 state={state} update={update} />}
+          {step === "extras" && (
+            /* Mini-modal de "Características del hogar" desde la
+             * ficha · lockToPane="extras" salta directo al pane de
+             * adicionales (Solárium, Equipamiento, Seguridad, Vistas,
+             * Orientación) sin pasar por essentials (que viven en
+             * sus propios bloques de la ficha · Parking, Trastero,
+             * Piscina). Wizard 5/14 standalone NO se ve afectado
+             * (ese caller no pasa la prop · 2 panes navegables). */
+            <ExtrasV5
+              state={state}
+              update={update}
+              lockToPane="extras"
+              hideCategoryKeys={["plot"]}
+            />
+          )}
           {step === "detalles" && (
             <DetallesStep
               state={state}
@@ -156,7 +185,38 @@ export function EditStepModal({
             />
           )}
           {step === "info_basica" && (
-            <InfoBasicaStep state={state} update={update} defaultsCapturedInExtras />
+            /* Modal · si `infoBasicaSection` está set, mini-modal de
+             * UNA sola sub-sección (amenidades / características /
+             * urbanización / estilo / energía). Si no, modal grande
+             * que combina pantallas 5/14 (ExtrasV5) + 8/14
+             * (InfoBasicaStep sin nombre/ubicación). */
+            infoBasicaSection ? (
+              <InfoBasicaStep
+                state={state}
+                update={update}
+                defaultsCapturedInExtras
+                hideNameSection
+                hideLocationSection
+                onlySection={infoBasicaSection}
+              />
+            ) : (
+              <div className="flex flex-col gap-6">
+                {/* "plot" (Parcela) oculta · pertenece al unidad ·
+                  * se edita desde la ficha de unidad. */}
+                <ExtrasV5
+                  state={state}
+                  update={update}
+                  hideCategoryKeys={["plot"]}
+                />
+                <InfoBasicaStep
+                  state={state}
+                  update={update}
+                  defaultsCapturedInExtras
+                  hideNameSection
+                  hideLocationSection
+                />
+              </div>
+            )
           )}
           {step === "descripcion" && <DescripcionStep state={state} update={update} />}
           {step === "multimedia" && (

@@ -4,6 +4,7 @@ import { useTabParam } from "@/lib/useTabParam";
 import { getDraft, saveDraft as persistDraft, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
 import { deleteCreatedPromotion, getCreatedPromotions } from "@/lib/promotionsStorage";
 import { composeDelivery } from "@/lib/deliveryFormat";
+import { feature } from "@/lib/featureIcons";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { WizardState, FotoItem, FotoCategoria } from "@/components/crear-promocion/types";
 import { faseConstruccionOptions, constructionPhaseLabelFromProgress } from "@/components/crear-promocion/options";
@@ -316,6 +317,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
    * formularios de edición. Helpers wireados más abajo cuando ya
    * tengamos el WizardState efectivo (override + base). */
   const [wizardModalStep, setWizardModalStep] = useState<StepId | null>(null);
+  /* Sub-sección activa cuando el modal abre `info_basica` · permite
+   * mini-modales por feature (amenidades sola, características solas,
+   * urbanización sola). null = modal grande con todo. */
+  const [wizardModalInfoSection, setWizardModalInfoSection] =
+    useState<"amenidades" | "caracteristicas" | "urbanizacion" | "estilo" | "energia" | null>(null);
 
   /* Mapping editOpen-key → StepId para abrir el EditStepModal canónico
    * en lugar del Edit*Dialog antiguo. Si el step NO está soportado en
@@ -342,10 +348,30 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     const step = map[key];
     if (step && isSupportedInModal(step)) {
       setWizardModalStep(step);
+      setWizardModalInfoSection(null); // modal grande
     } else {
       /* Fallback al Edit*Dialog legacy (memoria, contacts). */
       setEditOpen(key);
     }
+  };
+
+  /* Abre el modal apropiado según la sub-sección clickada del bloque
+   * "Características y amenidades":
+   *  · "caracteristicas" → step "extras" (pantalla 5/14 ExtrasV5) ·
+   *    es DONDE el user marca equipment/security/views/etc. al
+   *    crear · NO `info_basica` PillSelect (legacy/duplicativo).
+   *  · "amenidades" / "urbanizacion" / "estilo" / "energia" →
+   *    step "info_basica" con onlySection. */
+  const openInfoSection = (
+    section: "amenidades" | "caracteristicas" | "urbanizacion" | "estilo" | "energia",
+  ) => {
+    if (section === "caracteristicas") {
+      setWizardModalStep("extras");
+      setWizardModalInfoSection(null);
+      return;
+    }
+    setWizardModalStep("info_basica");
+    setWizardModalInfoSection(section);
   };
   /** IDs de las oficinas del workspace que actúan como puntos de venta
    *  para esta promoción. Se inicializan desde `p.puntosDeVentaIds` y
@@ -1868,6 +1894,19 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   );
                 })()}
               </div>
+
+              {/* Tipologías · movido aquí desde "Características y
+                amenidades" · es atributo estructural · click abre
+                modal grande de "Características y amenidades" donde
+                se editan en InfoBasicaStep. */}
+              <div className="mt-5 pt-4 border-t border-border/40">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Tipologías</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {p.propertyTypes.length > 0
+                    ? p.propertyTypes.map(t => <Tag key={t} variant="default" size="sm">{t}</Tag>)
+                    : <p className="text-xs text-muted-foreground italic">Sin tipologías marcadas</p>}
+                </div>
+              </div>
             </SectionCard>
               );
             })()}
@@ -2115,7 +2154,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   (Piscina, Gimnasio, Jardín, Cocina equipada, Aire,
                   Terraza, Smart home...) · todos inventados aunque
                   el promotor no marcase nada en el wizard. */}
-            <SectionCard title="Información básica" stepName="Basic info" missing={missingSet.has("Basic info")} softMissing={isDraft} onEdit={() => openEdit("basicInfo")} hideEdit={viewAsCollaborator}>
+            <SectionCard title="Características y amenidades" stepName="Basic info" missing={missingSet.has("Basic info")} softMissing={isDraft} onEdit={() => openEdit("basicInfo")} hideEdit={viewAsCollaborator}>
               {(() => {
                 const snap = (p as unknown as {
                   metadata?: { wizardSnapshot?: {
@@ -2133,6 +2172,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                       views?: { sea?: boolean; mountain?: boolean; golf?: boolean; panoramic?: boolean };
                       terraces?: { enabled?: boolean; covered?: boolean; uncovered?: boolean };
                     };
+                    /* PillSelect · array de ids seleccionados desde
+                     *  InfoBasicaStep (cocina_equipada, vistas_mar,
+                     *  terraza, jardin_privado, smart_home,
+                     *  aire_acondicionado, suelo_radiante). */
+                    caracteristicasVivienda?: string[];
                   } };
                 }).metadata?.wizardSnapshot;
 
@@ -2150,72 +2194,98 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   coworking: "Coworking", aparcamiento_visitas: "Parking visitas",
                   cargador_vehiculo: "Carga vehículo eléctrico",
                 };
-                const amenities = (snap?.zonasComunes ?? [])
-                  .map((id) => ZONA_LABEL[id] ?? id);
+                /* IDs (no labels) · el render usa `feature(id)` para
+                 *  obtener `{ icon, label }` canónicos del helper
+                 *  `lib/featureIcons.ts`. Los ids deben coincidir con
+                 *  el catálogo allí · el ZONA_LABEL local queda como
+                 *  fallback para zonas sin entry en el catálogo. */
+                const amenityIds = (snap?.zonasComunes ?? []) as string[];
 
-                /* Características del hogar · derivamos labels reales
-                 *  desde los flags del promotionDefaults. */
+                /* REGLA · render fiel a lo que el user marcó en la
+                 *  pantalla 5/14 del wizard (ExtrasV5):
+                 *    - equipment (AC, calefacción, cocina equipada,
+                 *      domótica, paneles solares, persianas eléctricas,
+                 *      doble acristalamiento)
+                 *    - security (alarma, puerta blindada, videovigilancia)
+                 *    - views (mar, montaña, golf, panorámica)
+                 *    - terraces (covered/uncovered)
+                 *  Si vacío, vacío · si marcado, aparece. */
                 const eq = snap?.promotionDefaults?.equipment;
                 const sec = snap?.promotionDefaults?.security;
                 const views = snap?.promotionDefaults?.views;
                 const terr = snap?.promotionDefaults?.terraces;
-                const features: string[] = [];
-                if (eq?.airConditioning) features.push("Aire acondicionado");
-                if (eq?.heating) features.push("Calefacción");
-                if (eq?.equippedKitchen) features.push("Cocina equipada");
-                if (eq?.domotics) features.push("Domótica");
-                if (eq?.solarPanels) features.push("Paneles solares");
-                if (eq?.electricBlinds) features.push("Persianas eléctricas");
-                if (eq?.doubleGlazing) features.push("Doble acristalamiento");
-                if (terr?.covered) features.push("Terraza cubierta");
-                if (terr?.uncovered) features.push("Terraza descubierta");
-                if (sec?.alarm) features.push("Alarma");
-                if (sec?.reinforcedDoor) features.push("Puerta blindada");
-                if (sec?.videoSurveillance) features.push("Videovigilancia");
-                if (views?.sea) features.push("Vistas al mar");
-                if (views?.mountain) features.push("Vistas a montaña");
-                if (views?.golf) features.push("Vistas a golf");
-                if (views?.panoramic) features.push("Vistas panorámicas");
+                const featureIds: string[] = [];
+                if (eq?.airConditioning) featureIds.push("airConditioning");
+                if (eq?.heating) featureIds.push("heating");
+                if (eq?.equippedKitchen) featureIds.push("equippedKitchen");
+                if (eq?.domotics) featureIds.push("domotics");
+                if (eq?.solarPanels) featureIds.push("solarPanels");
+                if (eq?.electricBlinds) featureIds.push("electricBlinds");
+                if (eq?.doubleGlazing) featureIds.push("doubleGlazing");
+                if (terr?.covered || terr?.uncovered) featureIds.push("terraza");
+                if (sec?.alarm) featureIds.push("alarm");
+                if (sec?.reinforcedDoor) featureIds.push("reinforcedDoor");
+                if (sec?.videoSurveillance) featureIds.push("videoSurveillance");
+                if (views?.sea) featureIds.push("sea");
+                if (views?.mountain) featureIds.push("mountain");
+                if (views?.golf) featureIds.push("golf");
+                if (views?.panoramic) featureIds.push("panoramic");
 
+                /* Cada sub-sección es un BUTTON · click abre mini-modal
+                 *  específico de esa sección · más rápido que el modal
+                 *  grande. El botón "Editar" general del SectionCard sigue
+                 *  abriendo el modal completo (ExtrasV5 + InfoBasicaStep). */
+                const sectionBtnCls = "w-full text-left rounded-xl border border-transparent hover:border-border hover:bg-muted/30 -mx-2 px-2 py-2 transition-colors";
                 return (
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Tipologías</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {p.propertyTypes.length > 0
-                          ? p.propertyTypes.map(t => <Tag key={t} variant="default" size="sm">{t}</Tag>)
-                          : <p className="text-xs text-muted-foreground italic">Sin tipologías marcadas</p>}
-                      </div>
-                    </div>
-                    {/* Amenities · solo si está dentro de urbanización
-                        Y hay zonas marcadas. Si no aplica, oculto el
-                        bloque entero (no es un dato obligatorio). */}
-                    {snap?.urbanizacion && amenities.length > 0 && (
+                  <div className="space-y-2">
+                    {/* Tipologías · MOVIDO al bloque Estructura · es un
+                       atributo estructural, no de característica. */}
+
+                    {/* Amenities urbanización · click → mini-modal solo
+                       de amenidades + urbanización. */}
+                    {snap?.urbanizacion && amenityIds.length > 0 && (
                       <>
                         <div className="h-px bg-border/40" />
-                        <div>
+                        <button type="button" onClick={() => openInfoSection("urbanizacion")} className={sectionBtnCls}>
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Amenities de la urbanización</p>
                           <div className="flex flex-wrap gap-1.5">
-                            {amenities.map(a => <Tag key={a} variant="default" size="sm">{a}</Tag>)}
+                            {amenityIds.map((id) => {
+                              const f = feature(id);
+                              const label = ZONA_LABEL[id] ?? f.label;
+                              return (
+                                <span key={id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-foreground">
+                                  <f.icon className="h-3 w-3 text-primary" strokeWidth={1.75} />
+                                  {label}
+                                </span>
+                              );
+                            })}
                           </div>
-                        </div>
+                        </button>
                       </>
                     )}
-                    {/* Características del hogar · solo si hay alguna
-                        marcada. Si vacío, hint para invitar a editar. */}
+                    {/* Características del hogar · click → mini-modal de
+                       características solo. */}
                     <div className="h-px bg-border/40" />
-                    <div>
+                    <button type="button" onClick={() => openInfoSection("caracteristicas")} className={sectionBtnCls}>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Características del hogar</p>
-                      {features.length > 0 ? (
+                      {featureIds.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
-                          {features.map(f => <Tag key={f} variant="default" size="sm">{f}</Tag>)}
+                          {[...new Set(featureIds)].map((id) => {
+                            const f = feature(id);
+                            return (
+                              <span key={id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-foreground">
+                                <f.icon className="h-3 w-3 text-primary" strokeWidth={1.75} />
+                                {f.label}
+                              </span>
+                            );
+                          })}
                         </div>
                       ) : (
                         <p className="text-xs text-muted-foreground italic">
-                          Sin características marcadas · edítalas desde Configuración
+                          Sin características marcadas · click para añadir
                         </p>
                       )}
-                    </div>
+                    </button>
                   </div>
                 );
               })()}
@@ -3035,7 +3105,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           state={wizardStateForModal}
           update={updateWizardField}
           uploadScopeId={p?.id}
-          onClose={() => setWizardModalStep(null)}
+          infoBasicaSection={wizardModalInfoSection ?? undefined}
+          onClose={() => {
+            setWizardModalStep(null);
+            setWizardModalInfoSection(null);
+          }}
         />
       )}
 
