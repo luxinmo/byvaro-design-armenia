@@ -17,7 +17,7 @@ import {
   /* Equipment ampliado · vistas ampliadas */
   Shirt, Wine, Bath, Flame, ArrowUpDown, LayoutPanelLeft, Trophy,
   Mountain, Building, Sunrise, Sunset, Maximize, Ship,
-  BatteryCharging,
+  BatteryCharging, PackageOpen,
   type LucideIcon,
 } from "lucide-react";
 
@@ -61,6 +61,7 @@ const FEATURE_CATALOG: Record<string, { icon: LucideIcon; label: string }> = {
   /* ExtrasV5 categorías · valores enabled del WizardState. */
   privatePool:    { icon: Waves,        label: "Piscina privada" },
   storageRoom:    { icon: Archive,      label: "Trastero" },
+  basement:       { icon: PackageOpen,  label: "Sótano" },
   plot:           { icon: TreePine,     label: "Parcela" },
   solarium:       { icon: Sun,          label: "Solárium" },
   terraces:       { icon: Sun,          label: "Terrazas" },

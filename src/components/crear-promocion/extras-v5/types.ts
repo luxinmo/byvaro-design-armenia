@@ -45,6 +45,15 @@ export interface PromotionDefaults {
     priceMode: PriceMode | null;
     optionalPrice: number | null;
   };
+  /** Sótano · típico en villa unifamiliar · puede tener uso polivalente
+   *  (bodega, gimnasio, cine, etc.). Puede ser opcional con precio
+   *  · igual que piscina/parking/trastero. */
+  basement: {
+    enabled: boolean;
+    appliesTo: AppliesTo | null;
+    priceMode: PriceMode | null;
+    optionalPrice: number | null;
+  };
   solarium: {
     enabled: boolean;
     appliesTo: AppliesTo | null;
@@ -142,6 +151,7 @@ export const defaultPromotionDefaults: PromotionDefaults = {
     optionalPrice: null,
   },
   storageRoom: { enabled: false, appliesTo: null, priceMode: null, optionalPrice: null },
+  basement: { enabled: false, appliesTo: null, priceMode: null, optionalPrice: null },
   solarium: { enabled: false, appliesTo: null, priceMode: null, optionalPrice: null },
   terraces: { enabled: false, covered: false, uncovered: false },
   plot: {
