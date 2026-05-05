@@ -19,6 +19,7 @@ import { memCache } from "./memCache";
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
 import { unitsByPromotion, type Unit } from "@/data/units";
 import { composeDelivery } from "./deliveryFormat";
+import { resolveConstructionProgress } from "./constructionProgress";
 
 const CREATED_KEY = "byvaro.promotions.created.v1";
 
@@ -78,20 +79,10 @@ export function deriveFlatMetadata(state: WizardState): {
       : state.tipo === "plurifamiliar" ? "plurifamiliar"
       : undefined;
 
-  const FASE_PROGRESS: Record<string, number> = {
-    inicio_obra: 10, estructura: 30, cerramientos: 50, instalaciones: 65,
-    acabados: 80, entrega_proxima: 95, llave_en_mano: 100, definir_mas_tarde: 0,
-  };
-  const ESTADO_PROGRESS: Record<string, number> = {
-    proyecto: 0, en_construccion: 50, terminado: 100,
-  };
-  const constructionProgress: number | undefined =
-    (state.faseConstruccion && FASE_PROGRESS[state.faseConstruccion] != null
-      ? FASE_PROGRESS[state.faseConstruccion]
-      : undefined)
-    ?? (state.estado && ESTADO_PROGRESS[state.estado] != null
-      ? ESTADO_PROGRESS[state.estado]
-      : undefined);
+  /* Helper canónico · prioridad: override manual > faseConstruccion >
+   *  estado. Reemplaza la implementación inline divergente que ignoraba
+   *  `constructionProgressOverride` y bajaba el % al editar. */
+  const constructionProgress = resolveConstructionProgress(state);
 
   return {
     propertyTypes,

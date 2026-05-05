@@ -39,7 +39,8 @@
 
 import type { Promotion } from "@/data/promotions";
 import type { DevPromotion, CollaborationConfig } from "@/data/developerPromotions";
-import type { WizardState, EstadoPromocion } from "@/components/crear-promocion/types";
+import type { WizardState } from "@/components/crear-promocion/types";
+import { resolveConstructionProgress } from "./constructionProgress";
 
 /* ══════════════════════════════════════════════════════════════════
    Helpers
@@ -68,19 +69,10 @@ function locationString(state: WizardState): string {
   return c || p || "";
 }
 
-/** Mapea `EstadoPromocion` a `constructionProgress` numérico para
- *  que `getMissingForPromotion` lo considere "definido". El override
- *  manual (`constructionProgressOverride`) gana si existe. */
-function deriveProgress(state: WizardState): number | undefined {
-  if (typeof state.constructionProgressOverride === "number") {
-    return state.constructionProgressOverride;
-  }
-  const e: EstadoPromocion | null = state.estado;
-  if (e === "proyecto") return 0;
-  if (e === "en_construccion") return 50;
-  if (e === "terminado") return 100;
-  return undefined;
-}
+/* `deriveProgress` ELIMINADO · usaba solo override + estado, ignoraba
+ *  `faseConstruccion` · al editar override sin tocar nada el % bajaba
+ *  de 80% (acabados) a 50% (en_construccion). Reemplazado por
+ *  `resolveConstructionProgress` canónico de `./constructionProgress`. */
 
 /** Construye `CollaborationConfig` desde `WizardState` · solo si
  *  `state.colaboracion` está activado. Si no, devuelve undefined ·
@@ -127,7 +119,7 @@ export function wizardStateToPromotion<T extends Promotion>(
   if (principal?.url) merged.image = principal.url;
 
   /* ─── Estado / construcción ─── */
-  const progress = deriveProgress(state);
+  const progress = resolveConstructionProgress(state);
   if (typeof progress === "number") merged.constructionProgress = progress;
   if (typeof state.pisoPiloto === "boolean") merged.hasShowFlat = state.pisoPiloto;
 
