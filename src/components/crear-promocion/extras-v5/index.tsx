@@ -21,6 +21,11 @@ import {
   Wind, Thermometer, Sparkles, Eye, Compass,
   ShieldAlert, Plus, X,
   ChevronRight, ChevronLeft,
+  /* Equipment ampliado · iconos para nuevas opciones */
+  Shirt, Wine, Dumbbell, Bath, Flame, UtensilsCrossed,
+  ArrowUpDown, LayoutPanelLeft, Cpu, Volleyball, Trophy,
+  /* Views ampliadas */
+  Mountain, Building, Sunrise, Sunset, Maximize, Ship,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/Checkbox";
@@ -108,7 +113,10 @@ function isConfigured(d: PromotionDefaults, k: CategoryKey): boolean {
       v !== null && v !== false && v !== undefined,
     );
     case "security":      return d.security.alarm || d.security.reinforcedDoor || d.security.videoSurveillance;
-    case "views":         return d.views.sea || d.views.mountain || d.views.golf || d.views.panoramic;
+    case "views":         return d.views.sea || d.views.oceano || d.views.rio
+                            || d.views.mountain || d.views.ciudad || d.views.golf
+                            || d.views.panoramic || d.views.amanecer || d.views.atardecer
+                            || d.views.abiertas;
     case "orientation":   return d.orientation !== null;
   }
 }
@@ -188,11 +196,33 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane }: P
    * pane queda fijo · útil para mini-modales de la ficha. */
   const pane = lockToPane ?? paneState;
 
-  /* Adicionales VISIBLES = configurados o añadidos manualmente.
-   * Los demás aparecen como chips "+ X" para añadirlos. */
-  const additionalsVisible = additionals.filter(
-    (c) => isConfigured(defaults, c.key) || manualAdded.has(c.key),
-  );
+  /* Adicionales VISIBLES · orden: ÚLTIMO añadido manualmente PRIMERO ·
+   * detrás los configurados desde draft (orden CATEGORIES). El user
+   * lo pidió: "siempre el nuevo añadido debe colocarse primero".
+   * Sets en JS mantienen orden de inserción · iteramos al revés. */
+  const additionalsVisible = (() => {
+    const out: typeof additionals = [];
+    const seen = new Set<CategoryKey>();
+    /* Manualmente añadidos · más reciente primero. */
+    const manualKeys = Array.from(manualAdded).reverse();
+    for (const k of manualKeys) {
+      const c = additionals.find((cat) => cat.key === k);
+      if (c && !seen.has(c.key)) {
+        out.push(c);
+        seen.add(c.key);
+      }
+    }
+    /* Configurados desde draft (no añadidos en esta sesión) · al
+     * final, en orden CATEGORIES. */
+    for (const c of additionals) {
+      if (seen.has(c.key)) continue;
+      if (isConfigured(defaults, c.key)) {
+        out.push(c);
+        seen.add(c.key);
+      }
+    }
+    return out;
+  })();
   const additionalsAvailable = additionals.filter(
     (c) => !isConfigured(defaults, c.key) && !manualAdded.has(c.key),
   );
@@ -658,79 +688,116 @@ function CategoryBody({
         </>
       );
 
-    case "equipment":
+    case "equipment": {
+      const eq = defaults.equipment;
+      const eqPatch = (sub: Partial<PromotionDefaults["equipment"]>) =>
+        patch("equipment", sub);
       return (
         <>
-          <ToggleRow
-            icon={Wind}
-            label="Aire acondicionado"
-            checked={defaults.equipment.airConditioning}
-            onChange={(v) => patch("equipment", { airConditioning: v })}
-          >
-            <SegmentedControl
-              value={defaults.equipment.airConditioningType ?? ""}
-              options={[
-                { value: "central",         label: "Central" },
-                { value: "split",           label: "Split" },
-                { value: "preinstallation", label: "Preinst." },
-              ]}
-              onChange={(v) =>
-                patch("equipment", {
-                  airConditioningType: v as "central" | "split" | "preinstallation",
-                })
-              }
-            />
-          </ToggleRow>
+          {/* Confort base · climatización + cocina con sub-tipo */}
+          <SubGroup label="Confort">
+            <ToggleRow
+              icon={Wind}
+              label="Aire acondicionado"
+              checked={eq.airConditioning}
+              onChange={(v) => eqPatch({ airConditioning: v })}
+            >
+              <SegmentedControl
+                value={eq.airConditioningType ?? ""}
+                options={[
+                  { value: "central",         label: "Central" },
+                  { value: "split",           label: "Split" },
+                  { value: "preinstallation", label: "Preinst." },
+                ]}
+                onChange={(v) =>
+                  eqPatch({ airConditioningType: v as "central" | "split" | "preinstallation" })
+                }
+              />
+            </ToggleRow>
+            <ToggleRow
+              icon={Thermometer}
+              label="Calefacción"
+              checked={eq.heating}
+              onChange={(v) => eqPatch({ heating: v })}
+            >
+              <SegmentedControl
+                value={eq.heatingType ?? ""}
+                options={[
+                  { value: "underfloor", label: "Suelo radiante" },
+                  { value: "central",    label: "Central" },
+                  { value: "gas",        label: "Gas" },
+                ]}
+                onChange={(v) => eqPatch({ heatingType: v as "underfloor" | "central" | "gas" })}
+              />
+            </ToggleRow>
+            <ToggleRow
+              icon={UtensilsCrossed}
+              label="Cocina equipada"
+              checked={eq.equippedKitchen}
+              onChange={(v) => eqPatch({ equippedKitchen: v })}
+            >
+              <SegmentedControl
+                value={eq.kitchenType ?? ""}
+                options={[
+                  { value: "open",        label: "Abierta" },
+                  { value: "independent", label: "Independ." },
+                ]}
+                onChange={(v) => eqPatch({ kitchenType: v as "open" | "independent" })}
+              />
+            </ToggleRow>
+          </SubGroup>
 
-          <ToggleRow
-            icon={Thermometer}
-            label="Calefacción"
-            checked={defaults.equipment.heating}
-            onChange={(v) => patch("equipment", { heating: v })}
-          >
-            <SegmentedControl
-              value={defaults.equipment.heatingType ?? ""}
-              options={[
-                { value: "underfloor", label: "Suelo radiante" },
-                { value: "central",    label: "Central" },
-                { value: "gas",        label: "Gas" },
+          {/* Eficiencia / smart home */}
+          <SubGroup label="Eficiencia y smart">
+            <IconCheckboxGrid
+              items={[
+                { key: "domotics",       label: "Domótica",              icon: Cpu,         checked: eq.domotics,        onChange: (v) => eqPatch({ domotics: v }) },
+                { key: "solarPanels",    label: "Paneles solares",       icon: Sun,         checked: eq.solarPanels,     onChange: (v) => eqPatch({ solarPanels: v }) },
+                { key: "electricBlinds", label: "Persianas eléctricas",  icon: LayoutPanelLeft, checked: eq.electricBlinds, onChange: (v) => eqPatch({ electricBlinds: v }) },
+                { key: "doubleGlazing",  label: "Doble acristalamiento", icon: LayoutPanelLeft, checked: eq.doubleGlazing,  onChange: (v) => eqPatch({ doubleGlazing: v }) },
               ]}
-              onChange={(v) =>
-                patch("equipment", { heatingType: v as "underfloor" | "central" | "gas" })
-              }
             />
-          </ToggleRow>
+          </SubGroup>
 
-          <ToggleRow
-            icon={Sparkles}
-            label="Cocina equipada"
-            checked={defaults.equipment.equippedKitchen}
-            onChange={(v) => patch("equipment", { equippedKitchen: v })}
-          >
-            <SegmentedControl
-              value={defaults.equipment.kitchenType ?? ""}
-              options={[
-                { value: "open",        label: "Abierta" },
-                { value: "independent", label: "Independ." },
+          {/* Espacios extra · armarios, vestidor, lavandería, bodega, chimenea */}
+          <SubGroup label="Espacios extra">
+            <IconCheckboxGrid
+              items={[
+                { key: "armariosEmpotrados", label: "Armarios empotrados", icon: Archive, checked: eq.armariosEmpotrados, onChange: (v) => eqPatch({ armariosEmpotrados: v }) },
+                { key: "vestidor",  label: "Vestidor",     icon: Shirt, checked: eq.vestidor,  onChange: (v) => eqPatch({ vestidor: v }) },
+                { key: "lavanderia", label: "Lavandería",   icon: Shirt, checked: eq.lavanderia, onChange: (v) => eqPatch({ lavanderia: v }) },
+                { key: "bodega",     label: "Bodega",       icon: Wine,  checked: eq.bodega,    onChange: (v) => eqPatch({ bodega: v }) },
+                { key: "chimenea",   label: "Chimenea",     icon: Flame, checked: eq.chimenea,  onChange: (v) => eqPatch({ chimenea: v }) },
+                { key: "ascensor",   label: "Ascensor",     icon: ArrowUpDown, checked: eq.ascensor, onChange: (v) => eqPatch({ ascensor: v }) },
               ]}
-              onChange={(v) => patch("equipment", { kitchenType: v as "open" | "independent" })}
             />
-          </ToggleRow>
+          </SubGroup>
 
-          <CheckboxGrid
-            items={[
-              { key: "domotics",       label: "Domótica",              checked: defaults.equipment.domotics,
-                onChange: (v) => patch("equipment", { domotics: v }) },
-              { key: "solarPanels",    label: "Paneles solares",       checked: defaults.equipment.solarPanels,
-                onChange: (v) => patch("equipment", { solarPanels: v }) },
-              { key: "electricBlinds", label: "Persianas eléctricas",  checked: defaults.equipment.electricBlinds,
-                onChange: (v) => patch("equipment", { electricBlinds: v }) },
-              { key: "doubleGlazing",  label: "Doble acristalamiento", checked: defaults.equipment.doubleGlazing,
-                onChange: (v) => patch("equipment", { doubleGlazing: v }) },
-            ]}
-          />
+          {/* Wellness · gym, sauna, jacuzzi, hammam */}
+          <SubGroup label="Wellness">
+            <IconCheckboxGrid
+              items={[
+                { key: "gym",     label: "Gimnasio", icon: Dumbbell, checked: eq.gym,     onChange: (v) => eqPatch({ gym: v }) },
+                { key: "sauna",   label: "Sauna",    icon: Flame,    checked: eq.sauna,   onChange: (v) => eqPatch({ sauna: v }) },
+                { key: "jacuzzi", label: "Jacuzzi",  icon: Bath,     checked: eq.jacuzzi, onChange: (v) => eqPatch({ jacuzzi: v }) },
+                { key: "hammam",  label: "Hammam",   icon: Bath,     checked: eq.hammam,  onChange: (v) => eqPatch({ hammam: v }) },
+              ]}
+            />
+          </SubGroup>
+
+          {/* Exterior y ocio · BBQ, tenis, pádel */}
+          <SubGroup label="Exterior y ocio">
+            <IconCheckboxGrid
+              items={[
+                { key: "bbq",   label: "Barbacoa (BBQ)", icon: Flame,      checked: eq.bbq,   onChange: (v) => eqPatch({ bbq: v }) },
+                { key: "tenis", label: "Pista de tenis", icon: Trophy,     checked: eq.tenis, onChange: (v) => eqPatch({ tenis: v }) },
+                { key: "padel", label: "Pista de pádel", icon: Volleyball, checked: eq.padel, onChange: (v) => eqPatch({ padel: v }) },
+              ]}
+            />
+          </SubGroup>
         </>
       );
+    }
 
     case "security":
       return (
@@ -746,21 +813,26 @@ function CategoryBody({
         />
       );
 
-    case "views":
+    case "views": {
+      const vw = defaults.views;
+      const vwPatch = (sub: Partial<PromotionDefaults["views"]>) => patch("views", sub);
       return (
-        <CheckboxGrid
+        <IconCheckboxGrid
           items={[
-            { key: "sea",        label: "Mar",        checked: defaults.views.sea,
-              onChange: (v) => patch("views", { sea: v }) },
-            { key: "mountain",   label: "Montaña",    checked: defaults.views.mountain,
-              onChange: (v) => patch("views", { mountain: v }) },
-            { key: "golf",       label: "Golf",       checked: defaults.views.golf,
-              onChange: (v) => patch("views", { golf: v }) },
-            { key: "panoramic",  label: "Panorámica", checked: defaults.views.panoramic,
-              onChange: (v) => patch("views", { panoramic: v }) },
+            { key: "sea",       label: "Mar",            icon: Waves,    checked: vw.sea,       onChange: (v) => vwPatch({ sea: v }) },
+            { key: "oceano",    label: "Océano",         icon: Ship,     checked: vw.oceano,    onChange: (v) => vwPatch({ oceano: v }) },
+            { key: "rio",       label: "Río",            icon: Waves,    checked: vw.rio,       onChange: (v) => vwPatch({ rio: v }) },
+            { key: "mountain",  label: "Montaña",        icon: Mountain, checked: vw.mountain,  onChange: (v) => vwPatch({ mountain: v }) },
+            { key: "ciudad",    label: "Ciudad",         icon: Building, checked: vw.ciudad,    onChange: (v) => vwPatch({ ciudad: v }) },
+            { key: "golf",      label: "Golf",           icon: Trophy,   checked: vw.golf,      onChange: (v) => vwPatch({ golf: v }) },
+            { key: "panoramic", label: "Panorámicas",    icon: Eye,      checked: vw.panoramic, onChange: (v) => vwPatch({ panoramic: v }) },
+            { key: "amanecer",  label: "Al amanecer",    icon: Sunrise,  checked: vw.amanecer,  onChange: (v) => vwPatch({ amanecer: v }) },
+            { key: "atardecer", label: "Al atardecer",   icon: Sunset,   checked: vw.atardecer, onChange: (v) => vwPatch({ atardecer: v }) },
+            { key: "abiertas",  label: "Vistas abiertas", icon: Maximize, checked: vw.abiertas,  onChange: (v) => vwPatch({ abiertas: v }) },
           ]}
         />
       );
+    }
 
     case "orientation":
       return (
@@ -971,6 +1043,78 @@ function CheckboxGrid({
           label={it.label}
         />
       ))}
+    </div>
+  );
+}
+
+/* ─── SubGroup · agrupador visual con label discreto ──────────── */
+function SubGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+        {label}
+      </p>
+      <div className="flex flex-col gap-2">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ─── IconCheckboxGrid · checkbox + icon + label · grid 2-3 col ───
+ *  Sustituye al `CheckboxGrid` plano cuando queremos cada item con
+ *  su icono · más visual y rápido de escanear. Click en cualquier
+ *  zona del item alterna el checkbox. */
+function IconCheckboxGrid({
+  items,
+}: {
+  items: {
+    key: string;
+    label: string;
+    icon: React.ElementType;
+    checked: boolean;
+    onChange: (v: boolean) => void;
+  }[];
+}) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {items.map((it) => {
+        const Icon = it.icon;
+        return (
+          <button
+            key={it.key}
+            type="button"
+            onClick={() => it.onChange(!it.checked)}
+            className={cn(
+              "flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors",
+              it.checked
+                ? "border-primary/50 bg-primary/5"
+                : "border-border bg-card hover:border-primary/30",
+            )}
+          >
+            <div className={cn(
+              "flex h-7 w-7 items-center justify-center rounded-lg shrink-0",
+              it.checked ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground",
+            )}>
+              <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+            </div>
+            <span className={cn(
+              "flex-1 text-[12.5px]",
+              it.checked ? "font-semibold text-foreground" : "text-foreground",
+            )}>
+              {it.label}
+            </span>
+            <span
+              className={cn(
+                "h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                it.checked ? "border-primary bg-primary" : "border-muted-foreground/30",
+              )}
+            >
+              {it.checked && <X className="h-2.5 w-2.5 text-primary-foreground rotate-45" strokeWidth={3} />}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

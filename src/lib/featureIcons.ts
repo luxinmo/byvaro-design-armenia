@@ -14,6 +14,9 @@ import {
   Car, TreePine, Baby, Umbrella, Bell, Volleyball, Footprints, Dog,
   CookingPot, Eye, PanelTop, Flower2, Cpu, Wind, Heater,
   Archive, Sun, Thermometer, Compass, ShieldAlert,
+  /* Equipment ampliado · vistas ampliadas */
+  Shirt, Wine, Bath, Flame, ArrowUpDown, LayoutPanelLeft, Trophy,
+  Mountain, Building, Sunrise, Sunset, Maximize, Ship,
   type LucideIcon,
 } from "lucide-react";
 
@@ -66,19 +69,38 @@ const FEATURE_CATALOG: Record<string, { icon: LucideIcon; label: string }> = {
   orientation:    { icon: Compass,      label: "Orientación" },
 
   /* Equipamiento sub-flags (ExtrasV5.equipment) */
-  airConditioning: { icon: Wind,         label: "Aire acondicionado" },
-  heating:         { icon: Thermometer,  label: "Calefacción" },
-  domotics:        { icon: Cpu,          label: "Domótica" },
-  solarPanels:     { icon: Sun,          label: "Paneles solares" },
-  electricBlinds:  { icon: PanelTop,     label: "Persianas eléctricas" },
-  doubleGlazing:   { icon: PanelTop,     label: "Doble acristalamiento" },
-  equippedKitchen: { icon: CookingPot,   label: "Cocina equipada" },
+  airConditioning:    { icon: Wind,            label: "Aire acondicionado" },
+  heating:            { icon: Thermometer,     label: "Calefacción" },
+  domotics:           { icon: Cpu,             label: "Domótica" },
+  solarPanels:        { icon: Sun,             label: "Paneles solares" },
+  electricBlinds:     { icon: PanelTop,        label: "Persianas eléctricas" },
+  doubleGlazing:      { icon: PanelTop,        label: "Doble acristalamiento" },
+  equippedKitchen:    { icon: UtensilsCrossed, label: "Cocina equipada" },
+  /* Equipment ampliado */
+  lavanderia:         { icon: Shirt,           label: "Lavandería" },
+  bodega:             { icon: Wine,            label: "Bodega" },
+  armariosEmpotrados: { icon: Archive,         label: "Armarios empotrados" },
+  vestidor:           { icon: Shirt,           label: "Vestidor" },
+  chimenea:           { icon: Flame,           label: "Chimenea" },
+  gym:                { icon: Dumbbell,        label: "Gimnasio" },
+  sauna:              { icon: Flame,           label: "Sauna" },
+  jacuzzi:            { icon: Bath,            label: "Jacuzzi" },
+  hammam:             { icon: Bath,            label: "Hammam" },
+  bbq:                { icon: Flame,           label: "Barbacoa (BBQ)" },
+  tenis:              { icon: Trophy,          label: "Pista de tenis" },
+  ascensor:           { icon: ArrowUpDown,     label: "Ascensor" },
 
-  /* Vistas (ExtrasV5.views) */
-  sea:        { icon: Eye, label: "Vistas al mar" },
-  mountain:   { icon: Eye, label: "Vistas a la montaña" },
-  golf:       { icon: Eye, label: "Vistas al golf" },
-  panoramic:  { icon: Eye, label: "Vistas panorámicas" },
+  /* Vistas (ExtrasV5.views) ampliadas */
+  sea:        { icon: Waves,    label: "Vistas al mar" },
+  oceano:     { icon: Ship,     label: "Vistas al océano" },
+  rio:        { icon: Waves,    label: "Vistas al río" },
+  mountain:   { icon: Mountain, label: "Vistas a la montaña" },
+  ciudad:     { icon: Building, label: "Vistas a la ciudad" },
+  golf:       { icon: Trophy,   label: "Vistas al golf" },
+  panoramic:  { icon: Eye,      label: "Vistas panorámicas" },
+  amanecer:   { icon: Sunrise,  label: "Vistas al amanecer" },
+  atardecer:  { icon: Sunset,   label: "Vistas al atardecer" },
+  abiertas:   { icon: Maximize, label: "Vistas abiertas" },
 
   /* Seguridad (ExtrasV5.security) */
   alarm:              { icon: ShieldAlert, label: "Alarma" },
