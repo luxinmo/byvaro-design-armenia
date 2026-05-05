@@ -2163,6 +2163,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                       views?: { sea?: boolean; mountain?: boolean; golf?: boolean; panoramic?: boolean };
                       terraces?: { enabled?: boolean; covered?: boolean; uncovered?: boolean };
                     };
+                    /* PillSelect · array de ids seleccionados desde
+                     *  InfoBasicaStep (cocina_equipada, vistas_mar,
+                     *  terraza, jardin_privado, smart_home,
+                     *  aire_acondicionado, suelo_radiante). */
+                    caracteristicasVivienda?: string[];
                   } };
                 }).metadata?.wizardSnapshot;
 
@@ -2192,6 +2197,12 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 const views = snap?.promotionDefaults?.views;
                 const terr = snap?.promotionDefaults?.terraces;
                 const featureIds: string[] = [];
+                /* Características seleccionadas en PillSelect · viven
+                 *  en `caracteristicasVivienda` (NO en
+                 *  promotionDefaults). Sin esto, lo que el user marca
+                 *  desde el modal "Características del hogar" no se
+                 *  reflejaba en la ficha · solo se veían las V5. */
+                for (const id of (snap?.caracteristicasVivienda ?? [])) featureIds.push(id);
                 if (eq?.airConditioning) featureIds.push("airConditioning");
                 if (eq?.heating) featureIds.push("heating");
                 if (eq?.equippedKitchen) featureIds.push("equippedKitchen");
