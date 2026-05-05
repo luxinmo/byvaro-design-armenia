@@ -31,6 +31,7 @@
 import { Promotion } from "@/data/promotions";
 import { TrendingUp, Home, Calendar, Euro, Banknote } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { resolveDelivery } from "@/lib/deliveryFormat";
 
 function formatPrice(n: number) {
   return new Intl.NumberFormat("es-ES", {
@@ -76,7 +77,7 @@ export function PromotionKPIs({ promotion: p }: { promotion: Promotion }) {
     {
       icon: Calendar,
       label: "Entrega estimada",
-      value: p.delivery || "Por confirmar",
+      value: resolveDelivery(p) || "Por confirmar",
       detail: "Desde firma de contrato",
       iconClass: "text-muted-foreground bg-muted",
     },

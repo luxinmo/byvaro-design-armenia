@@ -57,3 +57,37 @@ export function composeDelivery(input: DeliveryInputs): string {
   if (input.trimestreEntrega?.trim()) return input.trimestreEntrega.trim();
   return "";
 }
+
+/**
+ * resolveDelivery · ÚNICA fuente de verdad de "delivery" para mostrar
+ * al usuario. Usado por listado, ficha, drawer, panel agencia,
+ * microsite, emails, validadores publicación.
+ *
+ * Estrategia · si la promo tiene `metadata.wizardSnapshot`, recompute
+ * en runtime con `composeDelivery` (helper canónico, respeta
+ * `tipoEntrega`). Solo cae a `p.delivery` plano si no hay snapshot
+ * (legacy seeds, hidratación parcial).
+ *
+ * Por qué · la columna `promotions.delivery` se computó al CREAR/
+ * EDITAR con la versión vieja del helper (antes de PR #112) y puede
+ * estar stale ("T2 2026" cuando es "tras_licencia 12m"). Re-derivar
+ * desde el snapshot garantiza consistencia entre TODAS las pantallas
+ * sin esperar a la migración SQL.
+ *
+ * REGLA · siempre que vayas a leer "delivery" para mostrar al usuario,
+ * usa este helper. NO leas `p.delivery` directamente.
+ */
+export function resolveDelivery(p: {
+  delivery?: string | null;
+  metadata?: {
+    wizardSnapshot?: DeliveryInputs;
+  } | null;
+} | null | undefined): string {
+  if (!p) return "";
+  const snap = p.metadata?.wizardSnapshot;
+  if (snap) {
+    const fromSnap = composeDelivery(snap);
+    if (fromSnap) return fromSnap;
+  }
+  return p.delivery ?? "";
+}

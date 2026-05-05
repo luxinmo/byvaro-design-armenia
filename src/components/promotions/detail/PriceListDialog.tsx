@@ -35,6 +35,7 @@ import { Download, Printer, X, Building2, QrCode, MapPin, CreditCard, PenLine, M
 import QRCode from "qrcode";
 import { toast } from "sonner";
 import type { Promotion } from "@/data/promotions";
+import { resolveDelivery } from "@/lib/deliveryFormat";
 import { unitsByPromotion, type Unit } from "@/data/units";
 import { useEmpresa } from "@/lib/empresa";
 import { getOwnerRoleLabelLower } from "@/lib/promotionRole";
@@ -394,7 +395,7 @@ export function PriceListDialog({ open, onOpenChange, promotion, agencyMode = fa
               <div className="grid grid-cols-[1fr_auto] gap-5 mb-6">
                 <div className="grid grid-cols-3 gap-3">
                   <InfoCell label={t.ubicacion} value={promotion.location || "—"} color={color} />
-                  <InfoCell label={t.entrega} value={promotion.delivery || "—"} color={color} />
+                  <InfoCell label={t.entrega} value={resolveDelivery(promotion) || "—"} color={color} />
                   <InfoCell
                     label={t.unidades}
                     value={`${filteredUnits.length} / ${promotion.totalUnits}`}
@@ -895,7 +896,7 @@ function TemplateEditorial({
             { label: idioma === "es" ? "Desde" : "From", value: formatPrice(promotion.priceMin, idioma === "es" ? "es-ES" : "en-GB") },
             { label: idioma === "es" ? "Hasta" : "Up to", value: formatPrice(promotion.priceMax, idioma === "es" ? "es-ES" : "en-GB") },
             { label: t.disponibles, value: `${promotion.availableUnits} / ${promotion.totalUnits}` },
-            { label: t.entrega, value: promotion.delivery || "—" },
+            { label: t.entrega, value: resolveDelivery(promotion) || "—" },
           ].map((item) => (
             <div key={item.label} className="px-3 py-3">
               <dt className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">{item.label}</dt>

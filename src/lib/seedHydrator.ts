@@ -112,12 +112,14 @@ function rowToDevPromotion(r: PromotionRow): DevPromotion {
       modoValidacionRegistro?: string;
     };
   };
-  /* Delivery · fallback desde wizardSnapshot vía helper canónico.
-   * Cubre promos legacy con `r.delivery=null`. */
-  let derivedDelivery: string | null = r.delivery;
-  if (!derivedDelivery && meta.wizardSnapshot) {
+  /* Delivery · ÚNICA fuente · recompute desde wizardSnapshot SIEMPRE
+   * que exista (helper canónico respeta tipoEntrega · evita valores
+   * stale en columna DB). Solo cae a `r.delivery` si no hay snapshot. */
+  let derivedDelivery: string | null = null;
+  if (meta.wizardSnapshot) {
     derivedDelivery = composeDelivery(meta.wizardSnapshot) || null;
   }
+  if (!derivedDelivery) derivedDelivery = r.delivery;
 
   /* CollaborationConfig · 2 fuentes en orden de preferencia:
    *  1. `meta.collaboration` (escrito por createPromotionFromWizard

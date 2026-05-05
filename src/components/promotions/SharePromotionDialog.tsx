@@ -25,6 +25,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { memCache } from "@/lib/memCache";
+import { resolveDelivery } from "@/lib/deliveryFormat";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1193,7 +1194,7 @@ export function SharePromotionDialog({ open, onOpenChange, promotionName, promot
                                 <p className="text-sm font-semibold text-foreground truncate">{p.name}</p>
                                 <p className="text-[11px] text-muted-foreground truncate">
                                   {p.location}
-                                  {p.delivery ? ` · Entrega ${p.delivery}` : ""}
+                                  {resolveDelivery(p) ? ` · Entrega ${resolveDelivery(p)}` : ""}
                                   {p.availableUnits != null ? ` · ${p.availableUnits}/${p.totalUnits} disponibles` : ""}
                                 </p>
                               </div>

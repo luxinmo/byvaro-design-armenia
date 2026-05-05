@@ -22,6 +22,7 @@ import {
 } from "@/lib/promotionsByOwner";
 import { EditableSection } from "./EditableSection";
 import { cn } from "@/lib/utils";
+import { resolveDelivery } from "@/lib/deliveryFormat";
 import { useCurrentUser } from "@/lib/currentUser";
 import { usePlanState } from "@/lib/plan";
 
@@ -140,8 +141,8 @@ function PortfolioCard({
             />
           </div>
         </div>
-        {promotion.delivery && (
-          <span className="text-[10px] text-muted-foreground tnum shrink-0">{promotion.delivery}</span>
+        {resolveDelivery(promotion) && (
+          <span className="text-[10px] text-muted-foreground tnum shrink-0">{resolveDelivery(promotion)}</span>
         )}
       </div>
     </button>

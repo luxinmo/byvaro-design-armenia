@@ -16,7 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { promotions, getBuildingTypeLabel, isUnifamiliar, type Promotion } from "@/data/promotions";
-import { composeDelivery } from "@/lib/deliveryFormat";
+import { composeDelivery, resolveDelivery } from "@/lib/deliveryFormat";
 import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import { developerOnlyPromotions, type DevPromotion } from "@/data/developerPromotions";
 import { unitsByPromotion } from "@/data/units";
@@ -587,12 +587,17 @@ export default function Promociones() {
           mesesTrasLicencia?: number;
         };
       };
-      /* Delivery fallback desde wizardSnapshot · helper canónico
-       * `composeDelivery`. */
-      let derivedDelivery: string | null = p.delivery;
-      if (!derivedDelivery && meta.wizardSnapshot) {
+      /* Delivery · ÚNICA fuente de verdad · recompute desde
+       * wizardSnapshot SIEMPRE que exista (helper canónico respeta
+       * tipoEntrega). Solo cae a `p.delivery` plano si no hay
+       * snapshot (legacy seeds). Sin esto, promos creadas antes de
+       * PR #112 muestran trimestre stale ("T2 2026") cuando el
+       * tipoEntrega real es "tras_licencia". */
+      let derivedDelivery: string | null = null;
+      if (meta.wizardSnapshot) {
         derivedDelivery = composeDelivery(meta.wizardSnapshot) || null;
       }
+      if (!derivedDelivery) derivedDelivery = p.delivery;
       return {
         id: p.id,
         code: p.code,
@@ -833,7 +838,7 @@ export default function Promociones() {
   const deliveryOptions = useMemo(() => {
     const years = new Set<string>();
     allPromotions.forEach(p => {
-      const y = getDeliveryYear(p.delivery);
+      const y = getDeliveryYear(resolveDelivery(p));
       if (y !== 9999) years.add(String(y));
     });
     return [
@@ -1078,7 +1083,7 @@ export default function Promociones() {
       if (priceMax !== null && p.priceMin > priceMax) return false;
 
       if (selectedDelivery.length > 0) {
-        const promoYear = getDeliveryYear(p.delivery);
+        const promoYear = getDeliveryYear(resolveDelivery(p));
         const ok = selectedDelivery.some(d => {
           if (d === "ready") return promoYear <= new Date().getFullYear();
           return String(promoYear) === d;
@@ -1135,7 +1140,7 @@ export default function Promociones() {
       case "priceDesc":
         return arr.sort((a, b) => getEffectivePrice(b, "max") - getEffectivePrice(a, "max"));
       case "deliveryAsc":
-        return arr.sort((a, b) => getDeliveryYear(a.delivery) - getDeliveryYear(b.delivery));
+        return arr.sort((a, b) => getDeliveryYear(resolveDelivery(a)) - getDeliveryYear(resolveDelivery(b)));
       case "availability":
         return arr.sort((a, b) => b.availableUnits - a.availableUnits);
       case "recent":
@@ -1540,8 +1545,8 @@ export default function Promociones() {
                             </h3>
                             <div className="flex flex-wrap items-center gap-x-2 text-sm xl:text-xs text-muted-foreground">
                               {promoterName && <span>{promoterName}</span>}
-                              {promoterName && p.delivery && <span className="text-border">·</span>}
-                              {p.delivery && <span>Entrega {p.delivery}</span>}
+                              {promoterName && resolveDelivery(p) && <span className="text-border">·</span>}
+                              {resolveDelivery(p) && <span>Entrega {resolveDelivery(p)}</span>}
                             </div>
                           </div>
                         </div>
@@ -2461,7 +2466,7 @@ function PromoCardCompact({ promo: p, isTrending, isAgencyUser }: { promo: DevPr
         <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground truncate">{p.location}</p>
         <h3 className="text-[15px] font-bold text-foreground mt-0.5 truncate">{p.name}</h3>
         <p className="text-[11.5px] text-muted-foreground mt-0.5 truncate">
-          {getPromoterDisplayName(p)} · {p.delivery}
+          {getPromoterDisplayName(p)} · {resolveDelivery(p)}
         </p>
         {/* Chip "Licencia" · lee tieneLicencia real del wizardSnapshot ·
             true → "Licencia concedida" verde · false → "Sin licencia"
