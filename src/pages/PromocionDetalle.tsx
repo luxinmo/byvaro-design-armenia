@@ -4,6 +4,7 @@ import { useTabParam } from "@/lib/useTabParam";
 import { getDraft, saveDraft as persistDraft, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
 import { deleteCreatedPromotion, getCreatedPromotions } from "@/lib/promotionsStorage";
 import { composeDelivery } from "@/lib/deliveryFormat";
+import { feature } from "@/lib/featureIcons";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { WizardState, FotoItem, FotoCategoria } from "@/components/crear-promocion/types";
 import { faseConstruccionOptions, constructionPhaseLabelFromProgress } from "@/components/crear-promocion/options";
@@ -2150,32 +2151,34 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   coworking: "Coworking", aparcamiento_visitas: "Parking visitas",
                   cargador_vehiculo: "Carga vehículo eléctrico",
                 };
-                const amenities = (snap?.zonasComunes ?? [])
-                  .map((id) => ZONA_LABEL[id] ?? id);
+                /* IDs (no labels) · el render usa `feature(id)` para
+                 *  obtener `{ icon, label }` canónicos del helper
+                 *  `lib/featureIcons.ts`. Los ids deben coincidir con
+                 *  el catálogo allí · el ZONA_LABEL local queda como
+                 *  fallback para zonas sin entry en el catálogo. */
+                const amenityIds = (snap?.zonasComunes ?? []) as string[];
 
-                /* Características del hogar · derivamos labels reales
-                 *  desde los flags del promotionDefaults. */
                 const eq = snap?.promotionDefaults?.equipment;
                 const sec = snap?.promotionDefaults?.security;
                 const views = snap?.promotionDefaults?.views;
                 const terr = snap?.promotionDefaults?.terraces;
-                const features: string[] = [];
-                if (eq?.airConditioning) features.push("Aire acondicionado");
-                if (eq?.heating) features.push("Calefacción");
-                if (eq?.equippedKitchen) features.push("Cocina equipada");
-                if (eq?.domotics) features.push("Domótica");
-                if (eq?.solarPanels) features.push("Paneles solares");
-                if (eq?.electricBlinds) features.push("Persianas eléctricas");
-                if (eq?.doubleGlazing) features.push("Doble acristalamiento");
-                if (terr?.covered) features.push("Terraza cubierta");
-                if (terr?.uncovered) features.push("Terraza descubierta");
-                if (sec?.alarm) features.push("Alarma");
-                if (sec?.reinforcedDoor) features.push("Puerta blindada");
-                if (sec?.videoSurveillance) features.push("Videovigilancia");
-                if (views?.sea) features.push("Vistas al mar");
-                if (views?.mountain) features.push("Vistas a montaña");
-                if (views?.golf) features.push("Vistas a golf");
-                if (views?.panoramic) features.push("Vistas panorámicas");
+                const featureIds: string[] = [];
+                if (eq?.airConditioning) featureIds.push("airConditioning");
+                if (eq?.heating) featureIds.push("heating");
+                if (eq?.equippedKitchen) featureIds.push("equippedKitchen");
+                if (eq?.domotics) featureIds.push("domotics");
+                if (eq?.solarPanels) featureIds.push("solarPanels");
+                if (eq?.electricBlinds) featureIds.push("electricBlinds");
+                if (eq?.doubleGlazing) featureIds.push("doubleGlazing");
+                if (terr?.covered) featureIds.push("terraza");
+                if (terr?.uncovered) featureIds.push("terraza");
+                if (sec?.alarm) featureIds.push("alarm");
+                if (sec?.reinforcedDoor) featureIds.push("reinforcedDoor");
+                if (sec?.videoSurveillance) featureIds.push("videoSurveillance");
+                if (views?.sea) featureIds.push("sea");
+                if (views?.mountain) featureIds.push("mountain");
+                if (views?.golf) featureIds.push("golf");
+                if (views?.panoramic) featureIds.push("panoramic");
 
                 return (
                   <div className="space-y-4">
@@ -2187,28 +2190,44 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                           : <p className="text-xs text-muted-foreground italic">Sin tipologías marcadas</p>}
                       </div>
                     </div>
-                    {/* Amenities · solo si está dentro de urbanización
-                        Y hay zonas marcadas. Si no aplica, oculto el
-                        bloque entero (no es un dato obligatorio). */}
-                    {snap?.urbanizacion && amenities.length > 0 && (
+                    {/* Amenities urbanización · chips con icono. */}
+                    {snap?.urbanizacion && amenityIds.length > 0 && (
                       <>
                         <div className="h-px bg-border/40" />
                         <div>
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Amenities de la urbanización</p>
                           <div className="flex flex-wrap gap-1.5">
-                            {amenities.map(a => <Tag key={a} variant="default" size="sm">{a}</Tag>)}
+                            {amenityIds.map((id) => {
+                              const f = feature(id);
+                              const label = ZONA_LABEL[id] ?? f.label;
+                              return (
+                                <span key={id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-foreground">
+                                  <f.icon className="h-3 w-3 text-primary" strokeWidth={1.75} />
+                                  {label}
+                                </span>
+                              );
+                            })}
                           </div>
                         </div>
                       </>
                     )}
-                    {/* Características del hogar · solo si hay alguna
-                        marcada. Si vacío, hint para invitar a editar. */}
+                    {/* Características del hogar · chips con icono. */}
                     <div className="h-px bg-border/40" />
                     <div>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Características del hogar</p>
-                      {features.length > 0 ? (
+                      {featureIds.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
-                          {features.map(f => <Tag key={f} variant="default" size="sm">{f}</Tag>)}
+                          {/* Dedupe defensivo · "terraza" puede entrar 2x
+                            * (cubierta + descubierta) · mostrar 1 sola. */}
+                          {[...new Set(featureIds)].map((id) => {
+                            const f = feature(id);
+                            return (
+                              <span key={id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-foreground">
+                                <f.icon className="h-3 w-3 text-primary" strokeWidth={1.75} />
+                                {f.label}
+                              </span>
+                            );
+                          })}
                         </div>
                       ) : (
                         <p className="text-xs text-muted-foreground italic">
