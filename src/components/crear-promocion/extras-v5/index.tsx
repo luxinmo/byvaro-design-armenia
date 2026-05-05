@@ -24,6 +24,7 @@ import {
   /* Equipment ampliado · iconos para nuevas opciones */
   Shirt, Wine, Dumbbell, Bath, Flame, UtensilsCrossed,
   ArrowUpDown, LayoutPanelLeft, Cpu, Volleyball, Trophy,
+  BatteryCharging,
   /* Views ampliadas */
   Mountain, Building, Sunrise, Sunset, Maximize, Ship,
 } from "lucide-react";
@@ -781,10 +782,11 @@ function CategoryBody({
           <SubGroup label="Eficiencia y smart">
             <IconCheckboxGrid
               items={[
-                { key: "domotics",       label: "Domótica",              icon: Cpu,         checked: eq.domotics,        onChange: (v) => eqPatch({ domotics: v }) },
-                { key: "solarPanels",    label: "Paneles solares",       icon: Sun,         checked: eq.solarPanels,     onChange: (v) => eqPatch({ solarPanels: v }) },
-                { key: "electricBlinds", label: "Persianas eléctricas",  icon: LayoutPanelLeft, checked: eq.electricBlinds, onChange: (v) => eqPatch({ electricBlinds: v }) },
-                { key: "doubleGlazing",  label: "Doble acristalamiento", icon: LayoutPanelLeft, checked: eq.doubleGlazing,  onChange: (v) => eqPatch({ doubleGlazing: v }) },
+                { key: "domotics",       label: "Domótica",              icon: Cpu,             checked: eq.domotics,        onChange: (v) => eqPatch({ domotics: v }) },
+                { key: "solarPanels",    label: "Paneles solares",       icon: Sun,             checked: eq.solarPanels,     onChange: (v) => eqPatch({ solarPanels: v }) },
+                { key: "chargingPoint",  label: "Punto de carga VE",     icon: BatteryCharging, checked: eq.chargingPoint,   onChange: (v) => eqPatch({ chargingPoint: v }) },
+                { key: "electricBlinds", label: "Persianas eléctricas",  icon: LayoutPanelLeft, checked: eq.electricBlinds,  onChange: (v) => eqPatch({ electricBlinds: v }) },
+                { key: "doubleGlazing",  label: "Doble acristalamiento", icon: LayoutPanelLeft, checked: eq.doubleGlazing,   onChange: (v) => eqPatch({ doubleGlazing: v }) },
               ]}
             />
           </SubGroup>

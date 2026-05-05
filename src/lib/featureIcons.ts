@@ -17,6 +17,7 @@ import {
   /* Equipment ampliado · vistas ampliadas */
   Shirt, Wine, Bath, Flame, ArrowUpDown, LayoutPanelLeft, Trophy,
   Mountain, Building, Sunrise, Sunset, Maximize, Ship,
+  BatteryCharging,
   type LucideIcon,
 } from "lucide-react";
 
@@ -75,6 +76,7 @@ const FEATURE_CATALOG: Record<string, { icon: LucideIcon; label: string }> = {
   solarPanels:        { icon: Sun,             label: "Paneles solares" },
   electricBlinds:     { icon: PanelTop,        label: "Persianas eléctricas" },
   doubleGlazing:      { icon: PanelTop,        label: "Doble acristalamiento" },
+  chargingPoint:      { icon: BatteryCharging, label: "Punto de carga VE" },
   equippedKitchen:    { icon: UtensilsCrossed, label: "Cocina equipada" },
   /* Equipment ampliado */
   lavanderia:         { icon: Shirt,           label: "Lavandería" },
