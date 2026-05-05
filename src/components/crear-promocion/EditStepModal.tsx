@@ -162,7 +162,7 @@ export function EditStepModal({
              * solárium, equipamiento, seguridad, vistas, orientación)
              * y 8/14 (info básica sin nombre ni ubicación · estilo
              * arquitectónico, tipologías, amenities, características
-             * de vivienda, urbanización, certificado energético). */}
+             * de vivienda, urbanización, certificado energético). */
             <div className="flex flex-col gap-6">
               <ExtrasV5 state={state} update={update} />
               <InfoBasicaStep
