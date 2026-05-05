@@ -597,6 +597,8 @@ function CategoryBody({
           <PriceModeControl
             value={defaults.privatePool.priceMode}
             onChange={(v) => patch("privatePool", { priceMode: v })}
+            optionalPrice={defaults.privatePool.optionalPrice}
+            onOptionalPriceChange={(v) => patch("privatePool", { optionalPrice: v })}
           />
         </>
       );
@@ -624,6 +626,8 @@ function CategoryBody({
           <PriceModeControl
             value={defaults.parking.priceMode}
             onChange={(v) => patch("parking", { priceMode: v })}
+            optionalPrice={defaults.parking.optionalPrice}
+            onOptionalPriceChange={(v) => patch("parking", { optionalPrice: v })}
           />
           {!isSingleHome && (
             <AppliesToControl
@@ -646,6 +650,8 @@ function CategoryBody({
           <PriceModeControl
             value={defaults.storageRoom.priceMode}
             onChange={(v) => patch("storageRoom", { priceMode: v })}
+            optionalPrice={defaults.storageRoom.optionalPrice}
+            onOptionalPriceChange={(v) => patch("storageRoom", { optionalPrice: v })}
           />
         </>
       );
@@ -662,6 +668,8 @@ function CategoryBody({
           <PriceModeControl
             value={defaults.solarium.priceMode}
             onChange={(v) => patch("solarium", { priceMode: v })}
+            optionalPrice={defaults.solarium.optionalPrice}
+            onOptionalPriceChange={(v) => patch("solarium", { optionalPrice: v })}
           />
         </>
       );
@@ -984,20 +992,45 @@ function AppliesToControl({
 
 function PriceModeControl({
   value, onChange,
+  optionalPrice, onOptionalPriceChange,
 }: {
-  value: PriceMode | null; onChange: (v: PriceMode) => void;
+  value: PriceMode | null;
+  onChange: (v: PriceMode) => void;
+  /** Precio (€) cuando `value === "optional"` · captura el upsell que
+   *  el promotor cobra por activar el extra en cada unidad. Solo se
+   *  renderiza cuando "Opcional" está seleccionado. */
+  optionalPrice?: number | null;
+  onOptionalPriceChange?: (v: number | null) => void;
 }) {
   return (
-    <SegmentedControl
-      label="Precio"
-      value={value ?? ""}
-      options={[
-        { value: "included",     label: "Incluido" },
-        { value: "optional",     label: "Opcional" },
-        { value: "not_included", label: "No incluido" },
-      ]}
-      onChange={onChange}
-    />
+    <div className="flex flex-col gap-2.5">
+      <SegmentedControl
+        label="Precio"
+        value={value ?? ""}
+        options={[
+          { value: "included",     label: "Incluido" },
+          { value: "optional",     label: "Opcional" },
+          { value: "not_included", label: "No incluido" },
+        ]}
+        onChange={onChange}
+      />
+      {value === "optional" && onOptionalPriceChange && (
+        <Row label="Precio opcional">
+          <input
+            type="text"
+            inputMode="numeric"
+            value={optionalPrice && optionalPrice > 0 ? optionalPrice.toLocaleString("es-ES") : ""}
+            placeholder="0"
+            onChange={(e) => {
+              const digits = e.target.value.replace(/[^0-9]/g, "");
+              onOptionalPriceChange(digits === "" ? null : Number(digits));
+            }}
+            className="w-32 h-8 rounded-lg border border-border bg-background px-2.5 text-[13px] tnum text-right focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <span className="text-[12px] text-muted-foreground">€</span>
+        </Row>
+      )}
+    </div>
   );
 }
 
