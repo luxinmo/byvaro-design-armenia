@@ -40,6 +40,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Promotion } from "@/data/promotions";
 import { getPromoterDisplayName } from "@/lib/promotionRole";
+import { getPropertyTypeLabel } from "@/lib/propertyTypes";
 import { useCurrentUser } from "@/lib/currentUser";
 import { developerHref } from "@/lib/developerNavigation";
 import { MapPin, Share2, Heart, Printer, ExternalLink, ArrowUpRight, Image as ImageIcon } from "lucide-react";
@@ -173,7 +174,7 @@ export function PromotionHero({ promotion: p }: { promotion: Promotion }) {
             <MapPin className="h-3.5 w-3.5 shrink-0" />
             <span className="text-sm">{p.location}, España</span>
             <span className="text-xs text-border">·</span>
-            <span className="text-sm">{p.propertyTypes.join(", ")}</span>
+            <span className="text-sm">{p.propertyTypes.map(getPropertyTypeLabel).join(", ")}</span>
           </div>
           {(() => {
             const promoter = getPromoterDisplayName(p);

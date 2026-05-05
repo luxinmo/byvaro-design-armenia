@@ -19,6 +19,7 @@ import { memCache } from "./memCache";
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
 import { unitsByPromotion, type Unit } from "@/data/units";
 import { composeDelivery } from "./deliveryFormat";
+import { resolvePropertyTypes } from "./propertyTypes";
 
 const CREATED_KEY = "byvaro.promotions.created.v1";
 
@@ -67,10 +68,11 @@ export function deriveFlatMetadata(state: WizardState): {
   reservationCost: number;
   commission: number;
 } {
-  const propertyTypes = (state.tipologiasSeleccionadas ?? [])
-    .map((t) => t.tipo)
-    .filter((t): t is string => !!t);
-  if (propertyTypes.length === 0 && state.subVarias) propertyTypes.push(state.subVarias);
+  /* Helper canónico · ids raw del wizard. Garantiza coherencia entre
+   *  create y edit override (antes este path guardaba raw mientras
+   *  wizardStateToPromotion mapeaba a labels · divergía y filtros
+   *  del listado dejaban de matchear). */
+  const propertyTypes = resolvePropertyTypes(state);
 
   const buildingType =
     state.tipo === "unifamiliar"
