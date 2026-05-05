@@ -4,6 +4,7 @@ import { useTabParam } from "@/lib/useTabParam";
 import { getDraft, saveDraft as persistDraft, deleteDraft, draftToPromotionData, DRAFT_ID_PREFIX, type PromotionDraft } from "@/lib/promotionDrafts";
 import { deleteCreatedPromotion, getCreatedPromotions } from "@/lib/promotionsStorage";
 import { composeDelivery, resolveDelivery } from "@/lib/deliveryFormat";
+import { resolveLicenseGranted } from "@/lib/promotionFlatMeta";
 import { getPropertyTypeLabel } from "@/lib/propertyTypes";
 import { feature } from "@/lib/featureIcons";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -1908,8 +1909,9 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                     real · NO hardcoded. true → verde · false → muted ·
                     null/undefined → no se renderiza el bloque. */}
                 {(() => {
-                  const wsTieneLic = (p as { metadata?: { wizardSnapshot?: { tieneLicencia?: boolean | null } } })
-                    .metadata?.wizardSnapshot?.tieneLicencia;
+                  /* Helper canónico · prefiere metadata.licenseGranted plano
+                   *  · cae a wizardSnapshot.tieneLicencia · null si nada. */
+                  const wsTieneLic = resolveLicenseGranted(p);
                   if (wsTieneLic == null) return null;
                   const granted = wsTieneLic === true;
                   return (

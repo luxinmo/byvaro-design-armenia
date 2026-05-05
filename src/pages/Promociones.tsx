@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { promotions, getBuildingTypeLabel, isUnifamiliar, type Promotion } from "@/data/promotions";
 import { composeDelivery, resolveDelivery } from "@/lib/deliveryFormat";
+import { resolveLicenseGranted } from "@/lib/promotionFlatMeta";
 import { normalizePropertyType, getPropertyTypeLabel } from "@/lib/propertyTypes";
 import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import { developerOnlyPromotions, type DevPromotion } from "@/data/developerPromotions";
@@ -1568,9 +1569,8 @@ export default function Promociones() {
                           note la diferencia. Si null (no preguntado),
                           no mostramos chip. */}
                       {(() => {
-                        const meta = (p as { metadata?: Record<string, unknown> }).metadata;
-                        const ws = meta?.wizardSnapshot as { tieneLicencia?: boolean | null } | undefined;
-                        const wsTieneLic = ws?.tieneLicencia;
+                        /* Helper canónico · plano > snapshot > null. */
+                        const wsTieneLic = resolveLicenseGranted(p);
                         if (wsTieneLic === true) {
                           return (
                             <span className="inline-flex items-center gap-1 text-[11px] font-medium text-success">
@@ -2450,8 +2450,8 @@ function PromoCardCompact({ promo: p, isTrending, isAgencyUser }: { promo: DevPr
             muted · null/undefined → no aparece. Coherencia con la list
             view del listado. */}
         {(() => {
-          const wsTieneLic = (p as { metadata?: { wizardSnapshot?: { tieneLicencia?: boolean | null } } })
-            .metadata?.wizardSnapshot?.tieneLicencia;
+          /* Helper canónico · plano > snapshot > null. */
+          const wsTieneLic = resolveLicenseGranted(p);
           if (wsTieneLic === true) {
             return (
               <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-success mt-1">

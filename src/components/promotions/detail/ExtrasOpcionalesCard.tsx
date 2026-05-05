@@ -28,6 +28,7 @@ import { Pencil } from "lucide-react";
 import { feature } from "@/lib/featureIcons";
 import { cn } from "@/lib/utils";
 import type { Promotion } from "@/data/promotions";
+import { resolveAllExtras } from "@/lib/promotionFlatMeta";
 
 type ExtraKey = "privatePool" | "parking" | "storageRoom" | "basement" | "solarium";
 
@@ -55,13 +56,12 @@ export function ExtrasOpcionalesCard({
    *  con todas las categorías esenciales (incluye añadir/quitar). */
   onEditAll: () => void;
 }) {
-  const snap = (promotion as unknown as {
-    metadata?: { wizardSnapshot?: { promotionDefaults?: Record<ExtraKey, ExtraSlot> } };
-  }).metadata?.wizardSnapshot?.promotionDefaults;
-
-  if (!snap) return null;
-
-  const activeKeys = ORDER.filter((k) => snap[k]?.enabled);
+  /* Helper canónico · prefiere `metadata.extras` plano · cae al
+   *  `wizardSnapshot.promotionDefaults` legacy. Sin esto, el bloque
+   *  desaparecía cuando la promo se hidrataba sin wizardSnapshot
+   *  (legacy seeds, agencia mirror). */
+  const extras = resolveAllExtras(promotion);
+  const activeKeys = ORDER.filter((k) => extras[k].enabled);
   if (activeKeys.length === 0) return null;
 
   return (
@@ -83,7 +83,7 @@ export function ExtrasOpcionalesCard({
             <ExtraTile
               key={k}
               featureKey={k}
-              slot={snap[k]}
+              slot={extras[k]}
               disabled={hideEdit}
               onClick={() => onEdit(k)}
             />

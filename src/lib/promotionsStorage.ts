@@ -62,12 +62,36 @@ export interface CreatedPromotion {
  * distinto · ediciones de comisión/tipo/etc. no se reflejaban en el
  * listado tras refresh (porque metadata flat seguía con valores
  * viejos del create inicial). */
+/** Sub-shape proyectado de `promotionDefaults` · solo los anejos con
+ *  precio que el bloque "Extras y opcionales" de la ficha consume.
+ *  Si `metadata.wizardSnapshot.promotionDefaults` se pierde (legacy
+ *  seed, agencia mirror, hidratación parcial), este flat permite que
+ *  la ficha siga renderizando el bloque correctamente. */
+export interface FlatExtras {
+  privatePool: { enabled: boolean; priceMode: string | null; optionalPrice: number | null };
+  parking:     { enabled: boolean; priceMode: string | null; optionalPrice: number | null };
+  storageRoom: { enabled: boolean; priceMode: string | null; optionalPrice: number | null };
+  basement:    { enabled: boolean; priceMode: string | null; optionalPrice: number | null };
+  solarium:    { enabled: boolean; priceMode: string | null; optionalPrice: number | null };
+}
+
 export function deriveFlatMetadata(state: WizardState): {
   propertyTypes: string[];
   buildingType: "plurifamiliar" | "unifamiliar-single" | "unifamiliar-multiple" | undefined;
   constructionProgress: number | undefined;
   reservationCost: number;
   commission: number;
+  /** Estado legal · `true` = licencia concedida, `false` = sin licencia,
+   *  `null` = no decidido. Antes vivía SOLO en `metadata.wizardSnapshot.tieneLicencia`
+   *  · al hidratar desde seed legacy o desde DB sin snapshot, el chip
+   *  "Licencia" desaparecía. Proyectarlo a metadata plano lo mantiene
+   *  visible siempre. */
+  licenseGranted: boolean | null;
+  /** Anejos con precio (piscina/parking/trastero/sótano/solárium) · igual
+   *  motivación que `licenseGranted` · sin esto el bloque "Extras y
+   *  opcionales" de la ficha desaparece silenciosamente cuando el
+   *  snapshot no se hidrata. */
+  extras: FlatExtras;
 } {
   /* Helper canónico · ids raw del wizard. Garantiza coherencia entre
    *  create y edit override (antes este path guardaba raw mientras
@@ -86,12 +110,31 @@ export function deriveFlatMetadata(state: WizardState): {
    *  `constructionProgressOverride` y bajaba el % al editar. */
   const constructionProgress = resolveConstructionProgress(state);
 
+  /* Extras flat · subset proyectado del wizardSnapshot.promotionDefaults
+   *  con los 5 anejos que tienen priceMode. Si el state no tiene defaults
+   *  (drafts pre-V5), se devuelven todos como `enabled: false`. */
+  const d = state.promotionDefaults;
+  const extra = (slot: { enabled?: boolean; priceMode?: string | null; optionalPrice?: number | null } | undefined) => ({
+    enabled: !!slot?.enabled,
+    priceMode: slot?.priceMode ?? null,
+    optionalPrice: slot?.optionalPrice ?? null,
+  });
+  const extras: FlatExtras = {
+    privatePool: extra(d?.privatePool),
+    parking:     extra(d?.parking),
+    storageRoom: extra(d?.storageRoom),
+    basement:    extra(d?.basement),
+    solarium:    extra(d?.solarium),
+  };
+
   return {
     propertyTypes,
     buildingType,
     constructionProgress,
     reservationCost: typeof state.importeReserva === "number" ? state.importeReserva : 0,
     commission: typeof state.comisionInternacional === "number" ? state.comisionInternacional : 0,
+    licenseGranted: typeof state.tieneLicencia === "boolean" ? state.tieneLicencia : null,
+    extras,
   };
 }
 
@@ -265,7 +308,7 @@ export async function createPromotionFromWizard(
    *  `deriveFlatMetadata` para que tanto el create como el save
    *  override usen el mismo derivado. */
   const flat = deriveFlatMetadata(state);
-  const { propertyTypes, buildingType, constructionProgress, reservationCost, commission } = flat;
+  const { propertyTypes, buildingType, constructionProgress, reservationCost, commission, licenseGranted, extras } = flat;
   const canShareWithAgencies = state.colaboracion === true;
   /* CollaborationConfig completa · solo cuando se comparte con
    *  agencias. Sin esto, al refrescar la ficha tras crear, el
@@ -315,6 +358,11 @@ export async function createPromotionFromWizard(
       reservationCost,
       commission,
       collaboration,
+      /* `licenseGranted` y `extras` planos · sin esto el chip Licencia
+       *  y el bloque "Extras y opcionales" desaparecen cuando el
+       *  wizardSnapshot no se hidrata (legacy seeds, agencia mirror). */
+      licenseGranted,
+      extras,
       /* Snapshot completo del state · usado por adapters que
        *  necesitan info granular (Promociones.tsx createdAsDev,
        *  PromocionDetalle, etc.). Mantener al final · grande. */
