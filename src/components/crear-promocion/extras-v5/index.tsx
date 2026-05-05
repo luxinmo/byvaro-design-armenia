@@ -160,6 +160,18 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane }: P
     } as PromotionDefaults);
   }
 
+  /* Registra orden de selección · cada vez que el user toggle una
+   *  feature, su id se mete al INICIO de selectedOrder. Al
+   *  desmarcar, se quita. La ficha pinta los chips en este orden ·
+   *  el último marcado aparece primero. */
+  function recordSelection(key: string, checked: boolean) {
+    const current = defaults.selectedOrder ?? [];
+    const next = checked
+      ? [key, ...current.filter((k) => k !== key)]
+      : current.filter((k) => k !== key);
+    update("promotionDefaults", { ...defaults, selectedOrder: next });
+  }
+
   function add(k: CategoryKey) {
     setManualAdded((prev) => new Set(prev).add(k));
     /* Single-home · si la categoría tiene `appliesTo` y el control no
@@ -749,7 +761,7 @@ function CategoryBody({
 
           {/* Eficiencia / smart home */}
           <SubGroup label="Eficiencia y smart">
-            <IconCheckboxGrid
+            <IconCheckboxGrid onAfterToggle={recordSelection}
               items={[
                 { key: "domotics",       label: "Domótica",              icon: Cpu,         checked: eq.domotics,        onChange: (v) => eqPatch({ domotics: v }) },
                 { key: "solarPanels",    label: "Paneles solares",       icon: Sun,         checked: eq.solarPanels,     onChange: (v) => eqPatch({ solarPanels: v }) },
@@ -761,7 +773,7 @@ function CategoryBody({
 
           {/* Espacios extra · armarios, vestidor, lavandería, bodega, chimenea */}
           <SubGroup label="Espacios extra">
-            <IconCheckboxGrid
+            <IconCheckboxGrid onAfterToggle={recordSelection}
               items={[
                 { key: "armariosEmpotrados", label: "Armarios empotrados", icon: Archive, checked: eq.armariosEmpotrados, onChange: (v) => eqPatch({ armariosEmpotrados: v }) },
                 { key: "vestidor",  label: "Vestidor",     icon: Shirt, checked: eq.vestidor,  onChange: (v) => eqPatch({ vestidor: v }) },
@@ -775,7 +787,7 @@ function CategoryBody({
 
           {/* Wellness · gym, sauna, jacuzzi, hammam */}
           <SubGroup label="Wellness">
-            <IconCheckboxGrid
+            <IconCheckboxGrid onAfterToggle={recordSelection}
               items={[
                 { key: "gym",     label: "Gimnasio", icon: Dumbbell, checked: eq.gym,     onChange: (v) => eqPatch({ gym: v }) },
                 { key: "sauna",   label: "Sauna",    icon: Flame,    checked: eq.sauna,   onChange: (v) => eqPatch({ sauna: v }) },
@@ -787,7 +799,7 @@ function CategoryBody({
 
           {/* Exterior y ocio · BBQ, tenis, pádel */}
           <SubGroup label="Exterior y ocio">
-            <IconCheckboxGrid
+            <IconCheckboxGrid onAfterToggle={recordSelection}
               items={[
                 { key: "bbq",   label: "Barbacoa (BBQ)", icon: Flame,      checked: eq.bbq,   onChange: (v) => eqPatch({ bbq: v }) },
                 { key: "tenis", label: "Pista de tenis", icon: Trophy,     checked: eq.tenis, onChange: (v) => eqPatch({ tenis: v }) },
@@ -817,7 +829,7 @@ function CategoryBody({
       const vw = defaults.views;
       const vwPatch = (sub: Partial<PromotionDefaults["views"]>) => patch("views", sub);
       return (
-        <IconCheckboxGrid
+        <IconCheckboxGrid onAfterToggle={recordSelection}
           items={[
             { key: "sea",       label: "Mar",            icon: Waves,    checked: vw.sea,       onChange: (v) => vwPatch({ sea: v }) },
             { key: "oceano",    label: "Océano",         icon: Ship,     checked: vw.oceano,    onChange: (v) => vwPatch({ oceano: v }) },
@@ -1067,6 +1079,7 @@ function SubGroup({ label, children }: { label: string; children: React.ReactNod
  *  zona del item alterna el checkbox. */
 function IconCheckboxGrid({
   items,
+  onAfterToggle,
 }: {
   items: {
     key: string;
@@ -1075,6 +1088,10 @@ function IconCheckboxGrid({
     checked: boolean;
     onChange: (v: boolean) => void;
   }[];
+  /** Callback global del wrapper · se ejecuta DESPUÉS del onChange
+   *  individual · útil para registrar orden de selección
+   *  (selectedOrder) sin duplicar lógica en cada item. */
+  onAfterToggle?: (key: string, checked: boolean) => void;
 }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1084,7 +1101,11 @@ function IconCheckboxGrid({
           <button
             key={it.key}
             type="button"
-            onClick={() => it.onChange(!it.checked)}
+            onClick={() => {
+              const next = !it.checked;
+              it.onChange(next);
+              onAfterToggle?.(it.key, next);
+            }}
             className={cn(
               "flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors",
               it.checked

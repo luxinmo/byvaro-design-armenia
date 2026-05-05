@@ -2214,11 +2214,8 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 const sec = snap?.promotionDefaults?.security;
                 const views = (snap?.promotionDefaults?.views ?? {}) as Record<string, boolean>;
                 const terr = snap?.promotionDefaults?.terraces;
-                const featureIds: string[] = [];
-                /* Equipment · todas las flags ampliadas. Si la flag
-                 *  es true, push el id (mismo nombre que la key del
-                 *  schema) · `feature(id)` resuelve icono + label
-                 *  desde el catálogo canónico. */
+                /* Catálogo de TODOS los ids posibles · derivados de
+                 *  equipment/security/views/terraces. */
                 const EQUIPMENT_KEYS = [
                   "airConditioning", "heating", "equippedKitchen",
                   "domotics", "solarPanels", "electricBlinds", "doubleGlazing",
@@ -2226,17 +2223,37 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   "gym", "sauna", "jacuzzi", "hammam",
                   "bbq", "tenis", "padel", "ascensor",
                 ];
-                for (const k of EQUIPMENT_KEYS) if (eq[k]) featureIds.push(k);
-                if (terr?.covered || terr?.uncovered) featureIds.push("terraza");
-                if (sec?.alarm) featureIds.push("alarm");
-                if (sec?.reinforcedDoor) featureIds.push("reinforcedDoor");
-                if (sec?.videoSurveillance) featureIds.push("videoSurveillance");
-                /* Views · todos los nuevos puntos. */
                 const VIEWS_KEYS = [
                   "sea", "oceano", "rio", "mountain", "ciudad", "golf",
                   "panoramic", "amanecer", "atardecer", "abiertas",
                 ];
-                for (const k of VIEWS_KEYS) if (views[k]) featureIds.push(k);
+                /* Construir set de ids que están en true. */
+                const activeIds = new Set<string>();
+                for (const k of EQUIPMENT_KEYS) if (eq[k]) activeIds.add(k);
+                for (const k of VIEWS_KEYS) if (views[k]) activeIds.add(k);
+                if (terr?.covered || terr?.uncovered) activeIds.add("terraza");
+                if (sec?.alarm) activeIds.add("alarm");
+                if (sec?.reinforcedDoor) activeIds.add("reinforcedDoor");
+                if (sec?.videoSurveillance) activeIds.add("videoSurveillance");
+                /* Orden · primero `selectedOrder` (lo último marcado
+                 *  por el user va al inicio) · luego cualquier id
+                 *  activo no presente en selectedOrder (legacy o draft
+                 *  pre-fix). */
+                const selectedOrder = (snap?.promotionDefaults?.selectedOrder ?? []) as string[];
+                const featureIds: string[] = [];
+                const seen = new Set<string>();
+                for (const id of selectedOrder) {
+                  if (activeIds.has(id) && !seen.has(id)) {
+                    featureIds.push(id);
+                    seen.add(id);
+                  }
+                }
+                for (const id of activeIds) {
+                  if (!seen.has(id)) {
+                    featureIds.push(id);
+                    seen.add(id);
+                  }
+                }
 
                 /* Cada sub-sección es un BUTTON · click abre mini-modal
                  *  específico de esa sección · más rápido que el modal
