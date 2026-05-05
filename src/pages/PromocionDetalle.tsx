@@ -2192,33 +2192,16 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                  *  fallback para zonas sin entry en el catálogo. */
                 const amenityIds = (snap?.zonasComunes ?? []) as string[];
 
-                const eq = snap?.promotionDefaults?.equipment;
-                const sec = snap?.promotionDefaults?.security;
-                const views = snap?.promotionDefaults?.views;
-                const terr = snap?.promotionDefaults?.terraces;
-                const featureIds: string[] = [];
-                /* Características seleccionadas en PillSelect · viven
-                 *  en `caracteristicasVivienda` (NO en
-                 *  promotionDefaults). Sin esto, lo que el user marca
-                 *  desde el modal "Características del hogar" no se
-                 *  reflejaba en la ficha · solo se veían las V5. */
-                for (const id of (snap?.caracteristicasVivienda ?? [])) featureIds.push(id);
-                if (eq?.airConditioning) featureIds.push("airConditioning");
-                if (eq?.heating) featureIds.push("heating");
-                if (eq?.equippedKitchen) featureIds.push("equippedKitchen");
-                if (eq?.domotics) featureIds.push("domotics");
-                if (eq?.solarPanels) featureIds.push("solarPanels");
-                if (eq?.electricBlinds) featureIds.push("electricBlinds");
-                if (eq?.doubleGlazing) featureIds.push("doubleGlazing");
-                if (terr?.covered) featureIds.push("terraza");
-                if (terr?.uncovered) featureIds.push("terraza");
-                if (sec?.alarm) featureIds.push("alarm");
-                if (sec?.reinforcedDoor) featureIds.push("reinforcedDoor");
-                if (sec?.videoSurveillance) featureIds.push("videoSurveillance");
-                if (views?.sea) featureIds.push("sea");
-                if (views?.mountain) featureIds.push("mountain");
-                if (views?.golf) featureIds.push("golf");
-                if (views?.panoramic) featureIds.push("panoramic");
+                /* REGLA · mostrar SOLO lo que el user marcó
+                 *  explícitamente en el PillSelect "Características
+                 *  del hogar" (caracteristicasVivienda). Las flags V5
+                 *  (equipment/security/views/terraces) son otro
+                 *  concepto · vivir en otro sitio si se quiere
+                 *  exponer · evitan falsos positivos cuando alguna
+                 *  bandera está true sin intervención del user. */
+                const featureIds: string[] = [
+                  ...(snap?.caracteristicasVivienda ?? []),
+                ];
 
                 /* Cada sub-sección es un BUTTON · click abre mini-modal
                  *  específico de esa sección · más rápido que el modal
