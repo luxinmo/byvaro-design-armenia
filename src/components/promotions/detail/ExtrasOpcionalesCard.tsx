@@ -1,9 +1,10 @@
 /**
  * ExtrasOpcionalesCard · bloque de la ficha que lista los anejos
  * activos de la promoción (piscina privada · parking · trastero ·
- * sótano · solárium) con su modo de precio y precio opcional.
+ * sótano · solárium) como GRID HORIZONTAL de tiles con icono grande
+ * + label + chip de precio.
  *
- * Cada fila es clickable · abre un mini-modal específico de SU
+ * Cada tile es clickable · abre un mini-modal específico de SU
  * categoría (EditStepModal con `step="extras"` + `extrasOnlyCategory`).
  *
  * Solo se renderizan las categorías marcadas como `enabled` en el
@@ -16,7 +17,6 @@
  * cambia el origen del dato.
  */
 
-import { ChevronRight } from "lucide-react";
 import { feature } from "@/lib/featureIcons";
 import { cn } from "@/lib/utils";
 import type { Promotion } from "@/data/promotions";
@@ -53,13 +53,15 @@ export function ExtrasOpcionalesCard({
 
   return (
     <section className="rounded-2xl border border-border bg-card shadow-soft p-4 sm:p-5">
-      <header className="flex items-baseline justify-between mb-3">
+      <header className="flex items-baseline justify-between mb-4">
         <h2 className="text-base font-semibold text-foreground">Extras y opcionales</h2>
-        <p className="text-[11px] text-muted-foreground">Click para editar</p>
+        {!hideEdit && (
+          <p className="text-[11px] text-muted-foreground">Click para editar</p>
+        )}
       </header>
-      <div className="flex flex-col divide-y divide-border/50">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
         {activeKeys.map((k) => (
-          <ExtraRow
+          <ExtraTile
             key={k}
             featureKey={k}
             slot={snap[k]}
@@ -72,7 +74,7 @@ export function ExtrasOpcionalesCard({
   );
 }
 
-function ExtraRow({
+function ExtraTile({
   featureKey,
   slot,
   disabled,
@@ -93,48 +95,51 @@ function ExtraRow({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex items-center gap-3 py-3 text-left transition-colors",
-        disabled ? "cursor-default" : "hover:bg-muted/30 -mx-2 px-2 rounded-lg",
+        "flex flex-col items-center justify-start gap-2 rounded-xl border p-3 text-center transition-all",
+        priceMode === "optional"
+          ? "border-primary/40 bg-primary/[0.03]"
+          : priceMode === "included"
+          ? "border-success/30 bg-success/[0.03]"
+          : "border-border bg-background",
+        disabled
+          ? "cursor-default"
+          : "hover:border-foreground/40 hover:bg-muted/30 hover:-translate-y-0.5",
       )}
     >
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
-        <Icon className="h-4 w-4" strokeWidth={1.6} />
+      <div className={cn(
+        "flex h-10 w-10 items-center justify-center rounded-xl shrink-0",
+        priceMode === "optional"
+          ? "bg-primary/15 text-primary"
+          : priceMode === "included"
+          ? "bg-success/15 text-success"
+          : "bg-muted text-muted-foreground",
+      )}>
+        <Icon className="h-5 w-5" strokeWidth={1.6} />
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-[13.5px] font-medium text-foreground">{label}</p>
-        <PriceTag mode={priceMode} price={price} />
-      </div>
-      {!disabled && (
-        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={1.8} />
-      )}
+      <p className="text-[12.5px] font-semibold text-foreground leading-tight">{label}</p>
+      <PriceTag mode={priceMode} price={price} />
     </button>
   );
 }
 
 function PriceTag({ mode, price }: { mode: PriceMode; price: number | null }) {
   if (mode === "included") {
-    return <p className="text-[11.5px] mt-0.5 inline-flex items-center gap-1 text-success">Incluido en el precio</p>;
+    return <p className="text-[10.5px] font-medium text-success">Incluido</p>;
   }
   if (mode === "not_included") {
-    return <p className="text-[11.5px] mt-0.5 inline-flex items-center gap-1 text-muted-foreground">No incluido</p>;
+    return <p className="text-[10.5px] text-muted-foreground">No incluido</p>;
   }
   if (mode === "optional") {
     return (
-      <p className="text-[11.5px] mt-0.5 inline-flex items-center gap-1 text-foreground">
-        <span className="text-muted-foreground">Opcional</span>
+      <div className="flex flex-col items-center gap-0.5">
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Opcional</p>
         {price && price > 0 ? (
-          <>
-            <span className="text-muted-foreground">·</span>
-            <span className="font-semibold tnum">{price.toLocaleString("es-ES")} €</span>
-          </>
+          <p className="text-[12px] font-bold tnum text-foreground">{price.toLocaleString("es-ES")} €</p>
         ) : (
-          <>
-            <span className="text-muted-foreground">·</span>
-            <span className="text-muted-foreground italic">precio sin definir</span>
-          </>
+          <p className="text-[10.5px] italic text-muted-foreground">Sin precio</p>
         )}
-      </p>
+      </div>
     );
   }
-  return <p className="text-[11.5px] mt-0.5 text-muted-foreground italic">Sin definir si incluye</p>;
+  return <p className="text-[10.5px] italic text-muted-foreground">Sin definir</p>;
 }
