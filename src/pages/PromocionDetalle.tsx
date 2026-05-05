@@ -317,6 +317,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
    * formularios de edición. Helpers wireados más abajo cuando ya
    * tengamos el WizardState efectivo (override + base). */
   const [wizardModalStep, setWizardModalStep] = useState<StepId | null>(null);
+  /* Sub-sección activa cuando el modal abre `info_basica` · permite
+   * mini-modales por feature (amenidades sola, características solas,
+   * urbanización sola). null = modal grande con todo. */
+  const [wizardModalInfoSection, setWizardModalInfoSection] =
+    useState<"amenidades" | "caracteristicas" | "urbanizacion" | "estilo" | "energia" | null>(null);
 
   /* Mapping editOpen-key → StepId para abrir el EditStepModal canónico
    * en lugar del Edit*Dialog antiguo. Si el step NO está soportado en
@@ -343,10 +348,21 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     const step = map[key];
     if (step && isSupportedInModal(step)) {
       setWizardModalStep(step);
+      setWizardModalInfoSection(null); // modal grande
     } else {
       /* Fallback al Edit*Dialog legacy (memoria, contacts). */
       setEditOpen(key);
     }
+  };
+
+  /* Abre el modal de "info_basica" SOLO con esa sub-sección visible ·
+   * usado por las sub-secciones clickables del bloque "Características
+   * y amenidades". */
+  const openInfoSection = (
+    section: "amenidades" | "caracteristicas" | "urbanizacion" | "estilo" | "energia",
+  ) => {
+    setWizardModalStep("info_basica");
+    setWizardModalInfoSection(section);
   };
   /** IDs de las oficinas del workspace que actúan como puntos de venta
    *  para esta promoción. Se inicializan desde `p.puntosDeVentaIds` y
@@ -2180,21 +2196,31 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 if (views?.golf) featureIds.push("golf");
                 if (views?.panoramic) featureIds.push("panoramic");
 
+                /* Cada sub-sección es un BUTTON · click abre mini-modal
+                 *  específico de esa sección · más rápido que el modal
+                 *  grande. El botón "Editar" general del SectionCard sigue
+                 *  abriendo el modal completo (ExtrasV5 + InfoBasicaStep). */
+                const sectionBtnCls = "w-full text-left rounded-xl border border-transparent hover:border-border hover:bg-muted/30 -mx-2 px-2 py-2 transition-colors";
                 return (
-                  <div className="space-y-4">
-                    <div>
+                  <div className="space-y-2">
+                    {/* Tipologías · click → no editable individual desde
+                       aquí · abre el modal grande (tipologías están en
+                       InfoBasicaStep entero, no es 1 sección aislable). */}
+                    <button type="button" onClick={() => openEdit("basicInfo")} className={sectionBtnCls}>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Tipologías</p>
                       <div className="flex flex-wrap gap-1.5">
                         {p.propertyTypes.length > 0
                           ? p.propertyTypes.map(t => <Tag key={t} variant="default" size="sm">{t}</Tag>)
                           : <p className="text-xs text-muted-foreground italic">Sin tipologías marcadas</p>}
                       </div>
-                    </div>
-                    {/* Amenities urbanización · chips con icono. */}
+                    </button>
+
+                    {/* Amenities urbanización · click → mini-modal solo
+                       de amenidades + urbanización. */}
                     {snap?.urbanizacion && amenityIds.length > 0 && (
                       <>
                         <div className="h-px bg-border/40" />
-                        <div>
+                        <button type="button" onClick={() => openInfoSection("urbanizacion")} className={sectionBtnCls}>
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Amenities de la urbanización</p>
                           <div className="flex flex-wrap gap-1.5">
                             {amenityIds.map((id) => {
@@ -2208,17 +2234,16 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                               );
                             })}
                           </div>
-                        </div>
+                        </button>
                       </>
                     )}
-                    {/* Características del hogar · chips con icono. */}
+                    {/* Características del hogar · click → mini-modal de
+                       características solo. */}
                     <div className="h-px bg-border/40" />
-                    <div>
+                    <button type="button" onClick={() => openInfoSection("caracteristicas")} className={sectionBtnCls}>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Características del hogar</p>
                       {featureIds.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
-                          {/* Dedupe defensivo · "terraza" puede entrar 2x
-                            * (cubierta + descubierta) · mostrar 1 sola. */}
                           {[...new Set(featureIds)].map((id) => {
                             const f = feature(id);
                             return (
@@ -2231,10 +2256,10 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                         </div>
                       ) : (
                         <p className="text-xs text-muted-foreground italic">
-                          Sin características marcadas · edítalas desde Configuración
+                          Sin características marcadas · click para añadir
                         </p>
                       )}
-                    </div>
+                    </button>
                   </div>
                 );
               })()}
@@ -3054,7 +3079,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           state={wizardStateForModal}
           update={updateWizardField}
           uploadScopeId={p?.id}
-          onClose={() => setWizardModalStep(null)}
+          infoBasicaSection={wizardModalInfoSection ?? undefined}
+          onClose={() => {
+            setWizardModalStep(null);
+            setWizardModalInfoSection(null);
+          }}
         />
       )}
 

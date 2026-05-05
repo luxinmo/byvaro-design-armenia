@@ -178,6 +178,7 @@ export function InfoBasicaStep({
   defaultsCapturedInExtras = false,
   hideNameSection = false,
   hideLocationSection = false,
+  onlySection,
 }: {
   state: WizardState;
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
@@ -197,7 +198,16 @@ export function InfoBasicaStep({
    *  que arriba · la ubicación tiene su propio bloque + popup en
    *  la ficha. */
   hideLocationSection?: boolean;
+  /** Si está set, renderiza SOLO esa sección · útil para mini-modales
+   *  desde la ficha que editan una sola subárea (amenidades sola,
+   *  características solas, urbanización sola, etc.) sin abrir el
+   *  modal grande con todo. Default undefined → render completo. */
+  onlySection?: "amenidades" | "caracteristicas" | "urbanizacion" | "estilo" | "energia";
 }) {
+  /* Helper · ¿se debe renderizar esta sección? Si onlySection está
+   * set, solo si coincide. Si no, siempre. */
+  const showSection = (s: NonNullable<typeof onlySection>) =>
+    onlySection ? onlySection === s : true;
   const isPlurifamiliar = state.tipo === "plurifamiliar" || state.tipo === "mixto";
   const isUnifamiliar = state.tipo === "unifamiliar";
 
@@ -269,7 +279,7 @@ export function InfoBasicaStep({
 
       {/* ═════ Estilo arquitectónico · solo plurifamiliar/mixto
              (unifamiliar ya lo elige en el paso sub_varias). ═════ */}
-      {!isUnifamiliar && state.estiloVivienda == null && (
+      {showSection("estilo") && !isUnifamiliar && state.estiloVivienda == null && (
         <div>
           <SectionLabel>Estilo arquitectónico</SectionLabel>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -289,7 +299,7 @@ export function InfoBasicaStep({
           Rama UNIFAMILIAR: características
           (Solo si V5 NO está capturando defaults · evita duplicado.)
           ═════════════════════════════════════════════════════════════ */}
-      {isUnifamiliar && !defaultsCapturedInExtras && (
+      {showSection("caracteristicas") && isUnifamiliar && !defaultsCapturedInExtras && (
         <>
           <div>
             <SectionLabel>Características destacadas de las viviendas</SectionLabel>
@@ -308,6 +318,7 @@ export function InfoBasicaStep({
           ═════════════════════════════════════════════════════════════ */}
       {isPlurifamiliar && (
         <>
+          {showSection("amenidades") && (
           <div>
             <SectionLabel hint="Lo que ofrece el edificio/promoción por sí mismo.">
               <span className="inline-flex items-center gap-1.5">
@@ -331,8 +342,9 @@ export function InfoBasicaStep({
               </button>
             )}
           </div>
+          )}
 
-          {!defaultsCapturedInExtras && (
+          {showSection("caracteristicas") && !defaultsCapturedInExtras && (
             <div>
               <SectionLabel>Características comunes de las viviendas</SectionLabel>
               <PillSelect
@@ -368,6 +380,7 @@ export function InfoBasicaStep({
       )}
 
       {/* ═════ Urbanización master switch (siempre disponible) ═════ */}
+      {showSection("urbanizacion") && (
       <div>
         <SectionLabel>
           <span className="inline-flex items-center gap-1.5">
@@ -447,8 +460,10 @@ export function InfoBasicaStep({
           )}
         </div>
       </div>
+      )}
 
       {/* ═════ Certificado energético ═════ */}
+      {showSection("energia") && (
       <div>
         <SectionLabel>
           <span className="inline-flex items-center gap-1.5">
@@ -483,6 +498,7 @@ export function InfoBasicaStep({
           Puedes dejarlo como "En trámite" si la promoción está en proyecto o en construcción.
         </p>
       </div>
+      )}
     </div>
   );
 }

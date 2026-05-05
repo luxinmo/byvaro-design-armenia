@@ -74,6 +74,7 @@ export function EditStepModal({
   update,
   uploadScopeId,
   onClose,
+  infoBasicaSection,
 }: {
   open: boolean;
   step: StepId | null;
@@ -81,10 +82,24 @@ export function EditStepModal({
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
   uploadScopeId?: string;
   onClose: () => void;
+  /** Cuando step="info_basica", filtra el render para mostrar SOLO
+   *  esa sub-sección · permite mini-modales por feature (amenidades
+   *  sola, características solas, urbanización sola). Si no se pasa,
+   *  muestra todo el step (modal grande). */
+  infoBasicaSection?: "amenidades" | "caracteristicas" | "urbanizacion" | "estilo" | "energia";
 }) {
   if (!step) return null;
 
-  const title = STEP_TITLES[step] ?? "Editar";
+  const SECTION_TITLES: Record<string, string> = {
+    amenidades: "Amenities de la urbanización",
+    caracteristicas: "Características de la vivienda",
+    urbanizacion: "Urbanización",
+    estilo: "Estilo arquitectónico",
+    energia: "Certificado energético",
+  };
+  const title = (step === "info_basica" && infoBasicaSection)
+    ? (SECTION_TITLES[infoBasicaSection] ?? "Editar")
+    : (STEP_TITLES[step] ?? "Editar");
 
   /* Steps con tabla ancha (unidades) necesitan más espacio · sin
    * esto la tabla overflowea horizontalmente y el user tiene que
@@ -156,23 +171,32 @@ export function EditStepModal({
             />
           )}
           {step === "info_basica" && (
-            /* Modal "Características y amenidades" · combina las
-             * pantallas 5/14 (extras V5 · características por
-             * defecto: piscina, parking, trastero, parcela, terrazas,
-             * solárium, equipamiento, seguridad, vistas, orientación)
-             * y 8/14 (info básica sin nombre ni ubicación · estilo
-             * arquitectónico, tipologías, amenities, características
-             * de vivienda, urbanización, certificado energético). */
-            <div className="flex flex-col gap-6">
-              <ExtrasV5 state={state} update={update} />
+            /* Modal · si `infoBasicaSection` está set, mini-modal de
+             * UNA sola sub-sección (amenidades / características /
+             * urbanización / estilo / energía). Si no, modal grande
+             * que combina pantallas 5/14 (ExtrasV5) + 8/14
+             * (InfoBasicaStep sin nombre/ubicación). */
+            infoBasicaSection ? (
               <InfoBasicaStep
                 state={state}
                 update={update}
                 defaultsCapturedInExtras
                 hideNameSection
                 hideLocationSection
+                onlySection={infoBasicaSection}
               />
-            </div>
+            ) : (
+              <div className="flex flex-col gap-6">
+                <ExtrasV5 state={state} update={update} />
+                <InfoBasicaStep
+                  state={state}
+                  update={update}
+                  defaultsCapturedInExtras
+                  hideNameSection
+                  hideLocationSection
+                />
+              </div>
+            )
           )}
           {step === "descripcion" && <DescripcionStep state={state} update={update} />}
           {step === "multimedia" && (
