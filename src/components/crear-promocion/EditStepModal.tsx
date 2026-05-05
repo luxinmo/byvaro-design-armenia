@@ -162,7 +162,21 @@ export function EditStepModal({
               />
             </div>
           )}
-          {step === "extras" && <ExtrasV5 state={state} update={update} />}
+          {step === "extras" && (
+            /* Mini-modal de "Características del hogar" desde la
+             * ficha · lockToPane="extras" salta directo al pane de
+             * adicionales (Solárium, Equipamiento, Seguridad, Vistas,
+             * Orientación) sin pasar por essentials (que viven en
+             * sus propios bloques de la ficha · Parking, Trastero,
+             * Piscina). Wizard 5/14 standalone NO se ve afectado
+             * (ese caller no pasa la prop · 2 panes navegables). */
+            <ExtrasV5
+              state={state}
+              update={update}
+              lockToPane="extras"
+              hideCategoryKeys={["plot"]}
+            />
+          )}
           {step === "detalles" && (
             <DetallesStep
               state={state}

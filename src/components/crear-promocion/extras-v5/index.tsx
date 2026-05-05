@@ -41,6 +41,12 @@ interface Props {
    *  de Características de la ficha quiere ocultar "plot/parcela"
    *  porque pertenece a la unidad, no al edificio). Default vacío. */
   hideCategoryKeys?: string[];
+  /** Bloquea el pane del componente · si "extras" · solo muestra el
+   *  pane de adicionales (Solárium, Equipamiento, Seguridad, Vistas,
+   *  Orientación) sin botón "Volver a esenciales" · si "essentials"
+   *  · solo el pane de esenciales sin botón "Más opciones". Default
+   *  undefined · 2 panes navegables como en el wizard. */
+  lockToPane?: "essentials" | "extras";
 }
 
 type CategoryKey =
@@ -112,7 +118,7 @@ function resetCategory(d: PromotionDefaults, k: CategoryKey): PromotionDefaults 
   return { ...d, [k]: defaultPromotionDefaults[k] } as PromotionDefaults;
 }
 
-export function ExtrasV5({ state, update, hideCategoryKeys = [] }: Props) {
+export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane }: Props) {
   const hidden = new Set(hideCategoryKeys);
   /* Hidratación lazy para drafts pre-V5. */
   useEffect(() => {
@@ -177,7 +183,10 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [] }: Props) {
    * las dos con CTAs internos · el Siguiente del wizard exterior
    * sigue funcionando en cualquier pane (los additionales son
    * opcionales). */
-  const [pane, setPane] = useState<"essentials" | "extras">("essentials");
+  const [paneState, setPane] = useState<"essentials" | "extras">("essentials");
+  /* Cuando lockToPane está set, ignoramos el state interno · el
+   * pane queda fijo · útil para mini-modales de la ficha. */
+  const pane = lockToPane ?? paneState;
 
   /* Adicionales VISIBLES = configurados o añadidos manualmente.
    * Los demás aparecen como chips "+ X" para añadirlos. */
@@ -221,21 +230,22 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [] }: Props) {
           ))}
         </div>
 
-        {/* CTA hacia pane "extras" · siempre visible al final · click
-            para entrar en la lista de opciones avanzadas. */}
-        <button
-          type="button"
-          onClick={() => setPane("extras")}
-          className="self-start inline-flex items-center gap-2 h-10 px-4 rounded-full border border-border bg-card text-[13px] font-medium text-foreground hover:bg-muted/40 transition-colors"
-        >
-          Más opciones
-          {additionalsActiveCount > 0 && (
-            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary/10 text-primary text-[11px] font-semibold tnum">
-              {additionalsActiveCount}
-            </span>
-          )}
-          <ChevronRight className="h-4 w-4 text-muted-foreground" strokeWidth={1.8} />
-        </button>
+        {/* CTA hacia pane "extras" · oculto si lockToPane (mini-modal). */}
+        {!lockToPane && (
+          <button
+            type="button"
+            onClick={() => setPane("extras")}
+            className="self-start inline-flex items-center gap-2 h-10 px-4 rounded-full border border-border bg-card text-[13px] font-medium text-foreground hover:bg-muted/40 transition-colors"
+          >
+            Más opciones
+            {additionalsActiveCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary/10 text-primary text-[11px] font-semibold tnum">
+                {additionalsActiveCount}
+              </span>
+            )}
+            <ChevronRight className="h-4 w-4 text-muted-foreground" strokeWidth={1.8} />
+          </button>
+        )}
       </div>
     );
   }
@@ -244,14 +254,16 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [] }: Props) {
   return (
     <div className="flex flex-col gap-5 max-w-[760px] mx-auto w-full">
       <header className="mb-1">
-        <button
-          type="button"
-          onClick={() => setPane("essentials")}
-          className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors mb-3"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2} />
-          Volver a esenciales
-        </button>
+        {!lockToPane && (
+          <button
+            type="button"
+            onClick={() => setPane("essentials")}
+            className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors mb-3"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2} />
+            Volver a esenciales
+          </button>
+        )}
         <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           Más opciones
         </p>
