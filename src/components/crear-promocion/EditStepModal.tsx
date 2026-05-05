@@ -187,7 +187,13 @@ export function EditStepModal({
               />
             ) : (
               <div className="flex flex-col gap-6">
-                <ExtrasV5 state={state} update={update} />
+                {/* "plot" (Parcela) oculta · pertenece al unidad ·
+                  * se edita desde la ficha de unidad. */}
+                <ExtrasV5
+                  state={state}
+                  update={update}
+                  hideCategoryKeys={["plot"]}
+                />
                 <InfoBasicaStep
                   state={state}
                   update={update}

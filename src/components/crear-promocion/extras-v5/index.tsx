@@ -35,6 +35,12 @@ import {
 interface Props {
   state: WizardState;
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
+  /** Categorías que el caller quiere OCULTAR (no aparecen en el
+   *  picker ni se renderizan como cards aunque estén configuradas).
+   *  Útil cuando se embebe el step desde otro contexto (ej. modal
+   *  de Características de la ficha quiere ocultar "plot/parcela"
+   *  porque pertenece a la unidad, no al edificio). Default vacío. */
+  hideCategoryKeys?: string[];
 }
 
 type CategoryKey =
@@ -106,7 +112,8 @@ function resetCategory(d: PromotionDefaults, k: CategoryKey): PromotionDefaults 
   return { ...d, [k]: defaultPromotionDefaults[k] } as PromotionDefaults;
 }
 
-export function ExtrasV5({ state, update }: Props) {
+export function ExtrasV5({ state, update, hideCategoryKeys = [] }: Props) {
+  const hidden = new Set(hideCategoryKeys);
   /* Hidratación lazy para drafts pre-V5. */
   useEffect(() => {
     if (!state.promotionDefaults) {
@@ -161,8 +168,8 @@ export function ExtrasV5({ state, update }: Props) {
     update("promotionDefaults", resetCategory(defaults, k));
   }
 
-  const essentials = CATEGORIES.filter((c) => ESSENTIAL_KEYS.has(c.key));
-  const additionals = CATEGORIES.filter((c) => !ESSENTIAL_KEYS.has(c.key));
+  const essentials = CATEGORIES.filter((c) => ESSENTIAL_KEYS.has(c.key) && !hidden.has(c.key));
+  const additionals = CATEGORIES.filter((c) => !ESSENTIAL_KEYS.has(c.key) && !hidden.has(c.key));
 
   /* Pane interno · "essentials" (5 esenciales) o "extras" (más
    * opciones avanzadas). Evita que la lista crezca hacia abajo al
