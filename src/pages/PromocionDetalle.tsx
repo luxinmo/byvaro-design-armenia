@@ -15,6 +15,7 @@ import { developerOnlyPromotions, type DevPromotion, type Comercial, type Comerc
 import { findPromotionByParam, promotionHref, contactHref, registroHref, leadHref } from "@/lib/urls";
 import { agencies, countAgenciesForPromotion, getAgencyShareStats, type Agency } from "@/data/agencies";
 import { AgenciasTabStats } from "@/components/promotions/detail/AgenciasTabStats";
+import { ExtrasOpcionalesCard } from "@/components/promotions/detail/ExtrasOpcionalesCard";
 import { FeatureCardV3 } from "@/pages/Colaboradores";
 import ColaboradoresEstadisticas from "@/pages/ColaboradoresEstadisticas";
 import {
@@ -322,6 +323,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
    * urbanización sola). null = modal grande con todo. */
   const [wizardModalInfoSection, setWizardModalInfoSection] =
     useState<"amenidades" | "caracteristicas" | "urbanizacion" | "estilo" | "energia" | null>(null);
+  /* Categoría única cuando el modal abre `extras` desde el bloque
+   * "Extras y opcionales" · mini-modal de UNA sola feature
+   * (Piscina · Parking · Trastero · Sótano · Solárium). */
+  const [wizardModalExtrasCategory, setWizardModalExtrasCategory] =
+    useState<"privatePool" | "parking" | "storageRoom" | "basement" | "solarium" | null>(null);
 
   /* Mapping editOpen-key → StepId para abrir el EditStepModal canónico
    * en lugar del Edit*Dialog antiguo. Si el step NO está soportado en
@@ -372,6 +378,16 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
     }
     setWizardModalStep("info_basica");
     setWizardModalInfoSection(section);
+  };
+
+  /* Abre el mini-modal de UNA categoría del bloque "Extras y
+   * opcionales" · piscina/parking/trastero/sótano/solárium. */
+  const openExtraCategory = (
+    cat: "privatePool" | "parking" | "storageRoom" | "basement" | "solarium",
+  ) => {
+    setWizardModalStep("extras");
+    setWizardModalInfoSection(null);
+    setWizardModalExtrasCategory(cat);
   };
   /** IDs de las oficinas del workspace que actúan como puntos de venta
    *  para esta promoción. Se inicializan desde `p.puntosDeVentaIds` y
@@ -1860,8 +1876,9 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   <InfoItem icon={Layers} label="Estructura" value={p.totalUnits > 10 ? "Multibloque" : "Bloque único"} />
                 )}
                 <InfoItem icon={Home} label="Unidades totales" value={`${p.totalUnits}`} />
-                <InfoItem icon={Car} label="Parking" value={parkingValue} sub={parkingSub} />
-                <InfoItem icon={Archive} label="Trastero" value={trasteroValue} sub={trasteroSub} />
+                {/* Parking · Trastero · MOVIDOS al bloque "Extras y opcionales"
+                    debajo · ahí se ven con icono + chip de precio (Incluido /
+                    Opcional · X € / No incluido) y se editan individualmente. */}
                 {/* Licencia · lee `metadata.wizardSnapshot.tieneLicencia`
                     real · NO hardcoded. true → verde · false → muted ·
                     null/undefined → no se renderiza el bloque. */}
@@ -1910,6 +1927,18 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             </SectionCard>
               );
             })()}
+
+            {/* ── 1.5 EXTRAS Y OPCIONALES ──
+                  Anejos / extras de la unidad con su modo de precio
+                  (Incluido / Opcional con €/ No incluido). Cada fila
+                  abre un mini-modal de SU categoría · edición individual.
+                  Solo se renderizan los activos. Si ninguno está activo
+                  el bloque entero NO se muestra (no ensucia la ficha). */}
+            <ExtrasOpcionalesCard
+              promotion={p}
+              hideEdit={viewAsCollaborator}
+              onEdit={openExtraCategory}
+            />
 
             {/* ── 2. PAGO Y DISPONIBILIDAD (Unidades + Plan de pagos) ── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -3113,9 +3142,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           update={updateWizardField}
           uploadScopeId={p?.id}
           infoBasicaSection={wizardModalInfoSection ?? undefined}
+          extrasOnlyCategory={wizardModalExtrasCategory ?? undefined}
           onClose={() => {
             setWizardModalStep(null);
             setWizardModalInfoSection(null);
+            setWizardModalExtrasCategory(null);
           }}
         />
       )}

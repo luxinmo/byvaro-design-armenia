@@ -24,7 +24,7 @@ import {
   /* Equipment ampliado · iconos para nuevas opciones */
   Shirt, Wine, Dumbbell, Bath, Flame, UtensilsCrossed,
   ArrowUpDown, LayoutPanelLeft, Cpu, Volleyball, Trophy,
-  BatteryCharging,
+  BatteryCharging, PackageOpen,
   /* Views ampliadas */
   Mountain, Building, Sunrise, Sunset, Maximize, Ship,
 } from "lucide-react";
@@ -53,10 +53,15 @@ interface Props {
    *  · solo el pane de esenciales sin botón "Más opciones". Default
    *  undefined · 2 panes navegables como en el wizard. */
   lockToPane?: "essentials" | "extras";
+  /** Filtra el render a UNA sola categoría · oculta header, picker
+   *  y navegación de panes · auto-activa la categoría como añadida
+   *  para que aparezca expandida directamente. Útil para mini-modales
+   *  de la ficha "edita Parking" / "edita Sótano" / etc. */
+  onlyCategory?: CategoryKey;
 }
 
 type CategoryKey =
-  | "privatePool" | "parking" | "storageRoom"
+  | "privatePool" | "parking" | "storageRoom" | "basement"
   | "solarium" | "terraces" | "plot"
   | "equipment" | "security"
   | "views" | "orientation";
@@ -72,6 +77,7 @@ const CATEGORIES: CategoryDef[] = [
   { key: "privatePool",   label: "Piscina privada",  icon: Waves,        group: "private" },
   { key: "parking",       label: "Parking",          icon: Car,          group: "private" },
   { key: "storageRoom",   label: "Trastero",         icon: Archive,      group: "private" },
+  { key: "basement",      label: "Sótano",           icon: PackageOpen,  group: "private" },
   { key: "plot",          label: "Parcela",          icon: TreePine,     group: "private" },
   { key: "solarium",      label: "Solárium",         icon: Sun,          group: "private" },
   { key: "terraces",      label: "Terrazas",         icon: Sun,          group: "private" },
@@ -89,14 +95,14 @@ const CATEGORIES: CategoryDef[] = [
  * los añade explícitamente (solárium, parcela, equipamiento, vistas,
  * etc.) o si ya tienen datos (draft con valores set). */
 const ESSENTIAL_KEYS = new Set<CategoryKey>([
-  "privatePool", "parking", "storageRoom", "plot", "terraces",
+  "privatePool", "parking", "storageRoom", "basement", "plot", "terraces",
 ]);
 
 /* Categorías que tienen el control "Aplicar a" (Todas/Algunas/Decidir
  * luego). Se usa para auto-rellenar `appliesTo: "all"` cuando estamos
  * en single-home mode y el control no se renderiza. */
 const APPLIES_TO_KEYS = new Set<CategoryKey>([
-  "privatePool", "parking", "storageRoom", "solarium", "plot",
+  "privatePool", "parking", "storageRoom", "basement", "solarium", "plot",
 ]);
 
 /* Derivado · ¿la categoría tiene algún campo configurado? Si sí, se
@@ -107,6 +113,7 @@ function isConfigured(d: PromotionDefaults, k: CategoryKey): boolean {
     case "privatePool":   return d.privatePool.enabled;
     case "parking":       return d.parking.enabled;
     case "storageRoom":   return d.storageRoom.enabled;
+    case "basement":      return d.basement.enabled;
     case "solarium":      return d.solarium.enabled;
     case "terraces":      return d.terraces.enabled || d.terraces.covered || d.terraces.uncovered;
     case "plot":          return d.plot.enabled;
@@ -127,8 +134,14 @@ function resetCategory(d: PromotionDefaults, k: CategoryKey): PromotionDefaults 
   return { ...d, [k]: defaultPromotionDefaults[k] } as PromotionDefaults;
 }
 
-export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane }: Props) {
-  const hidden = new Set(hideCategoryKeys);
+export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane, onlyCategory }: Props) {
+  /* `onlyCategory` se traduce a "ocultar todas las categorías excepto
+   *  la solicitada" · reusa el mecanismo `hidden` existente. */
+  const hidden = onlyCategory
+    ? new Set<CategoryKey>(
+        (CATEGORIES.map((c) => c.key) as CategoryKey[]).filter((k) => k !== onlyCategory),
+      )
+    : new Set(hideCategoryKeys);
   /* Hidratación lazy para drafts pre-V5. */
   useEffect(() => {
     if (!state.promotionDefaults) {
@@ -149,7 +162,12 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane }: P
 
   /* Set local · qué categorías ha añadido el user que aún no tienen
    * datos. Las que SÍ tienen datos son visibles via `isConfigured`. */
-  const [manualAdded, setManualAdded] = useState<Set<CategoryKey>>(new Set());
+  const [manualAdded, setManualAdded] = useState<Set<CategoryKey>>(
+    /* Si onlyCategory está set, pre-añade esa categoría como manual ·
+     *  garantiza que se renderice expandida sin que el user tenga que
+     *  hacer click en el chip "+". */
+    onlyCategory ? new Set<CategoryKey>([onlyCategory]) : new Set(),
+  );
 
   function patch<K extends keyof PromotionDefaults>(
     key: K,
@@ -206,8 +224,13 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane }: P
    * opcionales). */
   const [paneState, setPane] = useState<"essentials" | "extras">("essentials");
   /* Cuando lockToPane está set, ignoramos el state interno · el
-   * pane queda fijo · útil para mini-modales de la ficha. */
-  const pane = lockToPane ?? paneState;
+   * pane queda fijo · útil para mini-modales de la ficha. Si
+   * onlyCategory está set, deduce el pane según donde viva la
+   * categoría (essential vs additional). */
+  const onlyCategoryPane: "essentials" | "extras" | undefined = onlyCategory
+    ? (ESSENTIAL_KEYS.has(onlyCategory) ? "essentials" : "extras")
+    : undefined;
+  const pane = onlyCategoryPane ?? lockToPane ?? paneState;
 
   /* Adicionales VISIBLES · orden: ÚLTIMO añadido manualmente PRIMERO ·
    * detrás los configurados desde draft (orden CATEGORIES). El user
@@ -246,19 +269,21 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane }: P
   if (pane === "essentials") {
     return (
       <div className="flex flex-col gap-5 max-w-[760px] mx-auto w-full">
-        <header className="mb-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Características
-          </p>
-          <h2 className="text-[19px] sm:text-[22px] font-semibold text-foreground tracking-tight mt-1">
-            {isSingleHome ? "¿Qué incluye la vivienda?" : "¿Qué incluyen las viviendas?"}
-          </h2>
-          <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
-            {isSingleHome
-              ? "Activa lo esencial · podrás añadir opciones avanzadas en la siguiente pantalla."
-              : "Activa lo esencial de cada vivienda · podrás añadir opciones avanzadas en la siguiente pantalla."}
-          </p>
-        </header>
+        {!onlyCategory && (
+          <header className="mb-1">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Características
+            </p>
+            <h2 className="text-[19px] sm:text-[22px] font-semibold text-foreground tracking-tight mt-1">
+              {isSingleHome ? "¿Qué incluye la vivienda?" : "¿Qué incluyen las viviendas?"}
+            </h2>
+            <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
+              {isSingleHome
+                ? "Activa lo esencial · podrás añadir opciones avanzadas en la siguiente pantalla."
+                : "Activa lo esencial de cada vivienda · podrás añadir opciones avanzadas en la siguiente pantalla."}
+            </p>
+          </header>
+        )}
 
         <div className="flex flex-col gap-2">
           {essentials.map((c) => (
@@ -274,8 +299,8 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane }: P
           ))}
         </div>
 
-        {/* CTA hacia pane "extras" · oculto si lockToPane (mini-modal). */}
-        {!lockToPane && (
+        {/* CTA hacia pane "extras" · oculto si lockToPane u onlyCategory (mini-modal). */}
+        {!lockToPane && !onlyCategory && (
           <button
             type="button"
             onClick={() => setPane("extras")}
@@ -297,29 +322,31 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane }: P
   /* ═══════════ Pane "extras" · picker + cards ═══════════ */
   return (
     <div className="flex flex-col gap-5 max-w-[760px] mx-auto w-full">
-      <header className="mb-1">
-        {!lockToPane && (
-          <button
-            type="button"
-            onClick={() => setPane("essentials")}
-            className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors mb-3"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2} />
-            Volver a esenciales
-          </button>
-        )}
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          Más opciones
-        </p>
-        <h2 className="text-[19px] sm:text-[22px] font-semibold text-foreground tracking-tight mt-1">
-          Características adicionales
-        </h2>
-        <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
-          Añade solo lo que aplica · equipamiento, vistas, zonas comunes, etc.
-        </p>
-      </header>
+      {!onlyCategory && (
+        <header className="mb-1">
+          {!lockToPane && (
+            <button
+              type="button"
+              onClick={() => setPane("essentials")}
+              className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors mb-3"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2} />
+              Volver a esenciales
+            </button>
+          )}
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Más opciones
+          </p>
+          <h2 className="text-[19px] sm:text-[22px] font-semibold text-foreground tracking-tight mt-1">
+            Características adicionales
+          </h2>
+          <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
+            Añade solo lo que aplica · equipamiento, vistas, zonas comunes, etc.
+          </p>
+        </header>
+      )}
 
-      {additionalsAvailable.length > 0 && (
+      {!onlyCategory && additionalsAvailable.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {additionalsAvailable.map((c) => (
             <button
@@ -389,7 +416,7 @@ function EssentialRow({
    * visual refleja el estado real cuando el user abre la card sin
    * haber chequeado nada todavía. */
   const TOGGLE_KEYS = new Set<CategoryKey>([
-    "privatePool", "parking", "storageRoom", "solarium", "plot", "terraces",
+    "privatePool", "parking", "storageRoom", "basement", "solarium", "plot", "terraces",
   ]);
   const hasEnabledFlag = TOGGLE_KEYS.has(def.key);
   const active = configured || (!hasEnabledFlag && open);
@@ -665,6 +692,24 @@ function CategoryBody({
             onChange={(v) => patch("storageRoom", { priceMode: v })}
             optionalPrice={defaults.storageRoom.optionalPrice}
             onOptionalPriceChange={(v) => patch("storageRoom", { optionalPrice: v })}
+          />
+        </>
+      );
+
+    case "basement":
+      return (
+        <>
+          {!isSingleHome && (
+            <AppliesToControl
+              value={defaults.basement.appliesTo}
+              onChange={(v) => patch("basement", { appliesTo: v })}
+            />
+          )}
+          <PriceModeControl
+            value={defaults.basement.priceMode}
+            onChange={(v) => patch("basement", { priceMode: v })}
+            optionalPrice={defaults.basement.optionalPrice}
+            onOptionalPriceChange={(v) => patch("basement", { optionalPrice: v })}
           />
         </>
       );

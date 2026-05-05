@@ -87,6 +87,10 @@ export function EditStepModal({
    *  sola, características solas, urbanización sola). Si no se pasa,
    *  muestra todo el step (modal grande). */
   infoBasicaSection?: "amenidades" | "caracteristicas" | "urbanizacion" | "estilo" | "energia";
+  /** Cuando step="extras", filtra el render a UNA sola categoría ·
+   *  útil para mini-modales del bloque "Extras y opcionales" de la
+   *  ficha (Piscina · Parking · Trastero · Sótano · Solárium). */
+  extrasOnlyCategory?: "privatePool" | "parking" | "storageRoom" | "basement" | "solarium";
 }) {
   if (!step) return null;
 
@@ -97,8 +101,17 @@ export function EditStepModal({
     estilo: "Estilo arquitectónico",
     energia: "Certificado energético",
   };
+  const EXTRAS_TITLES: Record<string, string> = {
+    privatePool: "Piscina privada",
+    parking: "Parking",
+    storageRoom: "Trastero",
+    basement: "Sótano",
+    solarium: "Solárium",
+  };
   const title = (step === "info_basica" && infoBasicaSection)
     ? (SECTION_TITLES[infoBasicaSection] ?? "Editar")
+    : (step === "extras" && extrasOnlyCategory)
+    ? (EXTRAS_TITLES[extrasOnlyCategory] ?? "Editar")
     : (STEP_TITLES[step] ?? "Editar");
 
   /* Steps con tabla ancha (unidades) necesitan más espacio · sin
@@ -169,13 +182,25 @@ export function EditStepModal({
              * Orientación) sin pasar por essentials (que viven en
              * sus propios bloques de la ficha · Parking, Trastero,
              * Piscina). Wizard 5/14 standalone NO se ve afectado
-             * (ese caller no pasa la prop · 2 panes navegables). */
-            <ExtrasV5
-              state={state}
-              update={update}
-              lockToPane="extras"
-              hideCategoryKeys={["plot"]}
-            />
+             * (ese caller no pasa la prop · 2 panes navegables).
+             *
+             * Si extrasOnlyCategory está set, mini-modal de UNA sola
+             * categoría · usado por el bloque "Extras y opcionales"
+             * de la ficha. */
+            extrasOnlyCategory ? (
+              <ExtrasV5
+                state={state}
+                update={update}
+                onlyCategory={extrasOnlyCategory}
+              />
+            ) : (
+              <ExtrasV5
+                state={state}
+                update={update}
+                lockToPane="extras"
+                hideCategoryKeys={["plot"]}
+              />
+            )
           )}
           {step === "detalles" && (
             <DetallesStep
