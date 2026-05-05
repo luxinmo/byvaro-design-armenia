@@ -80,6 +80,9 @@ export interface PromotionDefaults {
     solarPanels: boolean;
     electricBlinds: boolean;
     doubleGlazing: boolean;
+    /** Punto de carga para vehículo eléctrico (preinstalación o
+     *  instalación completa) · obligatorio CTE en parking nuevo. */
+    chargingPoint: boolean;
     /* Espacios extra */
     lavanderia: boolean;
     bodega: boolean;
@@ -151,6 +154,7 @@ export const defaultPromotionDefaults: PromotionDefaults = {
     heating: false, heatingType: null,
     equippedKitchen: false, kitchenType: null,
     domotics: false, solarPanels: false, electricBlinds: false, doubleGlazing: false,
+    chargingPoint: false,
     lavanderia: false, bodega: false, armariosEmpotrados: false, vestidor: false, chimenea: false,
     gym: false, sauna: false, jacuzzi: false, hammam: false,
     bbq: false, tenis: false, padel: false,

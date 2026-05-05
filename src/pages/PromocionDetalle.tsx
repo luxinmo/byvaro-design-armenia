@@ -2221,7 +2221,7 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                  *  desde el catálogo canónico. */
                 const EQUIPMENT_KEYS = [
                   "airConditioning", "heating", "equippedKitchen",
-                  "domotics", "solarPanels", "electricBlinds", "doubleGlazing",
+                  "domotics", "solarPanels", "chargingPoint", "electricBlinds", "doubleGlazing",
                   "lavanderia", "bodega", "armariosEmpotrados", "vestidor", "chimenea",
                   "gym", "sauna", "jacuzzi", "hammam",
                   "bbq", "tenis", "padel", "ascensor",
