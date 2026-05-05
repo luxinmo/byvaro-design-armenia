@@ -22,7 +22,7 @@
  * del edificio; zonasComunes = de la urbanización a la que pertenece.
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   MapPin, Sparkles, Leaf, Palmtree,
   Lock, ShieldCheck, Bell,
@@ -30,7 +30,7 @@ import {
   Dumbbell, Volleyball, Footprints, Sparkles as SpaIcon,
   Users as UsersIcon, Laptop, Wine, UtensilsCrossed, PartyPopper,
   Car, Wrench, BellRing,
-  Plug, Recycle,
+  Plug, Recycle, Plus, Heater,
 } from "lucide-react";
 import type { WizardState, EstiloVivienda } from "./types";
 import {
@@ -120,10 +120,12 @@ const URBANIZACION_GROUPS: {
   {
     label: "Zonas comunes",
     items: [
-      { value: "piscina_com",      label: "Piscina",      icon: Waves },
-      { value: "jardin_com",       label: "Jardín",       icon: TreePine },
-      { value: "zona_infantil_com",label: "Zona infantil",icon: Baby },
-      { value: "zona_mascotas",    label: "Mascotas",     icon: Dog },
+      { value: "piscina_com",         label: "Piscina exterior",   icon: Waves },
+      { value: "piscina_interior",    label: "Piscina interior",   icon: Waves },
+      { value: "piscina_climatizada", label: "Piscina climatizada", icon: Waves },
+      { value: "jardin_com",          label: "Jardín",             icon: TreePine },
+      { value: "zona_infantil_com",   label: "Zona infantil",      icon: Baby },
+      { value: "zona_mascotas",       label: "Mascotas",           icon: Dog },
     ],
   },
   {
@@ -152,6 +154,7 @@ const URBANIZACION_GROUPS: {
       { value: "parking_visitas",  label: "Parking visitas", icon: Car },
       { value: "mantenimiento",    label: "Mantenimiento",   icon: Wrench },
       { value: "concierge",        label: "Concierge",       icon: BellRing },
+      { value: "calefaccion_central", label: "Calefacción central", icon: Heater },
     ],
   },
   {
@@ -222,6 +225,14 @@ export function InfoBasicaStep({
   const isPlurifamiliar = state.tipo === "plurifamiliar" || state.tipo === "mixto";
   const isUnifamiliar = state.tipo === "unifamiliar";
 
+  /* Estilo arquitectónico en plurifamiliar · OPCIONAL · arranca
+   *  colapsado tras un botón "+ Añadir estilo". Solo se expande si
+   *  el user lo pide o ya hay un estilo previamente seleccionado.
+   *  Sin esto, el grid se mostraba abierto siempre · daba la impresión
+   *  de que había que elegir uno sí o sí. */
+  const [estiloPickerOpen, setEstiloPickerOpen] = useState(false);
+  const estiloVisible = estiloPickerOpen || state.estiloVivienda != null;
+
   // Sugerencias dinámicas de amenities según la ciudad.
   const suggestions = useMemo(
     () => suggestAmenities(state.direccionPromocion.ciudad ?? ""),
@@ -288,27 +299,55 @@ export function InfoBasicaStep({
         </div>
       )}
 
-      {/* ═════ Estilo arquitectónico · solo plurifamiliar/mixto
+      {/* ═════ Estilo arquitectónico · solo plurifamiliar/mixto ·
+             OPCIONAL · arranca colapsado tras "+ Añadir estilo"
              (unifamiliar ya lo elige en el paso sub_varias).
 
              Filtro · `finca` y `rustico` SOLO aplican a villa
              unifamiliar · un edificio plurifamiliar no es ni "finca
              rural" ni de piedra/madera rústica. ═════ */}
-      {showSection("estilo") && !isUnifamiliar && state.estiloVivienda == null && (
+      {showSection("estilo") && !isUnifamiliar && (
         <div>
-          <SectionLabel>Estilo arquitectónico</SectionLabel>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {estiloViviendaOptions
-              .filter((o) => !ESTILOS_SOLO_UNIFAMILIAR.has(o.value))
-              .map((o) => (
-                <OptionCard
-                  key={o.value}
-                  option={o}
-                  selected={state.estiloVivienda === o.value}
-                  onSelect={(v) => update("estiloVivienda", v as EstiloVivienda)}
-                />
-              ))}
-          </div>
+          {!estiloVisible ? (
+            <button
+              type="button"
+              onClick={() => setEstiloPickerOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full border border-dashed border-border text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/40 hover:bg-muted/40 transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              Añadir estilo arquitectónico
+            </button>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  Estilo arquitectónico
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    update("estiloVivienda", null);
+                    setEstiloPickerOpen(false);
+                  }}
+                  className="inline-flex items-center gap-1 px-2 h-7 rounded-full text-[11.5px] text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  Quitar
+                </button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {estiloViviendaOptions
+                  .filter((o) => !ESTILOS_SOLO_UNIFAMILIAR.has(o.value))
+                  .map((o) => (
+                    <OptionCard
+                      key={o.value}
+                      option={o}
+                      selected={state.estiloVivienda === o.value}
+                      onSelect={(v) => update("estiloVivienda", v as EstiloVivienda)}
+                    />
+                  ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -335,31 +374,10 @@ export function InfoBasicaStep({
           ═════════════════════════════════════════════════════════════ */}
       {isPlurifamiliar && (
         <>
-          {showSection("amenidades") && (
-          <div>
-            <SectionLabel hint="Lo que ofrece el edificio/promoción por sí mismo.">
-              <span className="inline-flex items-center gap-1.5">
-                <Sparkles className="h-3 w-3" />
-                Amenities del edificio
-              </span>
-            </SectionLabel>
-            <PillSelect
-              options={amenitiesOptions}
-              selected={state.amenities}
-              onToggle={toggleAmenity}
-            />
-            {noAmenitiesYet && state.direccionPromocion.ciudad && (
-              <button
-                type="button"
-                onClick={() => update("amenities", suggestions)}
-                className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] font-medium text-primary hover:underline"
-              >
-                <Sparkles className="h-3 w-3" />
-                Sugerencia: añadir {suggestions.length} amenities habituales en {state.direccionPromocion.ciudad}
-              </button>
-            )}
-          </div>
-          )}
+          {/* Bloque "Amenities del edificio" ELIMINADO · era duplicado
+           *  con URBANIZACION_GROUPS (10 items aparecían en los 2 lados)
+           *  · el edificio en sí ya es una urbanización · todo se
+           *  configura en "Zonas comunes y servicios" abajo. */}
 
           {showSection("caracteristicas") && !effectiveDefaultsCapturedInExtras && (
             <div>
@@ -396,85 +414,71 @@ export function InfoBasicaStep({
         </>
       )}
 
-      {/* ═════ Urbanización master switch (siempre disponible) ═════ */}
+      {/* ═════ Zonas comunes y servicios · siempre abierto.
+             Antes había switch "¿Está dentro de una urbanización?"
+             pero el edificio en sí ya es una urbanización (con sus
+             propias zonas comunes), así que el bloque siempre aplica.
+             El "Tipo" (Cerrada/Resort/Abierta) queda como sub-control
+             opcional · solo relevante si la promo está dentro de una
+             urbanización mayor. ═════ */}
       {showSection("urbanizacion") && (
       <div>
-        <SectionLabel>
+        <SectionLabel hint="Las amenidades del edificio o de la urbanización donde se encuentra.">
           <span className="inline-flex items-center gap-1.5">
             <Palmtree className="h-3 w-3" />
-            Urbanización
+            Zonas comunes y servicios
           </span>
         </SectionLabel>
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
-          <div className="flex items-center justify-between gap-3 p-4">
-            <div>
-              <p className="text-[13.5px] font-semibold text-foreground">¿Está dentro de una urbanización?</p>
-              <p className="text-[11.5px] text-muted-foreground leading-relaxed max-w-md">
-                {isUnifamiliar
-                  ? "Las viviendas unifamiliares suelen estar dentro de urbanizaciones con piscina, pistas de pádel, jardines compartidos…"
-                  : "Un bloque plurifamiliar puede formar parte de una urbanización más grande con sus propias zonas comunes."}
-              </p>
-            </div>
-            <Switch
-              checked={state.urbanizacion}
-              onCheckedChange={(v) => update("urbanizacion", v)}
-              ariaLabel="Dentro de urbanización"
-            />
-          </div>
-
-          {/* Sub-formulario que se revela cuando el switch está ON */}
-          {state.urbanizacion && (
-            <div className="border-t border-border bg-muted/20 p-4 flex flex-col gap-5">
-              {/* Tipo · Cerrada / Resort / Abierta */}
-              <div>
-                <label className="text-[11.5px] font-medium text-muted-foreground mb-1.5 block">
-                  Tipo
-                </label>
-                <div className="flex gap-1.5">
-                  {URBANIZACION_TIPOS.map((t) => {
-                    const isOn = state.urbanizacionTipo === t.value;
-                    return (
-                      <button
-                        key={t.value}
-                        type="button"
-                        onClick={() =>
-                          update("urbanizacionTipo", isOn ? null : t.value)
-                        }
-                        className={cn(
-                          "h-8 rounded-full px-3.5 text-[12px] font-medium transition-colors border",
-                          isOn
-                            ? "bg-foreground text-background border-foreground"
-                            : "bg-card text-muted-foreground border-border hover:text-foreground hover:border-foreground/30",
-                        )}
-                      >
-                        {t.label}
-                      </button>
-                    );
-                  })}
+          <div className="p-4 flex flex-col gap-5">
+            {/* Amenities agrupadas */}
+            <div className="flex flex-col gap-4">
+              {URBANIZACION_GROUPS.map((g) => (
+                <div key={g.label}>
+                  <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-2">
+                    {g.label}
+                  </p>
+                  <PillSelect
+                    options={g.items}
+                    selected={state.zonasComunes}
+                    onToggle={toggleZona}
+                  />
                 </div>
-              </div>
+              ))}
+            </div>
 
-              {/* Nombre de la urbanización · ocultado de momento ·
-               *  el campo `urbanizacionNombre` sigue en el modelo como
-               *  cadena vacía por compat con drafts antiguos. */}
-
-              {/* Amenities agrupadas */}
-              <div className="flex flex-col gap-4">
-                {URBANIZACION_GROUPS.map((g) => (
-                  <div key={g.label}>
-                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-2">
-                      {g.label}
-                    </p>
-                    <PillSelect
-                      options={g.items}
-                      selected={state.zonasComunes}
-                      onToggle={toggleZona}
-                    />
-                  </div>
-                ))}
+            {/* Tipo de urbanización · OPCIONAL · solo si la promo
+             *  está dentro de una urbanización mayor (resort, cerrada,
+             *  abierta). Si es un edificio standalone el user lo
+             *  puede dejar sin marcar. */}
+            <div className="border-t border-border/60 pt-4">
+              <label className="text-[11.5px] font-medium text-muted-foreground mb-1.5 block">
+                Tipo de urbanización <span className="text-muted-foreground/60 font-normal">(opcional)</span>
+              </label>
+              <div className="flex gap-1.5">
+                {URBANIZACION_TIPOS.map((t) => {
+                  const isOn = state.urbanizacionTipo === t.value;
+                  return (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() =>
+                        update("urbanizacionTipo", isOn ? null : t.value)
+                      }
+                      className={cn(
+                        "h-8 rounded-full px-3.5 text-[12px] font-medium transition-colors border",
+                        isOn
+                          ? "bg-foreground text-background border-foreground"
+                          : "bg-card text-muted-foreground border-border hover:text-foreground hover:border-foreground/30",
+                      )}
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
       )}

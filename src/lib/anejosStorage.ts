@@ -130,6 +130,81 @@ export function deleteAnejo(promotionId: string, anejoId: string) {
   commit(promotionId, list.filter((a) => a.id !== anejoId));
 }
 
+/** Siembra anejos sueltos desde el WizardState al crear/cargar una
+ *  promoción · solo si el storage está vacío para esta promo. Lee:
+ *    - state.trasteros + state.trasteroPrecios[]
+ *    - state.parkings + state.parkingPrecios[]
+ *    - state.solariums + state.solariumPrecios[]
+ *    - state.sotanos + state.sotanoPrecios[]
+ *  Genera un Anejo por cada, descontando los "incluidos por vivienda"
+ *  (que ya van con la unidad). Sin esta función, los anejos sueltos
+ *  configurados en el wizard NO aparecían en la tab Disponibilidad. */
+export function seedAnejosFromWizardIfEmpty(
+  promotionId: string,
+  state: {
+    trasteros?: number;
+    trasterosIncluidosPrecio?: boolean;
+    trasterosIncluidosPorVivienda?: number;
+    trasteroPrecios?: number[];
+    parkings?: number;
+    parkingsIncluidosPrecio?: boolean;
+    parkingsIncluidosPorVivienda?: number;
+    parkingPrecios?: number[];
+    solariums?: number;
+    solariumPrecios?: number[];
+    sotanos?: number;
+    sotanoPrecios?: number[];
+    unidades?: Array<unknown>;
+  } | null | undefined,
+  totalViviendas?: number,
+): void {
+  if (!state) return;
+  const store = readStore();
+  if (store[promotionId] && store[promotionId].length > 0) return; // ya hidratado
+  const totalViv = totalViviendas ?? (state.unidades?.length ?? 0);
+  const anejos: Anejo[] = [];
+  let counter = 0;
+
+  const addAnejos = (
+    tipo: AnejoTipo | "solarium" | "sotano",
+    count: number,
+    precios: number[],
+    incluidosPorViv = 0,
+    incluidosTodos = false,
+  ) => {
+    /* "incluidos en el precio" significa que esos N van con la
+     *  vivienda · NO se venden sueltos · los descontamos. */
+    const bundled = incluidosTodos ? totalViv * incluidosPorViv : 0;
+    const sueltos = Math.max(0, count - bundled);
+    /* `tipo` · solo "parking" / "trastero" están en el enum AnejoTipo
+     *  · solárium y sótano se mapean a "trastero" como aproximación
+     *  (el shape no tiene categoría aparte). */
+    const mappedTipo: AnejoTipo = tipo === "parking" ? "parking" : "trastero";
+    const prefix = tipo === "parking" ? "P" : tipo === "trastero" ? "T" : tipo === "solarium" ? "S" : "B";
+    for (let i = 0; i < sueltos; i++) {
+      counter++;
+      anejos.push({
+        id: `anejo-${promotionId}-seed-${tipo}-${i + 1}`,
+        promotionId,
+        publicId: `${prefix}${String(i + 1).padStart(2, "0")}`,
+        tipo: mappedTipo,
+        precio: precios[i] ?? 0,
+        status: "available",
+        visibleToAgencies: true,
+      });
+    }
+  };
+
+  addAnejos("trastero", state.trasteros ?? 0, state.trasteroPrecios ?? [],
+    state.trasterosIncluidosPorVivienda ?? 0, !!state.trasterosIncluidosPrecio);
+  addAnejos("parking", state.parkings ?? 0, state.parkingPrecios ?? [],
+    state.parkingsIncluidosPorVivienda ?? 0, !!state.parkingsIncluidosPrecio);
+  addAnejos("solarium", state.solariums ?? 0, state.solariumPrecios ?? []);
+  addAnejos("sotano", state.sotanos ?? 0, state.sotanoPrecios ?? []);
+
+  if (anejos.length > 0) commit(promotionId, anejos);
+}
+
 /** Hook reactivo · se re-renderiza al mutar el store (misma pestaña
  *  vía `CHANGE_EVENT` u otra pestaña vía `storage`). */
 export function useAnejosForPromotion(promotionId: string): Anejo[] {

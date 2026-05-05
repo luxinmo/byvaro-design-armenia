@@ -26,7 +26,7 @@
 import type { Promotion } from "@/data/promotions";
 import type { FlatExtras } from "./promotionsStorage";
 
-type ExtrasKey = "privatePool" | "parking" | "storageRoom" | "basement" | "solarium";
+type ExtrasKey = "privatePool" | "parking" | "storageRoom" | "basement" | "solarium" | "plot";
 
 interface SnapShape {
   metadata?: {
@@ -38,6 +38,7 @@ interface SnapShape {
         enabled?: boolean;
         priceMode?: string | null;
         optionalPrice?: number | null;
+        minSizeSqm?: number | null;
       }>>;
     };
   } | null;
@@ -64,14 +65,15 @@ export function resolveLicenseGranted(p: Promotion | SnapShape | null | undefine
 export function resolveExtraSlot(
   p: Promotion | SnapShape | null | undefined,
   key: ExtrasKey,
-): { enabled: boolean; priceMode: string | null; optionalPrice: number | null } {
+): { enabled: boolean; priceMode: string | null; optionalPrice: number | null; minSizeSqm: number | null } {
   const m = p?.metadata;
-  if (m?.extras?.[key]) {
-    const slot = m.extras[key];
+  if (m?.extras?.[key as keyof FlatExtras]) {
+    const slot = m.extras[key as keyof FlatExtras];
     return {
       enabled: !!slot.enabled,
       priceMode: slot.priceMode ?? null,
       optionalPrice: slot.optionalPrice ?? null,
+      minSizeSqm: null,
     };
   }
   const snap = m?.wizardSnapshot?.promotionDefaults?.[key];
@@ -80,19 +82,28 @@ export function resolveExtraSlot(
       enabled: !!snap.enabled,
       priceMode: snap.priceMode ?? null,
       optionalPrice: snap.optionalPrice ?? null,
+      minSizeSqm: snap.minSizeSqm ?? null,
     };
   }
-  return { enabled: false, priceMode: null, optionalPrice: null };
+  return { enabled: false, priceMode: null, optionalPrice: null, minSizeSqm: null };
 }
 
 /** Devuelve TODOS los anejos · útil para iterar al renderizar el
  *  bloque "Extras y opcionales" sin saber qué hay activo. */
-export function resolveAllExtras(p: Promotion | SnapShape | null | undefined): FlatExtras {
+export function resolveAllExtras(p: Promotion | SnapShape | null | undefined): {
+  privatePool: ReturnType<typeof resolveExtraSlot>;
+  parking: ReturnType<typeof resolveExtraSlot>;
+  storageRoom: ReturnType<typeof resolveExtraSlot>;
+  basement: ReturnType<typeof resolveExtraSlot>;
+  solarium: ReturnType<typeof resolveExtraSlot>;
+  plot: ReturnType<typeof resolveExtraSlot>;
+} {
   return {
     privatePool: resolveExtraSlot(p, "privatePool"),
     parking:     resolveExtraSlot(p, "parking"),
     storageRoom: resolveExtraSlot(p, "storageRoom"),
     basement:    resolveExtraSlot(p, "basement"),
     solarium:    resolveExtraSlot(p, "solarium"),
+    plot:        resolveExtraSlot(p, "plot"),
   };
 }

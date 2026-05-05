@@ -215,7 +215,22 @@ export function getMissingForPromotion(p: Promotion): MissingRequirement[] {
   }
 
   /* ── Tipología + edificación ──────────────────────────── */
-  if (!Array.isArray(p.propertyTypes) || p.propertyTypes.length === 0) {
+  /* Tolerancia · NO exigir `propertyTypes` cuando:
+   *  1. Hay subtipos en wizardSnapshot.unidades, O
+   *  2. Es plurifamiliar y hay >0 unidades (subtipo default
+   *     "apartamento" implícito · el flow plurifamiliar no fuerza
+   *     al user a elegir tipologías como sí hace unifamiliar).
+   *  Solo el flow unifamiliar exige tipología explícita. */
+  const hasPropertyTypes = Array.isArray(p.propertyTypes) && p.propertyTypes.length > 0;
+  const snapUnits = (p as { metadata?: { wizardSnapshot?: { unidades?: Array<{ subtipo?: string | null }> } } })
+    .metadata?.wizardSnapshot?.unidades;
+  const hasUnitSubtypes = (snapUnits ?? []).some(
+    (u) => u.subtipo && u.subtipo !== "local" && u.subtipo !== "planta_baja",
+  );
+  const isPluriWithUnits = (
+    p.buildingType === "plurifamiliar" || (snapUnits?.length ?? 0) > 0
+  ) && p.totalUnits > 0;
+  if (!hasPropertyTypes && !hasUnitSubtypes && !isPluriWithUnits) {
     missing.push({ key: "tipologia", label: "Sin tipologías (apartamento/ático...)", ficha: "basicInfo" });
   }
   if (!p.buildingType) {
@@ -271,13 +286,35 @@ export function getMissingForPromotion(p: Promotion): MissingRequirement[] {
      Sin (b) la tab Comisiones muestra "Sin estructura de comisiones
      definida", con lo cual la agencia no puede calcular su
      liquidación — no es publicable. */
-  const willShare = (p as { canShareWithAgencies?: boolean }).canShareWithAgencies !== false;
+  /* Compartir con agencias · `canShareWithAgencies === true` ·
+   *  EXPLÍCITAMENTE marcado por el user en el step Colaboradores.
+   *  Antes el default era "compartir si no es false" → undefined
+   *  caía en willShare=true → exigía comisiones aunque el user
+   *  nunca hubiera tocado la sección. Bug: cualquier promo recién
+   *  creada salía con "Comisiones sin porcentaje" pendiente. */
+  const snapColabFlag = (p as { metadata?: { wizardSnapshot?: { colaboracion?: boolean } } })
+    .metadata?.wizardSnapshot?.colaboracion;
+  const willShare = (p as { canShareWithAgencies?: boolean }).canShareWithAgencies === true
+    || snapColabFlag === true;
   if (willShare) {
-    if (!p.commission || p.commission <= 0) {
+    /* Tolerante con valores legacy · si `p.commission` plano está
+     *  vacío PERO el wizardSnapshot tiene `comisionInternacional > 0`
+     *  (porque la promo se creó antes de que `deriveFlatMetadata`
+     *  proyectara el campo correctamente), considerarlo OK. */
+    const snapCommission = (p as {
+      metadata?: { wizardSnapshot?: { comisionInternacional?: number } };
+    }).metadata?.wizardSnapshot?.comisionInternacional ?? 0;
+    const hasCommission = (p.commission && p.commission > 0) || snapCommission > 0;
+    if (!hasCommission) {
       missing.push({ key: "comisiones", label: "Comisiones sin porcentaje", ficha: "collaborators" });
     }
+    /* Estructura completa · `collaboration` plano O snapshot con
+     *  `colaboracion === true` (significa que el user pasó por el
+     *  step de colaboradores y rellenó algo). */
     const collab = (p as { collaboration?: unknown }).collaboration;
-    if (!collab) {
+    const snapColab = (p as { metadata?: { wizardSnapshot?: { colaboracion?: boolean } } })
+      .metadata?.wizardSnapshot?.colaboracion;
+    if (!collab && !snapColab) {
       missing.push({
         key: "estructura-comisiones",
         label: "Sin estructura de comisiones definida",

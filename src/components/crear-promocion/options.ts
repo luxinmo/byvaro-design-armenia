@@ -9,6 +9,8 @@ import {
   CookingPot, Eye, PanelTop, Flower2, Cpu, Wind, Heater,
   Sun, Boxes, TreeDeciduous, Columns2, PenTool, Mountain,
   Footprints, Volleyball, Dog,
+  /* Amenities del edificio · iconos para items específicos */
+  Film, Gamepad2, Bike, Shirt, Archive, Briefcase,
 } from "lucide-react";
 import type {
   CardOption, RoleOption, TipoPromocion, SubUni, SubVarias,
@@ -140,18 +142,27 @@ export const formaPagoComisionOptions: CardOption<FormaPagoComision>[] = [
   { value: "personalizado", label: "Personalizado", description: "Hitos de pago personalizados", icon: PackageCheck },
 ];
 
+/* Amenities DEL EDIFICIO · lo que tiene el propio edificio donde
+ *  vive el residente. Distinto de URBANIZACION_GROUPS (que cubre
+ *  amenidades compartidas con otros edificios cuando la promo está
+ *  dentro de una urbanización mayor).
+ *
+ *  Sin solapamientos · piscina/gimnasio/jardín/etc. genéricos viven
+ *  en URBANIZACION_GROUPS. Aquí solo los items intrínsecos al
+ *  edificio (piscina_edificio, gym_edificio, sala social, etc.). */
 export const amenitiesOptions = [
-  { value: "piscina", label: "Piscina", icon: Waves },
-  { value: "gimnasio", label: "Gimnasio", icon: Dumbbell },
-  { value: "spa", label: "Spa", icon: Sparkles },
-  { value: "restaurantes", label: "Restaurantes", icon: UtensilsCrossed },
-  { value: "coworking", label: "Co-working", icon: Laptop },
-  { value: "seguridad", label: "Seguridad", icon: ShieldCheck },
-  { value: "parking", label: "Parking", icon: Car },
-  { value: "jardin", label: "Jardín", icon: TreePine },
-  { value: "zona_infantil", label: "Zona infantil", icon: Baby },
-  { value: "beach_club", label: "Beach club", icon: Umbrella },
-  { value: "conserje", label: "Conserjería", icon: Bell },
+  { value: "piscina_edificio",  label: "Piscina del edificio", icon: Waves },
+  { value: "gimnasio_edificio", label: "Gimnasio del edificio", icon: Dumbbell },
+  { value: "sala_social",       label: "Sala social / Lounge", icon: Sparkles },
+  { value: "sala_cine",         label: "Sala cine / juegos",   icon: Film },
+  { value: "sala_reuniones",    label: "Sala reuniones / coworking", icon: Briefcase },
+  { value: "conserje_24h",      label: "Conserjería 24h",      icon: Bell },
+  { value: "parking_residentes", label: "Parking residentes",  icon: Car },
+  { value: "jardin_edificio",   label: "Jardín del edificio",  icon: TreePine },
+  { value: "biciparking",       label: "Biciparking",          icon: Bike },
+  { value: "lavanderia_comun",  label: "Lavandería compartida", icon: Shirt },
+  { value: "trasteros_comunes", label: "Trasteros comunes",    icon: Archive },
+  { value: "pet_wash",          label: "Pet wash / sala mascotas", icon: Dog },
 ];
 
 export const caracteristicasViviendaOptions = [

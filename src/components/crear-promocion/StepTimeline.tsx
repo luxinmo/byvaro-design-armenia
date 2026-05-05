@@ -124,27 +124,39 @@ function getAllSteps(state: WizardState): TimelineStep[] {
     getSummary: (s) => s.nombrePromocion || null,
   });
 
-  // 3. Las viviendas · anejos per-unidad + equipamiento + vistas + …
+  // 3. Anejos esenciales de cada vivienda · piscina, parking, etc.
   steps.push({
     id: "extras",
-    label: "Las viviendas",
+    label: "Anejos y extras",
     getSummary: (s) => {
+      const d = s.promotionDefaults;
       const parts: string[] = [];
-      if ((s.locales ?? 0) > 0) parts.push(`${s.locales} loc.`);
-      if ((s.trasteros ?? 0) > 0) parts.push(`${s.trasteros} trast.`);
-      if ((s.parkings ?? 0) > 0) parts.push(`${s.parkings} park.`);
+      if (d?.privatePool?.enabled) parts.push("Piscina");
+      if (d?.parking?.enabled) parts.push("Parking");
+      if (d?.storageRoom?.enabled) parts.push("Trastero");
+      if (d?.basement?.enabled) parts.push("Sótano");
+      if (d?.solarium?.enabled) parts.push("Solárium");
+      if (d?.terraces?.enabled) parts.push("Terrazas");
       return parts.length > 0 ? parts.join(" · ") : null;
     },
   });
 
-  // 4. Crear las viviendas · tabla de unidades con precios
+  // 4. Equipamiento · sub-grupos detallados + seguridad/vistas/orientación
   steps.push({
-    id: "crear_unidades",
-    label: "Crear unidades",
-    getSummary: (s) => (s.unidades?.length ?? 0) > 0 ? `${s.unidades.length} uds.` : null,
+    id: "equipamiento",
+    label: "Equipamiento",
+    getSummary: (s) => {
+      const eq = s.promotionDefaults?.equipment;
+      if (!eq) return null;
+      const count = Object.values(eq).filter((v) => v === true).length;
+      return count > 0 ? `${count} marcadas` : null;
+    },
   });
 
-  // 5. Marketing · multimedia + descripción
+  // 5. Multimedia · OBLIGATORIO antes de crear unidades · el promotor
+  //    sube las fotos generales (fachada, render, planos) ANTES de
+  //    poder rellenar la tabla de unidades · así puede asignar fotos
+  //    a cada unidad después.
   steps.push({
     id: "multimedia",
     label: "Multimedia",
@@ -156,6 +168,7 @@ function getAllSteps(state: WizardState): TimelineStep[] {
     },
   });
 
+  // 6. Descripción · texto de la promoción
   steps.push({
     id: "descripcion",
     label: "Descripción",
@@ -164,6 +177,15 @@ function getAllSteps(state: WizardState): TimelineStep[] {
       if (s.descripcionMode === "manual") return s.descripcion ? "Manual" : null;
       return null;
     },
+  });
+
+  // 7. Crear las viviendas · tabla de unidades con precios · va al
+  //    final del bloque de marketing porque el promotor ya tiene fotos
+  //    y descripción para asignar a cada unidad.
+  steps.push({
+    id: "crear_unidades",
+    label: "Crear unidades",
+    getSummary: (s) => (s.unidades?.length ?? 0) > 0 ? `${s.unidades.length} uds.` : null,
   });
 
   steps.push({

@@ -58,6 +58,12 @@ interface Props {
    *  para que aparezca expandida directamente. Útil para mini-modales
    *  de la ficha "edita Parking" / "edita Sótano" / etc. */
   onlyCategory?: CategoryKey;
+  /** Categorías a auto-expandir al montar · se añaden al
+   *  `manualAdded` set · aparecen como CategoryCard expandida sin
+   *  que el user tenga que clicar el chip "+". Útil para el step
+   *  "Equipamiento" donde queremos que `equipment` esté abierto
+   *  desde el inicio con todos sus sub-grupos visibles. */
+  autoExpandKeys?: CategoryKey[];
 }
 
 type CategoryKey =
@@ -105,6 +111,14 @@ const APPLIES_TO_KEYS = new Set<CategoryKey>([
   "privatePool", "parking", "storageRoom", "basement", "solarium", "plot",
 ]);
 
+/* Categorías cuyo state-shape tiene un flag `enabled: boolean`. Usado
+ * en `add()` para marcar enabled=true al añadir desde chip · sin
+ * esto el wizard no detectaba que el user abrió la card y no podía
+ * exigir que rellenara los campos obligatorios antes de "Siguiente". */
+const ENABLED_FLAG_KEYS = new Set<CategoryKey>([
+  "privatePool", "parking", "storageRoom", "basement", "solarium", "plot", "terraces",
+]);
+
 /* Categorías que SOLO tienen sentido en villa unifamiliar · NO se
  *  renderizan cuando `state.tipo === "plurifamiliar"`. Una piscina
  *  privada de cada apartamento no existe (sería comunitaria, que va
@@ -143,7 +157,7 @@ function resetCategory(d: PromotionDefaults, k: CategoryKey): PromotionDefaults 
   return { ...d, [k]: defaultPromotionDefaults[k] } as PromotionDefaults;
 }
 
-export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane, onlyCategory }: Props) {
+export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane, onlyCategory, autoExpandKeys }: Props) {
   /* En plurifamiliar · ocultar las categorías que solo aplican a
    *  villa unifamiliar (piscina privada, sótano, parcela). Para
    *  apartamentos esas opciones no tienen sentido como anejo
@@ -179,13 +193,19 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane, onl
   const isSingleHome = state.tipo === "unifamiliar" && state.subUni === "una_sola";
 
   /* Set local · qué categorías ha añadido el user que aún no tienen
-   * datos. Las que SÍ tienen datos son visibles via `isConfigured`. */
-  const [manualAdded, setManualAdded] = useState<Set<CategoryKey>>(
-    /* Si onlyCategory está set, pre-añade esa categoría como manual ·
-     *  garantiza que se renderice expandida sin que el user tenga que
-     *  hacer click en el chip "+". */
-    onlyCategory ? new Set<CategoryKey>([onlyCategory]) : new Set(),
-  );
+   * datos. Las que SÍ tienen datos son visibles via `isConfigured`.
+   *
+   * Pre-poblado si:
+   * - `onlyCategory` está set · solo esa categoría.
+   * - `autoExpandKeys` está set · cada una se añade · útil para el
+   *   step "Equipamiento" donde queremos `equipment` abierto sin
+   *   que el user clique el chip "+". */
+  const [manualAdded, setManualAdded] = useState<Set<CategoryKey>>(() => {
+    const initial = new Set<CategoryKey>();
+    if (onlyCategory) initial.add(onlyCategory);
+    if (autoExpandKeys) for (const k of autoExpandKeys) initial.add(k);
+    return initial;
+  });
 
   function patch<K extends keyof PromotionDefaults>(
     key: K,
@@ -211,15 +231,24 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane, onl
 
   function add(k: CategoryKey) {
     setManualAdded((prev) => new Set(prev).add(k));
-    /* Single-home · si la categoría tiene `appliesTo` y el control no
-     * se renderiza, lo dejamos en "all" desde el principio para que
-     * el validador `canContinue` no se quede esperando un valor. */
-    if (isSingleHome && APPLIES_TO_KEYS.has(k)) {
-      update("promotionDefaults", {
-        ...defaults,
-        [k]: { ...defaults[k], appliesTo: "all" },
-      } as PromotionDefaults);
-    }
+    /* Persistimos en state · `openExtras` es lo que `canContinue`
+     *  lee para saber qué chips están abiertos sin marcar nada. */
+    const openExtras = defaults.openExtras ?? [];
+    const nextOpen = openExtras.includes(k) ? openExtras : [...openExtras, k];
+    /* Categorías con `enabled` flag · al añadirlas marcamos enabled=true
+     *  para que `canContinue` pueda exigir priceMode, etc. */
+    const enabledExtra: Partial<PromotionDefaults[typeof k]> =
+      ENABLED_FLAG_KEYS.has(k) ? ({ enabled: true } as Partial<PromotionDefaults[typeof k]>) : {};
+    /* Single-home · `appliesTo: "all"` desde el inicio si aplica. */
+    const appliesExtra: Partial<PromotionDefaults[typeof k]> =
+      isSingleHome && APPLIES_TO_KEYS.has(k)
+        ? ({ appliesTo: "all" } as Partial<PromotionDefaults[typeof k]>)
+        : {};
+    update("promotionDefaults", {
+      ...defaults,
+      [k]: { ...defaults[k], ...enabledExtra, ...appliesExtra },
+      openExtras: nextOpen,
+    } as PromotionDefaults);
   }
 
   function remove(k: CategoryKey) {
@@ -228,7 +257,10 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane, onl
       next.delete(k);
       return next;
     });
-    update("promotionDefaults", resetCategory(defaults, k));
+    /* Reset categoría + saca de openExtras. */
+    const reset = resetCategory(defaults, k);
+    const openExtras = (defaults.openExtras ?? []).filter((x) => x !== k);
+    update("promotionDefaults", { ...reset, openExtras });
   }
 
   const essentials = CATEGORIES.filter((c) => ESSENTIAL_KEYS.has(c.key) && !hidden.has(c.key));
@@ -340,7 +372,11 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane, onl
   /* ═══════════ Pane "extras" · picker + cards ═══════════ */
   return (
     <div className="flex flex-col gap-5 max-w-[760px] mx-auto w-full">
-      {!onlyCategory && (
+      {/* Header interno · OCULTO cuando autoExpandKeys está set ·
+       *  el caller (step "Equipamiento" del wizard) ya tiene su
+       *  propio header arriba ("Equipamiento · Climatización, smart
+       *  home, wellness y más"). Sin esto se duplicaba el título. */}
+      {!onlyCategory && !autoExpandKeys && (
         <header className="mb-1">
           {!lockToPane && (
             <button
@@ -364,45 +400,150 @@ export function ExtrasV5({ state, update, hideCategoryKeys = [], lockToPane, onl
         </header>
       )}
 
-      {!onlyCategory && additionalsAvailable.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {additionalsAvailable.map((c) => (
-            <button
-              key={c.key}
-              type="button"
-              onClick={() => add(c.key)}
-              className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full border border-dashed border-border text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/40 hover:bg-muted/40 transition-colors"
-            >
-              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-              <c.icon className="h-3.5 w-3.5" strokeWidth={1.6} />
-              {c.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {(() => {
+        /* Si hay autoExpandKeys (step "Equipamiento"):
+         *   - ARRIBA · cards auto-expandidas (Equipamiento) · fijas.
+         *   - ABAJO · cada additional restante (Solárium · Seguridad ·
+         *     Vistas · Orientación) · cada uno en su sitio · chip o
+         *     card según estado · al clicar el chip se convierte en
+         *     card EN SU MISMO SITIO (no salta arriba).
+         * Sin autoExpandKeys (flow normal): chips arriba, cards abajo. */
+        const autoSet = new Set(autoExpandKeys ?? []);
+        if (autoExpandKeys) {
+          const topCards = additionalsVisible.filter((c) => autoSet.has(c.key));
+          const restItems = additionals.filter((c) => !autoSet.has(c.key));
+          const openSet = new Set(defaults.openExtras ?? []);
+          const isOpen = (k: CategoryKey) =>
+            openSet.has(k) || manualAdded.has(k) || isConfigured(defaults, k);
+          return (
+            <>
+              {topCards.length > 0 && (
+                <div className="flex flex-col gap-2.5">
+                  {topCards.map((c) => (
+                    <CategoryCard
+                      key={c.key}
+                      def={c}
+                      defaults={defaults}
+                      patch={patch}
+                      update={update}
+                      onRemove={() => remove(c.key)}
+                      isSingleHome={isSingleHome}
+                      recordSelection={recordSelection}
+                    />
+                  ))}
+                </div>
+              )}
+              {restItems.length > 0 && (() => {
+                const restOpenList = restItems.filter((c) => isOpen(c.key));
+                /* Toggle · si está abierto, lo cierra (con remove · resetea
+                 *  los campos por si tenía datos parciales). Si está
+                 *  cerrado, lo añade. */
+                const toggle = (k: CategoryKey) =>
+                  isOpen(k) ? remove(k) : add(k);
+                return (
+                  <div className="mt-2 flex flex-col gap-3">
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Características adicionales
+                    </p>
+                    {/* Fila horizontal de chips · TODOS visibles siempre.
+                     *  El chip abierto se destaca (border + bg primary) ·
+                     *  click otra vez lo cierra (toggle). */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {restItems.map((c) => {
+                        const open = isOpen(c.key);
+                        return (
+                          <button
+                            key={c.key}
+                            type="button"
+                            onClick={() => toggle(c.key)}
+                            className={cn(
+                              "inline-flex items-center gap-1.5 px-3 h-8 rounded-full border text-[12.5px] font-medium transition-colors",
+                              open
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-dashed border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 hover:bg-muted/40",
+                            )}
+                          >
+                            {open ? (
+                              <X className="h-3.5 w-3.5" strokeWidth={2} />
+                            ) : (
+                              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                            )}
+                            <c.icon className="h-3.5 w-3.5" strokeWidth={1.6} />
+                            {c.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* Cards expandidas DEBAJO de los chips · una por
+                     *  cada categoría abierta · vertical. */}
+                    {restOpenList.length > 0 && (
+                      <div className="flex flex-col gap-2.5">
+                        {restOpenList.map((c) => (
+                          <CategoryCard
+                            key={c.key}
+                            def={c}
+                            defaults={defaults}
+                            patch={patch}
+                            update={update}
+                            onRemove={() => remove(c.key)}
+                            isSingleHome={isSingleHome}
+                            recordSelection={recordSelection}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </>
+          );
+        }
 
-      {additionalsVisible.length > 0 && (
-        <div className="flex flex-col gap-2.5">
-          {additionalsVisible.map((c) => (
-            <CategoryCard
-              key={c.key}
-              def={c}
-              defaults={defaults}
-              patch={patch}
-              update={update}
-              onRemove={() => remove(c.key)}
-              isSingleHome={isSingleHome}
-              recordSelection={recordSelection}
-            />
-          ))}
-        </div>
-      )}
+        /* Flow normal · sin autoExpandKeys · chips arriba, cards abajo. */
+        return (
+          <>
+            {!onlyCategory && additionalsAvailable.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {additionalsAvailable.map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => add(c.key)}
+                    className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full border border-dashed border-border text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/40 hover:bg-muted/40 transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                    <c.icon className="h-3.5 w-3.5" strokeWidth={1.6} />
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
-      {additionalsVisible.length === 0 && additionalsAvailable.length > 0 && (
-        <p className="text-[12px] text-muted-foreground italic">
-          Selecciona arriba lo que quieras añadir.
-        </p>
-      )}
+            {additionalsVisible.length > 0 && (
+              <div className="flex flex-col gap-2.5">
+                {additionalsVisible.map((c) => (
+                  <CategoryCard
+                    key={c.key}
+                    def={c}
+                    defaults={defaults}
+                    patch={patch}
+                    update={update}
+                    onRemove={() => remove(c.key)}
+                    isSingleHome={isSingleHome}
+                    recordSelection={recordSelection}
+                  />
+                ))}
+              </div>
+            )}
+
+            {additionalsVisible.length === 0 && additionalsAvailable.length > 0 && (
+              <p className="text-[12px] text-muted-foreground italic">
+                Selecciona arriba lo que quieras añadir.
+              </p>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 }

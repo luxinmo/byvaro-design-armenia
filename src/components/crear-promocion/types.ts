@@ -53,7 +53,7 @@ export type FotoCategoria =
 
 export type TipoEntrega = "fecha_definida" | "tras_contrato_cv" | "tras_licencia";
 
-export type SubtipoUnidad = "apartamento" | "loft" | "penthouse" | "duplex" | "triplex" | "planta_baja";
+export type SubtipoUnidad = "apartamento" | "loft" | "penthouse" | "duplex" | "triplex" | "planta_baja" | "local";
 
 export type TipoVista = "mar" | "montana" | "rio" | "oceano" | "golf";
 
@@ -98,6 +98,7 @@ export type StepId =
   | "sub_varias"
   | "config_edificio"
   | "extras"
+  | "equipamiento"
   | "estado"
   | "detalles"
   | "info_basica"
@@ -263,7 +264,12 @@ export interface WizardState {
   escalerasPorBloque: number[];
   plantas: number;
   aptosPorPlanta: number;
-  plantaBajaTipo: PlantaBajaTipo | null;
+  /** Uso de planta baja · `null` = "Sin uso residencial" (elegido
+   *  explícitamente por el user) · `undefined` = aún no decidido (el
+   *  user no ha clicado ninguna card). El wizard exige una elección
+   *  antes de "Siguiente" · evita que el user avance sin saber que
+   *  hay opciones (default `null` aparecía como "Sin uso" preseleccionado). */
+  plantaBajaTipo: PlantaBajaTipo | null | undefined;
   locales: number;
   trasteros: number;
   trasterosIncluidosPrecio: boolean;
@@ -451,7 +457,9 @@ export const defaultWizardState: WizardState = {
    * ajusta a partir de ahí. */
   plantas: 4,
   aptosPorPlanta: 4,
-  plantaBajaTipo: null,
+  /* `undefined` · ninguna card preseleccionada · el user debe elegir
+   *  conscientemente entre Sin uso / Locales / Viviendas. */
+  plantaBajaTipo: undefined,
   locales: 0,
   trasteros: 0,
   trasterosIncluidosPrecio: true,

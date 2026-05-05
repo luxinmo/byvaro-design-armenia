@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
 import type { Promotion } from "@/data/promotions";
 import { resolveAllExtras } from "@/lib/promotionFlatMeta";
 
-type ExtraKey = "privatePool" | "parking" | "storageRoom" | "basement" | "solarium";
+type ExtraKey = "privatePool" | "parking" | "storageRoom" | "basement" | "solarium" | "plot";
 
 type PriceMode = "included" | "optional" | "not_included" | null | undefined;
 
@@ -38,9 +38,14 @@ interface ExtraSlot {
   enabled?: boolean;
   priceMode?: PriceMode;
   optionalPrice?: number | null;
+  /** Solo `plot` (parcela) · superficie mínima en m². */
+  minSizeSqm?: number | null;
 }
 
-const ORDER: ExtraKey[] = ["privatePool", "parking", "storageRoom", "basement", "solarium"];
+/* `plot` añadido al final · solo aplica a unifamiliar (parcela
+ *  desde X m²) · ExtrasOpcionalesCard lo renderiza como tile con
+ *  "X m²" en lugar de chip de precio. */
+const ORDER: ExtraKey[] = ["privatePool", "parking", "storageRoom", "basement", "solarium", "plot"];
 
 export function ExtrasOpcionalesCard({
   promotion,
@@ -133,7 +138,16 @@ function ExtraTile({
         <Icon className="h-5 w-5" strokeWidth={1.6} />
       </div>
       <p className="text-[12.5px] font-semibold text-foreground leading-tight">{label}</p>
-      <PriceTag mode={priceMode} price={price} />
+      {/* Plot · "Parcela desde X m²" en lugar de chip de precio. */}
+      {featureKey === "plot" ? (
+        slot?.minSizeSqm && slot.minSizeSqm > 0 ? (
+          <p className="text-[12px] font-bold tnum text-foreground">Desde {slot.minSizeSqm} m²</p>
+        ) : (
+          <p className="text-[10.5px] italic text-muted-foreground">Sin definir</p>
+        )
+      ) : (
+        <PriceTag mode={priceMode} price={price} />
+      )}
     </button>
   );
 }

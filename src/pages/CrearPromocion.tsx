@@ -102,6 +102,7 @@ const stepMeta: Record<StepId, { title: string; subtitle: string }> = {
   sub_varias: { title: "Tipología y estilo", subtitle: "Selecciona el tipo y estilo arquitectónico" },
   config_edificio: { title: "Configuración del edificio", subtitle: "Define la estructura y distribución de plantas" },
   extras: { title: "Anejos y extras", subtitle: "Configura trasteros y plazas de parking por vivienda" },
+  equipamiento: { title: "Equipamiento de las viviendas", subtitle: "Lo que incluye CADA vivienda · climatización, smart home, wellness y más" },
   estado: { title: "Estado de la promoción", subtitle: "¿En qué fase se encuentra?" },
   detalles: { title: "Detalles finales", subtitle: "Configuración adicional de la promoción" },
   info_basica: { title: "Información básica", subtitle: "Nombre, ubicación y características" },
@@ -538,9 +539,58 @@ export default function CrearPromocion() {
           return s.tipologiasSeleccionadas.length > 0 && s.estilosSeleccionados.length > 0;
         }
         return !!s.subVarias && !!s.estiloVivienda;
-      case "config_edificio": return s.numBloques >= 1 && s.plantas >= 1 && s.aptosPorPlanta >= 1;
+      case "config_edificio": {
+        if (s.numBloques < 1 || s.plantas < 1 || s.aptosPorPlanta < 1) return false;
+        /* Planta baja · el user DEBE elegir explícitamente una de las
+         *  3 cards · `undefined` = no ha clicado ninguna · `null` = ha
+         *  elegido "Sin uso" conscientemente. Sin esto el wizard
+         *  dejaba pasar con la card "Sin uso" preseleccionada por
+         *  default · el user no se enteraba de que había opciones. */
+        if (s.plantaBajaTipo === undefined) return false;
+        /* Locales comerciales · si el user marca "Locales", debe
+         *  rellenar cuántos · sin esto el wizard dejaba pasar con
+         *  `state.locales = 0` · resultado contradictorio. */
+        if (s.plantaBajaTipo === "locales" && (s.locales ?? 0) < 1) return false;
+        return true;
+      }
       case "extras": return true; // siempre opcional
-      case "estado": return !!s.estado;
+      case "equipamiento": {
+        /* Si el user abre Solárium/Seguridad/Vistas/Orientación pero no
+         *  marca nada dentro, "Siguiente" se deshabilita · fuerza a
+         *  marcar al menos 1 opción O cerrar el chip. ExtrasV5 persiste
+         *  qué chips están "abiertos" en `promotionDefaults.openExtras`. */
+        const d = s.promotionDefaults;
+        if (!d) return true;
+        const open = d.openExtras ?? [];
+        for (const key of open) {
+          if (key === "solarium") {
+            if (!d.solarium.priceMode) return false;
+          } else if (key === "security") {
+            const hasAny = d.security.alarm || d.security.reinforcedDoor || d.security.videoSurveillance;
+            if (!hasAny) return false;
+          } else if (key === "views") {
+            const hasAny = d.views.sea || d.views.oceano || d.views.rio
+              || d.views.mountain || d.views.ciudad || d.views.golf
+              || d.views.panoramic || d.views.amanecer || d.views.atardecer
+              || d.views.abiertas;
+            if (!hasAny) return false;
+          } else if (key === "orientation") {
+            if (!d.orientation) return false;
+          }
+        }
+        return true;
+      }
+      case "estado": {
+        /* Estado · el sub-campo condicional es OBLIGATORIO antes de
+         *  avanzar · sin esto el wizard dejaba pasar "Estado: Proyecto"
+         *  sin marcar Con/Sin licencia, o "En construcción" sin fase. */
+        if (!s.estado) return false;
+        if (s.estado === "proyecto") return s.tieneLicencia !== null;
+        if (s.estado === "en_construccion") return !!s.faseConstruccion;
+        /* "terminado" · fechaTerminacion es opcional (la promoción
+         *  está acabada, fecha exacta puede no recordarse) · pasa. */
+        return true;
+      }
       case "detalles":
         // Si ya está terminado, la entrega ya ocurrió y DetallesStep oculta
         // el selector de tipoEntrega · el paso queda completo sin requerirlo
@@ -550,7 +600,11 @@ export default function CrearPromocion() {
       case "info_basica":
         return !!s.nombrePromocion.trim()
           && !!s.direccionPromocion.pais.trim()
-          && !!s.direccionPromocion.ciudad.trim();
+          && !!s.direccionPromocion.ciudad.trim()
+          /* Certificado energético · obligatorio · es requisito legal
+           *  para vender en España (Real Decreto 390/2021) · sin él la
+           *  promoción no puede publicarse en portales ni microsite. */
+          && !!s.certificadoEnergetico.trim();
       case "multimedia": return s.fotos.length > 0;
       case "descripcion": return !!s.descripcion || Object.keys(s.descripcionIdiomas ?? {}).length > 0;
       case "crear_unidades": {
@@ -1354,9 +1408,24 @@ export default function CrearPromocion() {
                   </div>
                 )}
 
-                {/* ─── Step: extras (V5 · características por defecto) ─── */}
+                {/* ─── Step: extras (V5) · solo ANEJOS esenciales ·
+                       piscina/parking/trastero/sótano/solárium/parcela/terrazas.
+                       Equipamiento + Seguridad + Vistas + Orientación se
+                       movieron al step "equipamiento" siguiente. ─── */}
                 {step === "extras" && (
-                  <ExtrasV5 state={state} update={update} />
+                  <ExtrasV5 state={state} update={update} lockToPane="essentials" />
+                )}
+
+                {/* ─── Step: equipamiento (V5) · Equipamiento auto-expandido
+                       arriba + resto de adicionales (Solárium · Seguridad ·
+                       Vistas · Orientación) como cards añadibles debajo. ─── */}
+                {step === "equipamiento" && (
+                  <ExtrasV5
+                    state={state}
+                    update={update}
+                    lockToPane="extras"
+                    autoExpandKeys={["equipment"]}
+                  />
                 )}
 
 

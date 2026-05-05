@@ -30,7 +30,7 @@ import {
   Check, X, ExternalLink, Zap, Star, Search, ChevronDown, Info,
   Lock, Unlock, FolderOpen, Folder, Download, BookOpen, Upload, MoreHorizontal, FilePlus, ArrowRight,
   Trophy, Sparkles, ArrowUpRight, FileCheck2, Rocket, BarChart3,
-  Megaphone,
+  Megaphone, Leaf, Palmtree,
 } from "lucide-react";
 import { getMissingForPromotion } from "@/lib/publicationRequirements"; // fuente única de verdad de requisitos para publicar
 import { useOverride, saveOverride, getOverride } from "@/lib/promotionWizardOverrides";
@@ -665,7 +665,30 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
   if (p && !initialized) {
     setComercialesList(p.comerciales || []);
-    setSalesOfficeIds((p as DevPromotion).puntosDeVentaIds ?? []);
+    /* Hidratar oficinas + piso piloto + anejos sueltos desde
+     *  wizardSnapshot · antes todos quedaban vacíos al refresh
+     *  aunque el user los hubiera configurado en el wizard. */
+    const snap = (p as { metadata?: { wizardSnapshot?: {
+      oficinasVentaSeleccionadas?: string[];
+      pisoPilotoUnidadId?: string | null;
+      trasteros?: number; trasterosIncluidosPrecio?: boolean;
+      trasterosIncluidosPorVivienda?: number; trasteroPrecios?: number[];
+      parkings?: number; parkingsIncluidosPrecio?: boolean;
+      parkingsIncluidosPorVivienda?: number; parkingPrecios?: number[];
+      solariums?: number; solariumPrecios?: number[];
+      sotanos?: number; sotanoPrecios?: number[];
+    } } }).metadata?.wizardSnapshot;
+    const fromSnap = snap?.oficinasVentaSeleccionadas ?? [];
+    const fromSeed = (p as DevPromotion).puntosDeVentaIds ?? [];
+    setSalesOfficeIds(fromSeed.length > 0 ? fromSeed : fromSnap);
+    if (snap?.pisoPilotoUnidadId) setShowFlatUnitId(snap.pisoPilotoUnidadId);
+    /* Siembra anejos sueltos en el storage si está vacío. Importa
+     *  dinámico para no engordar el bundle inicial. */
+    if (snap) {
+      void import("@/lib/anejosStorage").then(({ seedAnejosFromWizardIfEmpty }) => {
+        seedAnejosFromWizardIfEmpty(p.id, snap, p.totalUnits);
+      });
+    }
     setInitialized(true);
   }
 
@@ -948,7 +971,14 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const occupancy = p.totalUnits > 0 ? Math.round(((p.totalUnits - p.availableUnits) / p.totalUnits) * 100) : 0;
   const typeLabel = getBuildingTypeLabel(p.buildingType);
   const returnPath = `/developer-promotions/${p.id}`;
-  const website = `${p.name.toLowerCase().replace(/\s+/g, "-")}.byvaro.com`;
+  /* Website · prefiere el campo configurado por el user en el step
+   *  contactos · cae al auto-generado si no hay. */
+  const contactSnap = (p as { metadata?: { wizardSnapshot?: { contactoWeb?: string; contactoTelefono?: string; contactoEmail?: string } } })
+    .metadata?.wizardSnapshot;
+  const website = contactSnap?.contactoWeb?.trim()
+    || `${p.name.toLowerCase().replace(/\s+/g, "-")}.byvaro.com`;
+  const contactPhone = contactSnap?.contactoTelefono?.trim() || "";
+  const contactEmail = contactSnap?.contactoEmail?.trim() || "";
 
   /* Label canónico de la fase de obra · derivado del % real de la promo
    *  vía buckets definidos en `options.ts::constructionPhaseFromProgress`.
@@ -1021,7 +1051,15 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
    *  promotor marcó "Solo uso interno" en el wizard · NO va a compartir
    *  con agencias · KPIs de Comisión y Agencias no aplican · los
    *  ocultamos para no ensuciar la vista con datos sin sentido. */
-  const isUsoInterno = (p as { canShareWithAgencies?: boolean }).canShareWithAgencies === false;
+  /* "Uso interno" cuando el user NO ha marcado explícitamente
+   *  compartir con agencias (canShareWithAgencies !== true) Y no hay
+   *  snapshot.colaboracion=true. Antes solo era `=== false` · cuando
+   *  estaba `undefined` (default · user no decidió) caía en "compartir"
+   *  y mostraba el KPI "Comisión · Falta" como warning · falsa alarma. */
+  const snapColabFlag = (p as { metadata?: { wizardSnapshot?: { colaboracion?: boolean } } })
+    .metadata?.wizardSnapshot?.colaboracion;
+  const isUsoInterno = (p as { canShareWithAgencies?: boolean }).canShareWithAgencies !== true
+    && snapColabFlag !== true;
 
   const allKpis = [
     /* "Rango de precios" · ELIMINADO del strip · ahora vive como
@@ -1738,14 +1776,32 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                         </div>
                       )}
                     </button>
-                  ) : videosCount > 0 ? (
-                    <div className="relative overflow-hidden cursor-pointer group bg-muted/30 flex items-center justify-center">
-                      <div className="text-center">
-                        <Video className="h-5 w-5 text-muted-foreground/40 mx-auto mb-1" />
-                        <span className="text-xs text-muted-foreground">{videosCount} {videosCount === 1 ? "vídeo" : "vídeos"}</span>
-                      </div>
-                    </div>
-                  ) : (
+                  ) : videosCount > 0 ? (() => {
+                    /* Render REAL · cada video como tile clickable que
+                     *  abre la URL en pestaña nueva (YouTube/Vimeo). Antes
+                     *  solo se mostraba el count "N vídeos" sin ser
+                     *  reproducibles · datos del wizard inaccesibles. */
+                    const snap = (p as { metadata?: { wizardSnapshot?: { videos?: Array<{ id: string; tipo: string; url: string; nombre: string }> } } })
+                      .metadata?.wizardSnapshot;
+                    const vids = (snap?.videos ?? []).filter((v) => v.url?.trim());
+                    const first = vids[0];
+                    return first ? (
+                      <a
+                        href={first.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="relative overflow-hidden cursor-pointer group bg-muted/30 flex items-center justify-center hover:bg-muted/50 transition-colors"
+                        title={first.nombre || "Ver vídeo"}
+                      >
+                        <div className="text-center">
+                          <Play className="h-6 w-6 text-foreground/70 mx-auto mb-1" strokeWidth={1.5} />
+                          <span className="text-xs text-foreground font-medium">{vids.length === 1 ? "Ver vídeo" : `${vids.length} vídeos`}</span>
+                        </div>
+                      </a>
+                    ) : (
+                      <div className="relative overflow-hidden bg-muted/20" />
+                    );
+                  })() : (
                     <div className="relative overflow-hidden bg-muted/20" />
                   )}
                 </div>
@@ -1896,12 +1952,85 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   · Trastero · Licencia) y 5 en unifamiliar (sin
                   Estructura). Grid-cols-3 en md+ · alineación limpia
                   con 2 filas equilibradas. */}
+              {(() => {
+                /* Datos REALES de config_edificio · antes solo se
+                 *  mostraba "Multibloque/Bloque único" derivado de
+                 *  totalUnits > 10. Ahora desglosamos bloques,
+                 *  escaleras, plantas, viviendas/planta y planta baja. */
+                const cfgSnap = (p as { metadata?: { wizardSnapshot?: {
+                  numBloques?: number; escalerasPorBloque?: number[];
+                  plantas?: number; aptosPorPlanta?: number;
+                  plantaBajaTipo?: "locales" | "viviendas" | null;
+                  locales?: number;
+                  certificadoEnergetico?: string;
+                  urbanizacion?: boolean;
+                  urbanizacionTipo?: "cerrada" | "resort" | "abierta" | null;
+                  urbanizacionNombre?: string;
+                } } }).metadata?.wizardSnapshot;
+                const numBloques = cfgSnap?.numBloques ?? 1;
+                const totalEscaleras = (cfgSnap?.escalerasPorBloque ?? []).reduce((sum, n) => sum + n, 0);
+                const plantas = cfgSnap?.plantas;
+                const aptosPorPlanta = cfgSnap?.aptosPorPlanta;
+                const pbTipo = cfgSnap?.plantaBajaTipo;
+                const locales = cfgSnap?.locales ?? 0;
+                const certEnerg = cfgSnap?.certificadoEnergetico;
+                const urbanizacion = cfgSnap?.urbanizacion;
+                const urbanizacionTipo = cfgSnap?.urbanizacionTipo;
+                const urbanizacionNombre = cfgSnap?.urbanizacionNombre;
+                const URB_TIPO_LABEL: Record<string, string> = {
+                  cerrada: "Urbanización cerrada",
+                  resort: "Resort",
+                  abierta: "Urbanización abierta",
+                };
+                const PB_LABEL: Record<string, string> = {
+                  locales: locales > 0 ? `${locales} ${locales === 1 ? "local" : "locales"}` : "Locales",
+                  viviendas: "Viviendas en bajo",
+                };
+                return (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-5">
                 <InfoItem icon={Building2} label="Tipo" value={typeLabel || "Sin definir"} />
-                {showEstructura && (
-                  <InfoItem icon={Layers} label="Estructura" value={p.totalUnits > 10 ? "Multibloque" : "Bloque único"} />
+                {showEstructura && numBloques > 1 && (
+                  <InfoItem icon={Layers} label="Bloques" value={`${numBloques}`} />
+                )}
+                {showEstructura && totalEscaleras > 1 && (
+                  <InfoItem icon={Layers} label="Escaleras" value={`${totalEscaleras}`} />
+                )}
+                {showEstructura && plantas !== undefined && (
+                  <InfoItem icon={Layers} label="Plantas" value={`${plantas}`} />
+                )}
+                {showEstructura && aptosPorPlanta !== undefined && (
+                  <InfoItem icon={Home} label="Viviendas/planta" value={`${aptosPorPlanta}`} />
                 )}
                 <InfoItem icon={Home} label="Unidades totales" value={`${p.totalUnits}`} />
+                {showEstructura && pbTipo && (
+                  <InfoItem icon={Building2} label="Planta baja" value={PB_LABEL[pbTipo] ?? pbTipo} />
+                )}
+                {certEnerg && (
+                  <InfoItem icon={Leaf} label="Certificado energético" value={certEnerg} />
+                )}
+                {/* Estilo arquitectónico · solo unifamiliar (en
+                 *  plurifamiliar el estilo va en el bloque siguiente). */}
+                {(() => {
+                  const estiloSnap = (p as { metadata?: { wizardSnapshot?: { estiloVivienda?: string | null; estilosSeleccionados?: string[] } } })
+                    .metadata?.wizardSnapshot;
+                  const ESTILO_LABEL: Record<string, string> = {
+                    mediterraneo: "Mediterráneo", contemporaneo: "Contemporáneo",
+                    finca: "Finca", colonial: "Colonial",
+                    minimalista: "Minimalista", rustico: "Rústico",
+                  };
+                  const single = estiloSnap?.estiloVivienda;
+                  const multi = (estiloSnap?.estilosSeleccionados ?? []).filter(Boolean);
+                  if (single) {
+                    return <InfoItem icon={Sparkles} label="Estilo arquitectónico" value={ESTILO_LABEL[single] ?? single} />;
+                  }
+                  if (multi.length > 0) {
+                    return <InfoItem icon={Sparkles} label="Estilos arquitectónicos" value={multi.map((e) => ESTILO_LABEL[e] ?? e).join(" · ")} />;
+                  }
+                  return null;
+                })()}
+                {urbanizacion && (urbanizacionNombre || urbanizacionTipo) && (
+                  <InfoItem icon={Palmtree} label="Urbanización" value={urbanizacionNombre || (urbanizacionTipo ? URB_TIPO_LABEL[urbanizacionTipo] : "Sí")} sub={urbanizacionNombre && urbanizacionTipo ? URB_TIPO_LABEL[urbanizacionTipo] : undefined} />
+                )}
                 {/* Parking · Trastero · MOVIDOS al bloque "Extras y opcionales"
                     debajo · ahí se ven con icono + chip de precio (Incluido /
                     Opcional · X € / No incluido) y se editan individualmente. */}
@@ -1938,17 +2067,32 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   );
                 })()}
               </div>
+                );
+              })()}
 
               {/* Tipologías · movido aquí desde "Características y
-                amenidades" · es atributo estructural · click abre
-                modal grande de "Características y amenidades" donde
-                se editan en InfoBasicaStep. */}
+                amenidades" · es atributo estructural. Si el wizard
+                guardó cantidades por tipología (varias villas), las
+                pintamos como "3 Adosados · 2 Pareados". Si solo hay
+                propertyTypes simples, fallback a chip único. */}
               <div className="mt-5 pt-4 border-t border-border/40">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Tipologías</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {p.propertyTypes.length > 0
-                    ? p.propertyTypes.map(t => <Tag key={t} variant="default" size="sm">{getPropertyTypeLabel(t)}</Tag>)
-                    : <p className="text-xs text-muted-foreground italic">Sin tipologías marcadas</p>}
+                  {(() => {
+                    const tipoSnap = (p as { metadata?: { wizardSnapshot?: { tipologiasSeleccionadas?: Array<{ tipo?: string; cantidad?: number }> } } })
+                      .metadata?.wizardSnapshot?.tipologiasSeleccionadas;
+                    const withQty = (tipoSnap ?? []).filter((t) => t.tipo);
+                    if (withQty.length > 0) {
+                      return withQty.map((t, i) => (
+                        <Tag key={`${t.tipo}-${i}`} variant="default" size="sm">
+                          {t.cantidad && t.cantidad > 1 ? `${t.cantidad} ${getPropertyTypeLabel(t.tipo!)}` : getPropertyTypeLabel(t.tipo!)}
+                        </Tag>
+                      ));
+                    }
+                    return p.propertyTypes.length > 0
+                      ? p.propertyTypes.map(t => <Tag key={t} variant="default" size="sm">{getPropertyTypeLabel(t)}</Tag>)
+                      : <p className="text-xs text-muted-foreground italic">Sin tipologías marcadas</p>;
+                  })()}
                 </div>
               </div>
             </SectionCard>
@@ -2096,24 +2240,65 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               </SectionCard>
             </div>
 
-            {/* ── 3. DESCRIPCIÓN ── */}
+            {/* ── 3. DESCRIPCIÓN ──
+                 Prefiere el texto REAL del promotor (`p.description` o
+                 `wizardSnapshot.descripcion` o multi-idioma
+                 `descripcionIdiomas`). Solo cae al template auto-generado
+                 si NO hay descripción rellenada · evita pisar el texto
+                 que el user escribió en el step Descripción. */}
             <SectionCard title="Descripción" stepName="Description" missing={missingSet.has("Description")} softMissing={isDraft} onEdit={() => openEdit("description")} hideEdit={viewAsCollaborator}>
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <Tag variant="default" size="sm"><Globe className="h-3 w-3" /> ES</Tag>
-                  <Tag variant="default" size="sm"><Globe className="h-3 w-3" /> EN</Tag>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  {p.name} es una promoción {typeLabel?.toLowerCase() || "residencial"} situada en {p.location || "España"}.
-                  {/* El nombre del promotor se oculta en vista colaborador (la agencia no expone al promotor). */}
-                  {!viewAsCollaborator && (() => {
-                    const promoterName = getPromoterDisplayName(p);
-                    return promoterName ? ` Desarrollada por ${promoterName}.` : "";
-                  })()}
-                  {p.totalUnits > 0 && ` El proyecto consta de ${p.totalUnits} unidades con entrega estimada para ${resolveDelivery(p) || "por definir"}.`}
-                  {p.propertyTypes.length > 0 && ` Las tipologías incluyen ${p.propertyTypes.map(getPropertyTypeLabel).join(", ").toLowerCase()}.`}
-                </p>
-              </div>
+              {(() => {
+                const snap = (p as { metadata?: { wizardSnapshot?: { descripcion?: string; descripcionIdiomas?: Record<string, string> } } })
+                  .metadata?.wizardSnapshot;
+                const idiomas = snap?.descripcionIdiomas ?? {};
+                const idiomasKeys = Object.keys(idiomas).filter((k) => idiomas[k]?.trim());
+                const userText = (p.description?.trim()) || snap?.descripcion?.trim() || "";
+                const hasMulti = idiomasKeys.length > 0;
+                const hasReal = !!userText || hasMulti;
+                const [activeLang, setActiveLang] = idiomasKeys.length > 1
+                  ? [idiomasKeys[0], () => {}] as [string, (s: string) => void]
+                  : [idiomasKeys[0] || "es", () => {}] as [string, (s: string) => void];
+                /* Render del texto real (priorizado) o del template
+                 *  auto-generado (fallback). */
+                if (hasReal) {
+                  /* Si solo hay multi-idioma sin descripcion plano, usar el primero. */
+                  const textToShow = userText || idiomas[activeLang] || "";
+                  return (
+                    <div className="space-y-3">
+                      {hasMulti && (
+                        <div className="flex items-center gap-2 mb-2">
+                          {idiomasKeys.map((lang) => (
+                            <Tag key={lang} variant="default" size="sm">
+                              <Globe className="h-3 w-3" /> {lang.toUpperCase()}
+                            </Tag>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">
+                        {textToShow}
+                      </p>
+                    </div>
+                  );
+                }
+                /* Fallback · template auto-generado cuando el promotor
+                 *  aún no escribió nada. */
+                return (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground leading-relaxed italic">
+                      {p.name} es una promoción {typeLabel?.toLowerCase() || "residencial"} situada en {p.location || "España"}.
+                      {!viewAsCollaborator && (() => {
+                        const promoterName = getPromoterDisplayName(p);
+                        return promoterName ? ` Desarrollada por ${promoterName}.` : "";
+                      })()}
+                      {p.totalUnits > 0 && ` El proyecto consta de ${p.totalUnits} unidades con entrega estimada para ${resolveDelivery(p) || "por definir"}.`}
+                      {p.propertyTypes.length > 0 && ` Las tipologías incluyen ${p.propertyTypes.map(getPropertyTypeLabel).join(", ").toLowerCase()}.`}
+                    </p>
+                    <p className="text-xs text-muted-foreground/80">
+                      ⓘ Texto auto-generado · añade tu descripción en el step "Descripción"
+                    </p>
+                  </div>
+                );
+              })()}
             </SectionCard>
 
             {/* ── 4. DOCUMENTACIÓN: Memoria + Planos + Brochure ──
@@ -2464,6 +2649,8 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             <ContactFooter
               contacts={contacts}
               website={website}
+              phone={contactPhone}
+              email={contactEmail}
               puntosDeVenta={salesOffices}
               comerciales={viewAsCollaborator ? [] : comercialesList}
               onAddMember={viewAsCollaborator ? undefined : () => setAddComercialOpen(true)}
@@ -2502,6 +2689,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               <PromotionAvailabilityFull
                 promotionId={p.id}
                 isCollaboratorView={viewAsCollaborator}
+                /* Hidratar plantas + nombres custom desde wizardSnapshot
+                 *  · sin esto el dropdown era 0..14 y los bloques siempre
+                 *  decían "Bloque 1/2", aunque el promotor los renombrase. */
+                maxFloor={(p as { metadata?: { wizardSnapshot?: { plantas?: number } } }).metadata?.wizardSnapshot?.plantas ?? 14}
+                initialBlockNames={(p as { metadata?: { wizardSnapshot?: { blockNames?: Record<string, string> } } }).metadata?.wizardSnapshot?.blockNames ?? {}}
                 /* Resolver per-unit · usa primero las fotos propias
                  *  de la unidad (subidas en el wizard) · si vacío,
                  *  cae al thumbnail (la primera foto de la promo).
@@ -4524,8 +4716,8 @@ function EmptyState({ icon: Icon, message, sub }: { icon: typeof Home; message: 
 type ContactPerson = { name: string; role: string; avatar: string; phone: string; email: string; languages: string[] };
 type PuntoDeVentaType = { id: string; nombre: string; direccion: string; telefono: string; email: string; whatsapp?: string; coverUrl?: string };
 
-function ContactFooter({ contacts, website, puntosDeVenta, comerciales, onAddMember, onAddOffice, onEditOffices, hideManagement }: {
-  contacts: ContactPerson[]; website: string; puntosDeVenta?: PuntoDeVentaType[];
+function ContactFooter({ contacts, website, phone, email, puntosDeVenta, comerciales, onAddMember, onAddOffice, onEditOffices, hideManagement }: {
+  contacts: ContactPerson[]; website: string; phone?: string; email?: string; puntosDeVenta?: PuntoDeVentaType[];
   comerciales?: Comercial[]; onAddMember?: () => void; onAddOffice?: () => void; onEditOffices?: () => void; hideManagement?: boolean;
 }) {
   const [page, setPage] = useState(0);
@@ -4623,15 +4815,29 @@ function ContactFooter({ contacts, website, puntosDeVenta, comerciales, onAddMem
         </>
       )}
 
-      {/* Footer: website + offices grid */}
+      {/* Footer: website + phone + email + offices grid */}
       <div className="h-px bg-border/40 mx-5" />
       <div className="px-5 py-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <a href="#" className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium transition-colors">
-            <Globe className="h-3 w-3" strokeWidth={1.5} />
-            {website}
-            <ExternalLink className="h-2.5 w-2.5 opacity-50" strokeWidth={1.5} />
-          </a>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <a href="#" className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium transition-colors">
+              <Globe className="h-3 w-3" strokeWidth={1.5} />
+              {website}
+              <ExternalLink className="h-2.5 w-2.5 opacity-50" strokeWidth={1.5} />
+            </a>
+            {phone && (
+              <a href={`tel:${phone}`} className="inline-flex items-center gap-1.5 text-xs text-foreground hover:text-primary transition-colors">
+                <Phone className="h-3 w-3" strokeWidth={1.5} />
+                {phone}
+              </a>
+            )}
+            {email && (
+              <a href={`mailto:${email}`} className="inline-flex items-center gap-1.5 text-xs text-foreground hover:text-primary transition-colors">
+                <Mail className="h-3 w-3" strokeWidth={1.5} />
+                {email}
+              </a>
+            )}
+          </div>
           {!isSingle && offices.length > 0 && (
             <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Oficinas de venta · {offices.length}</p>
           )}

@@ -153,6 +153,34 @@ function generateEdificio(state: WizardState): UnitData[] {
       }
     }
   }
+
+  /* Locales comerciales · si la planta baja se eligió como "locales"
+   *  y se entró un número > 0, generamos N unidades extra de subtipo
+   *  "local" · cada una con m²/precio editables (default 0 · el user
+   *  los rellena en la tabla). Aparecen al final del listado. */
+  if (state.plantaBajaTipo === "locales" && (state.locales ?? 0) > 0) {
+    for (let l = 1; l <= state.locales; l++) {
+      units.push(
+        baseUnit({
+          id: genUnitId(),
+          ref: `${prefix}-L${String(l).padStart(2, "0")}`,
+          nombre: `Local ${l}`,
+          planta: 0,                  // siempre planta baja
+          orientacion: orientaciones[(counter - 1) % orientaciones.length],
+          parking: false,
+          trastero: false,
+          vistas: [],
+          subtipo: "local",
+          parcela: 0,
+          caracteristicas: [],
+          dormitorios: 0,             // un local no tiene dorm/baños
+          banos: 0,
+        }),
+      );
+      counter++;
+    }
+  }
+
   return units;
 }
 
@@ -435,6 +463,46 @@ export function CrearUnidadesStep({
       else if (isMultipleUnifamiliar) update("unidades", generateMultipleUnifamiliar(state));
       else if (isEdificio) update("unidades", generateEdificio(state));
       return;
+    }
+
+    /* Sincroniza locales · si el user marcó "Locales comerciales" en
+     *  config_edificio (state.plantaBajaTipo="locales" + state.locales>0)
+     *  PERO ya había unidades creadas antes (al entrar la primera vez
+     *  no había locales · o el user cambió la cantidad después), añade
+     *  los locales que falten o quita los sobrantes. NO toca las
+     *  viviendas existentes. */
+    if (isEdificio) {
+      const targetLocales = state.plantaBajaTipo === "locales" ? (state.locales ?? 0) : 0;
+      const currentLocales = state.unidades.filter((u) => u.subtipo === "local");
+      if (currentLocales.length !== targetLocales) {
+        const viviendas = state.unidades.filter((u) => u.subtipo !== "local");
+        const prefix = promoRefPrefix(state);
+        const newLocales: UnitData[] = [];
+        for (let l = 1; l <= targetLocales; l++) {
+          /* Reusa el ID/precio/m² del local existente si lo había ·
+           *  evita perder datos cuando el user solo añadió 1 nuevo. */
+          const existing = currentLocales[l - 1];
+          newLocales.push(
+            existing ?? baseUnit({
+              id: genUnitId(),
+              ref: `${prefix}-L${String(l).padStart(2, "0")}`,
+              nombre: `Local ${l}`,
+              planta: 0,
+              orientacion: orientaciones[(viviendas.length + l - 1) % orientaciones.length],
+              parking: false,
+              trastero: false,
+              vistas: [],
+              subtipo: "local",
+              parcela: 0,
+              caracteristicas: [],
+              dormitorios: 0,
+              banos: 0,
+            }),
+          );
+        }
+        update("unidades", [...viviendas, ...newLocales]);
+        return;
+      }
     }
     // Chequeo de migración: si alguna unidad no tiene los campos nuevos
     // obligatorios, los rellenamos con los defaults. También migramos
@@ -817,6 +885,13 @@ export function CrearUnidadesStep({
         onUnitsChange={handleUnitsChange}
         onEditUnit={(id) => setEditUnitId(id)}
         onEditUnitPhotos={(id) => setEditPhotosUnitId(id)}
+        /* Limita el dropdown "Planta" a las plantas reales del edificio
+         *  declaradas en config_edificio (state.plantas) · sin esto el
+         *  dropdown mostraba 14 opciones aunque el user marcase 5. */
+        maxFloor={state.plantas}
+        /* Hidrata los nombres de bloques desde el wizard · "Torre Norte",
+         *  etc. Sin esto la tabla siempre mostraba "Bloque 1/2/...". */
+        initialBlockNames={state.blockNames}
         onReorderUnits={(orderedIds) => {
           /* Reordena `state.unidades` siguiendo el array de ids que
            * llega del drag handle · ids no presentes (no debería pasar
