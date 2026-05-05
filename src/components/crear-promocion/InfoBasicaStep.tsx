@@ -208,6 +208,11 @@ export function InfoBasicaStep({
    * set, solo si coincide. Si no, siempre. */
   const showSection = (s: NonNullable<typeof onlySection>) =>
     onlySection ? onlySection === s : true;
+  /* Cuando el caller pide UNA sección específica, ignoramos el flag
+   * `defaultsCapturedInExtras` · el user clica explícitamente
+   * "Características del hogar" en la ficha · debe verlo aunque V5
+   * normalmente las capture en otro paso. */
+  const effectiveDefaultsCapturedInExtras = onlySection ? false : defaultsCapturedInExtras;
   const isPlurifamiliar = state.tipo === "plurifamiliar" || state.tipo === "mixto";
   const isUnifamiliar = state.tipo === "unifamiliar";
 
@@ -299,7 +304,7 @@ export function InfoBasicaStep({
           Rama UNIFAMILIAR: características
           (Solo si V5 NO está capturando defaults · evita duplicado.)
           ═════════════════════════════════════════════════════════════ */}
-      {showSection("caracteristicas") && isUnifamiliar && !defaultsCapturedInExtras && (
+      {showSection("caracteristicas") && isUnifamiliar && !effectiveDefaultsCapturedInExtras && (
         <>
           <div>
             <SectionLabel>Características destacadas de las viviendas</SectionLabel>
@@ -344,7 +349,7 @@ export function InfoBasicaStep({
           </div>
           )}
 
-          {showSection("caracteristicas") && !defaultsCapturedInExtras && (
+          {showSection("caracteristicas") && !effectiveDefaultsCapturedInExtras && (
             <div>
               <SectionLabel>Características comunes de las viviendas</SectionLabel>
               <PillSelect
