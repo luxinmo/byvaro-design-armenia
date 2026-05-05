@@ -1885,6 +1885,19 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   );
                 })()}
               </div>
+
+              {/* Tipologías · movido aquí desde "Características y
+                amenidades" · es atributo estructural · click abre
+                modal grande de "Características y amenidades" donde
+                se editan en InfoBasicaStep. */}
+              <div className="mt-5 pt-4 border-t border-border/40">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Tipologías</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {p.propertyTypes.length > 0
+                    ? p.propertyTypes.map(t => <Tag key={t} variant="default" size="sm">{t}</Tag>)
+                    : <p className="text-xs text-muted-foreground italic">Sin tipologías marcadas</p>}
+                </div>
+              </div>
             </SectionCard>
               );
             })()}
@@ -2203,17 +2216,8 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 const sectionBtnCls = "w-full text-left rounded-xl border border-transparent hover:border-border hover:bg-muted/30 -mx-2 px-2 py-2 transition-colors";
                 return (
                   <div className="space-y-2">
-                    {/* Tipologías · click → no editable individual desde
-                       aquí · abre el modal grande (tipologías están en
-                       InfoBasicaStep entero, no es 1 sección aislable). */}
-                    <button type="button" onClick={() => openEdit("basicInfo")} className={sectionBtnCls}>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Tipologías</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {p.propertyTypes.length > 0
-                          ? p.propertyTypes.map(t => <Tag key={t} variant="default" size="sm">{t}</Tag>)
-                          : <p className="text-xs text-muted-foreground italic">Sin tipologías marcadas</p>}
-                      </div>
-                    </button>
+                    {/* Tipologías · MOVIDO al bloque Estructura · es un
+                       atributo estructural, no de característica. */}
 
                     {/* Amenities urbanización · click → mini-modal solo
                        de amenidades + urbanización. */}
