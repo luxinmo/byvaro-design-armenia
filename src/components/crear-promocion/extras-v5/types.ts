@@ -26,6 +26,10 @@ export interface PromotionDefaults {
     enabled: boolean;
     appliesTo: AppliesTo | null;
     priceMode: PriceMode | null;
+    /** Precio (€) cuando `priceMode === "optional"` · sin IVA, base
+     *  para el upsell de la unidad. Null si aún no se ha rellenado o
+     *  si el modo no es opcional. */
+    optionalPrice: number | null;
   };
   parking: {
     enabled: boolean;
@@ -33,16 +37,19 @@ export interface PromotionDefaults {
     type: "outdoor" | "closed_garage";
     priceMode: PriceMode | null;
     appliesTo: AppliesTo | null;
+    optionalPrice: number | null;
   };
   storageRoom: {
     enabled: boolean;
     appliesTo: AppliesTo | null;
     priceMode: PriceMode | null;
+    optionalPrice: number | null;
   };
   solarium: {
     enabled: boolean;
     appliesTo: AppliesTo | null;
     priceMode: PriceMode | null;
+    optionalPrice: number | null;
   };
   terraces: {
     /** Master switch · si true, exigimos que el user marque al menos
@@ -117,16 +124,17 @@ export interface PromotionDefaults {
 }
 
 export const defaultPromotionDefaults: PromotionDefaults = {
-  privatePool: { enabled: false, appliesTo: null, priceMode: null },
+  privatePool: { enabled: false, appliesTo: null, priceMode: null, optionalPrice: null },
   parking: {
     enabled: false,
     spaces: 1,
     type: "outdoor",
     priceMode: null,
     appliesTo: null,
+    optionalPrice: null,
   },
-  storageRoom: { enabled: false, appliesTo: null, priceMode: null },
-  solarium: { enabled: false, appliesTo: null, priceMode: null },
+  storageRoom: { enabled: false, appliesTo: null, priceMode: null, optionalPrice: null },
+  solarium: { enabled: false, appliesTo: null, priceMode: null, optionalPrice: null },
   terraces: { enabled: false, covered: false, uncovered: false },
   plot: {
     enabled: false,
