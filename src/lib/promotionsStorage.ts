@@ -21,6 +21,7 @@ import { unitsByPromotion, type Unit } from "@/data/units";
 import { composeDelivery } from "./deliveryFormat";
 import { resolveConstructionProgress } from "./constructionProgress";
 import { resolvePropertyTypes } from "./propertyTypes";
+import { resolvePriceRange } from "./priceRange";
 
 const CREATED_KEY = "byvaro.promotions.created.v1";
 
@@ -280,12 +281,11 @@ export async function createPromotionFromWizard(
   const description = state.descripcion?.trim() || null;
   /* totalUnits · count de unidades creadas en el wizard. */
   const totalUnits = state.unidades?.length ?? 0;
-  /* Rango de precios · derivado de las unidades con precio > 0. */
-  const unitPrices = (state.unidades ?? [])
-    .map((u) => u.precio ?? 0)
-    .filter((p) => p > 0);
-  const priceFrom = unitPrices.length > 0 ? Math.min(...unitPrices) : null;
-  const priceTo = unitPrices.length > 0 ? Math.max(...unitPrices) : null;
+  /* Rango de precios · helper canónico. Snapshot all-units · cards
+   *  filtran available en runtime con `promoStats`. */
+  const priceRange = resolvePriceRange(state.unidades ?? []);
+  const priceFrom = priceRange.min > 0 ? priceRange.min : null;
+  const priceTo = priceRange.max > 0 ? priceRange.max : null;
   /* Entrega · helper canónico `composeDelivery` · formato compacto
    *  ("CPV + 18m" / "Lic. + 18m" / "T2 2026"). Mantener un único
    *  punto de composición evita strings divergentes en cada

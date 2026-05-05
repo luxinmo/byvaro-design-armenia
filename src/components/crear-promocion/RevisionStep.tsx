@@ -28,6 +28,7 @@ import {
   Sparkles, HardHat, Hash, Camera, Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { resolvePriceRange } from "@/lib/priceRange";
 import {
   tipoOptions, subUniOptions, subVariasOptions, estadoOptions,
   faseConstruccionOptions, formaPagoComisionOptions,
@@ -161,8 +162,9 @@ export function RevisionStep({ state, onEditStep, onDeletePromotion }: Props) {
   const precioMedio = unidadesCount > 0
     ? state.unidades.reduce((s, u) => s + (u.precio || 0), 0) / unidadesCount
     : 0;
-  const rangoMin = unidadesCount > 0 ? Math.min(...state.unidades.map((u) => u.precio || 0)) : 0;
-  const rangoMax = unidadesCount > 0 ? Math.max(...state.unidades.map((u) => u.precio || 0)) : 0;
+  /* Helper canónico · snapshot all-units · al revisar mostramos
+   *  el rango total porque aún no hay ventas (estamos creando). */
+  const { min: rangoMin, max: rangoMax } = resolvePriceRange(state.unidades);
 
   const formaPagoLabel = formaPagoComisionOptions.find((o) => o.value === state.formaPagoComision)?.label ?? dash;
   const metodoPagoLabel = state.metodoPago === "contrato" ? "Definido en contrato"

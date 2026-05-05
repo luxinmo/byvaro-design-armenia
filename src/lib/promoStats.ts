@@ -26,6 +26,7 @@
  */
 
 import { unitsByPromotion } from "@/data/units";
+import { resolvePriceRange } from "./priceRange";
 
 export type PromoStats = {
   availableUnits: number;
@@ -66,10 +67,8 @@ export function getPromoStats(
 
   /* Precios derivados de las unidades DISPONIBLES · regla canónica:
    *  el rango de la card refleja qué hay realmente a la venta · si la
-   *  unidad barata se vende, el "desde" sube. */
-  const availablePrices = available.map((u) => u.price ?? 0).filter((n) => n > 0);
-  const priceMin = availablePrices.length > 0 ? Math.min(...availablePrices) : 0;
-  const priceMax = availablePrices.length > 0 ? Math.max(...availablePrices) : 0;
+   *  unidad barata se vende, el "desde" sube. Helper canónico. */
+  const { min: priceMin, max: priceMax } = resolvePriceRange(units, { availableOnly: true });
 
   /* Badge dinámico · prevalece "last-units" sobre "new" cuando solo
    *  queda 1 unidad (es la señal más urgente para el comercial). */
