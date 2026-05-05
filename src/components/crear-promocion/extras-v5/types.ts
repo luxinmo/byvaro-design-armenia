@@ -61,16 +61,35 @@ export interface PromotionDefaults {
     minSizeSqm: number | null;
   };
   equipment: {
+    /* Confort base */
     airConditioning: boolean;
     airConditioningType: "central" | "split" | "preinstallation" | null;
     heating: boolean;
     heatingType: "underfloor" | "central" | "gas" | null;
+    equippedKitchen: boolean;
+    kitchenType: "open" | "independent" | null;
+    /* Eficiencia / smart */
     domotics: boolean;
     solarPanels: boolean;
     electricBlinds: boolean;
     doubleGlazing: boolean;
-    equippedKitchen: boolean;
-    kitchenType: "open" | "independent" | null;
+    /* Espacios extra */
+    lavanderia: boolean;
+    bodega: boolean;
+    armariosEmpotrados: boolean;
+    vestidor: boolean;
+    chimenea: boolean;
+    /* Wellness · zonas comunes/privadas */
+    gym: boolean;
+    sauna: boolean;
+    jacuzzi: boolean;
+    hammam: boolean;
+    /* Exterior · ocio */
+    bbq: boolean;
+    tenis: boolean;
+    padel: boolean;
+    /* Edificio */
+    ascensor: boolean;
   };
   security: {
     alarm: boolean;
@@ -79,9 +98,15 @@ export interface PromotionDefaults {
   };
   views: {
     sea: boolean;
+    oceano: boolean;
+    rio: boolean;
     mountain: boolean;
+    ciudad: boolean;
     golf: boolean;
     panoramic: boolean;
+    amanecer: boolean;
+    atardecer: boolean;
+    abiertas: boolean;
   };
   /** Rosa de los vientos completa · 8 puntos cardinales · estándar
    *  en fichas inmobiliarias españolas (Idealista, Fotocasa, etc.). */
@@ -109,18 +134,20 @@ export const defaultPromotionDefaults: PromotionDefaults = {
     minSizeSqm: null,
   },
   equipment: {
-    airConditioning: false,
-    airConditioningType: null,
-    heating: false,
-    heatingType: null,
-    domotics: false,
-    solarPanels: false,
-    electricBlinds: false,
-    doubleGlazing: false,
-    equippedKitchen: false,
-    kitchenType: null,
+    airConditioning: false, airConditioningType: null,
+    heating: false, heatingType: null,
+    equippedKitchen: false, kitchenType: null,
+    domotics: false, solarPanels: false, electricBlinds: false, doubleGlazing: false,
+    lavanderia: false, bodega: false, armariosEmpotrados: false, vestidor: false, chimenea: false,
+    gym: false, sauna: false, jacuzzi: false, hammam: false,
+    bbq: false, tenis: false, padel: false,
+    ascensor: false,
   },
   security: { alarm: false, reinforcedDoor: false, videoSurveillance: false },
-  views: { sea: false, mountain: false, golf: false, panoramic: false },
+  views: {
+    sea: false, oceano: false, rio: false,
+    mountain: false, ciudad: false, golf: false, panoramic: false,
+    amanecer: false, atardecer: false, abiertas: false,
+  },
   orientation: null,
 };

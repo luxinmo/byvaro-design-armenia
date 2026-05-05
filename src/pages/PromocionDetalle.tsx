@@ -2210,26 +2210,33 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                  *    - views (mar, montaña, golf, panorámica)
                  *    - terraces (covered/uncovered)
                  *  Si vacío, vacío · si marcado, aparece. */
-                const eq = snap?.promotionDefaults?.equipment;
+                const eq = (snap?.promotionDefaults?.equipment ?? {}) as Record<string, boolean>;
                 const sec = snap?.promotionDefaults?.security;
-                const views = snap?.promotionDefaults?.views;
+                const views = (snap?.promotionDefaults?.views ?? {}) as Record<string, boolean>;
                 const terr = snap?.promotionDefaults?.terraces;
                 const featureIds: string[] = [];
-                if (eq?.airConditioning) featureIds.push("airConditioning");
-                if (eq?.heating) featureIds.push("heating");
-                if (eq?.equippedKitchen) featureIds.push("equippedKitchen");
-                if (eq?.domotics) featureIds.push("domotics");
-                if (eq?.solarPanels) featureIds.push("solarPanels");
-                if (eq?.electricBlinds) featureIds.push("electricBlinds");
-                if (eq?.doubleGlazing) featureIds.push("doubleGlazing");
+                /* Equipment · todas las flags ampliadas. Si la flag
+                 *  es true, push el id (mismo nombre que la key del
+                 *  schema) · `feature(id)` resuelve icono + label
+                 *  desde el catálogo canónico. */
+                const EQUIPMENT_KEYS = [
+                  "airConditioning", "heating", "equippedKitchen",
+                  "domotics", "solarPanels", "electricBlinds", "doubleGlazing",
+                  "lavanderia", "bodega", "armariosEmpotrados", "vestidor", "chimenea",
+                  "gym", "sauna", "jacuzzi", "hammam",
+                  "bbq", "tenis", "padel", "ascensor",
+                ];
+                for (const k of EQUIPMENT_KEYS) if (eq[k]) featureIds.push(k);
                 if (terr?.covered || terr?.uncovered) featureIds.push("terraza");
                 if (sec?.alarm) featureIds.push("alarm");
                 if (sec?.reinforcedDoor) featureIds.push("reinforcedDoor");
                 if (sec?.videoSurveillance) featureIds.push("videoSurveillance");
-                if (views?.sea) featureIds.push("sea");
-                if (views?.mountain) featureIds.push("mountain");
-                if (views?.golf) featureIds.push("golf");
-                if (views?.panoramic) featureIds.push("panoramic");
+                /* Views · todos los nuevos puntos. */
+                const VIEWS_KEYS = [
+                  "sea", "oceano", "rio", "mountain", "ciudad", "golf",
+                  "panoramic", "amanecer", "atardecer", "abiertas",
+                ];
+                for (const k of VIEWS_KEYS) if (views[k]) featureIds.push(k);
 
                 /* Cada sub-sección es un BUTTON · click abre mini-modal
                  *  específico de esa sección · más rápido que el modal
