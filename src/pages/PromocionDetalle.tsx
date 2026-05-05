@@ -328,6 +328,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
    * (Piscina · Parking · Trastero · Sótano · Solárium). */
   const [wizardModalExtrasCategory, setWizardModalExtrasCategory] =
     useState<"privatePool" | "parking" | "storageRoom" | "basement" | "solarium" | null>(null);
+  /* Pane que abre por defecto cuando step="extras" sin filtrar ·
+   * "essentials" para el botón del bloque "Extras y opcionales" ·
+   * "extras" (default) para el botón de "Características y amenidades". */
+  const [wizardModalExtrasPane, setWizardModalExtrasPane] =
+    useState<"essentials" | "extras" | null>(null);
 
   /* Mapping editOpen-key → StepId para abrir el EditStepModal canónico
    * en lugar del Edit*Dialog antiguo. Si el step NO está soportado en
@@ -600,7 +605,22 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const p = useMemo(() => {
     if (!pBase) return null;
     if (!wizardOverride) return pBase;
-    return wizardStateToPromotion(wizardOverride, pBase);
+    /* `wizardStateToPromotion` mapea los campos canónicos (name,
+     *  delivery, ownerRole, etc.) PERO algunas secciones de la ficha
+     *  leen DIRECTAMENTE `metadata.wizardSnapshot.*` (tieneLicencia,
+     *  promotionDefaults.*, etc.). Sin sobreescribir el snapshot, esos
+     *  reads quedan stale tras editar y la UI parece "tarda en cambiar".
+     *  Solución · pisamos el snapshot del metadata con el override
+     *  actual ANTES de derivar `p` · así toda la ficha ve los cambios
+     *  instantáneamente desde el primer render post-save. */
+    const merged = wizardStateToPromotion(wizardOverride, pBase);
+    return {
+      ...merged,
+      metadata: {
+        ...((merged as { metadata?: Record<string, unknown> }).metadata ?? {}),
+        wizardSnapshot: wizardOverride,
+      },
+    } as typeof merged;
   }, [pBase, wizardOverride]);
 
   /* WizardState efectivo para el `EditStepModal` embebido · prioridad:
@@ -1938,6 +1958,16 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               promotion={p}
               hideEdit={viewAsCollaborator}
               onEdit={openExtraCategory}
+              onEditAll={() => {
+                /* Abre el step "extras" sin filtrar con pane=essentials
+                 *  · modal grande con piscina/parking/trastero/sótano/
+                 *  solárium/parcela/terrazas · permite añadir/quitar/
+                 *  editar todas a la vez. */
+                setWizardModalStep("extras");
+                setWizardModalInfoSection(null);
+                setWizardModalExtrasCategory(null);
+                setWizardModalExtrasPane("essentials");
+              }}
             />
 
             {/* ── 2. PAGO Y DISPONIBILIDAD (Unidades + Plan de pagos) ── */}
@@ -3143,9 +3173,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
           uploadScopeId={p?.id}
           infoBasicaSection={wizardModalInfoSection ?? undefined}
           extrasOnlyCategory={wizardModalExtrasCategory ?? undefined}
+          extrasPane={wizardModalExtrasPane ?? undefined}
           onClose={() => {
             setWizardModalStep(null);
             setWizardModalInfoSection(null);
+            setWizardModalExtrasPane(null);
             setWizardModalExtrasCategory(null);
           }}
         />
