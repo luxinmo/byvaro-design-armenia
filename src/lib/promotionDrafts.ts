@@ -18,6 +18,7 @@
 
 import type { WizardState, StepId } from "@/components/crear-promocion/types";
 import { memCache } from "./memCache";
+import { resolveConstructionProgress } from "./constructionProgress";
 
 const DRAFTS_KEY = "byvaro-promotion-drafts";
 /** Clave histórica (single-draft) · se migra la primera vez que se carga la lista. */
@@ -391,18 +392,6 @@ const SUBTIPO_LABEL: Record<string, string> = {
   planta_baja: "Bajos",
 };
 
-/** % de progreso según la fase de obra declarada. */
-const FASE_PROGRESS: Record<string, number> = {
-  inicio_obra: 10,
-  estructura: 30,
-  cerramientos: 50,
-  instalaciones: 65,
-  acabados: 80,
-  entrega_proxima: 95,
-  llave_en_mano: 100,
-  definir_mas_tarde: 0,
-};
-
 /** Convierte un borrador a la forma `Promotion`-like para alimentar la
  *  ficha (`/promociones/:id`). Se asignan `status: "incomplete"` y
  *  `missingSteps` para que la UI pinte los bloques incompletos en rojo. */
@@ -428,10 +417,9 @@ export function draftToPromotionData(d: PromotionDraft) {
       .filter((x): x is string => !!x),
   ));
 
-  /* Progreso de obra derivado de fase declarada en la promoción. */
-  const constructionProgress = s.faseConstruccion
-    ? FASE_PROGRESS[s.faseConstruccion] ?? undefined
-    : undefined;
+  /* Progreso de obra · helper canónico (override > faseConstruccion >
+   *  estado). Antes esta lógica ignoraba override y estado. */
+  const constructionProgress = resolveConstructionProgress(s);
 
   /* Delivery en formato legible. Si hay `fechaEntrega` (YYYY-MM o similar)
      lo dejamos tal cual; si solo hay trimestre, ese. */
