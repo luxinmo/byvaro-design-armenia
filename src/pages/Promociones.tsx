@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { promotions, getBuildingTypeLabel, isUnifamiliar, type Promotion } from "@/data/promotions";
 import { composeDelivery, resolveDelivery } from "@/lib/deliveryFormat";
+import { normalizePropertyType, getPropertyTypeLabel } from "@/lib/propertyTypes";
 import { currentOrgIdentity } from "@/lib/orgCollabRequests";
 import { developerOnlyPromotions, type DevPromotion } from "@/data/developerPromotions";
 import { unitsByPromotion } from "@/data/units";
@@ -55,33 +56,11 @@ import { promotionHref } from "@/lib/urls";
    Opciones estáticas (las dinámicas se derivan de los datos en el componente)
    ═══════════════════════════════════════════════════════════════════ */
 
-/** Aliases: normalizan variantes del dato a un único value canónico.
- *  Evita duplicados tipo "Villa" vs "Villas" en el filtro. */
-const propertyTypeAliases: Record<string, string> = {
-  "Villa": "Villas",
-  "Villas": "Villas",
-  "Apartment": "Apartments",
-  "Apartments": "Apartments",
-  "Townhouse": "Townhouses",
-  "Townhouses": "Townhouses",
-  "Penthouse": "Penthouses",
-  "Penthouses": "Penthouses",
-};
-
-/** Traducción de propertyType canónico → label español */
-const propertyTypeLabels: Record<string, string> = {
-  "Apartments": "Apartamentos",
-  "Villas": "Villas",
-  "Townhouses": "Adosados",
-  "Penthouses": "Áticos",
-  "Duplex": "Dúplex",
-  "Commercial": "Locales",
-};
-
-/** Normaliza un propertyType crudo al canónico (Villa → Villas) */
-function normalizePropertyType(v: string): string {
-  return propertyTypeAliases[v] ?? v;
-}
+/* `propertyTypeAliases`, `propertyTypeLabels`, `normalizePropertyType`
+ * y `getPropertyTypeLabel` ELIMINADOS aquí · MIGRADOS a
+ * `src/lib/propertyTypes.ts` como ÚNICA fuente de verdad. Evita
+ * divergencia entre listado (este archivo), wizardStateToPromotion
+ * y deriveFlatMetadata. */
 
 const buildingTypeOptions = [
   { value: "Unifamiliar", label: "Unifamiliar" },
@@ -163,10 +142,8 @@ function parseTime(t?: string | number): number {
   return Number.isFinite(ms) ? ms : 0;
 }
 
-/** Traduce un value de propertyType a su label en español */
-function getPropertyTypeLabel(v: string): string {
-  return propertyTypeLabels[v] || v;
-}
+/* `getPropertyTypeLabel` re-exportado del helper canónico (importado
+ *  arriba) · este archivo lo usa en filtros y chips. */
 
 /** Traduce el buildingType interno a su filtro */
 function matchesBuildingType(promoType: string | undefined, filterValue: string): boolean {

@@ -47,6 +47,7 @@ import { resolveConstructionProgress } from "./constructionProgress";
    ══════════════════════════════════════════════════════════════════ */
 
 import { composeDelivery } from "./deliveryFormat";
+import { resolvePropertyTypes } from "./propertyTypes";
 
 /** Reconstruye el string de delivery · delega en `composeDelivery`
  *  helper canónico (formato compacto: "CPV + 18m" / "Lic. + 18m" /
@@ -129,16 +130,13 @@ export function wizardStateToPromotion<T extends Promotion>(
 
   /* ─── Tipologías + edificación ─── */
   if (Array.isArray(state.tipologiasSeleccionadas) && state.tipologiasSeleccionadas.length > 0) {
-    /* Cuando el wizard tiene tipologías estructuradas las usamos. Si no,
-     *  preservamos `propertyTypes` original del seed. */
-    merged.propertyTypes = state.tipologiasSeleccionadas.map((t) => {
-      const labelMap: Record<string, string> = {
-        independiente: "Villas",
-        adosados: "Adosados",
-        pareados: "Pareados",
-      };
-      return labelMap[t.tipo] ?? t.tipo;
-    });
+    /* Helper canónico · guarda RAW ids del wizard
+     *  (`independiente`/`adosados`/`pareados`/etc.). El mapeo a
+     *  label visible se aplica al renderizar vía
+     *  `getPropertyTypeLabel`. Antes este path mapeaba inline a
+     *  labels y divergía con `deriveFlatMetadata` (que guarda raw)
+     *  · los filtros del listado dejaban de matchear al editar. */
+    merged.propertyTypes = resolvePropertyTypes(state);
   }
   if (state.tipo === "unifamiliar" && state.subUni === "una_sola") {
     merged.buildingType = "unifamiliar-single";
