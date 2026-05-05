@@ -34,7 +34,10 @@ export interface PromotionDefaults {
   parking: {
     enabled: boolean;
     spaces: number;
-    type: "outdoor" | "closed_garage";
+    /** Tipo de plaza · `outdoor` (descubierta), `subterraneo` (sótano
+     *  comunitario), `closed_garage` (garaje cerrado privado), `mixto`
+     *  (la promoción ofrece varios tipos sin distinguir per-vivienda). */
+    type: "outdoor" | "subterraneo" | "closed_garage" | "mixto";
     priceMode: PriceMode | null;
     appliesTo: AppliesTo | null;
     optionalPrice: number | null;
@@ -103,11 +106,12 @@ export interface PromotionDefaults {
     sauna: boolean;
     jacuzzi: boolean;
     hammam: boolean;
-    /* Exterior · ocio */
+    /* Exterior · ocio · tenis/padel ELIMINADOS · son zona comunitaria
+     *  de la urbanización (van en amenidades), no anejo per-vivienda. */
     bbq: boolean;
-    tenis: boolean;
-    padel: boolean;
-    /* Edificio */
+    /* Edificio · `ascensor` se renderiza como "Ascensor privado" en
+     *  ambos tipos · en plurifamiliar = ascensor exclusivo del piso ·
+     *  en unifamiliar = ascensor interno de la villa. */
     ascensor: boolean;
   };
   security: {
@@ -167,7 +171,7 @@ export const defaultPromotionDefaults: PromotionDefaults = {
     chargingPoint: false,
     lavanderia: false, bodega: false, armariosEmpotrados: false, vestidor: false, chimenea: false,
     gym: false, sauna: false, jacuzzi: false, hammam: false,
-    bbq: false, tenis: false, padel: false,
+    bbq: false,
     ascensor: false,
   },
   security: { alarm: false, reinforcedDoor: false, videoSurveillance: false },
