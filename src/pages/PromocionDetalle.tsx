@@ -2079,6 +2079,8 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Tipologías</p>
                 <div className="flex flex-wrap gap-1.5">
                   {(() => {
+                    /* Prioridad 1 · `tipologiasSeleccionadas` con
+                     *  cantidades (unifamiliar varias villas). */
                     const tipoSnap = (p as { metadata?: { wizardSnapshot?: { tipologiasSeleccionadas?: Array<{ tipo?: string; cantidad?: number }> } } })
                       .metadata?.wizardSnapshot?.tipologiasSeleccionadas;
                     const withQty = (tipoSnap ?? []).filter((t) => t.tipo);
@@ -2089,9 +2091,33 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                         </Tag>
                       ));
                     }
-                    return p.propertyTypes.length > 0
-                      ? p.propertyTypes.map(t => <Tag key={t} variant="default" size="sm">{getPropertyTypeLabel(t)}</Tag>)
-                      : <p className="text-xs text-muted-foreground italic">Sin tipologías marcadas</p>;
+                    /* Prioridad 2 · `p.propertyTypes` plano. */
+                    if (p.propertyTypes.length > 0) {
+                      return p.propertyTypes.map(t => <Tag key={t} variant="default" size="sm">{getPropertyTypeLabel(t)}</Tag>);
+                    }
+                    /* Prioridad 3 · derivar de SUBTIPOS de las unidades
+                     *  (plurifamiliar) · agrupar y contar. Si Apt-1
+                     *  apartamento, Apt-2 apartamento, Apt-3 ático ·
+                     *  → "2 Apartamentos · 1 Ático". Cubre promos
+                     *  legacy con propertyTypes=[] que tienen unidades
+                     *  con subtipo declarado. */
+                    const snapUnits = (p as { metadata?: { wizardSnapshot?: { unidades?: Array<{ subtipo?: string | null }> } } })
+                      .metadata?.wizardSnapshot?.unidades;
+                    const subtipoCount: Record<string, number> = {};
+                    for (const u of snapUnits ?? []) {
+                      if (u.subtipo && u.subtipo !== "local" && u.subtipo !== "planta_baja") {
+                        subtipoCount[u.subtipo] = (subtipoCount[u.subtipo] ?? 0) + 1;
+                      }
+                    }
+                    const entries = Object.entries(subtipoCount);
+                    if (entries.length > 0) {
+                      return entries.map(([tipo, count]) => (
+                        <Tag key={tipo} variant="default" size="sm">
+                          {count > 1 ? `${count} ${getPropertyTypeLabel(tipo)}` : getPropertyTypeLabel(tipo)}
+                        </Tag>
+                      ));
+                    }
+                    return <p className="text-xs text-muted-foreground italic">Sin tipologías marcadas</p>;
                   })()}
                 </div>
               </div>
