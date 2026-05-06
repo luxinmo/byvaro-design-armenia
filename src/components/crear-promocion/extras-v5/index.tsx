@@ -1077,14 +1077,20 @@ function CategoryBody({
             />
           </SubGroup>
 
-          {/* Wellness · gym, sauna, jacuzzi, hammam */}
-          <SubGroup label="Wellness">
+          {/* Wellness · gym, sauna, jacuzzi, hammam · PRIVADAS de la
+              vivienda · NO comunitarias. Si quieres marcar gimnasio o
+              sauna comunitarios, edítalos en Amenities de la
+              urbanización (paso Información básica). */}
+          <SubGroup
+            label="Wellness"
+            description="Privadas de la vivienda · pertenecen a la unidad, no son de la urbanización. Para gimnasio / sauna comunitarios, márcalos en Amenities."
+          >
             <IconCheckboxGrid
               items={[
-                { key: "gym",     label: "Gimnasio", icon: Dumbbell, checked: eq.gym,     onChange: (v) => eqPatch({ gym: v }) },
-                { key: "sauna",   label: "Sauna",    icon: Flame,    checked: eq.sauna,   onChange: (v) => eqPatch({ sauna: v }) },
-                { key: "jacuzzi", label: "Jacuzzi",  icon: Bath,     checked: eq.jacuzzi, onChange: (v) => eqPatch({ jacuzzi: v }) },
-                { key: "hammam",  label: "Hammam",   icon: Bath,     checked: eq.hammam,  onChange: (v) => eqPatch({ hammam: v }) },
+                { key: "gym",     label: "Gimnasio privado", icon: Dumbbell, checked: eq.gym,     onChange: (v) => eqPatch({ gym: v }) },
+                { key: "sauna",   label: "Sauna privada",    icon: Flame,    checked: eq.sauna,   onChange: (v) => eqPatch({ sauna: v }) },
+                { key: "jacuzzi", label: "Jacuzzi privado",  icon: Bath,     checked: eq.jacuzzi, onChange: (v) => eqPatch({ jacuzzi: v }) },
+                { key: "hammam",  label: "Hammam privado",   icon: Bath,     checked: eq.hammam,  onChange: (v) => eqPatch({ hammam: v }) },
               ]}
             />
           </SubGroup>
@@ -1482,12 +1488,26 @@ function CheckboxGrid({
 }
 
 /* ─── SubGroup · agrupador visual con label discreto ──────────── */
-function SubGroup({ label, children }: { label: string; children: React.ReactNode }) {
+function SubGroup({ label, description, children }: {
+  label: string;
+  /** Aviso bajo el label · útil para clarificar dominio (ej. wellness
+   *  privado vs urbanización · sin esto el user mezclaba lo que va en
+   *  amenities urbanización con lo que va per-unit). */
+  description?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-        {label}
-      </p>
+      <div className="flex flex-col gap-0.5">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+          {label}
+        </p>
+        {description && (
+          <p className="text-[11.5px] text-muted-foreground leading-snug">
+            {description}
+          </p>
+        )}
+      </div>
       <div className="flex flex-col gap-2">
         {children}
       </div>
