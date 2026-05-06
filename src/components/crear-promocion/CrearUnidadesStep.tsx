@@ -492,21 +492,33 @@ export function CrearUnidadesStep({
   /* Modal ligero solo-fotos · disparado al click del thumbnail. */
   const [editPhotosUnitId, setEditPhotosUnitId] = useState<string | null>(null);
 
-  /* Sync · si V5 marcó parking/trastero como "separate" y state.parkings
-   *  / state.trasteros aún no tiene count, lo sembramos al entrar al
-   *  paso para que aparezcan en la sección "Anejos sueltos" del pie.
-   *  Sin esto, el user marcaba "separada" en V5 pero al llegar a
-   *  unidades no veía nada · tenía que abrir "+ Añadir anejos" y
-   *  duplicar lo que ya había declarado. */
+  /* Sync · si V5 marcó parking/trastero como "separate", sembramos
+   *  count + flags legacy al entrar al paso para que aparezcan en la
+   *  sección "Anejos sueltos" del pie.
+   *
+   *  CRÍTICO · NO basta con `update("parkings", N)` · la fórmula
+   *  `parkingsAdicionales` resta `totalViv × parkingsIncluidosPorVivienda`
+   *  (default `true × 1`) suponiendo que cada vivienda ya lleva su
+   *  plaza bundled · si eso no se neutraliza, parkings sueltos = 0
+   *  aunque state.parkings sea > 0. Para "separate" las plazas NO
+   *  van bundled · son anejos sueltos puros · forzamos
+   *  `parkingsIncluidosPrecio: false`. Mismo razonamiento para
+   *  trasteros. */
   useEffect(() => {
     const pk = state.promotionDefaults?.parking;
-    if (pk?.enabled && pk.registralKind === "separate" && state.parkings === 0) {
-      const seed = Math.max(1, pk.spaces || 1);
-      update("parkings", seed);
+    if (pk?.enabled && pk.registralKind === "separate") {
+      if (state.parkingsIncluidosPrecio) update("parkingsIncluidosPrecio", false);
+      if (state.parkings === 0) {
+        const seed = Math.max(1, pk.spaces || 1);
+        update("parkings", seed);
+      }
     }
     const sr = state.promotionDefaults?.storageRoom;
-    if (sr?.enabled && sr.registralKind === "separate" && state.trasteros === 0) {
-      update("trasteros", 1);
+    if (sr?.enabled && sr.registralKind === "separate") {
+      if (state.trasterosIncluidosPrecio) update("trasterosIncluidosPrecio", false);
+      if (state.trasteros === 0) {
+        update("trasteros", 1);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
