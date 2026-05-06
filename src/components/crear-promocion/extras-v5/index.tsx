@@ -596,10 +596,13 @@ function EssentialRow({
   const hasEnabledFlag = TOGGLE_KEYS.has(def.key);
   const active = configured || (!hasEnabledFlag && open);
 
-  /* Auto-expand cuando se activa por primera vez (el user marca el
-   * toggle pero también queremos enseñar las sub-opciones). */
+  /* Auto-expand al activar · auto-colapsar al desactivar. Sin la
+   *  rama del else, al pulsar la X del chip de registralKind (que
+   *  resetea parking/trastero al default · enabled=false), la card
+   *  se quedaba abierta mostrando los controles vacíos · había que
+   *  pulsar otra vez el toggle para cerrar. Ahora se cierra sola. */
   useEffect(() => {
-    if (active) setOpen(true);
+    setOpen(active);
   }, [active]);
 
   function toggleEnabled(v: boolean) {
@@ -849,6 +852,10 @@ function CategoryBody({
           <RegistralKindBadge
             value={defaults.parking.registralKind}
             onChange={() => patch("parking", { registralKind: null })}
+            onRemove={() => update("promotionDefaults", {
+              ...defaults,
+              parking: defaultPromotionDefaults.parking,
+            })}
           />
           <Row label={isSingleHome
             ? (defaults.parking.registralKind === "separate" ? "Plazas en total" : "Plazas")
@@ -896,6 +903,10 @@ function CategoryBody({
           <RegistralKindBadge
             value={defaults.storageRoom.registralKind}
             onChange={() => patch("storageRoom", { registralKind: null })}
+            onRemove={() => update("promotionDefaults", {
+              ...defaults,
+              storageRoom: defaultPromotionDefaults.storageRoom,
+            })}
           />
           {!isSingleHome && defaults.storageRoom.registralKind === "inseparable" && (
             <AppliesToControl
@@ -1265,35 +1276,48 @@ function AppliesToControl({
   );
 }
 
-/* Badge "Tipo de unidad registral" · resumen visual del valor elegido
- *  desde el popup `RegistralKindDialog`. Click en "Cambiar" resetea
- *  el valor a null · el useEffect en EssentialRow detecta el null y
- *  reabre el popup. Más limpio que un segmented inline · una sola
- *  decisión, una sola línea, sin saturar la card. */
+/* Chip "Tipo de unidad registral" · resumen del valor elegido en el
+ *  popup. Dos acciones distintas:
+ *    · Click en el label → reabre el popup para CAMBIAR (resetea solo
+ *      registralKind a null · el resto de config se mantiene).
+ *    · Click en la X → DESACTIVA parking entero · vuelve al estado
+ *      inicial (toggle off + reset all). Equivalente a clicar el
+ *      switch de la cabecera del row. */
 function RegistralKindBadge({
-  value, onChange,
+  value, onChange, onRemove,
 }: {
   value: RegistralKind | null;
   onChange: () => void;
+  onRemove: () => void;
 }) {
-  if (!value) return null; // mientras es null, el popup está abierto · no pintes badge
+  if (!value) return null; // mientras es null, el popup está abierto · no pintes chip
+  const label = value === "inseparable" ? "Inseparable del inmueble" : "Unidad registral separada";
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/40 border border-border/40 px-3 py-2">
-      <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Tipo de unidad registral
-        </p>
-        <p className="text-[13px] font-medium text-foreground leading-tight mt-0.5">
-          {value === "inseparable" ? "Inseparable del inmueble" : "Unidad registral separada"}
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={onChange}
-        className="text-[12px] font-medium text-primary hover:underline shrink-0"
+    <div className="flex flex-wrap items-center gap-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Tipo de unidad registral
+      </p>
+      <span
+        className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/25 pl-3 pr-1 py-1 text-[12px] font-medium text-primary"
       >
-        Cambiar
-      </button>
+        <button
+          type="button"
+          onClick={onChange}
+          className="hover:underline"
+          title="Cambiar"
+        >
+          {label}
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="inline-flex items-center justify-center h-5 w-5 rounded-full hover:bg-primary/15 text-primary/80 hover:text-primary"
+          aria-label="Desactivar"
+          title="Desactivar parking"
+        >
+          <X className="h-3 w-3" strokeWidth={2} />
+        </button>
+      </span>
     </div>
   );
 }
