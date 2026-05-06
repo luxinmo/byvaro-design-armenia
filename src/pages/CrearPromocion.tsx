@@ -454,8 +454,16 @@ export default function CrearPromocion() {
     if (isVariasUni) {
       return state.tipologiasSeleccionadas.reduce((s, t) => s + t.cantidad, 0) || 1;
     }
-    return state.plantas * state.aptosPorPlanta * multiplier;
-  }, [isSingleHome, isVariasUni, state.tipologiasSeleccionadas, state.plantas, state.aptosPorPlanta, multiplier]);
+    /* Plurifamiliar · plantas-sobre-rasante × viv/planta × escaleras
+     *  + bajos residenciales (planta 0) si `plantaBajaTipo === "viviendas"`.
+     *  Sin sumar los bajos, el banner mostraba "4 viviendas" cuando
+     *  el preview decía "5 viviendas" · inconsistencia visible. */
+    const upperUnits = state.plantas * state.aptosPorPlanta * multiplier;
+    const groundUnits = state.plantaBajaTipo === "viviendas"
+      ? state.aptosPorPlanta * multiplier
+      : 0;
+    return upperUnits + groundUnits;
+  }, [isSingleHome, isVariasUni, state.tipologiasSeleccionadas, state.plantas, state.aptosPorPlanta, state.plantaBajaTipo, multiplier]);
   const totalLocales = state.tipo === "unifamiliar" ? 0 : state.locales * multiplier;
   const summaryItems = [
     { label: "viviendas", count: totalViviendas },
@@ -553,7 +561,18 @@ export default function CrearPromocion() {
         if (s.plantaBajaTipo === "locales" && (s.locales ?? 0) < 1) return false;
         return true;
       }
-      case "extras": return true; // siempre opcional
+      case "extras": {
+        /* Parking / trastero · si están enabled, el user DEBE elegir
+         *  registralKind (inseparable o separada) antes de avanzar.
+         *  Sin esto el generador de unidades no sabe si propagar el
+         *  flag per-unit o crear anejos sueltos · acaba haciendo lo
+         *  primero por defecto y se pierde la venta del anejo. */
+        const d = s.promotionDefaults;
+        if (!d) return true;
+        if (d.parking.enabled && !d.parking.registralKind) return false;
+        if (d.storageRoom.enabled && !d.storageRoom.registralKind) return false;
+        return true;
+      }
       case "equipamiento": {
         /* Si el user abre Solárium/Seguridad/Vistas/Orientación pero no
          *  marca nada dentro, "Siguiente" se deshabilita · fuerza a
