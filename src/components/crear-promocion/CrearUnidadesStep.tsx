@@ -1003,12 +1003,14 @@ export function CrearUnidadesStep({
         /* Hidrata los nombres de bloques desde el wizard · "Torre Norte",
          *  etc. Sin esto la tabla siempre mostraba "Bloque 1/2/...". */
         initialBlockNames={state.blockNames}
-        /* Plurifamiliar · piscina es comunitaria (vive en zonasComunes
-         *  / amenities urbanización) · NO per-unit. Ocultamos la columna
-         *  para evitar que el user marque per-vivienda algo que ya está
-         *  como amenity comunitaria. Unifamiliar villa SÍ tiene piscina
-         *  privada per-unit · columna visible. */
-        hidePoolColumn={state.tipo === "plurifamiliar"}
+        /* Plurifamiliar y mixto · piscina es comunitaria (vive en
+         *  zonasComunes / amenities urbanización) · NO per-unit.
+         *  Ocultamos la columna para evitar que el user marque per-
+         *  vivienda algo que ya está como amenity comunitaria.
+         *  Unifamiliar villa SÍ tiene piscina privada per-unit ·
+         *  columna visible. Mixto incluye apartamentos por lo que
+         *  igual que plurifamiliar oculta. */
+        hidePoolColumn={state.tipo === "plurifamiliar" || state.tipo === "mixto"}
         onReorderUnits={(orderedIds) => {
           /* Reordena `state.unidades` siguiendo el array de ids que
            * llega del drag handle · ids no presentes (no debería pasar
