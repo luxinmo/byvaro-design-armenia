@@ -18,6 +18,8 @@ import {
   Shirt, Wine, Bath, Flame, ArrowUpDown, LayoutPanelLeft, Trophy,
   Mountain, Building, Sunrise, Sunset, Maximize, Ship,
   BatteryCharging, PackageOpen,
+  /* Amenities del edificio · iconos nuevos */
+  Film, Bike, Briefcase,
   type LucideIcon,
 } from "lucide-react";
 
@@ -25,7 +27,9 @@ import {
  *  Cuando se añade una feature nueva al wizard, basta con sumarla
  *  aquí · todos los consumidores la ven automáticamente. */
 const FEATURE_CATALOG: Record<string, { icon: LucideIcon; label: string }> = {
-  /* Amenities urbanización */
+  /* Amenities urbanización · catálogo legacy (mantenido para promos
+   *  viejas) · el wizard nuevo usa los ids específicos del edificio
+   *  abajo + URBANIZACION_GROUPS de InfoBasicaStep para urbanización. */
   piscina:        { icon: Waves,           label: "Piscina" },
   gimnasio:       { icon: Dumbbell,        label: "Gimnasio" },
   spa:            { icon: Sparkles,        label: "Spa" },
@@ -37,6 +41,22 @@ const FEATURE_CATALOG: Record<string, { icon: LucideIcon; label: string }> = {
   zona_infantil:  { icon: Baby,            label: "Zona infantil" },
   beach_club:     { icon: Umbrella,        label: "Beach club" },
   conserje:       { icon: Bell,            label: "Conserjería" },
+
+  /* Amenities DEL EDIFICIO · catálogo nuevo (sin solapamiento con
+   *  urbanización). Lo que tiene el propio edificio donde vive el
+   *  residente. Distinto de URBANIZACION_GROUPS (compartidas). */
+  piscina_edificio:  { icon: Waves,        label: "Piscina del edificio" },
+  gimnasio_edificio: { icon: Dumbbell,     label: "Gimnasio del edificio" },
+  sala_social:       { icon: Sparkles,     label: "Sala social / Lounge" },
+  sala_cine:         { icon: Film,         label: "Sala cine / juegos" },
+  sala_reuniones:    { icon: Briefcase,    label: "Sala reuniones / coworking" },
+  conserje_24h:      { icon: Bell,         label: "Conserjería 24h" },
+  parking_residentes: { icon: Car,         label: "Parking residentes" },
+  jardin_edificio:   { icon: TreePine,     label: "Jardín del edificio" },
+  biciparking:       { icon: Bike,         label: "Biciparking" },
+  lavanderia_comun:  { icon: Shirt,        label: "Lavandería compartida" },
+  trasteros_comunes: { icon: Archive,      label: "Trasteros comunes" },
+  pet_wash:          { icon: Dog,          label: "Pet wash / sala mascotas" },
 
   /* Características de vivienda */
   cocina_equipada:    { icon: CookingPot, label: "Cocina equipada" },

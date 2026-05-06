@@ -142,6 +142,12 @@ export interface PromotionDefaults {
    *  este array. Al desmarcar, se quita. La ficha pinta los chips
    *  en este orden · el último marcado aparece primero. */
   selectedOrder: string[];
+  /** Categorías "abiertas" en el wizard (chip seleccionado · card
+   *  expandida). Se persiste para que `canContinue` pueda exigir al
+   *  user que marque algo dentro o cierre el chip antes de
+   *  "Siguiente". Útil sobre todo para categorías sin `enabled`
+   *  flag (security, views, orientation). */
+  openExtras: string[];
 }
 
 export const defaultPromotionDefaults: PromotionDefaults = {
@@ -182,4 +188,5 @@ export const defaultPromotionDefaults: PromotionDefaults = {
   },
   orientation: null,
   selectedOrder: [],
+  openExtras: [],
 };

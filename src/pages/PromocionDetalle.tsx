@@ -30,7 +30,7 @@ import {
   Check, X, ExternalLink, Zap, Star, Search, ChevronDown, Info,
   Lock, Unlock, FolderOpen, Folder, Download, BookOpen, Upload, MoreHorizontal, FilePlus, ArrowRight,
   Trophy, Sparkles, ArrowUpRight, FileCheck2, Rocket, BarChart3,
-  Megaphone,
+  Megaphone, Leaf, Palmtree,
 } from "lucide-react";
 import { getMissingForPromotion } from "@/lib/publicationRequirements"; // fuente única de verdad de requisitos para publicar
 import { useOverride, saveOverride, getOverride } from "@/lib/promotionWizardOverrides";
@@ -665,7 +665,30 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
 
   if (p && !initialized) {
     setComercialesList(p.comerciales || []);
-    setSalesOfficeIds((p as DevPromotion).puntosDeVentaIds ?? []);
+    /* Hidratar oficinas + piso piloto + anejos sueltos desde
+     *  wizardSnapshot · antes todos quedaban vacíos al refresh
+     *  aunque el user los hubiera configurado en el wizard. */
+    const snap = (p as { metadata?: { wizardSnapshot?: {
+      oficinasVentaSeleccionadas?: string[];
+      pisoPilotoUnidadId?: string | null;
+      trasteros?: number; trasterosIncluidosPrecio?: boolean;
+      trasterosIncluidosPorVivienda?: number; trasteroPrecios?: number[];
+      parkings?: number; parkingsIncluidosPrecio?: boolean;
+      parkingsIncluidosPorVivienda?: number; parkingPrecios?: number[];
+      solariums?: number; solariumPrecios?: number[];
+      sotanos?: number; sotanoPrecios?: number[];
+    } } }).metadata?.wizardSnapshot;
+    const fromSnap = snap?.oficinasVentaSeleccionadas ?? [];
+    const fromSeed = (p as DevPromotion).puntosDeVentaIds ?? [];
+    setSalesOfficeIds(fromSeed.length > 0 ? fromSeed : fromSnap);
+    if (snap?.pisoPilotoUnidadId) setShowFlatUnitId(snap.pisoPilotoUnidadId);
+    /* Siembra anejos sueltos en el storage si está vacío. Importa
+     *  dinámico para no engordar el bundle inicial. */
+    if (snap) {
+      void import("@/lib/anejosStorage").then(({ seedAnejosFromWizardIfEmpty }) => {
+        seedAnejosFromWizardIfEmpty(p.id, snap, p.totalUnits);
+      });
+    }
     setInitialized(true);
   }
 
@@ -948,7 +971,14 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   const occupancy = p.totalUnits > 0 ? Math.round(((p.totalUnits - p.availableUnits) / p.totalUnits) * 100) : 0;
   const typeLabel = getBuildingTypeLabel(p.buildingType);
   const returnPath = `/developer-promotions/${p.id}`;
-  const website = `${p.name.toLowerCase().replace(/\s+/g, "-")}.byvaro.com`;
+  /* Website · prefiere el campo configurado por el user en el step
+   *  contactos · cae al auto-generado si no hay. */
+  const contactSnap = (p as { metadata?: { wizardSnapshot?: { contactoWeb?: string; contactoTelefono?: string; contactoEmail?: string } } })
+    .metadata?.wizardSnapshot;
+  const website = contactSnap?.contactoWeb?.trim()
+    || `${p.name.toLowerCase().replace(/\s+/g, "-")}.byvaro.com`;
+  const contactPhone = contactSnap?.contactoTelefono?.trim() || "";
+  const contactEmail = contactSnap?.contactoEmail?.trim() || "";
 
   /* Label canónico de la fase de obra · derivado del % real de la promo
    *  vía buckets definidos en `options.ts::constructionPhaseFromProgress`.
@@ -1014,14 +1044,38 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   // KPI data with optional click handler to switch tabs.
   // Para borradores (priceMin=0) y otros estados incompletos, mostramos
   // "Sin configurar" en lugar de valores engañosos.
-  const availabilityValue = p.totalUnits > 0 ? `${p.availableUnits} / ${p.totalUnits}` : "Sin configurar";
-  const availabilityDetail = p.totalUnits > 0 ? `${occupancy}% vendido` : "Añade unidades";
+  /* Disponibilidad · solo cuenta VIVIENDAS · los locales se muestran
+   *  aparte como sub-detail. Los unitsByPromotion locales no se
+   *  pueden distinguir desde Promotion plana · derivamos del snapshot.
+   *  Si no hay snapshot (legacy), fallback al total como siempre. */
+  const snapUnitsForKpi = (p as { metadata?: { wizardSnapshot?: { unidades?: Array<{ subtipo?: string | null; status?: string | null }> } } })
+    .metadata?.wizardSnapshot?.unidades;
+  const localesTotal = (snapUnitsForKpi ?? []).filter((u) => u.subtipo === "local").length;
+  const viviendasTotal = Math.max(0, p.totalUnits - localesTotal);
+  const localesAvailable = (snapUnitsForKpi ?? []).filter((u) => u.subtipo === "local" && (u.status ?? "available") === "available").length;
+  const viviendasAvailable = Math.max(0, p.availableUnits - localesAvailable);
+  const availabilityValue = p.totalUnits > 0
+    ? `${viviendasAvailable} / ${viviendasTotal}`
+    : "Sin configurar";
+  const availabilityDetail = p.totalUnits > 0
+    ? (localesTotal > 0
+        ? `${occupancy}% vendido · + ${localesTotal} ${localesTotal === 1 ? "local" : "locales"}`
+        : `${occupancy}% vendido`)
+    : "Añade unidades";
 
   /* Uso interno · `canShareWithAgencies === false` significa que el
    *  promotor marcó "Solo uso interno" en el wizard · NO va a compartir
    *  con agencias · KPIs de Comisión y Agencias no aplican · los
    *  ocultamos para no ensuciar la vista con datos sin sentido. */
-  const isUsoInterno = (p as { canShareWithAgencies?: boolean }).canShareWithAgencies === false;
+  /* "Uso interno" cuando el user NO ha marcado explícitamente
+   *  compartir con agencias (canShareWithAgencies !== true) Y no hay
+   *  snapshot.colaboracion=true. Antes solo era `=== false` · cuando
+   *  estaba `undefined` (default · user no decidió) caía en "compartir"
+   *  y mostraba el KPI "Comisión · Falta" como warning · falsa alarma. */
+  const snapColabFlag = (p as { metadata?: { wizardSnapshot?: { colaboracion?: boolean } } })
+    .metadata?.wizardSnapshot?.colaboracion;
+  const isUsoInterno = (p as { canShareWithAgencies?: boolean }).canShareWithAgencies !== true
+    && snapColabFlag !== true;
 
   const allKpis = [
     /* "Rango de precios" · ELIMINADO del strip · ahora vive como
@@ -1738,14 +1792,32 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                         </div>
                       )}
                     </button>
-                  ) : videosCount > 0 ? (
-                    <div className="relative overflow-hidden cursor-pointer group bg-muted/30 flex items-center justify-center">
-                      <div className="text-center">
-                        <Video className="h-5 w-5 text-muted-foreground/40 mx-auto mb-1" />
-                        <span className="text-xs text-muted-foreground">{videosCount} {videosCount === 1 ? "vídeo" : "vídeos"}</span>
-                      </div>
-                    </div>
-                  ) : (
+                  ) : videosCount > 0 ? (() => {
+                    /* Render REAL · cada video como tile clickable que
+                     *  abre la URL en pestaña nueva (YouTube/Vimeo). Antes
+                     *  solo se mostraba el count "N vídeos" sin ser
+                     *  reproducibles · datos del wizard inaccesibles. */
+                    const snap = (p as { metadata?: { wizardSnapshot?: { videos?: Array<{ id: string; tipo: string; url: string; nombre: string }> } } })
+                      .metadata?.wizardSnapshot;
+                    const vids = (snap?.videos ?? []).filter((v) => v.url?.trim());
+                    const first = vids[0];
+                    return first ? (
+                      <a
+                        href={first.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="relative overflow-hidden cursor-pointer group bg-muted/30 flex items-center justify-center hover:bg-muted/50 transition-colors"
+                        title={first.nombre || "Ver vídeo"}
+                      >
+                        <div className="text-center">
+                          <Play className="h-6 w-6 text-foreground/70 mx-auto mb-1" strokeWidth={1.5} />
+                          <span className="text-xs text-foreground font-medium">{vids.length === 1 ? "Ver vídeo" : `${vids.length} vídeos`}</span>
+                        </div>
+                      </a>
+                    ) : (
+                      <div className="relative overflow-hidden bg-muted/20" />
+                    );
+                  })() : (
                     <div className="relative overflow-hidden bg-muted/20" />
                   )}
                 </div>
@@ -1896,59 +1968,237 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   · Trastero · Licencia) y 5 en unifamiliar (sin
                   Estructura). Grid-cols-3 en md+ · alineación limpia
                   con 2 filas equilibradas. */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-5">
-                <InfoItem icon={Building2} label="Tipo" value={typeLabel || "Sin definir"} />
+              {(() => {
+                /* Datos REALES de config_edificio · antes solo se
+                 *  mostraba "Multibloque/Bloque único" derivado de
+                 *  totalUnits > 10. Ahora desglosamos bloques,
+                 *  escaleras, plantas, viviendas/planta y planta baja. */
+                const cfgSnap = (p as { metadata?: { wizardSnapshot?: {
+                  numBloques?: number; escalerasPorBloque?: number[];
+                  plantas?: number; aptosPorPlanta?: number;
+                  plantaBajaTipo?: "locales" | "viviendas" | null;
+                  locales?: number;
+                  certificadoEnergetico?: string;
+                  urbanizacion?: boolean;
+                  urbanizacionTipo?: "cerrada" | "resort" | "abierta" | null;
+                  urbanizacionNombre?: string;
+                } } }).metadata?.wizardSnapshot;
+                const numBloques = cfgSnap?.numBloques ?? 1;
+                const totalEscaleras = (cfgSnap?.escalerasPorBloque ?? []).reduce((sum, n) => sum + n, 0);
+                const plantas = cfgSnap?.plantas;
+                const aptosPorPlanta = cfgSnap?.aptosPorPlanta;
+                const pbTipo = cfgSnap?.plantaBajaTipo;
+                const locales = cfgSnap?.locales ?? 0;
+                const certEnerg = cfgSnap?.certificadoEnergetico;
+                const urbanizacion = cfgSnap?.urbanizacion;
+                const urbanizacionTipo = cfgSnap?.urbanizacionTipo;
+                const urbanizacionNombre = cfgSnap?.urbanizacionNombre;
+                const URB_TIPO_LABEL: Record<string, string> = {
+                  cerrada: "Urbanización cerrada",
+                  resort: "Resort",
+                  abierta: "Urbanización abierta",
+                };
+                const PB_LABEL: Record<string, string> = {
+                  locales: locales > 0 ? `${locales} ${locales === 1 ? "local" : "locales"}` : "Locales",
+                  viviendas: "Viviendas en bajo",
+                };
+                /* ─── Layout COMERCIAL · stat tiles agrupadas
+                 *  por dominio (Edificio · Oferta · Legal & energía
+                 *  · Entorno) en lugar de InfoItems planos uniformes.
+                 *  Cada tile · icono coloreado en cuadro grande +
+                 *  número/valor destacado + label discreto. */
+                const snapUnitsForCount = (p as { metadata?: { wizardSnapshot?: { unidades?: Array<{ subtipo?: string | null }> } } })
+                  .metadata?.wizardSnapshot?.unidades;
+                const localesCount = (snapUnitsForCount ?? []).filter((u) => u.subtipo === "local").length;
+                const viviendas = Math.max(0, p.totalUnits - localesCount);
+                const wsTieneLic = resolveLicenseGranted(p);
+                const estiloSnap = (p as { metadata?: { wizardSnapshot?: { estiloVivienda?: string | null; estilosSeleccionados?: string[] } } })
+                  .metadata?.wizardSnapshot;
+                const ESTILO_LABEL: Record<string, string> = {
+                  mediterraneo: "Mediterráneo", contemporaneo: "Contemporáneo",
+                  finca: "Finca", colonial: "Colonial",
+                  minimalista: "Minimalista", rustico: "Rústico",
+                };
+                const estiloSingle = estiloSnap?.estiloVivienda;
+                const estiloMulti = (estiloSnap?.estilosSeleccionados ?? []).filter(Boolean);
+                const estiloLabel = estiloSingle
+                  ? (ESTILO_LABEL[estiloSingle] ?? estiloSingle)
+                  : (estiloMulti.length > 0 ? estiloMulti.map((e) => ESTILO_LABEL[e] ?? e).join(" · ") : null);
+                /* Color del cert energético · estándar inmobiliario
+                 *  europeo · A/B verde · C amarillo claro · D amarillo
+                 *  · E naranja · F/G rojo. */
+                const certColor = (() => {
+                  if (!certEnerg) return "muted";
+                  const letter = certEnerg.charAt(0).toUpperCase();
+                  if (letter === "A" || letter === "B") return "success";
+                  if (letter === "C" || letter === "D") return "warning";
+                  if (letter === "E" || letter === "F" || letter === "G") return "destructive";
+                  return "muted";
+                })();
+                return (
+              <div className="space-y-5">
+                {/* GRUPO 1 · Edificio · estructura física */}
                 {showEstructura && (
-                  <InfoItem icon={Layers} label="Estructura" value={p.totalUnits > 10 ? "Multibloque" : "Bloque único"} />
-                )}
-                <InfoItem icon={Home} label="Unidades totales" value={`${p.totalUnits}`} />
-                {/* Parking · Trastero · MOVIDOS al bloque "Extras y opcionales"
-                    debajo · ahí se ven con icono + chip de precio (Incluido /
-                    Opcional · X € / No incluido) y se editan individualmente. */}
-                {/* Licencia · lee `metadata.wizardSnapshot.tieneLicencia`
-                    real · NO hardcoded. true → verde · false → muted ·
-                    null/undefined → no se renderiza el bloque. */}
-                {(() => {
-                  /* Helper canónico · prefiere metadata.licenseGranted plano
-                   *  · cae a wizardSnapshot.tieneLicencia · null si nada. */
-                  const wsTieneLic = resolveLicenseGranted(p);
-                  if (wsTieneLic == null) return null;
-                  const granted = wsTieneLic === true;
-                  return (
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Shield className={cn("h-3 w-3", granted ? "text-success" : "text-muted-foreground")} strokeWidth={2} />
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Estado legal</p>
-                      </div>
-                      <p className={cn(
-                        "text-sm font-semibold inline-flex items-center gap-1.5",
-                        granted ? "text-success" : "text-muted-foreground",
-                      )}>
-                        <span className={cn(
-                          "inline-flex items-center justify-center h-4 w-4 rounded-full",
-                          granted ? "bg-success/15" : "bg-muted",
-                        )}>
-                          {granted
-                            ? <Check className="h-2.5 w-2.5 text-success" strokeWidth={3} />
-                            : <X className="h-2.5 w-2.5 text-muted-foreground" strokeWidth={3} />}
-                        </span>
-                        {granted ? "Licencia concedida" : "Sin licencia"}
-                      </p>
+                  <div>
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-3">El edificio</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      <StatTile icon={Building2} label="Tipo" value={typeLabel || "—"} />
+                      {plantas !== undefined && <StatTile icon={Layers} label="Plantas" value={`${plantas}`} />}
+                      {aptosPorPlanta !== undefined && <StatTile icon={Home} label="Viviendas/planta" value={`${aptosPorPlanta}`} />}
+                      {numBloques > 1 && <StatTile icon={Layers} label="Bloques" value={`${numBloques}`} />}
+                      {totalEscaleras > 1 && <StatTile icon={Layers} label="Escaleras" value={`${totalEscaleras}`} />}
                     </div>
-                  );
-                })()}
+                  </div>
+                )}
+                {!showEstructura && (
+                  <div>
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-3">La promoción</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      <StatTile icon={Building2} label="Tipo" value={typeLabel || "—"} />
+                      {estiloLabel && <StatTile icon={Sparkles} label="Estilo" value={estiloLabel} />}
+                    </div>
+                  </div>
+                )}
+
+                {/* GRUPO 2 · Oferta · qué se vende */}
+                <div>
+                  <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-3">Oferta</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    <StatTile
+                      icon={Home}
+                      label={localesCount > 0 ? "Viviendas residenciales" : "Unidades totales"}
+                      value={`${viviendas}`}
+                      sub={localesCount > 0 ? `+ ${localesCount} ${localesCount === 1 ? "local" : "locales"}` : undefined}
+                      accent="primary"
+                    />
+                    {showEstructura && pbTipo === "locales" && locales > 0 && (
+                      <StatTile icon={Store} label="Locales comerciales" value={`${locales}`} accent="primary" />
+                    )}
+                    {showEstructura && pbTipo === "viviendas" && (
+                      <StatTile icon={Home} label="Planta baja" value="Viviendas en bajo" />
+                    )}
+                  </div>
+                </div>
+
+                {/* GRUPO 3 · Legal y energía · destacados visualmente */}
+                {(wsTieneLic !== null || certEnerg) && (
+                  <div>
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-3">Legal y energía</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {wsTieneLic !== null && (
+                        <StatTile
+                          icon={Shield}
+                          label="Estado legal"
+                          value={wsTieneLic ? "Licencia concedida" : "Sin licencia"}
+                          accent={wsTieneLic ? "success" : "warning"}
+                        />
+                      )}
+                      {certEnerg && (
+                        <StatTile
+                          icon={Leaf}
+                          label="Certificado energético"
+                          value={certEnerg}
+                          accent={certColor as "success" | "warning" | "destructive" | "muted" | "primary" | undefined}
+                          large
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* GRUPO 4 · Entorno · urbanización + estilo (pluri) */}
+                {((urbanizacion && (urbanizacionNombre || urbanizacionTipo)) || (showEstructura && estiloLabel)) && (
+                  <div>
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-3">Entorno y diseño</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {urbanizacion && (urbanizacionNombre || urbanizacionTipo) && (
+                        <StatTile
+                          icon={Palmtree}
+                          label="Urbanización"
+                          value={urbanizacionNombre || (urbanizacionTipo ? URB_TIPO_LABEL[urbanizacionTipo] : "Sí")}
+                          sub={urbanizacionNombre && urbanizacionTipo ? URB_TIPO_LABEL[urbanizacionTipo] : undefined}
+                        />
+                      )}
+                      {showEstructura && estiloLabel && (
+                        <StatTile icon={Sparkles} label="Estilo arquitectónico" value={estiloLabel} />
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
+                );
+              })()}
 
               {/* Tipologías · movido aquí desde "Características y
-                amenidades" · es atributo estructural · click abre
-                modal grande de "Características y amenidades" donde
-                se editan en InfoBasicaStep. */}
+                amenidades" · es atributo estructural. Si el wizard
+                guardó cantidades por tipología (varias villas), las
+                pintamos como "3 Adosados · 2 Pareados". Si solo hay
+                propertyTypes simples, fallback a chip único. */}
               <div className="mt-5 pt-4 border-t border-border/40">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Tipologías</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {p.propertyTypes.length > 0
-                    ? p.propertyTypes.map(t => <Tag key={t} variant="default" size="sm">{getPropertyTypeLabel(t)}</Tag>)
-                    : <p className="text-xs text-muted-foreground italic">Sin tipologías marcadas</p>}
+                  {(() => {
+                    /* Prioridad 1 · `tipologiasSeleccionadas` con
+                     *  cantidades (unifamiliar varias villas). */
+                    const tipoSnap = (p as { metadata?: { wizardSnapshot?: { tipologiasSeleccionadas?: Array<{ tipo?: string; cantidad?: number }> } } })
+                      .metadata?.wizardSnapshot?.tipologiasSeleccionadas;
+                    const withQty = (tipoSnap ?? []).filter((t) => t.tipo);
+                    if (withQty.length > 0) {
+                      return withQty.map((t, i) => (
+                        <Tag key={`${t.tipo}-${i}`} variant="default" size="sm">
+                          {t.cantidad && t.cantidad > 1 ? `${t.cantidad} ${getPropertyTypeLabel(t.tipo!)}` : getPropertyTypeLabel(t.tipo!)}
+                        </Tag>
+                      ));
+                    }
+                    /* Prioridad 2 · `p.propertyTypes` plano. */
+                    if (p.propertyTypes.length > 0) {
+                      return p.propertyTypes.map(t => <Tag key={t} variant="default" size="sm">{getPropertyTypeLabel(t)}</Tag>);
+                    }
+                    /* Prioridad 3 · derivar de SUBTIPOS de las unidades
+                     *  (plurifamiliar) · agrupar y contar. Incluye
+                     *  locales y viviendas en planta baja para que el
+                     *  promotor vea TODO lo que se vende. */
+                    const snapUnits = (p as { metadata?: { wizardSnapshot?: { unidades?: Array<{ subtipo?: string | null }> } } })
+                      .metadata?.wizardSnapshot?.unidades;
+                    const subtipoCount: Record<string, number> = {};
+                    for (const u of snapUnits ?? []) {
+                      if (u.subtipo) {
+                        subtipoCount[u.subtipo] = (subtipoCount[u.subtipo] ?? 0) + 1;
+                      }
+                    }
+                    /* Orden canónico · viviendas primero, locales al
+                     *  final · más legible para el comercial. */
+                    const SUBTIPO_ORDER = ["apartamento", "atico", "duplex", "loft", "estudio", "planta_baja", "local"];
+                    const entries = Object.entries(subtipoCount).sort(
+                      ([a], [b]) => SUBTIPO_ORDER.indexOf(a) - SUBTIPO_ORDER.indexOf(b),
+                    );
+                    if (entries.length > 0) {
+                      return entries.map(([tipo, count]) => {
+                        /* Local · label custom para distinguir de
+                         *  viviendas + tono diferenciado (muted). */
+                        if (tipo === "local") {
+                          return (
+                            <Tag key={tipo} variant="default" size="sm">
+                              {count > 1 ? `${count} Locales comerciales` : "1 Local comercial"}
+                            </Tag>
+                          );
+                        }
+                        if (tipo === "planta_baja") {
+                          return (
+                            <Tag key={tipo} variant="default" size="sm">
+                              {count > 1 ? `${count} Bajos` : "1 Bajo"}
+                            </Tag>
+                          );
+                        }
+                        return (
+                          <Tag key={tipo} variant="default" size="sm">
+                            {count > 1 ? `${count} ${getPropertyTypeLabel(tipo)}` : getPropertyTypeLabel(tipo)}
+                          </Tag>
+                        );
+                      });
+                    }
+                    return <p className="text-xs text-muted-foreground italic">Sin tipologías marcadas</p>;
+                  })()}
                 </div>
               </div>
             </SectionCard>
@@ -2096,24 +2346,65 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               </SectionCard>
             </div>
 
-            {/* ── 3. DESCRIPCIÓN ── */}
+            {/* ── 3. DESCRIPCIÓN ──
+                 Prefiere el texto REAL del promotor (`p.description` o
+                 `wizardSnapshot.descripcion` o multi-idioma
+                 `descripcionIdiomas`). Solo cae al template auto-generado
+                 si NO hay descripción rellenada · evita pisar el texto
+                 que el user escribió en el step Descripción. */}
             <SectionCard title="Descripción" stepName="Description" missing={missingSet.has("Description")} softMissing={isDraft} onEdit={() => openEdit("description")} hideEdit={viewAsCollaborator}>
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <Tag variant="default" size="sm"><Globe className="h-3 w-3" /> ES</Tag>
-                  <Tag variant="default" size="sm"><Globe className="h-3 w-3" /> EN</Tag>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  {p.name} es una promoción {typeLabel?.toLowerCase() || "residencial"} situada en {p.location || "España"}.
-                  {/* El nombre del promotor se oculta en vista colaborador (la agencia no expone al promotor). */}
-                  {!viewAsCollaborator && (() => {
-                    const promoterName = getPromoterDisplayName(p);
-                    return promoterName ? ` Desarrollada por ${promoterName}.` : "";
-                  })()}
-                  {p.totalUnits > 0 && ` El proyecto consta de ${p.totalUnits} unidades con entrega estimada para ${resolveDelivery(p) || "por definir"}.`}
-                  {p.propertyTypes.length > 0 && ` Las tipologías incluyen ${p.propertyTypes.map(getPropertyTypeLabel).join(", ").toLowerCase()}.`}
-                </p>
-              </div>
+              {(() => {
+                const snap = (p as { metadata?: { wizardSnapshot?: { descripcion?: string; descripcionIdiomas?: Record<string, string> } } })
+                  .metadata?.wizardSnapshot;
+                const idiomas = snap?.descripcionIdiomas ?? {};
+                const idiomasKeys = Object.keys(idiomas).filter((k) => idiomas[k]?.trim());
+                const userText = (p.description?.trim()) || snap?.descripcion?.trim() || "";
+                const hasMulti = idiomasKeys.length > 0;
+                const hasReal = !!userText || hasMulti;
+                const [activeLang, setActiveLang] = idiomasKeys.length > 1
+                  ? [idiomasKeys[0], () => {}] as [string, (s: string) => void]
+                  : [idiomasKeys[0] || "es", () => {}] as [string, (s: string) => void];
+                /* Render del texto real (priorizado) o del template
+                 *  auto-generado (fallback). */
+                if (hasReal) {
+                  /* Si solo hay multi-idioma sin descripcion plano, usar el primero. */
+                  const textToShow = userText || idiomas[activeLang] || "";
+                  return (
+                    <div className="space-y-3">
+                      {hasMulti && (
+                        <div className="flex items-center gap-2 mb-2">
+                          {idiomasKeys.map((lang) => (
+                            <Tag key={lang} variant="default" size="sm">
+                              <Globe className="h-3 w-3" /> {lang.toUpperCase()}
+                            </Tag>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">
+                        {textToShow}
+                      </p>
+                    </div>
+                  );
+                }
+                /* Fallback · template auto-generado cuando el promotor
+                 *  aún no escribió nada. */
+                return (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground leading-relaxed italic">
+                      {p.name} es una promoción {typeLabel?.toLowerCase() || "residencial"} situada en {p.location || "España"}.
+                      {!viewAsCollaborator && (() => {
+                        const promoterName = getPromoterDisplayName(p);
+                        return promoterName ? ` Desarrollada por ${promoterName}.` : "";
+                      })()}
+                      {p.totalUnits > 0 && ` El proyecto consta de ${p.totalUnits} unidades con entrega estimada para ${resolveDelivery(p) || "por definir"}.`}
+                      {p.propertyTypes.length > 0 && ` Las tipologías incluyen ${p.propertyTypes.map(getPropertyTypeLabel).join(", ").toLowerCase()}.`}
+                    </p>
+                    <p className="text-xs text-muted-foreground/80">
+                      ⓘ Texto auto-generado · añade tu descripción en el step "Descripción"
+                    </p>
+                  </div>
+                );
+              })()}
             </SectionCard>
 
             {/* ── 4. DOCUMENTACIÓN: Memoria + Planos + Brochure ──
@@ -2280,11 +2571,14 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 const sec = snap?.promotionDefaults?.security;
                 const views = (snap?.promotionDefaults?.views ?? {}) as Record<string, boolean>;
                 const terr = snap?.promotionDefaults?.terraces;
-                const featureIds: string[] = [];
-                /* Equipment · todas las flags ampliadas. Si la flag
-                 *  es true, push el id (mismo nombre que la key del
-                 *  schema) · `feature(id)` resuelve icono + label
-                 *  desde el catálogo canónico. */
+                const orientation = (snap?.promotionDefaults as { orientation?: string | null } | undefined)?.orientation;
+                /* Sub-grupos · cada categoría del wizard step "equipamiento"
+                 *  se renderiza como su propia fila de chips · sin esto
+                 *  todo iba mezclado en un único "Características del
+                 *  hogar" y el user creía que solo se veía equipamiento
+                 *  cuando en realidad seguridad/vistas/orientación SÍ
+                 *  estaban renderizados (pero indistinguibles). */
+                const equipmentIds: string[] = [];
                 const EQUIPMENT_KEYS = [
                   "airConditioning", "heating", "equippedKitchen",
                   "domotics", "solarPanels", "chargingPoint", "electricBlinds", "doubleGlazing",
@@ -2296,17 +2590,49 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                    *  catálogo legacy para chips de promos viejas. */
                   "bbq", "ascensor",
                 ];
-                for (const k of EQUIPMENT_KEYS) if (eq[k]) featureIds.push(k);
-                if (terr?.covered || terr?.uncovered) featureIds.push("terraza");
-                if (sec?.alarm) featureIds.push("alarm");
-                if (sec?.reinforcedDoor) featureIds.push("reinforcedDoor");
-                if (sec?.videoSurveillance) featureIds.push("videoSurveillance");
-                /* Views · todos los nuevos puntos. */
+                for (const k of EQUIPMENT_KEYS) if (eq[k]) equipmentIds.push(k);
+                if (terr?.covered || terr?.uncovered) equipmentIds.push("terraza");
+
+                const securityIds: string[] = [];
+                if (sec?.alarm) securityIds.push("alarm");
+                if (sec?.reinforcedDoor) securityIds.push("reinforcedDoor");
+                if (sec?.videoSurveillance) securityIds.push("videoSurveillance");
+
+                const viewsIds: string[] = [];
                 const VIEWS_KEYS = [
                   "sea", "oceano", "rio", "mountain", "ciudad", "golf",
                   "panoramic", "amanecer", "atardecer", "abiertas",
                 ];
-                for (const k of VIEWS_KEYS) if (views[k]) featureIds.push(k);
+                for (const k of VIEWS_KEYS) if (views[k]) viewsIds.push(k);
+
+                const orientationId: string | null = orientation ?? null;
+
+                const hasAnyFeature =
+                  equipmentIds.length > 0 ||
+                  securityIds.length > 0 ||
+                  viewsIds.length > 0 ||
+                  !!orientationId;
+
+                /* Helper · pinta una fila de chips bajo un sub-label.
+                 *  Mantiene el estilo de chip único (border + icon
+                 *  primary) en todos los sub-grupos para coherencia
+                 *  visual. */
+                const renderChipRow = (label: string, ids: string[]) => (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-semibold text-muted-foreground/80 uppercase tracking-wide">{label}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ids.map((id) => {
+                        const f = feature(id);
+                        return (
+                          <span key={id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-foreground">
+                            <f.icon className="h-3 w-3 text-primary" strokeWidth={1.75} />
+                            {f.label}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
 
                 /* Cada sub-sección es un BUTTON · click abre mini-modal
                  *  específico de esa sección · más rápido que el modal
@@ -2340,22 +2666,19 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                         </button>
                       </>
                     )}
-                    {/* Características del hogar · click → mini-modal de
-                       características solo. */}
+                    {/* Características del hogar · agrupadas por sub-categoría
+                       (Equipamiento · Seguridad · Vistas · Orientación) ·
+                       click en cualquier punto del bloque abre el mini-modal
+                       de características. */}
                     <div className="h-px bg-border/40" />
                     <button type="button" onClick={() => openInfoSection("caracteristicas")} className={sectionBtnCls}>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Características del hogar</p>
-                      {featureIds.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {[...new Set(featureIds)].map((id) => {
-                            const f = feature(id);
-                            return (
-                              <span key={id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-foreground">
-                                <f.icon className="h-3 w-3 text-primary" strokeWidth={1.75} />
-                                {f.label}
-                              </span>
-                            );
-                          })}
+                      {hasAnyFeature ? (
+                        <div className="space-y-3">
+                          {equipmentIds.length > 0 && renderChipRow("Equipamiento", equipmentIds)}
+                          {securityIds.length > 0 && renderChipRow("Seguridad", securityIds)}
+                          {viewsIds.length > 0 && renderChipRow("Vistas", viewsIds)}
+                          {orientationId && renderChipRow("Orientación", [orientationId])}
                         </div>
                       ) : (
                         <p className="text-xs text-muted-foreground italic">
@@ -2464,6 +2787,8 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
             <ContactFooter
               contacts={contacts}
               website={website}
+              phone={contactPhone}
+              email={contactEmail}
               puntosDeVenta={salesOffices}
               comerciales={viewAsCollaborator ? [] : comercialesList}
               onAddMember={viewAsCollaborator ? undefined : () => setAddComercialOpen(true)}
@@ -2502,6 +2827,11 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
               <PromotionAvailabilityFull
                 promotionId={p.id}
                 isCollaboratorView={viewAsCollaborator}
+                /* Hidratar plantas + nombres custom desde wizardSnapshot
+                 *  · sin esto el dropdown era 0..14 y los bloques siempre
+                 *  decían "Bloque 1/2", aunque el promotor los renombrase. */
+                maxFloor={(p as { metadata?: { wizardSnapshot?: { plantas?: number } } }).metadata?.wizardSnapshot?.plantas ?? 14}
+                initialBlockNames={(p as { metadata?: { wizardSnapshot?: { blockNames?: Record<string, string> } } }).metadata?.wizardSnapshot?.blockNames ?? {}}
                 /* Resolver per-unit · usa primero las fotos propias
                  *  de la unidad (subidas en el wizard) · si vacío,
                  *  cae al thumbnail (la primera foto de la promo).
@@ -4394,6 +4724,47 @@ function InfoItem({ icon: Icon, label, value, sub }: { icon: typeof Home; label:
   );
 }
 
+/** StatTile · MINIMALISTA · sin bordes/cards · solo texto bien
+ *  jerarquizado (label discreto + valor en bold). El icono va
+ *  pequeño junto al label · sin caja de fondo. Acento de color
+ *  reservado para datos críticos (cert energético, estado legal). */
+function StatTile({
+  icon: Icon, label, value, sub, accent = "muted", large = false,
+}: {
+  icon: typeof Home;
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: "primary" | "success" | "warning" | "destructive" | "muted";
+  /** `large` · valor en font 22px (default 15px) · usado para cert
+   *  energético donde la letra A/B/C es la info crítica. */
+  large?: boolean;
+}) {
+  const VALUE_COLOR = {
+    primary: "text-foreground",
+    success: "text-success",
+    warning: "text-warning",
+    destructive: "text-destructive",
+    muted: "text-foreground",
+  };
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-1.5 mb-1">
+        <Icon className="h-3 w-3 text-muted-foreground/60" strokeWidth={1.6} />
+        <p className="text-[10px] text-muted-foreground uppercase tracking-wide leading-tight">{label}</p>
+      </div>
+      <p className={cn(
+        "font-semibold truncate leading-tight",
+        large ? "text-[22px] tnum" : "text-[15px]",
+        VALUE_COLOR[accent],
+      )}>
+        {value}
+      </p>
+      {sub && <p className="text-[10.5px] text-muted-foreground mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
 /* `DocCard` · card para Memoria · Planos · Brochure. Lee el array
  *  de URLs del wizardSnapshot · si vacío muestra empty state con
  *  CTA "Subir" · si tiene archivos muestra count + lista compacta.
@@ -4524,8 +4895,8 @@ function EmptyState({ icon: Icon, message, sub }: { icon: typeof Home; message: 
 type ContactPerson = { name: string; role: string; avatar: string; phone: string; email: string; languages: string[] };
 type PuntoDeVentaType = { id: string; nombre: string; direccion: string; telefono: string; email: string; whatsapp?: string; coverUrl?: string };
 
-function ContactFooter({ contacts, website, puntosDeVenta, comerciales, onAddMember, onAddOffice, onEditOffices, hideManagement }: {
-  contacts: ContactPerson[]; website: string; puntosDeVenta?: PuntoDeVentaType[];
+function ContactFooter({ contacts, website, phone, email, puntosDeVenta, comerciales, onAddMember, onAddOffice, onEditOffices, hideManagement }: {
+  contacts: ContactPerson[]; website: string; phone?: string; email?: string; puntosDeVenta?: PuntoDeVentaType[];
   comerciales?: Comercial[]; onAddMember?: () => void; onAddOffice?: () => void; onEditOffices?: () => void; hideManagement?: boolean;
 }) {
   const [page, setPage] = useState(0);
@@ -4623,15 +4994,29 @@ function ContactFooter({ contacts, website, puntosDeVenta, comerciales, onAddMem
         </>
       )}
 
-      {/* Footer: website + offices grid */}
+      {/* Footer: website + phone + email + offices grid */}
       <div className="h-px bg-border/40 mx-5" />
       <div className="px-5 py-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <a href="#" className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium transition-colors">
-            <Globe className="h-3 w-3" strokeWidth={1.5} />
-            {website}
-            <ExternalLink className="h-2.5 w-2.5 opacity-50" strokeWidth={1.5} />
-          </a>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <a href="#" className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium transition-colors">
+              <Globe className="h-3 w-3" strokeWidth={1.5} />
+              {website}
+              <ExternalLink className="h-2.5 w-2.5 opacity-50" strokeWidth={1.5} />
+            </a>
+            {phone && (
+              <a href={`tel:${phone}`} className="inline-flex items-center gap-1.5 text-xs text-foreground hover:text-primary transition-colors">
+                <Phone className="h-3 w-3" strokeWidth={1.5} />
+                {phone}
+              </a>
+            )}
+            {email && (
+              <a href={`mailto:${email}`} className="inline-flex items-center gap-1.5 text-xs text-foreground hover:text-primary transition-colors">
+                <Mail className="h-3 w-3" strokeWidth={1.5} />
+                {email}
+              </a>
+            )}
+          </div>
           {!isSingle && offices.length > 0 && (
             <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Oficinas de venta · {offices.length}</p>
           )}

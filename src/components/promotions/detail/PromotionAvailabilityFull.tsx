@@ -207,9 +207,18 @@ interface Props {
    *  puntitos) en la primera columna en lugar del checkbox. El
    *  caller recibe los ids en el nuevo orden y persiste. */
   onReorderUnits?: (orderedIds: string[]) => void;
+  /** Número máximo de plantas del edificio · usado para limitar las
+   *  opciones del dropdown "Planta" a P0..PmaxFloor. Si no se pasa,
+   *  fallback 14 (legacy). El wizard pasa `state.plantas` para que
+   *  el dropdown coincida con la configuración del edificio. */
+  maxFloor?: number;
+  /** Nombres custom de bloques · ej. `{ "1": "Torre Norte", "2": "Torre Sur" }`.
+   *  Se usa como default del state local · si no se pasa, los bloques
+   *  se muestran como "Bloque 1", "Bloque 2", etc. (default legacy). */
+  initialBlockNames?: Record<string, string>;
 }
 
-export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = false, units, onUnitsChange, onEditUnit, hideExternalActions = false, promotionCtx, getUnitPhoto, defaultBulkEditAll = false, onUploadFile, onEditUnitPhotos, onReorderUnits }: Props) {
+export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = false, units, onUnitsChange, onEditUnit, hideExternalActions = false, promotionCtx, getUnitPhoto, defaultBulkEditAll = false, onUploadFile, onEditUnitPhotos, onReorderUnits, maxFloor = 14, initialBlockNames }: Props) {
   const { toast } = useToast();
   const controlled = units !== undefined;
   const [innerUnits, setInnerUnits] = useState<Unit[]>(() => units ?? unitsByPromotion[promotionId] ?? []);
@@ -339,7 +348,7 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
   const [detailUnitId, setDetailUnitId] = useState<string | null>(null);
   const [editUnitId, setEditUnitId] = useState<string | null>(null);
   const [emailUnitId, setEmailUnitId] = useState<string | null>(null);
-  const [blockNames, setBlockNames] = useState<Record<string, string>>({});
+  const [blockNames, setBlockNames] = useState<Record<string, string>>(initialBlockNames ?? {});
   const [editingBlock, setEditingBlock] = useState<string | null>(null);
   const [editingBlockValue, setEditingBlockValue] = useState("");
 
@@ -1240,6 +1249,14 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                       <th className="px-2 py-2.5 text-left font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("block")}>
                         ID {renderSortIcon("block")}
                       </th>
+                      {/* Planta · MOVIDO aquí (antes estaba después de m²
+                       *  útiles) · el usuario lo pidió justo después de
+                       *  ID para identificar rápido en qué nivel está
+                       *  cada unidad. En unifamiliar el label cambia
+                       *  a "Parcela". */}
+                      <th className="px-2 py-2.5 text-right font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("floor")}>
+                        {hasUnifamiliar ? "Parcela" : "Planta"} {renderSortIcon("floor")}
+                      </th>
                       <th className="px-2 py-2.5 text-left font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("type")}>
                         Tipo {renderSortIcon("type")}
                       </th>
@@ -1251,9 +1268,6 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                         m² const. {renderSortIcon("builtArea")}
                       </th>
                       <th className="hidden lg:table-cell px-2 py-2.5 text-right font-medium whitespace-nowrap">m² útiles</th>
-                      <th className="hidden md:table-cell px-2 py-2.5 text-right font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("floor")}>
-                        {hasUnifamiliar ? "Parcela" : "Planta"} {renderSortIcon("floor")}
-                      </th>
                       <th className="hidden lg:table-cell px-2 py-2.5 text-right font-medium whitespace-nowrap">Terraza</th>
                       <th className="hidden lg:table-cell px-2 py-2.5 text-center font-medium whitespace-nowrap">Piscina</th>
                       <th className="hidden md:table-cell px-2 py-2.5 text-center font-medium whitespace-nowrap">Archivos</th>
@@ -1412,6 +1426,27 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                               )}
                             </td>
 
+                            {/* Planta · MOVIDA aquí (justo después de ID).
+                             *  En unifamiliar muestra Parcela en lugar de
+                             *  Planta · coherente con el header dinámico. */}
+                            <td className="px-2 py-2 text-right" onClick={e => editing && (isFieldEditable("floor") || isFieldEditable("parcel")) && e.stopPropagation()}>
+                              {(() => {
+                                const isUni = ["Villa", "Chalet", "Unifamiliar", "Pareado", "Adosado", "Independiente", "Pareada", "Adosada"].includes(u.type);
+                                if (isUni) {
+                                  return renderEditableCell(u, "parcel",
+                                    <span className="text-xs text-muted-foreground">{u.parcel > 0 ? `${u.parcel} m²` : "—"}</span>,
+                                    <input type="number" value={(getVal(u, "parcel") as number) || ""} placeholder="0" onChange={e => updateField(u.id, "parcel", e.target.value === "" ? 0 : Number(e.target.value))} className={cn("w-16 lg:w-20 h-7 px-2 text-xs text-right", editableCellClass)} />
+                                  );
+                                }
+                                return renderEditableCell(u, "floor",
+                                  <span className="text-xs text-muted-foreground">{u.floor === 0 ? "PB" : `P${u.floor}`}</span>,
+                                  <select value={getVal(u, "floor")} onChange={e => updateField(u.id, "floor", Number(e.target.value))} className={cn("w-16 lg:w-20 h-7 px-1.5 text-xs", editableCellClass)}>
+                                    {Array.from({ length: maxFloor + 1 }, (_, i) => <option key={i} value={i}>{i === 0 ? "PB" : `P${i}`}</option>)}
+                                  </select>
+                                );
+                              })()}
+                            </td>
+
                             {/* Tipo */}
                             <td className="px-2 py-2" onClick={e => editing && isFieldEditable("type") && e.stopPropagation()}>
                               {renderEditableCell(u, "type",
@@ -1484,25 +1519,6 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                                   className={cn("w-16 lg:w-20 h-7 px-2 text-xs text-right", editableCellClass)}
                                 />
                               )}
-                            </td>
-
-                            {/* Parcela / Planta */}
-                            <td className="hidden md:table-cell px-2 py-2 text-right" onClick={e => editing && (isFieldEditable("floor") || isFieldEditable("parcel")) && e.stopPropagation()}>
-                              {(() => {
-                                const isUni = ["Villa", "Chalet", "Unifamiliar", "Pareado", "Adosado", "Independiente", "Pareada", "Adosada"].includes(u.type);
-                                if (isUni) {
-                                  return renderEditableCell(u, "parcel",
-                                    <span className="text-xs text-muted-foreground">{u.parcel > 0 ? `${u.parcel} m²` : "—"}</span>,
-                                    <input type="number" value={(getVal(u, "parcel") as number) || ""} placeholder="0" onChange={e => updateField(u.id, "parcel", e.target.value === "" ? 0 : Number(e.target.value))} className={cn("w-16 lg:w-20 h-7 px-2 text-xs text-right", editableCellClass)} />
-                                  );
-                                }
-                                return renderEditableCell(u, "floor",
-                                  <span className="text-xs text-muted-foreground">{u.floor === 0 ? "PB" : `P${u.floor}`}</span>,
-                                  <select value={getVal(u, "floor")} onChange={e => updateField(u.id, "floor", Number(e.target.value))} className={cn("w-16 lg:w-20 h-7 px-1.5 text-xs", editableCellClass)}>
-                                    {Array.from({ length: 15 }, (_, i) => <option key={i} value={i}>{i === 0 ? "PB" : `P${i}`}</option>)}
-                                  </select>
-                                );
-                              })()}
                             </td>
 
                             {/* Terraza */}

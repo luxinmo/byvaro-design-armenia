@@ -138,20 +138,27 @@ export function RevisionStep({ state, onEditStep, onDeletePromotion }: Props) {
   const totalIdiomas = 1 + Object.values(state.descripcionIdiomas).filter(Boolean).length;
   const marketingComplete = !!state.nombrePromocion && !!direccionCompleta;
 
-  /* ──── Características por defecto (V5 extras) ──── */
+  /* ──── Características por defecto (V5 extras) ────
+   *  Lista PLANA de labels activos · agrupa esenciales (anejos) +
+   *  adicionales (equipamiento/seguridad/vistas/orientación).
+   *  Bug histórico · faltaba `basement` (sótano) y la lista de
+   *  vistas estaba truncada (solo 4 de 10 tipos). Ahora se valida
+   *  con `Object.values(d.views).some(...)` para cubrir todas las
+   *  variantes futuras sin tener que mantener una lista en sync. */
   const d = state.promotionDefaults;
   const extrasActiveLabels: string[] = [];
   if (d) {
     if (d.privatePool.enabled) extrasActiveLabels.push("Piscina privada");
     if (d.parking.enabled) extrasActiveLabels.push("Parking");
     if (d.storageRoom.enabled) extrasActiveLabels.push("Trastero");
+    if (d.basement?.enabled) extrasActiveLabels.push("Sótano");
     if (d.plot.enabled) extrasActiveLabels.push("Parcela");
     if (d.solarium.enabled) extrasActiveLabels.push("Solárium");
     if (d.terraces.covered || d.terraces.uncovered) extrasActiveLabels.push("Terrazas");
-    /* "Más opciones" */
-    if (Object.values(d.equipment).some((v) => v && v !== null)) extrasActiveLabels.push("Equipamiento");
-    if (d.security.alarm || d.security.reinforcedDoor || d.security.videoSurveillance) extrasActiveLabels.push("Seguridad");
-    if (d.views.sea || d.views.mountain || d.views.golf || d.views.panoramic) extrasActiveLabels.push("Vistas");
+    /* "Más opciones" · cualquier flag true en cada sub-objeto. */
+    if (Object.values(d.equipment).some((v) => v === true)) extrasActiveLabels.push("Equipamiento");
+    if (Object.values(d.security).some((v) => v === true)) extrasActiveLabels.push("Seguridad");
+    if (Object.values(d.views).some((v) => v === true)) extrasActiveLabels.push("Vistas");
     if (d.orientation) extrasActiveLabels.push("Orientación");
   }
   /* No es obligatorio · siempre "completo" para no bloquear publicación. */

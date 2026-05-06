@@ -81,18 +81,34 @@ export function getPropertyTypeLabel(v: string): string {
  *  WizardState · ÚNICA función que producen TODOS los paths de
  *  guardado (createPromotionFromWizard, wizardStateToPromotion,
  *  promotionDrafts). Garantiza que listado, ficha, filtros, chips
- *  y emails leen el mismo conjunto de ids estables. */
+ *  y emails leen el mismo conjunto de ids estables.
+ *
+ *  Para PLURIFAMILIAR · `tipologiasSeleccionadas` y `subVarias` están
+ *  vacíos (son campos del flow unifamiliar). En su lugar derivamos
+ *  los subtipos únicos de las unidades creadas (apartamento, ático,
+ *  duplex, etc.). Sin esto, el validador de publicación pedía
+ *  "Sin tipologías" aunque el user ya tuviera unidades configuradas. */
 export function resolvePropertyTypes(
   state: {
     tipologiasSeleccionadas?: Array<{ tipo?: string | null }> | null;
     subVarias?: string | null;
+    unidades?: Array<{ subtipo?: string | null }> | null;
+    tipo?: string | null;
   },
 ): string[] {
   const ids = (state.tipologiasSeleccionadas ?? [])
     .map((t) => t?.tipo)
     .filter((t): t is string => !!t);
-  if (ids.length === 0 && state.subVarias) {
-    ids.push(state.subVarias);
+  if (ids.length > 0) return ids;
+  if (state.subVarias) return [state.subVarias];
+  /* Plurifamiliar/mixto · derivar de subtipos únicos de unidades.
+   *  Excluye `local` (no es vivienda) y `planta_baja` (es localización,
+   *  no tipología). */
+  const subtipos = new Set<string>();
+  for (const u of state.unidades ?? []) {
+    if (u.subtipo && u.subtipo !== "local" && u.subtipo !== "planta_baja") {
+      subtipos.add(u.subtipo);
+    }
   }
-  return ids;
+  return Array.from(subtipos);
 }
