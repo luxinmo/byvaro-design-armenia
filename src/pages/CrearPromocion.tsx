@@ -454,8 +454,16 @@ export default function CrearPromocion() {
     if (isVariasUni) {
       return state.tipologiasSeleccionadas.reduce((s, t) => s + t.cantidad, 0) || 1;
     }
-    return state.plantas * state.aptosPorPlanta * multiplier;
-  }, [isSingleHome, isVariasUni, state.tipologiasSeleccionadas, state.plantas, state.aptosPorPlanta, multiplier]);
+    /* Plurifamiliar · plantas-sobre-rasante × viv/planta × escaleras
+     *  + bajos residenciales (planta 0) si `plantaBajaTipo === "viviendas"`.
+     *  Sin sumar los bajos, el banner mostraba "4 viviendas" cuando
+     *  el preview decía "5 viviendas" · inconsistencia visible. */
+    const upperUnits = state.plantas * state.aptosPorPlanta * multiplier;
+    const groundUnits = state.plantaBajaTipo === "viviendas"
+      ? state.aptosPorPlanta * multiplier
+      : 0;
+    return upperUnits + groundUnits;
+  }, [isSingleHome, isVariasUni, state.tipologiasSeleccionadas, state.plantas, state.aptosPorPlanta, state.plantaBajaTipo, multiplier]);
   const totalLocales = state.tipo === "unifamiliar" ? 0 : state.locales * multiplier;
   const summaryItems = [
     { label: "viviendas", count: totalViviendas },
