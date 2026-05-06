@@ -946,6 +946,28 @@ export function CrearUnidadesStep({
   const setSolariumAsignacion = makeSetAsignacion("solariumAsignaciones");
   const setSotanoAsignacion = makeSetAsignacion("sotanoAsignaciones");
 
+  /* Setters genéricos para arrays string · publicIds y registros
+   *  per-anejo · mismo patrón que asignaciones. */
+  const makeSetStringArr = (
+    key: "trasteroPublicIds" | "parkingPublicIds" | "solariumPublicIds" | "sotanoPublicIds"
+       | "trasteroRegistros" | "parkingRegistros" | "solariumRegistros" | "sotanoRegistros",
+  ) =>
+    (idx: number, v: string) => {
+      const cur = (state[key] ?? []) as string[];
+      const next = [...cur];
+      while (next.length <= idx) next.push("");
+      next[idx] = v;
+      update(key, next);
+    };
+  const setTrasteroPublicId = makeSetStringArr("trasteroPublicIds");
+  const setParkingPublicId  = makeSetStringArr("parkingPublicIds");
+  const setSolariumPublicId = makeSetStringArr("solariumPublicIds");
+  const setSotanoPublicId   = makeSetStringArr("sotanoPublicIds");
+  const setTrasteroRegistro = makeSetStringArr("trasteroRegistros");
+  const setParkingRegistro  = makeSetStringArr("parkingRegistros");
+  const setSolariumRegistro = makeSetStringArr("solariumRegistros");
+  const setSotanoRegistro   = makeSetStringArr("sotanoRegistros");
+
   /* Lista de unidades disponibles para asignar (id + label). */
   const unitsForSelect = useMemo(
     () => state.unidades.map((u) => ({ id: u.id, label: u.nombre || u.ref || u.id })),
@@ -1185,10 +1207,14 @@ export function CrearUnidadesStep({
                 prices={state.parkingPrecios}
                 defaultPrice={state.parkingPrecio}
                 assignments={state.parkingAsignaciones ?? []}
+                publicIds={state.parkingPublicIds ?? []}
+                registros={state.parkingRegistros ?? []}
                 units={unitsForSelect}
                 priceMode={state.promotionDefaults?.parking?.priceMode}
                 onChangePrice={setParkingPrecio}
                 onChangeAssignment={setParkingAsignacion}
+                onChangePublicId={setParkingPublicId}
+                onChangeRegistro={setParkingRegistro}
                 onRemove={removeParking}
               />
             )}
@@ -1204,10 +1230,14 @@ export function CrearUnidadesStep({
                 prices={state.trasteroPrecios}
                 defaultPrice={state.trasteroPrecio}
                 assignments={state.trasteroAsignaciones ?? []}
+                publicIds={state.trasteroPublicIds ?? []}
+                registros={state.trasteroRegistros ?? []}
                 units={unitsForSelect}
                 priceMode={state.promotionDefaults?.storageRoom?.priceMode}
                 onChangePrice={setTrasteroPrecio}
                 onChangeAssignment={setTrasteroAsignacion}
+                onChangePublicId={setTrasteroPublicId}
+                onChangeRegistro={setTrasteroRegistro}
                 onRemove={removeTrastero}
               />
             )}
@@ -1223,10 +1253,14 @@ export function CrearUnidadesStep({
                 prices={state.solariumPrecios ?? []}
                 defaultPrice={state.solariumPrecio ?? 0}
                 assignments={state.solariumAsignaciones ?? []}
+                publicIds={state.solariumPublicIds ?? []}
+                registros={state.solariumRegistros ?? []}
                 units={unitsForSelect}
                 priceMode={state.promotionDefaults?.solarium?.priceMode}
                 onChangePrice={setSolariumPrecio}
                 onChangeAssignment={setSolariumAsignacion}
+                onChangePublicId={setSolariumPublicId}
+                onChangeRegistro={setSolariumRegistro}
                 onRemove={removeSolarium}
               />
             )}
@@ -1240,9 +1274,13 @@ export function CrearUnidadesStep({
                 prices={state.sotanoPrecios ?? []}
                 defaultPrice={state.sotanoPrecio ?? 0}
                 assignments={state.sotanoAsignaciones ?? []}
+                publicIds={state.sotanoPublicIds ?? []}
+                registros={state.sotanoRegistros ?? []}
                 units={unitsForSelect}
                 onChangePrice={setSotanoPrecio}
                 onChangeAssignment={setSotanoAsignacion}
+                onChangePublicId={setSotanoPublicId}
+                onChangeRegistro={setSotanoRegistro}
                 onRemove={removeSotano}
               />
             )}
@@ -1317,7 +1355,7 @@ export function CrearUnidadesStep({
 
 /* ═══════════ Anejos sueltos: lista vertical con precio individual ═══════════ */
 function AnejoList({
-  icon: Icon, title, subtitle, idPrefix, count, prices, defaultPrice, assignments, units, priceMode, onChangePrice, onChangeAssignment, onRemove,
+  icon: Icon, title, subtitle, idPrefix, count, prices, defaultPrice, assignments, publicIds, registros, units, priceMode, onChangePrice, onChangeAssignment, onChangePublicId, onChangeRegistro, onRemove,
 }: {
   icon: typeof Archive;
   title: string;
@@ -1329,6 +1367,13 @@ function AnejoList({
   /** ID de la unidad asignada · "" / undefined = sin asignar. Mismo
    *  índice que `prices`. */
   assignments: string[];
+  /** ID público editable del anejo · default `idPrefix + index padded`
+   *  · misma celda con estilo "warning" amarillo que la columna ID
+   *  de la tabla de unidades · coherencia visual. */
+  publicIds: string[];
+  /** Número de registro / referencia catastral por anejo · empty
+   *  hasta que el user lo añada via "+" del row. */
+  registros: string[];
   /** Lista de unidades disponibles para asignar (id + nombre/publicId). */
   units: { id: string; label: string }[];
   /** Modo de precio del V5 · si "included", el input de precio se
@@ -1337,9 +1382,17 @@ function AnejoList({
   priceMode?: "included" | "optional" | "not_included" | null;
   onChangePrice: (idx: number, v: number) => void;
   onChangeAssignment: (idx: number, unitId: string) => void;
+  onChangePublicId: (idx: number, v: string) => void;
+  onChangeRegistro: (idx: number, v: string) => void;
   onRemove: (idx: number) => void;
 }) {
   const isIncluded = priceMode === "included";
+  /* Mismo estilo "warning amarillo" que los inputs editables de la
+   *  tabla de unidades · coherencia visual. */
+  const editableInputCls = "border-2 border-warning/40 bg-warning/10 rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all";
+  /* Por row · si el registro tiene contenido, mostrar el input;
+   *  si está vacío, mostrar botón "+ Añadir nº registro" que al
+   *  click revela el input. State local lleva el toggle. */
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
@@ -1352,72 +1405,147 @@ function AnejoList({
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="flex flex-col divide-y divide-border">
           {Array.from({ length: count }, (_, i) => {
-            const id = `${idPrefix}${i + 1}`;
+            const defaultId = `${idPrefix}${String(i + 1).padStart(2, "0")}`;
+            const publicId = publicIds[i] ?? "";
+            const registro = registros[i] ?? "";
             const value = prices[i] ?? defaultPrice;
             const assignedTo = assignments[i] ?? "";
             return (
-              <div key={id} className="group flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors flex-wrap sm:flex-nowrap">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground shrink-0">
-                    <Icon className="h-4 w-4" strokeWidth={1.5} />
-                  </div>
-                  <span className="text-sm font-semibold text-foreground tnum">{id}</span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-                  {/* Selector de unidad asignada */}
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">Vivienda</span>
-                    <select
-                      value={assignedTo}
-                      onChange={(e) => onChangeAssignment(i, e.target.value)}
-                      className="h-8 rounded-lg border border-border bg-card text-xs px-2 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 min-w-[120px]"
-                    >
-                      <option value="">Sin asignar</option>
-                      {units.map((u) => (
-                        <option key={u.id} value={u.id}>{u.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">Precio</span>
-                    {isIncluded ? (
-                      <span className="inline-flex items-center h-8 px-3 rounded-lg bg-success/10 text-success text-[12px] font-medium tnum">
-                        Incluido en el precio
-                      </span>
-                    ) : (
-                      <>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          /* Formato es-ES con miles · "100.000" en vez de
-                           * "100000". Empty string cuando 0 · evita el bug
-                           * de "20" al teclear "2" sobre "0". */
-                          value={value > 0 ? value.toLocaleString("es-ES") : ""}
-                          placeholder="0"
-                          onChange={(e) => {
-                            const digits = e.target.value.replace(/[^0-9]/g, "");
-                            onChangePrice(i, digits === "" ? 0 : Number(digits));
-                          }}
-                          className="h-8 w-28 rounded-lg border border-border bg-card text-sm tnum px-2 text-right outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
-                        />
-                        <span className="text-xs text-muted-foreground ml-0.5">€</span>
-                      </>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onRemove(i)}
-                    aria-label={`Eliminar ${id}`}
-                    className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                    title="Eliminar"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-                  </button>
-                </div>
-              </div>
+              <AnejoRow
+                key={i}
+                Icon={Icon}
+                defaultId={defaultId}
+                publicId={publicId}
+                registro={registro}
+                value={value}
+                assignedTo={assignedTo}
+                units={units}
+                isIncluded={isIncluded}
+                editableInputCls={editableInputCls}
+                onChangePublicId={(v) => onChangePublicId(i, v)}
+                onChangeRegistro={(v) => onChangeRegistro(i, v)}
+                onChangePrice={(v) => onChangePrice(i, v)}
+                onChangeAssignment={(v) => onChangeAssignment(i, v)}
+                onRemove={() => onRemove(i)}
+              />
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* Row individual de un anejo suelto · ID editable + nº registro
+ *  togglable + selector de vivienda + precio (o "Incluido"). El
+ *  diseño de los inputs reutiliza el estilo "warning amarillo" de
+ *  la tabla de unidades · coherencia visual entre ambos sitios. */
+function AnejoRow({
+  Icon, defaultId, publicId, registro, value, assignedTo, units, isIncluded, editableInputCls,
+  onChangePublicId, onChangeRegistro, onChangePrice, onChangeAssignment, onRemove,
+}: {
+  Icon: typeof Archive;
+  defaultId: string;
+  publicId: string;
+  registro: string;
+  value: number;
+  assignedTo: string;
+  units: { id: string; label: string }[];
+  isIncluded: boolean;
+  editableInputCls: string;
+  onChangePublicId: (v: string) => void;
+  onChangeRegistro: (v: string) => void;
+  onChangePrice: (v: number) => void;
+  onChangeAssignment: (v: string) => void;
+  onRemove: () => void;
+}) {
+  /* Toggle local · si el registro ya tiene contenido, se muestra el
+   *  input directamente · si está vacío, se muestra "+ Añadir nº
+   *  registro" hasta que el user clique. */
+  const [showRegistro, setShowRegistro] = useState(!!registro);
+  return (
+    <div className="group flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors flex-wrap sm:flex-nowrap">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground shrink-0">
+          <Icon className="h-4 w-4" strokeWidth={1.5} />
+        </div>
+        {/* ID público editable · mismo estilo que columna ID de la
+            tabla de unidades (warning amarillo). */}
+        <input
+          type="text"
+          value={publicId}
+          placeholder={defaultId}
+          onChange={(e) => onChangePublicId(e.target.value)}
+          className={cn("w-20 sm:w-24 h-7 px-2 text-xs font-bold", editableInputCls)}
+        />
+        {/* Registro / catastro · "+" si vacío, input si lleno o si
+            el user lo abrió. */}
+        {showRegistro ? (
+          <input
+            type="text"
+            value={registro}
+            placeholder="Nº registro"
+            onChange={(e) => onChangeRegistro(e.target.value)}
+            className={cn("w-32 sm:w-40 h-7 px-2 text-xs", editableInputCls)}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowRegistro(true)}
+            className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-dashed border-border bg-card/50 text-[11px] text-muted-foreground hover:text-foreground hover:border-foreground/40 hover:bg-muted/40 transition-colors"
+            title="Añadir número de registro / referencia catastral"
+          >
+            <Plus className="h-3 w-3" strokeWidth={2} />
+            Nº registro
+          </button>
+        )}
+      </div>
+      <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">Vivienda</span>
+          <select
+            value={assignedTo}
+            onChange={(e) => onChangeAssignment(e.target.value)}
+            className={cn("h-7 text-xs px-2 min-w-[120px]", editableInputCls)}
+          >
+            <option value="">Sin asignar</option>
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>{u.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">Precio</span>
+          {isIncluded ? (
+            <span className="inline-flex items-center h-7 px-3 rounded-lg bg-success/10 text-success text-[12px] font-medium tnum">
+              Incluido en el precio
+            </span>
+          ) : (
+            <>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={value > 0 ? value.toLocaleString("es-ES") : ""}
+                placeholder="0"
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/[^0-9]/g, "");
+                  onChangePrice(digits === "" ? 0 : Number(digits));
+                }}
+                className={cn("h-7 w-28 text-xs tnum px-2 text-right", editableInputCls)}
+              />
+              <span className="text-xs text-muted-foreground ml-0.5">€</span>
+            </>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Eliminar"
+          className="h-7 w-7 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+          title="Eliminar"
+        >
+          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+        </button>
       </div>
     </div>
   );
