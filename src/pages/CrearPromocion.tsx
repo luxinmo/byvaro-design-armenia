@@ -761,8 +761,20 @@ export default function CrearPromocion() {
       const d = state.promotionDefaults;
       if (d) {
         if (d.privatePool.enabled && (!d.privatePool.appliesTo || !d.privatePool.priceMode)) return false;
-        if (d.parking.enabled && (!d.parking.appliesTo || !d.parking.priceMode)) return false;
-        if (d.storageRoom.enabled && (!d.storageRoom.appliesTo || !d.storageRoom.priceMode)) return false;
+        /* Parking / trastero · `appliesTo` SOLO se valida cuando
+         *  registralKind === "inseparable" · si es "separate" el
+         *  control "Aplicar a" se oculta del card (no aplica a viv ·
+         *  es anejo suelto) · sin esto Siguiente quedaba bloqueado
+         *  esperando un valor que el UI ya no pide. `registralKind`
+         *  obligatorio se valida en `isStepComplete`. */
+        if (d.parking.enabled) {
+          if (d.parking.registralKind === "inseparable" && !d.parking.appliesTo) return false;
+          if (!d.parking.priceMode) return false;
+        }
+        if (d.storageRoom.enabled) {
+          if (d.storageRoom.registralKind === "inseparable" && !d.storageRoom.appliesTo) return false;
+          if (!d.storageRoom.priceMode) return false;
+        }
         if (d.solarium.enabled && (!d.solarium.appliesTo || !d.solarium.priceMode)) return false;
         if (d.plot.enabled && !d.plot.appliesTo) return false;
         /* Parcela activada · exige superficie mínima · sin m² la
