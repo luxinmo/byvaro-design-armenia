@@ -216,9 +216,13 @@ interface Props {
    *  Se usa como default del state local · si no se pasa, los bloques
    *  se muestran como "Bloque 1", "Bloque 2", etc. (default legacy). */
   initialBlockNames?: Record<string, string>;
+  /** Oculta la columna "Piscina" del listado de unidades · usado en
+   *  plurifamiliar donde la piscina es comunitaria (urbanización) ·
+   *  NO per-unit. Si no se pasa, se muestra (modo legacy / unifamiliar). */
+  hidePoolColumn?: boolean;
 }
 
-export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = false, units, onUnitsChange, onEditUnit, hideExternalActions = false, promotionCtx, getUnitPhoto, defaultBulkEditAll = false, onUploadFile, onEditUnitPhotos, onReorderUnits, maxFloor = 14, initialBlockNames }: Props) {
+export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = false, units, onUnitsChange, onEditUnit, hideExternalActions = false, promotionCtx, getUnitPhoto, defaultBulkEditAll = false, onUploadFile, onEditUnitPhotos, onReorderUnits, maxFloor = 14, initialBlockNames, hidePoolColumn = false }: Props) {
   const { toast } = useToast();
   const controlled = units !== undefined;
   const [innerUnits, setInnerUnits] = useState<Unit[]>(() => units ?? unitsByPromotion[promotionId] ?? []);
@@ -1269,7 +1273,9 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                       </th>
                       <th className="hidden lg:table-cell px-2 py-2.5 text-right font-medium whitespace-nowrap">m² útiles</th>
                       <th className="hidden lg:table-cell px-2 py-2.5 text-right font-medium whitespace-nowrap">Terraza</th>
-                      <th className="hidden lg:table-cell px-2 py-2.5 text-center font-medium whitespace-nowrap">Piscina</th>
+                      {!hidePoolColumn && (
+                        <th className="hidden lg:table-cell px-2 py-2.5 text-center font-medium whitespace-nowrap">Piscina</th>
+                      )}
                       <th className="hidden md:table-cell px-2 py-2.5 text-center font-medium whitespace-nowrap">Archivos</th>
                       <th className="px-2 py-2.5 text-right font-medium cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("price")}>
                         Precio {renderSortIcon("price")}
@@ -1535,20 +1541,24 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                               )}
                             </td>
 
-                            {/* Piscina sí/no */}
-                            <td className="hidden lg:table-cell px-2 py-2 text-center" onClick={e => editing && isFieldEditable("hasPool") && e.stopPropagation()}>
-                              {renderEditableCell(u, "hasPool",
-                                <span className="text-xs text-muted-foreground">{u.hasPool ? "Sí" : "No"}</span>,
-                                <select
-                                  value={(getVal(u, "hasPool") as boolean) ? "yes" : "no"}
-                                  onChange={e => updateField(u.id, "hasPool" as never, (e.target.value === "yes") as never)}
-                                  className={cn("w-14 lg:w-16 h-7 px-1.5 text-xs", editableCellClass)}
-                                >
-                                  <option value="no">No</option>
-                                  <option value="yes">Sí</option>
-                                </select>
-                              )}
-                            </td>
+                            {/* Piscina sí/no · oculto en plurifamiliar
+                                (piscina comunitaria · vive en
+                                amenities urbanización, NO per-unit). */}
+                            {!hidePoolColumn && (
+                              <td className="hidden lg:table-cell px-2 py-2 text-center" onClick={e => editing && isFieldEditable("hasPool") && e.stopPropagation()}>
+                                {renderEditableCell(u, "hasPool",
+                                  <span className="text-xs text-muted-foreground">{u.hasPool ? "Sí" : "No"}</span>,
+                                  <select
+                                    value={(getVal(u, "hasPool") as boolean) ? "yes" : "no"}
+                                    onChange={e => updateField(u.id, "hasPool" as never, (e.target.value === "yes") as never)}
+                                    className={cn("w-14 lg:w-16 h-7 px-1.5 text-xs", editableCellClass)}
+                                  >
+                                    <option value="no">No</option>
+                                    <option value="yes">Sí</option>
+                                  </select>
+                                )}
+                              </td>
+                            )}
 
                             {/* Archivos · popover con 3 tipos · plano / memoria / brochure */}
                             <td className="hidden md:table-cell px-2 py-2 text-center" onClick={e => e.stopPropagation()}>
