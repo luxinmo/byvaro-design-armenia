@@ -2001,7 +2001,24 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 {showEstructura && aptosPorPlanta !== undefined && (
                   <InfoItem icon={Home} label="Viviendas/planta" value={`${aptosPorPlanta}`} />
                 )}
-                <InfoItem icon={Home} label="Unidades totales" value={`${p.totalUnits}`} />
+                {(() => {
+                  /* Viviendas residenciales = total - locales. Si el
+                   *  promotor configuró locales en planta baja se
+                   *  cuentan aparte · "20 viviendas" en lugar de "23
+                   *  unidades" mezcladas. */
+                  const snapUnitsForCount = (p as { metadata?: { wizardSnapshot?: { unidades?: Array<{ subtipo?: string | null }> } } })
+                    .metadata?.wizardSnapshot?.unidades;
+                  const localesCount = (snapUnitsForCount ?? []).filter((u) => u.subtipo === "local").length;
+                  const viviendas = Math.max(0, p.totalUnits - localesCount);
+                  return (
+                    <InfoItem
+                      icon={Home}
+                      label={localesCount > 0 ? "Viviendas residenciales" : "Unidades totales"}
+                      value={`${viviendas}`}
+                      sub={localesCount > 0 ? `+ ${localesCount} ${localesCount === 1 ? "local" : "locales"}` : undefined}
+                    />
+                  );
+                })()}
                 {showEstructura && pbTipo && (
                   <InfoItem icon={Building2} label="Planta baja" value={PB_LABEL[pbTipo] ?? pbTipo} />
                 )}
