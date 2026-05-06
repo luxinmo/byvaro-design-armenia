@@ -511,6 +511,55 @@ export function CrearUnidadesStep({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* Re-aplicar herencia V5 al volver al paso · si el user fue ATRÁS y
+   *  cambió parking/trastero/piscina en V5 (toggle, registralKind,
+   *  appliesTo), las unidades existentes deben recoger el cambio al
+   *  volver. Sin esto, los flags `parking/trastero/piscinaPrivada` se
+   *  quedaban con el valor del primer generate y el user perdía
+   *  novedades silenciosamente.
+   *
+   *  REGLA DURA · NUNCA tocamos campos de usuario · `dormitorios`,
+   *  `banos`, `superficieConstruida`, `superficieUtil`,
+   *  `superficieTerraza`, `precio`, `parcela` (custom), `orientacion`,
+   *  `vistas`, `caracteristicas`, fotos, planos, descripciones, status
+   *  · todo eso queda intacto. Solo reescribimos los 3 flags que tienen
+   *  fuente canónica en V5.
+   *
+   *  Evita el "perder ediciones" del usuario · se ejecuta solo al
+   *  MONTAR el paso (entrar/volver) · no en cada keystroke. */
+  useEffect(() => {
+    if (state.unidades.length === 0) return; // sin unidades aún · el otro useEffect genera
+    const isUnifamiliarVilla = state.tipo === "unifamiliar";
+    const inheritParking = shouldInheritParking(state);
+    const inheritStorage = shouldInheritStorage(state);
+    const inheritPool = shouldInheritPool(state, isUnifamiliarVilla);
+    /* Solo committear si algún flag cambia · evita disparar un re-
+     *  render gratuito y un write a Supabase sin razón. */
+    let changed = false;
+    const next = state.unidades.map((u) => {
+      /* Pool · solo aplica a villas independientes · pareados/adosados
+       *  no heredan piscina aunque V5 esté en true. Mantiene la
+       *  lógica de los generadores. Locales y plurifamiliar siempre
+       *  pool=false. */
+      const isIndependiente = u.tipologiaUnifamiliar === "independiente"
+        || (state.subVarias === "independiente" && state.subUni === "una_sola");
+      const nextPool = inheritPool && isIndependiente && u.subtipo !== "local";
+      const nextParking = u.subtipo === "local" ? !!u.parking : inheritParking;
+      const nextStorage = u.subtipo === "local" ? !!u.trastero : inheritStorage;
+      if (
+        nextPool !== !!u.piscinaPrivada
+        || nextParking !== !!u.parking
+        || nextStorage !== !!u.trastero
+      ) {
+        changed = true;
+        return { ...u, piscinaPrivada: nextPool, parking: nextParking, trastero: nextStorage };
+      }
+      return u;
+    });
+    if (changed) update("unidades", next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Auto-generar al entrar si aún no hay unidades + migrar drafts
   // antiguos que no tengan los campos nuevos (ref, parcela, status,
   // piscinaPrivada). Evita crashes al renderizar la tabla.
