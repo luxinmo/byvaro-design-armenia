@@ -561,7 +561,18 @@ export default function CrearPromocion() {
         if (s.plantaBajaTipo === "locales" && (s.locales ?? 0) < 1) return false;
         return true;
       }
-      case "extras": return true; // siempre opcional
+      case "extras": {
+        /* Parking / trastero · si están enabled, el user DEBE elegir
+         *  registralKind (inseparable o separada) antes de avanzar.
+         *  Sin esto el generador de unidades no sabe si propagar el
+         *  flag per-unit o crear anejos sueltos · acaba haciendo lo
+         *  primero por defecto y se pierde la venta del anejo. */
+        const d = s.promotionDefaults;
+        if (!d) return true;
+        if (d.parking.enabled && !d.parking.registralKind) return false;
+        if (d.storageRoom.enabled && !d.storageRoom.registralKind) return false;
+        return true;
+      }
       case "equipamiento": {
         /* Si el user abre Solárium/Seguridad/Vistas/Orientación pero no
          *  marca nada dentro, "Siguiente" se deshabilita · fuerza a
