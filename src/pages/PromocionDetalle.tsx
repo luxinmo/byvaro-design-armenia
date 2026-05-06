@@ -1044,8 +1044,24 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
   // KPI data with optional click handler to switch tabs.
   // Para borradores (priceMin=0) y otros estados incompletos, mostramos
   // "Sin configurar" en lugar de valores engañosos.
-  const availabilityValue = p.totalUnits > 0 ? `${p.availableUnits} / ${p.totalUnits}` : "Sin configurar";
-  const availabilityDetail = p.totalUnits > 0 ? `${occupancy}% vendido` : "Añade unidades";
+  /* Disponibilidad · solo cuenta VIVIENDAS · los locales se muestran
+   *  aparte como sub-detail. Los unitsByPromotion locales no se
+   *  pueden distinguir desde Promotion plana · derivamos del snapshot.
+   *  Si no hay snapshot (legacy), fallback al total como siempre. */
+  const snapUnitsForKpi = (p as { metadata?: { wizardSnapshot?: { unidades?: Array<{ subtipo?: string | null; status?: string | null }> } } })
+    .metadata?.wizardSnapshot?.unidades;
+  const localesTotal = (snapUnitsForKpi ?? []).filter((u) => u.subtipo === "local").length;
+  const viviendasTotal = Math.max(0, p.totalUnits - localesTotal);
+  const localesAvailable = (snapUnitsForKpi ?? []).filter((u) => u.subtipo === "local" && (u.status ?? "available") === "available").length;
+  const viviendasAvailable = Math.max(0, p.availableUnits - localesAvailable);
+  const availabilityValue = p.totalUnits > 0
+    ? `${viviendasAvailable} / ${viviendasTotal}`
+    : "Sin configurar";
+  const availabilityDetail = p.totalUnits > 0
+    ? (localesTotal > 0
+        ? `${occupancy}% vendido · + ${localesTotal} ${localesTotal === 1 ? "local" : "locales"}`
+        : `${occupancy}% vendido`)
+    : "Añade unidades";
 
   /* Uso interno · `canShareWithAgencies === false` significa que el
    *  promotor marcó "Solo uso interno" en el wizard · NO va a compartir
