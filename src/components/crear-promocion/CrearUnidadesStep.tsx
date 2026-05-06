@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { Info, Trash2, Plus, Archive, Car, Sun, Layers } from "lucide-react";
+import { Trash2, Plus, Archive, Car, Sun, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/Checkbox";
 import {
@@ -142,6 +142,27 @@ function shouldInheritPool(state: WizardState, isUnifamiliarVilla: boolean): boo
   const pool = state.promotionDefaults?.privatePool;
   if (!pool) return !!state.piscinaPrivadaPorDefecto;
   return !!pool.enabled && pool.appliesTo === "all";
+}
+
+/* Cuenta de unidades esperadas según los inputs estructurales del
+ *  state · usado por el seed de anejos sueltos para sembrar N items
+ *  cuando V5 dice "Inseparable + Aplicar a Todas". Se calcula DESDE
+ *  los inputs (plantas, viv/planta, escaleras, etc.) en vez de
+ *  `state.unidades.length` porque al primer mount las unidades aún
+ *  no están generadas. */
+function expectedUnitCountForState(state: WizardState): number {
+  if (state.tipo === "unifamiliar" && state.subUni === "una_sola") return 1;
+  if (state.tipo === "unifamiliar" && state.subUni === "varias") {
+    return state.tipologiasSeleccionadas.reduce((s, t) => s + (t.cantidad ?? 0), 0) || 1;
+  }
+  /* Plurifamiliar / mixto · plantas-sobre-rasante × viv/planta ×
+   *  escaleras + bajos residenciales si plantaBajaTipo === "viviendas". */
+  const totalEsc = state.escalerasPorBloque.reduce((s, n) => s + n, 0) || 1;
+  const upperUnits = (state.plantas || 1) * (state.aptosPorPlanta || 1) * totalEsc;
+  const groundUnits = state.plantaBajaTipo === "viviendas"
+    ? (state.aptosPorPlanta || 1) * totalEsc
+    : 0;
+  return upperUnits + groundUnits;
 }
 
 function generateEdificio(state: WizardState): UnitData[] {
@@ -492,32 +513,50 @@ export function CrearUnidadesStep({
   /* Modal ligero solo-fotos · disparado al click del thumbnail. */
   const [editPhotosUnitId, setEditPhotosUnitId] = useState<string | null>(null);
 
-  /* Sync · si V5 marcó parking/trastero como "separate", sembramos
-   *  count + flags legacy al entrar al paso para que aparezcan en la
-   *  sección "Anejos sueltos" del pie.
+  /* Sync · siembra anejos sueltos al entrar al paso para que el user
+   *  vea el inventario sin tener que abrir "+ Añadir anejos" y
+   *  duplicar lo declarado en V5.
    *
-   *  CRÍTICO · NO basta con `update("parkings", N)` · la fórmula
+   *  CASOS:
+   *
+   *  1. parking/trastero `separate` · son anejos sueltos puros (no
+   *     ligados a vivienda). count = `pk.spaces` (default 1).
+   *
+   *  2. parking/trastero `inseparable` + `appliesTo === "all"` · cada
+   *     vivienda lleva uno → count = N viviendas × spaces. El user
+   *     marcó "todas las viviendas tienen X" · esperar ver N items
+   *     en el listado para asignarles vivienda/precio (o ver
+   *     "Incluido en el precio" si V5 dice incluido).
+   *
+   *  CRÍTICO · NO basta con setear count · la fórmula
    *  `parkingsAdicionales` resta `totalViv × parkingsIncluidosPorVivienda`
-   *  (default `true × 1`) suponiendo que cada vivienda ya lleva su
-   *  plaza bundled · si eso no se neutraliza, parkings sueltos = 0
-   *  aunque state.parkings sea > 0. Para "separate" las plazas NO
-   *  van bundled · son anejos sueltos puros · forzamos
-   *  `parkingsIncluidosPrecio: false`. Mismo razonamiento para
-   *  trasteros. */
+   *  (default `true × 1`) suponiendo bundling con vivienda. Forzamos
+   *  `parkingsIncluidosPrecio: false` · de lo contrario los items
+   *  desaparecen porque max(0, N - N×1) = 0. Lo mismo para trasteros. */
   useEffect(() => {
+    const expectedUnits = expectedUnitCountForState(state);
     const pk = state.promotionDefaults?.parking;
-    if (pk?.enabled && pk.registralKind === "separate") {
-      if (state.parkingsIncluidosPrecio) update("parkingsIncluidosPrecio", false);
-      if (state.parkings === 0) {
-        const seed = Math.max(1, pk.spaces || 1);
-        update("parkings", seed);
+    if (pk?.enabled) {
+      if (pk.registralKind === "separate") {
+        if (state.parkingsIncluidosPrecio) update("parkingsIncluidosPrecio", false);
+        if (state.parkings === 0) {
+          update("parkings", Math.max(1, pk.spaces || 1));
+        }
+      } else if (pk.registralKind === "inseparable" && pk.appliesTo === "all") {
+        if (state.parkingsIncluidosPrecio) update("parkingsIncluidosPrecio", false);
+        if (state.parkings === 0) {
+          update("parkings", Math.max(1, expectedUnits * (pk.spaces || 1)));
+        }
       }
     }
     const sr = state.promotionDefaults?.storageRoom;
-    if (sr?.enabled && sr.registralKind === "separate") {
-      if (state.trasterosIncluidosPrecio) update("trasterosIncluidosPrecio", false);
-      if (state.trasteros === 0) {
-        update("trasteros", 1);
+    if (sr?.enabled) {
+      if (sr.registralKind === "separate") {
+        if (state.trasterosIncluidosPrecio) update("trasterosIncluidosPrecio", false);
+        if (state.trasteros === 0) update("trasteros", 1);
+      } else if (sr.registralKind === "inseparable" && sr.appliesTo === "all") {
+        if (state.trasterosIncluidosPrecio) update("trasterosIncluidosPrecio", false);
+        if (state.trasteros === 0) update("trasteros", Math.max(1, expectedUnits));
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -991,15 +1030,9 @@ export function CrearUnidadesStep({
       </div>
 
 
-      <div className="rounded-lg bg-primary/5 border border-primary/20 px-3 py-2.5 flex items-start gap-2 text-xs text-foreground leading-relaxed">
-        <Info className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" strokeWidth={1.5} />
-        <div>
-          <p className="font-medium text-foreground">¿Imágenes y descripción iguales para todas las unidades?</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            Selecciona varias con el checkbox y usa <span className="font-medium text-foreground">Edición masiva</span> para cambiar los campos necesarios en todas a la vez.
-          </p>
-        </div>
-      </div>
+      {/* Banner "Edición masiva" eliminado · el paso ya arranca en
+          modo edición masiva (`defaultBulkEditAll=true`) por lo que
+          el aviso era redundante y ocupaba espacio sin aportar info. */}
 
       {/* ═════ Disponibilidad (componente compartido con la ficha) ═════ */}
       <PromotionAvailabilityFull
@@ -1100,7 +1133,7 @@ export function CrearUnidadesStep({
               Anejos sueltos
             </p>
             <p className="text-[10px] text-muted-foreground/80">
-              Plazas y trasteros que se venden por separado, con su propio precio
+              Plazas y trasteros · asígnalos a una vivienda y pon precio
             </p>
           </div>
           <button
@@ -1112,6 +1145,18 @@ export function CrearUnidadesStep({
             Añadir anejos
           </button>
         </div>
+        {/* Aviso · esto no es obligatorio aquí · puede completarse luego
+            desde la ficha de la promoción · sin esto el user creía que
+            tenía que rellenar todos los precios y asignaciones antes de
+            poder seguir. Solo se muestra cuando hay anejos visibles ·
+            si la sección está vacía no añade ruido. */}
+        {(parkingsAdicionales > 0 || trasterosAdicionales > 0
+          || (state.solariums ?? 0) > 0 || (state.sotanos ?? 0) > 0) && (
+          <p className="text-[11px] text-muted-foreground italic">
+            Esto es opcional aquí · puedes asignar viviendas y poner
+            precios más adelante desde la ficha de la promoción.
+          </p>
+        )}
 
         {parkingsAdicionales === 0 && trasterosAdicionales === 0 && (state.solariums ?? 0) === 0 && (state.sotanos ?? 0) === 0 ? (
           <button
@@ -1132,13 +1177,16 @@ export function CrearUnidadesStep({
               <AnejoList
                 icon={Car}
                 title="Plazas de parking sueltas"
-                subtitle="No incluidas en el precio de la vivienda"
+                subtitle={state.promotionDefaults?.parking?.priceMode === "included"
+                  ? "Incluidas en el precio de la vivienda"
+                  : "No incluidas en el precio de la vivienda"}
                 idPrefix="P"
                 count={parkingsAdicionales}
                 prices={state.parkingPrecios}
                 defaultPrice={state.parkingPrecio}
                 assignments={state.parkingAsignaciones ?? []}
                 units={unitsForSelect}
+                priceMode={state.promotionDefaults?.parking?.priceMode}
                 onChangePrice={setParkingPrecio}
                 onChangeAssignment={setParkingAsignacion}
                 onRemove={removeParking}
@@ -1148,13 +1196,16 @@ export function CrearUnidadesStep({
               <AnejoList
                 icon={Archive}
                 title="Trasteros sueltos"
-                subtitle="No incluidos en el precio de la vivienda"
+                subtitle={state.promotionDefaults?.storageRoom?.priceMode === "included"
+                  ? "Incluidos en el precio de la vivienda"
+                  : "No incluidos en el precio de la vivienda"}
                 idPrefix="T"
                 count={trasterosAdicionales}
                 prices={state.trasteroPrecios}
                 defaultPrice={state.trasteroPrecio}
                 assignments={state.trasteroAsignaciones ?? []}
                 units={unitsForSelect}
+                priceMode={state.promotionDefaults?.storageRoom?.priceMode}
                 onChangePrice={setTrasteroPrecio}
                 onChangeAssignment={setTrasteroAsignacion}
                 onRemove={removeTrastero}
@@ -1164,13 +1215,16 @@ export function CrearUnidadesStep({
               <AnejoList
                 icon={Sun}
                 title="Solariums sueltos"
-                subtitle="No incluidos en el precio de la vivienda"
+                subtitle={state.promotionDefaults?.solarium?.priceMode === "included"
+                  ? "Incluidos en el precio de la vivienda"
+                  : "No incluidos en el precio de la vivienda"}
                 idPrefix="S"
                 count={state.solariums ?? 0}
                 prices={state.solariumPrecios ?? []}
                 defaultPrice={state.solariumPrecio ?? 0}
                 assignments={state.solariumAsignaciones ?? []}
                 units={unitsForSelect}
+                priceMode={state.promotionDefaults?.solarium?.priceMode}
                 onChangePrice={setSolariumPrecio}
                 onChangeAssignment={setSolariumAsignacion}
                 onRemove={removeSolarium}
@@ -1263,7 +1317,7 @@ export function CrearUnidadesStep({
 
 /* ═══════════ Anejos sueltos: lista vertical con precio individual ═══════════ */
 function AnejoList({
-  icon: Icon, title, subtitle, idPrefix, count, prices, defaultPrice, assignments, units, onChangePrice, onChangeAssignment, onRemove,
+  icon: Icon, title, subtitle, idPrefix, count, prices, defaultPrice, assignments, units, priceMode, onChangePrice, onChangeAssignment, onRemove,
 }: {
   icon: typeof Archive;
   title: string;
@@ -1277,10 +1331,15 @@ function AnejoList({
   assignments: string[];
   /** Lista de unidades disponibles para asignar (id + nombre/publicId). */
   units: { id: string; label: string }[];
+  /** Modo de precio del V5 · si "included", el input de precio se
+   *  reemplaza por un texto "Incluido en el precio" · sin esto las
+   *  cajas quedaban vacías y el user no sabía qué poner. */
+  priceMode?: "included" | "optional" | "not_included" | null;
   onChangePrice: (idx: number, v: number) => void;
   onChangeAssignment: (idx: number, unitId: string) => void;
   onRemove: (idx: number) => void;
 }) {
+  const isIncluded = priceMode === "included";
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
@@ -1321,21 +1380,29 @@ function AnejoList({
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">Precio</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      /* Formato es-ES con miles · "100.000" en vez de
-                       * "100000". Empty string cuando 0 · evita el bug
-                       * de "20" al teclear "2" sobre "0". */
-                      value={value > 0 ? value.toLocaleString("es-ES") : ""}
-                      placeholder="0"
-                      onChange={(e) => {
-                        const digits = e.target.value.replace(/[^0-9]/g, "");
-                        onChangePrice(i, digits === "" ? 0 : Number(digits));
-                      }}
-                      className="h-8 w-28 rounded-lg border border-border bg-card text-sm tnum px-2 text-right outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
-                    />
-                    <span className="text-xs text-muted-foreground ml-0.5">€</span>
+                    {isIncluded ? (
+                      <span className="inline-flex items-center h-8 px-3 rounded-lg bg-success/10 text-success text-[12px] font-medium tnum">
+                        Incluido en el precio
+                      </span>
+                    ) : (
+                      <>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          /* Formato es-ES con miles · "100.000" en vez de
+                           * "100000". Empty string cuando 0 · evita el bug
+                           * de "20" al teclear "2" sobre "0". */
+                          value={value > 0 ? value.toLocaleString("es-ES") : ""}
+                          placeholder="0"
+                          onChange={(e) => {
+                            const digits = e.target.value.replace(/[^0-9]/g, "");
+                            onChangePrice(i, digits === "" ? 0 : Number(digits));
+                          }}
+                          className="h-8 w-28 rounded-lg border border-border bg-card text-sm tnum px-2 text-right outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                        />
+                        <span className="text-xs text-muted-foreground ml-0.5">€</span>
+                      </>
+                    )}
                   </div>
                   <button
                     type="button"
