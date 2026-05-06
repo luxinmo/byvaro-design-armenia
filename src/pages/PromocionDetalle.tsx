@@ -2096,26 +2096,47 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                       return p.propertyTypes.map(t => <Tag key={t} variant="default" size="sm">{getPropertyTypeLabel(t)}</Tag>);
                     }
                     /* Prioridad 3 · derivar de SUBTIPOS de las unidades
-                     *  (plurifamiliar) · agrupar y contar. Si Apt-1
-                     *  apartamento, Apt-2 apartamento, Apt-3 ático ·
-                     *  → "2 Apartamentos · 1 Ático". Cubre promos
-                     *  legacy con propertyTypes=[] que tienen unidades
-                     *  con subtipo declarado. */
+                     *  (plurifamiliar) · agrupar y contar. Incluye
+                     *  locales y viviendas en planta baja para que el
+                     *  promotor vea TODO lo que se vende. */
                     const snapUnits = (p as { metadata?: { wizardSnapshot?: { unidades?: Array<{ subtipo?: string | null }> } } })
                       .metadata?.wizardSnapshot?.unidades;
                     const subtipoCount: Record<string, number> = {};
                     for (const u of snapUnits ?? []) {
-                      if (u.subtipo && u.subtipo !== "local" && u.subtipo !== "planta_baja") {
+                      if (u.subtipo) {
                         subtipoCount[u.subtipo] = (subtipoCount[u.subtipo] ?? 0) + 1;
                       }
                     }
-                    const entries = Object.entries(subtipoCount);
+                    /* Orden canónico · viviendas primero, locales al
+                     *  final · más legible para el comercial. */
+                    const SUBTIPO_ORDER = ["apartamento", "atico", "duplex", "loft", "estudio", "planta_baja", "local"];
+                    const entries = Object.entries(subtipoCount).sort(
+                      ([a], [b]) => SUBTIPO_ORDER.indexOf(a) - SUBTIPO_ORDER.indexOf(b),
+                    );
                     if (entries.length > 0) {
-                      return entries.map(([tipo, count]) => (
-                        <Tag key={tipo} variant="default" size="sm">
-                          {count > 1 ? `${count} ${getPropertyTypeLabel(tipo)}` : getPropertyTypeLabel(tipo)}
-                        </Tag>
-                      ));
+                      return entries.map(([tipo, count]) => {
+                        /* Local · label custom para distinguir de
+                         *  viviendas + tono diferenciado (muted). */
+                        if (tipo === "local") {
+                          return (
+                            <Tag key={tipo} variant="default" size="sm">
+                              {count > 1 ? `${count} Locales comerciales` : "1 Local comercial"}
+                            </Tag>
+                          );
+                        }
+                        if (tipo === "planta_baja") {
+                          return (
+                            <Tag key={tipo} variant="default" size="sm">
+                              {count > 1 ? `${count} Bajos` : "1 Bajo"}
+                            </Tag>
+                          );
+                        }
+                        return (
+                          <Tag key={tipo} variant="default" size="sm">
+                            {count > 1 ? `${count} ${getPropertyTypeLabel(tipo)}` : getPropertyTypeLabel(tipo)}
+                          </Tag>
+                        );
+                      });
                     }
                     return <p className="text-xs text-muted-foreground italic">Sin tipologías marcadas</p>;
                   })()}
