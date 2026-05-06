@@ -2571,11 +2571,14 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                 const sec = snap?.promotionDefaults?.security;
                 const views = (snap?.promotionDefaults?.views ?? {}) as Record<string, boolean>;
                 const terr = snap?.promotionDefaults?.terraces;
-                const featureIds: string[] = [];
-                /* Equipment · todas las flags ampliadas. Si la flag
-                 *  es true, push el id (mismo nombre que la key del
-                 *  schema) · `feature(id)` resuelve icono + label
-                 *  desde el catálogo canónico. */
+                const orientation = (snap?.promotionDefaults as { orientation?: string | null } | undefined)?.orientation;
+                /* Sub-grupos · cada categoría del wizard step "equipamiento"
+                 *  se renderiza como su propia fila de chips · sin esto
+                 *  todo iba mezclado en un único "Características del
+                 *  hogar" y el user creía que solo se veía equipamiento
+                 *  cuando en realidad seguridad/vistas/orientación SÍ
+                 *  estaban renderizados (pero indistinguibles). */
+                const equipmentIds: string[] = [];
                 const EQUIPMENT_KEYS = [
                   "airConditioning", "heating", "equippedKitchen",
                   "domotics", "solarPanels", "chargingPoint", "electricBlinds", "doubleGlazing",
@@ -2587,17 +2590,49 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                    *  catálogo legacy para chips de promos viejas. */
                   "bbq", "ascensor",
                 ];
-                for (const k of EQUIPMENT_KEYS) if (eq[k]) featureIds.push(k);
-                if (terr?.covered || terr?.uncovered) featureIds.push("terraza");
-                if (sec?.alarm) featureIds.push("alarm");
-                if (sec?.reinforcedDoor) featureIds.push("reinforcedDoor");
-                if (sec?.videoSurveillance) featureIds.push("videoSurveillance");
-                /* Views · todos los nuevos puntos. */
+                for (const k of EQUIPMENT_KEYS) if (eq[k]) equipmentIds.push(k);
+                if (terr?.covered || terr?.uncovered) equipmentIds.push("terraza");
+
+                const securityIds: string[] = [];
+                if (sec?.alarm) securityIds.push("alarm");
+                if (sec?.reinforcedDoor) securityIds.push("reinforcedDoor");
+                if (sec?.videoSurveillance) securityIds.push("videoSurveillance");
+
+                const viewsIds: string[] = [];
                 const VIEWS_KEYS = [
                   "sea", "oceano", "rio", "mountain", "ciudad", "golf",
                   "panoramic", "amanecer", "atardecer", "abiertas",
                 ];
-                for (const k of VIEWS_KEYS) if (views[k]) featureIds.push(k);
+                for (const k of VIEWS_KEYS) if (views[k]) viewsIds.push(k);
+
+                const orientationId: string | null = orientation ?? null;
+
+                const hasAnyFeature =
+                  equipmentIds.length > 0 ||
+                  securityIds.length > 0 ||
+                  viewsIds.length > 0 ||
+                  !!orientationId;
+
+                /* Helper · pinta una fila de chips bajo un sub-label.
+                 *  Mantiene el estilo de chip único (border + icon
+                 *  primary) en todos los sub-grupos para coherencia
+                 *  visual. */
+                const renderChipRow = (label: string, ids: string[]) => (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-semibold text-muted-foreground/80 uppercase tracking-wide">{label}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ids.map((id) => {
+                        const f = feature(id);
+                        return (
+                          <span key={id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-foreground">
+                            <f.icon className="h-3 w-3 text-primary" strokeWidth={1.75} />
+                            {f.label}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
 
                 /* Cada sub-sección es un BUTTON · click abre mini-modal
                  *  específico de esa sección · más rápido que el modal
@@ -2631,22 +2666,19 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                         </button>
                       </>
                     )}
-                    {/* Características del hogar · click → mini-modal de
-                       características solo. */}
+                    {/* Características del hogar · agrupadas por sub-categoría
+                       (Equipamiento · Seguridad · Vistas · Orientación) ·
+                       click en cualquier punto del bloque abre el mini-modal
+                       de características. */}
                     <div className="h-px bg-border/40" />
                     <button type="button" onClick={() => openInfoSection("caracteristicas")} className={sectionBtnCls}>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Características del hogar</p>
-                      {featureIds.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {[...new Set(featureIds)].map((id) => {
-                            const f = feature(id);
-                            return (
-                              <span key={id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-foreground">
-                                <f.icon className="h-3 w-3 text-primary" strokeWidth={1.75} />
-                                {f.label}
-                              </span>
-                            );
-                          })}
+                      {hasAnyFeature ? (
+                        <div className="space-y-3">
+                          {equipmentIds.length > 0 && renderChipRow("Equipamiento", equipmentIds)}
+                          {securityIds.length > 0 && renderChipRow("Seguridad", securityIds)}
+                          {viewsIds.length > 0 && renderChipRow("Vistas", viewsIds)}
+                          {orientationId && renderChipRow("Orientación", [orientationId])}
                         </div>
                       ) : (
                         <p className="text-xs text-muted-foreground italic">
