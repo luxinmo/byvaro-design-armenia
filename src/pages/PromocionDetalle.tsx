@@ -4692,9 +4692,10 @@ function InfoItem({ icon: Icon, label, value, sub }: { icon: typeof Home; label:
   );
 }
 
-/** StatTile · variante visual de InfoItem con cuadro de icono
- *  coloreado + valor destacado · más comercial. Usado en el bloque
- *  Estructura para que cada dato tenga peso visual propio. */
+/** StatTile · MINIMALISTA · sin bordes/cards · solo texto bien
+ *  jerarquizado (label discreto + valor en bold). El icono va
+ *  pequeño junto al label · sin caja de fondo. Acento de color
+ *  reservado para datos críticos (cert energético, estado legal). */
 function StatTile({
   icon: Icon, label, value, sub, accent = "muted", large = false,
 }: {
@@ -4703,17 +4704,10 @@ function StatTile({
   value: string;
   sub?: string;
   accent?: "primary" | "success" | "warning" | "destructive" | "muted";
-  /** `large` · valor en font 24px (default 16px) · usado para cert
+  /** `large` · valor en font 22px (default 15px) · usado para cert
    *  energético donde la letra A/B/C es la info crítica. */
   large?: boolean;
 }) {
-  const ICON_BG = {
-    primary: "bg-primary/10 text-primary",
-    success: "bg-success/15 text-success",
-    warning: "bg-warning/15 text-warning",
-    destructive: "bg-destructive/15 text-destructive",
-    muted: "bg-muted text-foreground/80",
-  };
   const VALUE_COLOR = {
     primary: "text-foreground",
     success: "text-success",
@@ -4722,21 +4716,19 @@ function StatTile({
     muted: "text-foreground",
   };
   return (
-    <div className="rounded-xl border border-border bg-background p-3 flex items-start gap-2.5 transition-colors hover:bg-muted/20">
-      <div className={cn("flex h-9 w-9 items-center justify-center rounded-xl shrink-0", ICON_BG[accent])}>
-        <Icon className="h-4 w-4" strokeWidth={1.6} />
+    <div className="min-w-0">
+      <div className="flex items-center gap-1.5 mb-1">
+        <Icon className="h-3 w-3 text-muted-foreground/60" strokeWidth={1.6} />
+        <p className="text-[10px] text-muted-foreground uppercase tracking-wide leading-tight">{label}</p>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80 leading-tight">{label}</p>
-        <p className={cn(
-          "font-bold truncate leading-tight mt-1",
-          large ? "text-2xl tnum" : "text-[15px]",
-          VALUE_COLOR[accent],
-        )}>
-          {value}
-        </p>
-        {sub && <p className="text-[10.5px] text-muted-foreground mt-0.5">{sub}</p>}
-      </div>
+      <p className={cn(
+        "font-semibold truncate leading-tight",
+        large ? "text-[22px] tnum" : "text-[15px]",
+        VALUE_COLOR[accent],
+      )}>
+        {value}
+      </p>
+      {sub && <p className="text-[10.5px] text-muted-foreground mt-0.5">{sub}</p>}
     </div>
   );
 }
