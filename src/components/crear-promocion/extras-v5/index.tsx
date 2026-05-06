@@ -579,12 +579,17 @@ function EssentialRow({
    *  primera vez. Auto-open cuando enabled && registralKind === null.
    *  Si el user cierra sin elegir, desactivamos la categoría (revierte
    *  el toggle) para no quedar en estado inconsistente. */
-  const needsRegistralKind = def.key === "parking" || def.key === "storageRoom";
+  /* Categorías que comparten el flow registralKind · parking/trastero/
+   *  solárium/sótano. Todas pueden ser separadas (anejo suelto con
+   *  escritura propia) o inseparables (ligadas al inmueble). */
+  type RegistralKey = "parking" | "storageRoom" | "solarium" | "basement";
+  const REGISTRAL_KEYS = new Set<CategoryKey>(["parking", "storageRoom", "solarium", "basement"]);
+  const needsRegistralKind = REGISTRAL_KEYS.has(def.key);
   const currentKind: RegistralKind | null = needsRegistralKind
-    ? (defaults[def.key as "parking" | "storageRoom"]).registralKind
+    ? (defaults[def.key as RegistralKey]).registralKind
     : null;
   const isEnabledFlag = needsRegistralKind
-    && (defaults[def.key as "parking" | "storageRoom"]).enabled;
+    && (defaults[def.key as RegistralKey]).enabled;
   const kindDialogOpen = needsRegistralKind && isEnabledFlag && !currentKind;
   /* Para categorías sin `enabled` (terraces) consideramos "activa" si
    * ya tiene algún flag set O si el row está abierto · así el toggle
@@ -700,9 +705,15 @@ function EssentialRow({
       {needsRegistralKind && (
         <RegistralKindDialog
           open={kindDialogOpen}
-          categoryLabel={def.key === "parking" ? "Plaza de parking" : "Trastero"}
-          onPick={(v) => patch(def.key as "parking" | "storageRoom",
-            { registralKind: v } as Partial<PromotionDefaults["parking"] | PromotionDefaults["storageRoom"]>,
+          categoryLabel={
+            def.key === "parking"     ? "Plaza de parking" :
+            def.key === "storageRoom" ? "Trastero" :
+            def.key === "solarium"    ? "Solárium" :
+            def.key === "basement"    ? "Sótano" :
+            "Anejo"
+          }
+          onPick={(v) => patch(def.key as RegistralKey,
+            { registralKind: v } as Partial<PromotionDefaults[RegistralKey]>,
           )}
           onDismiss={() => {
             /* Cerrar sin elegir · revertimos el toggle · reset
@@ -926,7 +937,15 @@ function CategoryBody({
     case "basement":
       return (
         <>
-          {!isSingleHome && (
+          <RegistralKindBadge
+            value={defaults.basement.registralKind}
+            onChange={() => patch("basement", { registralKind: null })}
+            onRemove={() => update("promotionDefaults", {
+              ...defaults,
+              basement: defaultPromotionDefaults.basement,
+            })}
+          />
+          {!isSingleHome && defaults.basement.registralKind === "inseparable" && (
             <AppliesToControl
               value={defaults.basement.appliesTo}
               onChange={(v) => patch("basement", { appliesTo: v })}
@@ -944,7 +963,15 @@ function CategoryBody({
     case "solarium":
       return (
         <>
-          {!isSingleHome && (
+          <RegistralKindBadge
+            value={defaults.solarium.registralKind}
+            onChange={() => patch("solarium", { registralKind: null })}
+            onRemove={() => update("promotionDefaults", {
+              ...defaults,
+              solarium: defaultPromotionDefaults.solarium,
+            })}
+          />
+          {!isSingleHome && defaults.solarium.registralKind === "inseparable" && (
             <AppliesToControl
               value={defaults.solarium.appliesTo}
               onChange={(v) => patch("solarium", { appliesTo: v })}

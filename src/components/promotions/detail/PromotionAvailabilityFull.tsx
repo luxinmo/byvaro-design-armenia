@@ -1565,23 +1565,27 @@ export function PromotionAvailabilityFull({ promotionId, isCollaboratorView = fa
                               <UnitFilesButton u={u} onUploadFile={onUploadFile} />
                             </td>
 
-                            {/* Precio */}
+                            {/* Precio · con símbolo € a la derecha
+                                del input · coherente con AnejoList y
+                                wizard de extras. Sin esto el user no
+                                veía la moneda y dudaba. */}
                             <td className="px-2 py-2 text-right" onClick={e => editing && isFieldEditable("price") && e.stopPropagation()}>
                               {renderEditableCell(u, "price",
                                 <span className="text-sm font-semibold text-foreground tabular-nums">{priceForDisplay(u)}</span>,
-                                <input
-                                  type="text"
-                                  inputMode="numeric"
-                                  /* Empty string cuando 0 · evita el "20" al teclear "2"
-                                   * sobre un campo con "0" (típico bug de número padded). */
-                                  value={Number(getVal(u, "price")) > 0 ? Number(getVal(u, "price")).toLocaleString("es-ES") : ""}
-                                  placeholder="0"
-                                  onChange={e => {
-                                    const digits = e.target.value.replace(/[^0-9]/g, "");
-                                    updateField(u.id, "price", digits === "" ? 0 : Number(digits));
-                                  }}
-                                  className={cn("w-28 h-7 px-2 text-xs text-right font-semibold tabular-nums", editableCellClass)}
-                                />
+                                <div className="inline-flex items-center gap-1">
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={Number(getVal(u, "price")) > 0 ? Number(getVal(u, "price")).toLocaleString("es-ES") : ""}
+                                    placeholder="0"
+                                    onChange={e => {
+                                      const digits = e.target.value.replace(/[^0-9]/g, "");
+                                      updateField(u.id, "price", digits === "" ? 0 : Number(digits));
+                                    }}
+                                    className={cn("w-24 h-7 px-2 text-xs text-right font-semibold tabular-nums", editableCellClass)}
+                                  />
+                                  <span className="text-xs text-muted-foreground">€</span>
+                                </div>
                               )}
                             </td>
 

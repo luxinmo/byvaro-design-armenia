@@ -562,15 +562,18 @@ export default function CrearPromocion() {
         return true;
       }
       case "extras": {
-        /* Parking / trastero · si están enabled, el user DEBE elegir
-         *  registralKind (inseparable o separada) antes de avanzar.
-         *  Sin esto el generador de unidades no sabe si propagar el
-         *  flag per-unit o crear anejos sueltos · acaba haciendo lo
-         *  primero por defecto y se pierde la venta del anejo. */
+        /* Parking / trastero / solárium / sótano · si están enabled,
+         *  el user DEBE elegir registralKind (inseparable o separada)
+         *  antes de avanzar. Sin esto el generador de unidades no sabe
+         *  si propagar el flag per-unit o crear anejos sueltos · acaba
+         *  haciendo lo primero por defecto y se pierde la venta del
+         *  anejo. */
         const d = s.promotionDefaults;
         if (!d) return true;
         if (d.parking.enabled && !d.parking.registralKind) return false;
         if (d.storageRoom.enabled && !d.storageRoom.registralKind) return false;
+        if (d.solarium.enabled && !d.solarium.registralKind) return false;
+        if (d.basement.enabled && !d.basement.registralKind) return false;
         return true;
       }
       case "equipamiento": {
@@ -580,6 +583,10 @@ export default function CrearPromocion() {
          *  qué chips están "abiertos" en `promotionDefaults.openExtras`. */
         const d = s.promotionDefaults;
         if (!d) return true;
+        /* Solárium habilitado · registralKind obligatorio (popup en
+         *  V5 lo pide al activar) · sin esto el wizard avanzaba sin
+         *  saber si solárium es separado/inseparable · seed roto. */
+        if (d.solarium.enabled && !d.solarium.registralKind) return false;
         const open = d.openExtras ?? [];
         for (const key of open) {
           if (key === "solarium") {
@@ -775,7 +782,14 @@ export default function CrearPromocion() {
           if (d.storageRoom.registralKind === "inseparable" && !d.storageRoom.appliesTo) return false;
           if (!d.storageRoom.priceMode) return false;
         }
-        if (d.solarium.enabled && (!d.solarium.appliesTo || !d.solarium.priceMode)) return false;
+        if (d.solarium.enabled) {
+          if (d.solarium.registralKind === "inseparable" && !d.solarium.appliesTo) return false;
+          if (!d.solarium.priceMode) return false;
+        }
+        if (d.basement.enabled) {
+          if (d.basement.registralKind === "inseparable" && !d.basement.appliesTo) return false;
+          if (!d.basement.priceMode) return false;
+        }
         if (d.plot.enabled && !d.plot.appliesTo) return false;
         /* Parcela activada · exige superficie mínima · sin m² la
          *  card queda incompleta · la unidad heredaría parcela "0

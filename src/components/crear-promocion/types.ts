@@ -279,6 +279,12 @@ export interface WizardState {
   /** Unidad a la que pertenece cada trastero suelto · "" = sin asignar.
    *  Mismo índice que `trasteroPrecios`. */
   trasteroAsignaciones?: string[];
+  /** ID público editable por anejo · default auto-generado "T01"
+   *  · `idPrefix + index padded`. Mismo índice que `trasteroPrecios`. */
+  trasteroPublicIds?: string[];
+  /** Número de registro / referencia catastral del anejo · opcional ·
+   *  empty hasta que el user lo añada via "+" del row. */
+  trasteroRegistros?: string[];
   parkings: number;
   parkingsIncluidosPrecio: boolean;
   parkingsIncluidosPorVivienda: number;
@@ -286,6 +292,8 @@ export interface WizardState {
   parkingPrecios: number[];         // precio individualizado por Pn (índice 0 = P1)
   /** Unidad a la que pertenece cada plaza suelta. Mismo índice. */
   parkingAsignaciones?: string[];
+  parkingPublicIds?: string[];
+  parkingRegistros?: string[];
   /* Solárium y sótano sueltos · solo aplica a unifamiliar. Mismo
    * patrón que trasteros/parking · `count` total + `precios[]` por
    * índice. La UI los expone en Anejos sueltos cuando hay villas.
@@ -296,11 +304,15 @@ export interface WizardState {
   solariumPrecios?: number[];
   /** Unidad asignada a cada solárium · mismo índice que precios. */
   solariumAsignaciones?: string[];
+  solariumPublicIds?: string[];
+  solariumRegistros?: string[];
   sotanos?: number;
   sotanoPrecio?: number;
   sotanoPrecios?: number[];
   /** Unidad asignada a cada sótano · mismo índice que precios. */
   sotanoAsignaciones?: string[];
+  sotanoPublicIds?: string[];
+  sotanoRegistros?: string[];
   /* ── Zonas y amenidades (ampliado) ─────────────────────────────────
      Booleanos explícitos para las amenidades clave que la ficha de
      unidad necesita consultar de forma estructurada. El array genérico

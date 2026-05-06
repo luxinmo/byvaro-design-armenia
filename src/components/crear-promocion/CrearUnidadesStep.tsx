@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { Info, Trash2, Plus, Archive, Car, Sun, Layers } from "lucide-react";
+import { Trash2, Plus, Archive, Car, Sun, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/Checkbox";
 import {
@@ -142,6 +142,27 @@ function shouldInheritPool(state: WizardState, isUnifamiliarVilla: boolean): boo
   const pool = state.promotionDefaults?.privatePool;
   if (!pool) return !!state.piscinaPrivadaPorDefecto;
   return !!pool.enabled && pool.appliesTo === "all";
+}
+
+/* Cuenta de unidades esperadas según los inputs estructurales del
+ *  state · usado por el seed de anejos sueltos para sembrar N items
+ *  cuando V5 dice "Inseparable + Aplicar a Todas". Se calcula DESDE
+ *  los inputs (plantas, viv/planta, escaleras, etc.) en vez de
+ *  `state.unidades.length` porque al primer mount las unidades aún
+ *  no están generadas. */
+function expectedUnitCountForState(state: WizardState): number {
+  if (state.tipo === "unifamiliar" && state.subUni === "una_sola") return 1;
+  if (state.tipo === "unifamiliar" && state.subUni === "varias") {
+    return state.tipologiasSeleccionadas.reduce((s, t) => s + (t.cantidad ?? 0), 0) || 1;
+  }
+  /* Plurifamiliar / mixto · plantas-sobre-rasante × viv/planta ×
+   *  escaleras + bajos residenciales si plantaBajaTipo === "viviendas". */
+  const totalEsc = state.escalerasPorBloque.reduce((s, n) => s + n, 0) || 1;
+  const upperUnits = (state.plantas || 1) * (state.aptosPorPlanta || 1) * totalEsc;
+  const groundUnits = state.plantaBajaTipo === "viviendas"
+    ? (state.aptosPorPlanta || 1) * totalEsc
+    : 0;
+  return upperUnits + groundUnits;
 }
 
 function generateEdificio(state: WizardState): UnitData[] {
@@ -492,32 +513,69 @@ export function CrearUnidadesStep({
   /* Modal ligero solo-fotos · disparado al click del thumbnail. */
   const [editPhotosUnitId, setEditPhotosUnitId] = useState<string | null>(null);
 
-  /* Sync · si V5 marcó parking/trastero como "separate", sembramos
-   *  count + flags legacy al entrar al paso para que aparezcan en la
-   *  sección "Anejos sueltos" del pie.
+  /* Sync · siembra anejos sueltos al entrar al paso para que el user
+   *  vea el inventario sin tener que abrir "+ Añadir anejos" y
+   *  duplicar lo declarado en V5.
    *
-   *  CRÍTICO · NO basta con `update("parkings", N)` · la fórmula
+   *  CASOS:
+   *
+   *  1. parking/trastero `separate` · son anejos sueltos puros (no
+   *     ligados a vivienda). count = `pk.spaces` (default 1).
+   *
+   *  2. parking/trastero `inseparable` + `appliesTo === "all"` · cada
+   *     vivienda lleva uno → count = N viviendas × spaces. El user
+   *     marcó "todas las viviendas tienen X" · esperar ver N items
+   *     en el listado para asignarles vivienda/precio (o ver
+   *     "Incluido en el precio" si V5 dice incluido).
+   *
+   *  CRÍTICO · NO basta con setear count · la fórmula
    *  `parkingsAdicionales` resta `totalViv × parkingsIncluidosPorVivienda`
-   *  (default `true × 1`) suponiendo que cada vivienda ya lleva su
-   *  plaza bundled · si eso no se neutraliza, parkings sueltos = 0
-   *  aunque state.parkings sea > 0. Para "separate" las plazas NO
-   *  van bundled · son anejos sueltos puros · forzamos
-   *  `parkingsIncluidosPrecio: false`. Mismo razonamiento para
-   *  trasteros. */
+   *  (default `true × 1`) suponiendo bundling con vivienda. Forzamos
+   *  `parkingsIncluidosPrecio: false` · de lo contrario los items
+   *  desaparecen porque max(0, N - N×1) = 0. Lo mismo para trasteros. */
   useEffect(() => {
+    const expectedUnits = expectedUnitCountForState(state);
     const pk = state.promotionDefaults?.parking;
-    if (pk?.enabled && pk.registralKind === "separate") {
-      if (state.parkingsIncluidosPrecio) update("parkingsIncluidosPrecio", false);
-      if (state.parkings === 0) {
-        const seed = Math.max(1, pk.spaces || 1);
-        update("parkings", seed);
+    if (pk?.enabled) {
+      if (pk.registralKind === "separate") {
+        if (state.parkingsIncluidosPrecio) update("parkingsIncluidosPrecio", false);
+        if (state.parkings === 0) {
+          update("parkings", Math.max(1, pk.spaces || 1));
+        }
+      } else if (pk.registralKind === "inseparable" && pk.appliesTo === "all") {
+        if (state.parkingsIncluidosPrecio) update("parkingsIncluidosPrecio", false);
+        if (state.parkings === 0) {
+          update("parkings", Math.max(1, expectedUnits * (pk.spaces || 1)));
+        }
       }
     }
     const sr = state.promotionDefaults?.storageRoom;
-    if (sr?.enabled && sr.registralKind === "separate") {
-      if (state.trasterosIncluidosPrecio) update("trasterosIncluidosPrecio", false);
-      if (state.trasteros === 0) {
-        update("trasteros", 1);
+    if (sr?.enabled) {
+      if (sr.registralKind === "separate") {
+        if (state.trasterosIncluidosPrecio) update("trasterosIncluidosPrecio", false);
+        if (state.trasteros === 0) update("trasteros", 1);
+      } else if (sr.registralKind === "inseparable" && sr.appliesTo === "all") {
+        if (state.trasterosIncluidosPrecio) update("trasterosIncluidosPrecio", false);
+        if (state.trasteros === 0) update("trasteros", Math.max(1, expectedUnits));
+      }
+    }
+    /* Solárium · misma lógica que parking/trastero · separate sale
+     *  como anejo suelto (1) · inseparable+all = N viviendas. */
+    const sol = state.promotionDefaults?.solarium;
+    if (sol?.enabled) {
+      if (sol.registralKind === "separate") {
+        if ((state.solariums ?? 0) === 0) update("solariums", 1);
+      } else if (sol.registralKind === "inseparable" && sol.appliesTo === "all") {
+        if ((state.solariums ?? 0) === 0) update("solariums", Math.max(1, expectedUnits));
+      }
+    }
+    /* Sótano · igual que solárium. */
+    const bs = state.promotionDefaults?.basement;
+    if (bs?.enabled) {
+      if (bs.registralKind === "separate") {
+        if ((state.sotanos ?? 0) === 0) update("sotanos", 1);
+      } else if (bs.registralKind === "inseparable" && bs.appliesTo === "all") {
+        if ((state.sotanos ?? 0) === 0) update("sotanos", Math.max(1, expectedUnits));
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -907,6 +965,28 @@ export function CrearUnidadesStep({
   const setSolariumAsignacion = makeSetAsignacion("solariumAsignaciones");
   const setSotanoAsignacion = makeSetAsignacion("sotanoAsignaciones");
 
+  /* Setters genéricos para arrays string · publicIds y registros
+   *  per-anejo · mismo patrón que asignaciones. */
+  const makeSetStringArr = (
+    key: "trasteroPublicIds" | "parkingPublicIds" | "solariumPublicIds" | "sotanoPublicIds"
+       | "trasteroRegistros" | "parkingRegistros" | "solariumRegistros" | "sotanoRegistros",
+  ) =>
+    (idx: number, v: string) => {
+      const cur = (state[key] ?? []) as string[];
+      const next = [...cur];
+      while (next.length <= idx) next.push("");
+      next[idx] = v;
+      update(key, next);
+    };
+  const setTrasteroPublicId = makeSetStringArr("trasteroPublicIds");
+  const setParkingPublicId  = makeSetStringArr("parkingPublicIds");
+  const setSolariumPublicId = makeSetStringArr("solariumPublicIds");
+  const setSotanoPublicId   = makeSetStringArr("sotanoPublicIds");
+  const setTrasteroRegistro = makeSetStringArr("trasteroRegistros");
+  const setParkingRegistro  = makeSetStringArr("parkingRegistros");
+  const setSolariumRegistro = makeSetStringArr("solariumRegistros");
+  const setSotanoRegistro   = makeSetStringArr("sotanoRegistros");
+
   /* Lista de unidades disponibles para asignar (id + label). */
   const unitsForSelect = useMemo(
     () => state.unidades.map((u) => ({ id: u.id, label: u.nombre || u.ref || u.id })),
@@ -991,15 +1071,9 @@ export function CrearUnidadesStep({
       </div>
 
 
-      <div className="rounded-lg bg-primary/5 border border-primary/20 px-3 py-2.5 flex items-start gap-2 text-xs text-foreground leading-relaxed">
-        <Info className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" strokeWidth={1.5} />
-        <div>
-          <p className="font-medium text-foreground">¿Imágenes y descripción iguales para todas las unidades?</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            Selecciona varias con el checkbox y usa <span className="font-medium text-foreground">Edición masiva</span> para cambiar los campos necesarios en todas a la vez.
-          </p>
-        </div>
-      </div>
+      {/* Banner "Edición masiva" eliminado · el paso ya arranca en
+          modo edición masiva (`defaultBulkEditAll=true`) por lo que
+          el aviso era redundante y ocupaba espacio sin aportar info. */}
 
       {/* ═════ Disponibilidad (componente compartido con la ficha) ═════ */}
       <PromotionAvailabilityFull
@@ -1100,7 +1174,7 @@ export function CrearUnidadesStep({
               Anejos sueltos
             </p>
             <p className="text-[10px] text-muted-foreground/80">
-              Plazas y trasteros que se venden por separado, con su propio precio
+              Plazas y trasteros · asígnalos a una vivienda y pon precio
             </p>
           </div>
           <button
@@ -1112,6 +1186,18 @@ export function CrearUnidadesStep({
             Añadir anejos
           </button>
         </div>
+        {/* Aviso · esto no es obligatorio aquí · puede completarse luego
+            desde la ficha de la promoción · sin esto el user creía que
+            tenía que rellenar todos los precios y asignaciones antes de
+            poder seguir. Solo se muestra cuando hay anejos visibles ·
+            si la sección está vacía no añade ruido. */}
+        {(parkingsAdicionales > 0 || trasterosAdicionales > 0
+          || (state.solariums ?? 0) > 0 || (state.sotanos ?? 0) > 0) && (
+          <p className="text-[11px] text-muted-foreground italic">
+            Esto es opcional aquí · puedes asignar viviendas y poner
+            precios más adelante desde la ficha de la promoción.
+          </p>
+        )}
 
         {parkingsAdicionales === 0 && trasterosAdicionales === 0 && (state.solariums ?? 0) === 0 && (state.sotanos ?? 0) === 0 ? (
           <button
@@ -1132,15 +1218,22 @@ export function CrearUnidadesStep({
               <AnejoList
                 icon={Car}
                 title="Plazas de parking sueltas"
-                subtitle="No incluidas en el precio de la vivienda"
+                subtitle={state.promotionDefaults?.parking?.priceMode === "included"
+                  ? "Incluidas en el precio de la vivienda"
+                  : "No incluidas en el precio de la vivienda"}
                 idPrefix="P"
                 count={parkingsAdicionales}
                 prices={state.parkingPrecios}
                 defaultPrice={state.parkingPrecio}
                 assignments={state.parkingAsignaciones ?? []}
+                publicIds={state.parkingPublicIds ?? []}
+                registros={state.parkingRegistros ?? []}
                 units={unitsForSelect}
+                priceMode={state.promotionDefaults?.parking?.priceMode}
                 onChangePrice={setParkingPrecio}
                 onChangeAssignment={setParkingAsignacion}
+                onChangePublicId={setParkingPublicId}
+                onChangeRegistro={setParkingRegistro}
                 onRemove={removeParking}
               />
             )}
@@ -1148,15 +1241,22 @@ export function CrearUnidadesStep({
               <AnejoList
                 icon={Archive}
                 title="Trasteros sueltos"
-                subtitle="No incluidos en el precio de la vivienda"
+                subtitle={state.promotionDefaults?.storageRoom?.priceMode === "included"
+                  ? "Incluidos en el precio de la vivienda"
+                  : "No incluidos en el precio de la vivienda"}
                 idPrefix="T"
                 count={trasterosAdicionales}
                 prices={state.trasteroPrecios}
                 defaultPrice={state.trasteroPrecio}
                 assignments={state.trasteroAsignaciones ?? []}
+                publicIds={state.trasteroPublicIds ?? []}
+                registros={state.trasteroRegistros ?? []}
                 units={unitsForSelect}
+                priceMode={state.promotionDefaults?.storageRoom?.priceMode}
                 onChangePrice={setTrasteroPrecio}
                 onChangeAssignment={setTrasteroAsignacion}
+                onChangePublicId={setTrasteroPublicId}
+                onChangeRegistro={setTrasteroRegistro}
                 onRemove={removeTrastero}
               />
             )}
@@ -1164,15 +1264,22 @@ export function CrearUnidadesStep({
               <AnejoList
                 icon={Sun}
                 title="Solariums sueltos"
-                subtitle="No incluidos en el precio de la vivienda"
+                subtitle={state.promotionDefaults?.solarium?.priceMode === "included"
+                  ? "Incluidos en el precio de la vivienda"
+                  : "No incluidos en el precio de la vivienda"}
                 idPrefix="S"
                 count={state.solariums ?? 0}
                 prices={state.solariumPrecios ?? []}
                 defaultPrice={state.solariumPrecio ?? 0}
                 assignments={state.solariumAsignaciones ?? []}
+                publicIds={state.solariumPublicIds ?? []}
+                registros={state.solariumRegistros ?? []}
                 units={unitsForSelect}
+                priceMode={state.promotionDefaults?.solarium?.priceMode}
                 onChangePrice={setSolariumPrecio}
                 onChangeAssignment={setSolariumAsignacion}
+                onChangePublicId={setSolariumPublicId}
+                onChangeRegistro={setSolariumRegistro}
                 onRemove={removeSolarium}
               />
             )}
@@ -1180,15 +1287,22 @@ export function CrearUnidadesStep({
               <AnejoList
                 icon={Layers}
                 title="Sótanos sueltos"
-                subtitle="No incluidos en el precio de la vivienda"
+                subtitle={state.promotionDefaults?.basement?.priceMode === "included"
+                  ? "Incluidos en el precio de la vivienda"
+                  : "No incluidos en el precio de la vivienda"}
                 idPrefix="B"
                 count={state.sotanos ?? 0}
                 prices={state.sotanoPrecios ?? []}
                 defaultPrice={state.sotanoPrecio ?? 0}
                 assignments={state.sotanoAsignaciones ?? []}
+                publicIds={state.sotanoPublicIds ?? []}
+                registros={state.sotanoRegistros ?? []}
                 units={unitsForSelect}
+                priceMode={state.promotionDefaults?.basement?.priceMode}
                 onChangePrice={setSotanoPrecio}
                 onChangeAssignment={setSotanoAsignacion}
+                onChangePublicId={setSotanoPublicId}
+                onChangeRegistro={setSotanoRegistro}
                 onRemove={removeSotano}
               />
             )}
@@ -1263,7 +1377,7 @@ export function CrearUnidadesStep({
 
 /* ═══════════ Anejos sueltos: lista vertical con precio individual ═══════════ */
 function AnejoList({
-  icon: Icon, title, subtitle, idPrefix, count, prices, defaultPrice, assignments, units, onChangePrice, onChangeAssignment, onRemove,
+  icon: Icon, title, subtitle, idPrefix, count, prices, defaultPrice, assignments, publicIds, registros, units, priceMode, onChangePrice, onChangeAssignment, onChangePublicId, onChangeRegistro, onRemove,
 }: {
   icon: typeof Archive;
   title: string;
@@ -1275,12 +1389,32 @@ function AnejoList({
   /** ID de la unidad asignada · "" / undefined = sin asignar. Mismo
    *  índice que `prices`. */
   assignments: string[];
+  /** ID público editable del anejo · default `idPrefix + index padded`
+   *  · misma celda con estilo "warning" amarillo que la columna ID
+   *  de la tabla de unidades · coherencia visual. */
+  publicIds: string[];
+  /** Número de registro / referencia catastral por anejo · empty
+   *  hasta que el user lo añada via "+" del row. */
+  registros: string[];
   /** Lista de unidades disponibles para asignar (id + nombre/publicId). */
   units: { id: string; label: string }[];
+  /** Modo de precio del V5 · si "included", el input de precio se
+   *  reemplaza por un texto "Incluido en el precio" · sin esto las
+   *  cajas quedaban vacías y el user no sabía qué poner. */
+  priceMode?: "included" | "optional" | "not_included" | null;
   onChangePrice: (idx: number, v: number) => void;
   onChangeAssignment: (idx: number, unitId: string) => void;
+  onChangePublicId: (idx: number, v: string) => void;
+  onChangeRegistro: (idx: number, v: string) => void;
   onRemove: (idx: number) => void;
 }) {
+  const isIncluded = priceMode === "included";
+  /* Mismo estilo "warning amarillo" que los inputs editables de la
+   *  tabla de unidades · coherencia visual. */
+  const editableInputCls = "border-2 border-warning/40 bg-warning/10 rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all";
+  /* Por row · si el registro tiene contenido, mostrar el input;
+   *  si está vacío, mostrar botón "+ Añadir nº registro" que al
+   *  click revela el input. State local lleva el toggle. */
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
@@ -1293,64 +1427,147 @@ function AnejoList({
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="flex flex-col divide-y divide-border">
           {Array.from({ length: count }, (_, i) => {
-            const id = `${idPrefix}${i + 1}`;
+            const defaultId = `${idPrefix}${String(i + 1).padStart(2, "0")}`;
+            const publicId = publicIds[i] ?? "";
+            const registro = registros[i] ?? "";
             const value = prices[i] ?? defaultPrice;
             const assignedTo = assignments[i] ?? "";
             return (
-              <div key={id} className="group flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors flex-wrap sm:flex-nowrap">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground shrink-0">
-                    <Icon className="h-4 w-4" strokeWidth={1.5} />
-                  </div>
-                  <span className="text-sm font-semibold text-foreground tnum">{id}</span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-                  {/* Selector de unidad asignada */}
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">Vivienda</span>
-                    <select
-                      value={assignedTo}
-                      onChange={(e) => onChangeAssignment(i, e.target.value)}
-                      className="h-8 rounded-lg border border-border bg-card text-xs px-2 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 min-w-[120px]"
-                    >
-                      <option value="">Sin asignar</option>
-                      {units.map((u) => (
-                        <option key={u.id} value={u.id}>{u.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">Precio</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      /* Formato es-ES con miles · "100.000" en vez de
-                       * "100000". Empty string cuando 0 · evita el bug
-                       * de "20" al teclear "2" sobre "0". */
-                      value={value > 0 ? value.toLocaleString("es-ES") : ""}
-                      placeholder="0"
-                      onChange={(e) => {
-                        const digits = e.target.value.replace(/[^0-9]/g, "");
-                        onChangePrice(i, digits === "" ? 0 : Number(digits));
-                      }}
-                      className="h-8 w-28 rounded-lg border border-border bg-card text-sm tnum px-2 text-right outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
-                    />
-                    <span className="text-xs text-muted-foreground ml-0.5">€</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onRemove(i)}
-                    aria-label={`Eliminar ${id}`}
-                    className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                    title="Eliminar"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-                  </button>
-                </div>
-              </div>
+              <AnejoRow
+                key={i}
+                Icon={Icon}
+                defaultId={defaultId}
+                publicId={publicId}
+                registro={registro}
+                value={value}
+                assignedTo={assignedTo}
+                units={units}
+                isIncluded={isIncluded}
+                editableInputCls={editableInputCls}
+                onChangePublicId={(v) => onChangePublicId(i, v)}
+                onChangeRegistro={(v) => onChangeRegistro(i, v)}
+                onChangePrice={(v) => onChangePrice(i, v)}
+                onChangeAssignment={(v) => onChangeAssignment(i, v)}
+                onRemove={() => onRemove(i)}
+              />
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* Row individual de un anejo suelto · ID editable + nº registro
+ *  togglable + selector de vivienda + precio (o "Incluido"). El
+ *  diseño de los inputs reutiliza el estilo "warning amarillo" de
+ *  la tabla de unidades · coherencia visual entre ambos sitios. */
+function AnejoRow({
+  Icon, defaultId, publicId, registro, value, assignedTo, units, isIncluded, editableInputCls,
+  onChangePublicId, onChangeRegistro, onChangePrice, onChangeAssignment, onRemove,
+}: {
+  Icon: typeof Archive;
+  defaultId: string;
+  publicId: string;
+  registro: string;
+  value: number;
+  assignedTo: string;
+  units: { id: string; label: string }[];
+  isIncluded: boolean;
+  editableInputCls: string;
+  onChangePublicId: (v: string) => void;
+  onChangeRegistro: (v: string) => void;
+  onChangePrice: (v: number) => void;
+  onChangeAssignment: (v: string) => void;
+  onRemove: () => void;
+}) {
+  /* Toggle local · si el registro ya tiene contenido, se muestra el
+   *  input directamente · si está vacío, se muestra "+ Añadir nº
+   *  registro" hasta que el user clique. */
+  const [showRegistro, setShowRegistro] = useState(!!registro);
+  return (
+    <div className="group flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors flex-wrap sm:flex-nowrap">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground shrink-0">
+          <Icon className="h-4 w-4" strokeWidth={1.5} />
+        </div>
+        {/* ID público editable · mismo estilo que columna ID de la
+            tabla de unidades (warning amarillo). */}
+        <input
+          type="text"
+          value={publicId}
+          placeholder={defaultId}
+          onChange={(e) => onChangePublicId(e.target.value)}
+          className={cn("w-20 sm:w-24 h-7 px-2 text-xs font-bold", editableInputCls)}
+        />
+        {/* Registro / catastro · "+" si vacío, input si lleno o si
+            el user lo abrió. */}
+        {showRegistro ? (
+          <input
+            type="text"
+            value={registro}
+            placeholder="Nº registro"
+            onChange={(e) => onChangeRegistro(e.target.value)}
+            className={cn("w-32 sm:w-40 h-7 px-2 text-xs", editableInputCls)}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowRegistro(true)}
+            className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-dashed border-border bg-card/50 text-[11px] text-muted-foreground hover:text-foreground hover:border-foreground/40 hover:bg-muted/40 transition-colors"
+            title="Añadir número de registro / referencia catastral"
+          >
+            <Plus className="h-3 w-3" strokeWidth={2} />
+            Nº registro
+          </button>
+        )}
+      </div>
+      <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">Vivienda</span>
+          <select
+            value={assignedTo}
+            onChange={(e) => onChangeAssignment(e.target.value)}
+            className={cn("h-7 text-xs px-2 min-w-[120px]", editableInputCls)}
+          >
+            <option value="">Sin asignar</option>
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>{u.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">Precio</span>
+          {isIncluded ? (
+            <span className="inline-flex items-center h-7 px-3 rounded-lg bg-success/10 text-success text-[12px] font-medium tnum">
+              Incluido en el precio
+            </span>
+          ) : (
+            <>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={value > 0 ? value.toLocaleString("es-ES") : ""}
+                placeholder="0"
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/[^0-9]/g, "");
+                  onChangePrice(digits === "" ? 0 : Number(digits));
+                }}
+                className={cn("h-7 w-28 text-xs tnum px-2 text-right", editableInputCls)}
+              />
+              <span className="text-xs text-muted-foreground ml-0.5">€</span>
+            </>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Eliminar"
+          className="h-7 w-7 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+          title="Eliminar"
+        >
+          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+        </button>
       </div>
     </div>
   );
