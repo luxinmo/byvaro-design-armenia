@@ -2002,103 +2002,129 @@ export default function DeveloperPromotionDetail({ agentMode = false }: { agentM
                   locales: locales > 0 ? `${locales} ${locales === 1 ? "local" : "locales"}` : "Locales",
                   viviendas: "Viviendas en bajo",
                 };
+                /* ─── Layout COMERCIAL · stat tiles agrupadas
+                 *  por dominio (Edificio · Oferta · Legal & energía
+                 *  · Entorno) en lugar de InfoItems planos uniformes.
+                 *  Cada tile · icono coloreado en cuadro grande +
+                 *  número/valor destacado + label discreto. */
+                const snapUnitsForCount = (p as { metadata?: { wizardSnapshot?: { unidades?: Array<{ subtipo?: string | null }> } } })
+                  .metadata?.wizardSnapshot?.unidades;
+                const localesCount = (snapUnitsForCount ?? []).filter((u) => u.subtipo === "local").length;
+                const viviendas = Math.max(0, p.totalUnits - localesCount);
+                const wsTieneLic = resolveLicenseGranted(p);
+                const estiloSnap = (p as { metadata?: { wizardSnapshot?: { estiloVivienda?: string | null; estilosSeleccionados?: string[] } } })
+                  .metadata?.wizardSnapshot;
+                const ESTILO_LABEL: Record<string, string> = {
+                  mediterraneo: "Mediterráneo", contemporaneo: "Contemporáneo",
+                  finca: "Finca", colonial: "Colonial",
+                  minimalista: "Minimalista", rustico: "Rústico",
+                };
+                const estiloSingle = estiloSnap?.estiloVivienda;
+                const estiloMulti = (estiloSnap?.estilosSeleccionados ?? []).filter(Boolean);
+                const estiloLabel = estiloSingle
+                  ? (ESTILO_LABEL[estiloSingle] ?? estiloSingle)
+                  : (estiloMulti.length > 0 ? estiloMulti.map((e) => ESTILO_LABEL[e] ?? e).join(" · ") : null);
+                /* Color del cert energético · estándar inmobiliario
+                 *  europeo · A/B verde · C amarillo claro · D amarillo
+                 *  · E naranja · F/G rojo. */
+                const certColor = (() => {
+                  if (!certEnerg) return "muted";
+                  const letter = certEnerg.charAt(0).toUpperCase();
+                  if (letter === "A" || letter === "B") return "success";
+                  if (letter === "C" || letter === "D") return "warning";
+                  if (letter === "E" || letter === "F" || letter === "G") return "destructive";
+                  return "muted";
+                })();
                 return (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-5">
-                <InfoItem icon={Building2} label="Tipo" value={typeLabel || "Sin definir"} />
-                {showEstructura && numBloques > 1 && (
-                  <InfoItem icon={Layers} label="Bloques" value={`${numBloques}`} />
+              <div className="space-y-5">
+                {/* GRUPO 1 · Edificio · estructura física */}
+                {showEstructura && (
+                  <div>
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-3">El edificio</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      <StatTile icon={Building2} label="Tipo" value={typeLabel || "—"} />
+                      {plantas !== undefined && <StatTile icon={Layers} label="Plantas" value={`${plantas}`} />}
+                      {aptosPorPlanta !== undefined && <StatTile icon={Home} label="Viviendas/planta" value={`${aptosPorPlanta}`} />}
+                      {numBloques > 1 && <StatTile icon={Layers} label="Bloques" value={`${numBloques}`} />}
+                      {totalEscaleras > 1 && <StatTile icon={Layers} label="Escaleras" value={`${totalEscaleras}`} />}
+                    </div>
+                  </div>
                 )}
-                {showEstructura && totalEscaleras > 1 && (
-                  <InfoItem icon={Layers} label="Escaleras" value={`${totalEscaleras}`} />
+                {!showEstructura && (
+                  <div>
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-3">La promoción</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      <StatTile icon={Building2} label="Tipo" value={typeLabel || "—"} />
+                      {estiloLabel && <StatTile icon={Sparkles} label="Estilo" value={estiloLabel} />}
+                    </div>
+                  </div>
                 )}
-                {showEstructura && plantas !== undefined && (
-                  <InfoItem icon={Layers} label="Plantas" value={`${plantas}`} />
-                )}
-                {showEstructura && aptosPorPlanta !== undefined && (
-                  <InfoItem icon={Home} label="Viviendas/planta" value={`${aptosPorPlanta}`} />
-                )}
-                {(() => {
-                  /* Viviendas residenciales = total - locales. Si el
-                   *  promotor configuró locales en planta baja se
-                   *  cuentan aparte · "20 viviendas" en lugar de "23
-                   *  unidades" mezcladas. */
-                  const snapUnitsForCount = (p as { metadata?: { wizardSnapshot?: { unidades?: Array<{ subtipo?: string | null }> } } })
-                    .metadata?.wizardSnapshot?.unidades;
-                  const localesCount = (snapUnitsForCount ?? []).filter((u) => u.subtipo === "local").length;
-                  const viviendas = Math.max(0, p.totalUnits - localesCount);
-                  return (
-                    <InfoItem
+
+                {/* GRUPO 2 · Oferta · qué se vende */}
+                <div>
+                  <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-3">Oferta</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    <StatTile
                       icon={Home}
                       label={localesCount > 0 ? "Viviendas residenciales" : "Unidades totales"}
                       value={`${viviendas}`}
                       sub={localesCount > 0 ? `+ ${localesCount} ${localesCount === 1 ? "local" : "locales"}` : undefined}
+                      accent="primary"
                     />
-                  );
-                })()}
-                {showEstructura && pbTipo && (
-                  <InfoItem icon={Building2} label="Planta baja" value={PB_LABEL[pbTipo] ?? pbTipo} />
-                )}
-                {certEnerg && (
-                  <InfoItem icon={Leaf} label="Certificado energético" value={certEnerg} />
-                )}
-                {/* Estilo arquitectónico · solo unifamiliar (en
-                 *  plurifamiliar el estilo va en el bloque siguiente). */}
-                {(() => {
-                  const estiloSnap = (p as { metadata?: { wizardSnapshot?: { estiloVivienda?: string | null; estilosSeleccionados?: string[] } } })
-                    .metadata?.wizardSnapshot;
-                  const ESTILO_LABEL: Record<string, string> = {
-                    mediterraneo: "Mediterráneo", contemporaneo: "Contemporáneo",
-                    finca: "Finca", colonial: "Colonial",
-                    minimalista: "Minimalista", rustico: "Rústico",
-                  };
-                  const single = estiloSnap?.estiloVivienda;
-                  const multi = (estiloSnap?.estilosSeleccionados ?? []).filter(Boolean);
-                  if (single) {
-                    return <InfoItem icon={Sparkles} label="Estilo arquitectónico" value={ESTILO_LABEL[single] ?? single} />;
-                  }
-                  if (multi.length > 0) {
-                    return <InfoItem icon={Sparkles} label="Estilos arquitectónicos" value={multi.map((e) => ESTILO_LABEL[e] ?? e).join(" · ")} />;
-                  }
-                  return null;
-                })()}
-                {urbanizacion && (urbanizacionNombre || urbanizacionTipo) && (
-                  <InfoItem icon={Palmtree} label="Urbanización" value={urbanizacionNombre || (urbanizacionTipo ? URB_TIPO_LABEL[urbanizacionTipo] : "Sí")} sub={urbanizacionNombre && urbanizacionTipo ? URB_TIPO_LABEL[urbanizacionTipo] : undefined} />
-                )}
-                {/* Parking · Trastero · MOVIDOS al bloque "Extras y opcionales"
-                    debajo · ahí se ven con icono + chip de precio (Incluido /
-                    Opcional · X € / No incluido) y se editan individualmente. */}
-                {/* Licencia · lee `metadata.wizardSnapshot.tieneLicencia`
-                    real · NO hardcoded. true → verde · false → muted ·
-                    null/undefined → no se renderiza el bloque. */}
-                {(() => {
-                  /* Helper canónico · prefiere metadata.licenseGranted plano
-                   *  · cae a wizardSnapshot.tieneLicencia · null si nada. */
-                  const wsTieneLic = resolveLicenseGranted(p);
-                  if (wsTieneLic == null) return null;
-                  const granted = wsTieneLic === true;
-                  return (
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Shield className={cn("h-3 w-3", granted ? "text-success" : "text-muted-foreground")} strokeWidth={2} />
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Estado legal</p>
-                      </div>
-                      <p className={cn(
-                        "text-sm font-semibold inline-flex items-center gap-1.5",
-                        granted ? "text-success" : "text-muted-foreground",
-                      )}>
-                        <span className={cn(
-                          "inline-flex items-center justify-center h-4 w-4 rounded-full",
-                          granted ? "bg-success/15" : "bg-muted",
-                        )}>
-                          {granted
-                            ? <Check className="h-2.5 w-2.5 text-success" strokeWidth={3} />
-                            : <X className="h-2.5 w-2.5 text-muted-foreground" strokeWidth={3} />}
-                        </span>
-                        {granted ? "Licencia concedida" : "Sin licencia"}
-                      </p>
+                    {showEstructura && pbTipo === "locales" && locales > 0 && (
+                      <StatTile icon={Store} label="Locales comerciales" value={`${locales}`} accent="primary" />
+                    )}
+                    {showEstructura && pbTipo === "viviendas" && (
+                      <StatTile icon={Home} label="Planta baja" value="Viviendas en bajo" />
+                    )}
+                  </div>
+                </div>
+
+                {/* GRUPO 3 · Legal y energía · destacados visualmente */}
+                {(wsTieneLic !== null || certEnerg) && (
+                  <div>
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-3">Legal y energía</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {wsTieneLic !== null && (
+                        <StatTile
+                          icon={Shield}
+                          label="Estado legal"
+                          value={wsTieneLic ? "Licencia concedida" : "Sin licencia"}
+                          accent={wsTieneLic ? "success" : "warning"}
+                        />
+                      )}
+                      {certEnerg && (
+                        <StatTile
+                          icon={Leaf}
+                          label="Certificado energético"
+                          value={certEnerg}
+                          accent={certColor as "success" | "warning" | "destructive" | "muted" | "primary" | undefined}
+                          large
+                        />
+                      )}
                     </div>
-                  );
-                })()}
+                  </div>
+                )}
+
+                {/* GRUPO 4 · Entorno · urbanización + estilo (pluri) */}
+                {((urbanizacion && (urbanizacionNombre || urbanizacionTipo)) || (showEstructura && estiloLabel)) && (
+                  <div>
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-3">Entorno y diseño</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {urbanizacion && (urbanizacionNombre || urbanizacionTipo) && (
+                        <StatTile
+                          icon={Palmtree}
+                          label="Urbanización"
+                          value={urbanizacionNombre || (urbanizacionTipo ? URB_TIPO_LABEL[urbanizacionTipo] : "Sí")}
+                          sub={urbanizacionNombre && urbanizacionTipo ? URB_TIPO_LABEL[urbanizacionTipo] : undefined}
+                        />
+                      )}
+                      {showEstructura && estiloLabel && (
+                        <StatTile icon={Sparkles} label="Estilo arquitectónico" value={estiloLabel} />
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
                 );
               })()}
@@ -4662,6 +4688,55 @@ function InfoItem({ icon: Icon, label, value, sub }: { icon: typeof Home; label:
       </div>
       <p className="text-sm font-medium text-foreground">{value}</p>
       {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+/** StatTile · variante visual de InfoItem con cuadro de icono
+ *  coloreado + valor destacado · más comercial. Usado en el bloque
+ *  Estructura para que cada dato tenga peso visual propio. */
+function StatTile({
+  icon: Icon, label, value, sub, accent = "muted", large = false,
+}: {
+  icon: typeof Home;
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: "primary" | "success" | "warning" | "destructive" | "muted";
+  /** `large` · valor en font 24px (default 16px) · usado para cert
+   *  energético donde la letra A/B/C es la info crítica. */
+  large?: boolean;
+}) {
+  const ICON_BG = {
+    primary: "bg-primary/10 text-primary",
+    success: "bg-success/15 text-success",
+    warning: "bg-warning/15 text-warning",
+    destructive: "bg-destructive/15 text-destructive",
+    muted: "bg-muted text-foreground/80",
+  };
+  const VALUE_COLOR = {
+    primary: "text-foreground",
+    success: "text-success",
+    warning: "text-warning",
+    destructive: "text-destructive",
+    muted: "text-foreground",
+  };
+  return (
+    <div className="rounded-xl border border-border bg-background p-3 flex items-start gap-2.5 transition-colors hover:bg-muted/20">
+      <div className={cn("flex h-9 w-9 items-center justify-center rounded-xl shrink-0", ICON_BG[accent])}>
+        <Icon className="h-4 w-4" strokeWidth={1.6} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80 leading-tight">{label}</p>
+        <p className={cn(
+          "font-bold truncate leading-tight mt-1",
+          large ? "text-2xl tnum" : "text-[15px]",
+          VALUE_COLOR[accent],
+        )}>
+          {value}
+        </p>
+        {sub && <p className="text-[10.5px] text-muted-foreground mt-0.5">{sub}</p>}
+      </div>
     </div>
   );
 }
