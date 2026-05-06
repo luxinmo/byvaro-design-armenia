@@ -559,6 +559,25 @@ export function CrearUnidadesStep({
         if (state.trasteros === 0) update("trasteros", Math.max(1, expectedUnits));
       }
     }
+    /* Solárium · misma lógica que parking/trastero · separate sale
+     *  como anejo suelto (1) · inseparable+all = N viviendas. */
+    const sol = state.promotionDefaults?.solarium;
+    if (sol?.enabled) {
+      if (sol.registralKind === "separate") {
+        if ((state.solariums ?? 0) === 0) update("solariums", 1);
+      } else if (sol.registralKind === "inseparable" && sol.appliesTo === "all") {
+        if ((state.solariums ?? 0) === 0) update("solariums", Math.max(1, expectedUnits));
+      }
+    }
+    /* Sótano · igual que solárium. */
+    const bs = state.promotionDefaults?.basement;
+    if (bs?.enabled) {
+      if (bs.registralKind === "separate") {
+        if ((state.sotanos ?? 0) === 0) update("sotanos", 1);
+      } else if (bs.registralKind === "inseparable" && bs.appliesTo === "all") {
+        if ((state.sotanos ?? 0) === 0) update("sotanos", Math.max(1, expectedUnits));
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1268,7 +1287,9 @@ export function CrearUnidadesStep({
               <AnejoList
                 icon={Layers}
                 title="Sótanos sueltos"
-                subtitle="No incluidos en el precio de la vivienda"
+                subtitle={state.promotionDefaults?.basement?.priceMode === "included"
+                  ? "Incluidos en el precio de la vivienda"
+                  : "No incluidos en el precio de la vivienda"}
                 idPrefix="B"
                 count={state.sotanos ?? 0}
                 prices={state.sotanoPrecios ?? []}
@@ -1277,6 +1298,7 @@ export function CrearUnidadesStep({
                 publicIds={state.sotanoPublicIds ?? []}
                 registros={state.sotanoRegistros ?? []}
                 units={unitsForSelect}
+                priceMode={state.promotionDefaults?.basement?.priceMode}
                 onChangePrice={setSotanoPrecio}
                 onChangeAssignment={setSotanoAsignacion}
                 onChangePublicId={setSotanoPublicId}

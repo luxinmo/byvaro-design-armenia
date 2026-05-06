@@ -72,12 +72,17 @@ export interface PromotionDefaults {
     appliesTo: AppliesTo | null;
     priceMode: PriceMode | null;
     optionalPrice: number | null;
+    /** Mismo registralKind que parking/trastero · separate = anejo
+     *  suelto al pie de Crear Unidades · inseparable = ligado a
+     *  vivienda. */
+    registralKind: RegistralKind | null;
   };
   solarium: {
     enabled: boolean;
     appliesTo: AppliesTo | null;
     priceMode: PriceMode | null;
     optionalPrice: number | null;
+    registralKind: RegistralKind | null;
   };
   terraces: {
     /** Master switch · si true, exigimos que el user marque al menos
@@ -178,8 +183,8 @@ export const defaultPromotionDefaults: PromotionDefaults = {
     registralKind: null,
   },
   storageRoom: { enabled: false, appliesTo: null, priceMode: null, optionalPrice: null, registralKind: null },
-  basement: { enabled: false, appliesTo: null, priceMode: null, optionalPrice: null },
-  solarium: { enabled: false, appliesTo: null, priceMode: null, optionalPrice: null },
+  basement: { enabled: false, appliesTo: null, priceMode: null, optionalPrice: null, registralKind: null },
+  solarium: { enabled: false, appliesTo: null, priceMode: null, optionalPrice: null, registralKind: null },
   terraces: { enabled: false, covered: false, uncovered: false },
   plot: {
     enabled: false,
