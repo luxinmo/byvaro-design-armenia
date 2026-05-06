@@ -30,6 +30,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/Checkbox";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import type { WizardState } from "../types";
 import {
   defaultPromotionDefaults,
@@ -571,6 +574,18 @@ function EssentialRow({
   const Icon = def.icon;
   const configured = isConfigured(defaults, def.key);
   const [open, setOpen] = useState(configured);
+
+  /* Popup "registralKind" · sale al activar parking/trastero por
+   *  primera vez. Auto-open cuando enabled && registralKind === null.
+   *  Si el user cierra sin elegir, desactivamos la categoría (revierte
+   *  el toggle) para no quedar en estado inconsistente. */
+  const needsRegistralKind = def.key === "parking" || def.key === "storageRoom";
+  const currentKind: RegistralKind | null = needsRegistralKind
+    ? (defaults[def.key as "parking" | "storageRoom"]).registralKind
+    : null;
+  const isEnabledFlag = needsRegistralKind
+    && (defaults[def.key as "parking" | "storageRoom"]).enabled;
+  const kindDialogOpen = needsRegistralKind && isEnabledFlag && !currentKind;
   /* Para categorías sin `enabled` (terraces) consideramos "activa" si
    * ya tiene algún flag set O si el row está abierto · así el toggle
    * visual refleja el estado real cuando el user abre la card sin
@@ -581,10 +596,13 @@ function EssentialRow({
   const hasEnabledFlag = TOGGLE_KEYS.has(def.key);
   const active = configured || (!hasEnabledFlag && open);
 
-  /* Auto-expand cuando se activa por primera vez (el user marca el
-   * toggle pero también queremos enseñar las sub-opciones). */
+  /* Auto-expand al activar · auto-colapsar al desactivar. Sin la
+   *  rama del else, al pulsar la X del chip de registralKind (que
+   *  resetea parking/trastero al default · enabled=false), la card
+   *  se quedaba abierta mostrando los controles vacíos · había que
+   *  pulsar otra vez el toggle para cerrar. Ahora se cierra sola. */
   useEffect(() => {
-    if (active) setOpen(true);
+    setOpen(active);
   }, [active]);
 
   function toggleEnabled(v: boolean) {
@@ -678,6 +696,26 @@ function EssentialRow({
             recordSelection={recordSelection}
           />
         </div>
+      )}
+      {needsRegistralKind && (
+        <RegistralKindDialog
+          open={kindDialogOpen}
+          categoryLabel={def.key === "parking" ? "Plaza de parking" : "Trastero"}
+          onPick={(v) => patch(def.key as "parking" | "storageRoom",
+            { registralKind: v } as Partial<PromotionDefaults["parking"] | PromotionDefaults["storageRoom"]>,
+          )}
+          onDismiss={() => {
+            /* Cerrar sin elegir · revertimos el toggle · reset
+             *  COMPLETO al default · sin esto la card se quedaba
+             *  con `enabled: true` + `registralKind: null` y el
+             *  popup se reabría en bucle. */
+            update("promotionDefaults", {
+              ...defaults,
+              [def.key]: defaultPromotionDefaults[def.key],
+            } as PromotionDefaults);
+            setOpen(false);
+          }}
+        />
       )}
     </div>
   );
@@ -806,13 +844,18 @@ function CategoryBody({
     case "parking":
       return (
         <>
-          {/* Tipo de unidad registral · PRIMERO porque condiciona el
-              resto · si es "separada" no tiene sentido pedir "Aplicar
-              a" (no aplica a nadie · es anejo suelto). */}
-          <RegistralKindControl
-            label="Tipo de unidad registral"
+          {/* Tipo de unidad registral · se elige en POPUP que sale al
+              activar parking (`RegistralKindDialog` en EssentialRow).
+              Aquí solo mostramos un chip discreto con el valor actual y
+              un botón "Cambiar" que reabre el popup. NO segmented inline
+              porque saturaba la card y el user pidió que fuera popup. */}
+          <RegistralKindBadge
             value={defaults.parking.registralKind}
-            onChange={(v) => patch("parking", { registralKind: v })}
+            onChange={() => patch("parking", { registralKind: null })}
+            onRemove={() => update("promotionDefaults", {
+              ...defaults,
+              parking: defaultPromotionDefaults.parking,
+            })}
           />
           <Row label={isSingleHome
             ? (defaults.parking.registralKind === "separate" ? "Plazas en total" : "Plazas")
@@ -857,10 +900,13 @@ function CategoryBody({
     case "storageRoom":
       return (
         <>
-          <RegistralKindControl
-            label="Tipo de unidad registral"
+          <RegistralKindBadge
             value={defaults.storageRoom.registralKind}
-            onChange={(v) => patch("storageRoom", { registralKind: v })}
+            onChange={() => patch("storageRoom", { registralKind: null })}
+            onRemove={() => update("promotionDefaults", {
+              ...defaults,
+              storageRoom: defaultPromotionDefaults.storageRoom,
+            })}
           />
           {!isSingleHome && defaults.storageRoom.registralKind === "inseparable" && (
             <AppliesToControl
@@ -1230,41 +1276,108 @@ function AppliesToControl({
   );
 }
 
-/* Control "Tipo de unidad registral" para parking / trastero ·
- *  decide si la plaza/trastero forma parte del inmueble (inseparable ·
- *  cada vivienda lo hereda como flag) o es unidad registral propia
- *  (separate · se gestiona como anejo suelto al final del paso
- *  "Crear unidades" con su precio independiente). El generador de
- *  unidades en `CrearUnidadesStep` lee este campo para decidir.
- *  Sin esto antes el wizard creaba siempre `parking: true` per-unit
- *  aunque las plazas se vendieran sueltas (precios ya inflados al
- *  precio base de la vivienda y los anejos sueltos no aparecían). */
-function RegistralKindControl({
-  value, onChange, label,
+/* Chip "Tipo de unidad registral" · resumen del valor elegido en el
+ *  popup. Dos acciones distintas:
+ *    · Click en el label → reabre el popup para CAMBIAR (resetea solo
+ *      registralKind a null · el resto de config se mantiene).
+ *    · Click en la X → DESACTIVA parking entero · vuelve al estado
+ *      inicial (toggle off + reset all). Equivalente a clicar el
+ *      switch de la cabecera del row. */
+function RegistralKindBadge({
+  value, onChange, onRemove,
 }: {
   value: RegistralKind | null;
-  onChange: (v: RegistralKind) => void;
-  label: string;
+  onChange: () => void;
+  onRemove: () => void;
+}) {
+  if (!value) return null; // mientras es null, el popup está abierto · no pintes chip
+  const label = value === "inseparable" ? "Inseparable del inmueble" : "Unidad registral separada";
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Tipo de unidad registral
+      </p>
+      <span
+        className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/25 pl-3 pr-1 py-1 text-[12px] font-medium text-primary"
+      >
+        <button
+          type="button"
+          onClick={onChange}
+          className="hover:underline"
+          title="Cambiar"
+        >
+          {label}
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="inline-flex items-center justify-center h-5 w-5 rounded-full hover:bg-primary/15 text-primary/80 hover:text-primary"
+          aria-label="Desactivar"
+          title="Desactivar parking"
+        >
+          <X className="h-3 w-3" strokeWidth={2} />
+        </button>
+      </span>
+    </div>
+  );
+}
+
+/* Popup con la pregunta "¿separada o inseparable?" · sale al activar
+ *  parking / trastero la primera vez · también se reabre al click en
+ *  "Cambiar" del badge. Bloqueante · si el user lo cierra sin elegir,
+ *  EssentialRow desactiva la categoría (revierte el toggle). */
+function RegistralKindDialog({
+  open, onPick, onDismiss, categoryLabel,
+}: {
+  open: boolean;
+  onPick: (v: RegistralKind) => void;
+  onDismiss: () => void;
+  categoryLabel: string;
 }) {
   return (
-    <div className="space-y-1.5">
-      <SegmentedControl
-        label={label}
-        value={value ?? ""}
-        options={[
-          { value: "inseparable", label: "Inseparable" },
-          { value: "separate",    label: "Separada" },
-        ]}
-        onChange={onChange}
-      />
-      <p className="text-[11px] text-muted-foreground leading-snug">
-        {value === "inseparable"
-          ? "Forma parte del inmueble · ligada a la vivienda · NO se vende suelta."
-          : value === "separate"
-          ? "Unidad registral con escritura propia · se gestiona como anejo suelto al final del paso Unidades."
-          : "Elige cómo se vende esta plaza / trastero."}
-      </p>
-    </div>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onDismiss(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-[16px]">
+            ¿Cómo se vende cada {categoryLabel.toLowerCase()}?
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-[13px] text-muted-foreground leading-relaxed mt-1">
+          La forma de venta cambia cómo se asocia a la vivienda y dónde
+          aparece en el catálogo. Elige una:
+        </p>
+        <div className="grid gap-2.5 mt-3">
+          <button
+            type="button"
+            onClick={() => onPick("inseparable")}
+            className="text-left rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/40 transition-colors p-3.5"
+          >
+            <p className="text-[14px] font-semibold text-foreground">
+              Inseparable del inmueble
+            </p>
+            <p className="text-[12px] text-muted-foreground leading-snug mt-1">
+              La plaza / trastero forma parte de la vivienda · NO se
+              vende por separado · cada unidad lo hereda como anejo
+              ligado.
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={() => onPick("separate")}
+            className="text-left rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/40 transition-colors p-3.5"
+          >
+            <p className="text-[14px] font-semibold text-foreground">
+              Unidad registral separada
+            </p>
+            <p className="text-[12px] text-muted-foreground leading-snug mt-1">
+              Tiene escritura propia · se vende como anejo suelto · sale
+              al final del paso "Crear unidades" para asignar a vivienda
+              y poner precio.
+            </p>
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
