@@ -105,16 +105,58 @@ function nextRef(state: WizardState, offset: number): string {
   return `${prefix}-${String(n).padStart(4, "0")}`;
 }
 
+/* ════════════════════════════════════════════════════════════════════
+ *  Helpers de herencia V5 → unit
+ *  ════════════════════════════════════════════════════════════════════
+ *  REGLA DE ORO · una unidad SOLO recibe el flag `parking: true` o
+ *  `trastero: true` cuando:
+ *    1. La categoría está `enabled` en V5.
+ *    2. `appliesTo === "all"` (el user dijo "todas las viviendas
+ *       tienen X" · si es "algunas" o "decidir luego" cada unidad
+ *       arranca en blanco para que el user marque manualmente).
+ *    3. `registralKind === "inseparable"` (la plaza/trastero forma
+ *       parte del inmueble · NO es unidad registral propia).
+ *
+ *  Si `registralKind === "separate"`, el parking/trastero se gestiona
+ *  como anejo suelto al final del paso "Crear unidades" · cada unidad
+ *  recibe el flag false (no inherit) y el user asigna anejos a
+ *  viviendas en la sección Anejos sueltos.
+ *
+ *  La piscina del catálogo V5 es PRIVADA · solo aplica a unifamiliar
+ *  (UNIFAMILIAR_ONLY_KEYS). En plurifamiliar la piscina vive como
+ *  amenidad de urbanización (zonasComunes) · NUNCA per-vivienda.
+ *  Este helper lo refuerza por si alguien activase privatePool en
+ *  un draft mixto/plurifamiliar legacy. */
+function shouldInheritParking(state: WizardState): boolean {
+  const p = state.promotionDefaults?.parking;
+  if (!p) return state.parkings > 0; // legacy fallback
+  return !!p.enabled && p.appliesTo === "all" && p.registralKind === "inseparable";
+}
+function shouldInheritStorage(state: WizardState): boolean {
+  const s = state.promotionDefaults?.storageRoom;
+  if (!s) return state.trasteros > 0;
+  return !!s.enabled && s.appliesTo === "all" && s.registralKind === "inseparable";
+}
+function shouldInheritPool(state: WizardState, isUnifamiliarVilla: boolean): boolean {
+  if (!isUnifamiliarVilla) return false; // plurifamiliar · piscina NUNCA per-unit
+  const pool = state.promotionDefaults?.privatePool;
+  if (!pool) return !!state.piscinaPrivadaPorDefecto;
+  return !!pool.enabled && pool.appliesTo === "all";
+}
+
 function generateEdificio(state: WizardState): UnitData[] {
   const hasVistas = state.caracteristicasVivienda?.includes("vistas_mar") ?? false;
   const startFloor = state.plantaBajaTipo === "viviendas" ? 0 : 1;
   const floorEnd = state.plantaBajaTipo === "viviendas" ? state.plantas - 1 : state.plantas;
   const units: UnitData[] = [];
   let counter = 1;
-  const totalEsc = state.escalerasPorBloque.reduce((s, n) => s + n, 0);
-  const totalUnits = (floorEnd - startFloor + 1) * state.aptosPorPlanta * totalEsc;
-  const hasParking = state.parkings >= totalUnits;
-  const hasTrastero = state.trasteros >= totalUnits;
+  /* Plurifamiliar · parking/trastero se heredan SOLO si V5 dice
+   *  enabled + appliesTo=all + registralKind=inseparable. Si separate,
+   *  cada unidad arranca sin flag · los parkings/trasteros se gestionan
+   *  como anejos sueltos al pie del paso. Si applies=some/later,
+   *  arranca en blanco · el user marca per-unit. */
+  const hasParking = shouldInheritParking(state);
+  const hasTrastero = shouldInheritStorage(state);
   const prefix = promoRefPrefix(state);
 
   for (let b = 0; b < state.numBloques; b++) {
@@ -191,15 +233,12 @@ function generateSingleUnit(state: WizardState): UnitData[] {
    * como default · si no, fallback razonable. */
   const parcelDefault = state.promotionDefaults?.plot?.minSizeSqm
     ?? (isIndependiente ? 400 : 0);
-  /* Defaults de V5 (extras-v5) · prioritarios sobre los flags legacy
-   * `piscinaPrivadaPorDefecto`/`parkings`/`trasteros` que ya no se
-   * configuran (el user los configura en V5). */
-  const promoHasPool = state.promotionDefaults?.privatePool?.enabled
-    ?? state.piscinaPrivadaPorDefecto;
-  const promoHasParking = (state.promotionDefaults?.parking?.enabled ?? false)
-    || state.parkings > 0;
-  const promoHasStorage = (state.promotionDefaults?.storageRoom?.enabled ?? false)
-    || state.trasteros > 0;
+  /* Helpers canónicos · respetan `appliesTo` y `registralKind` de V5.
+   * Sin esto las viviendas heredaban `parking: true` aunque las
+   * plazas se vendieran sueltas (registralKind="separate"). */
+  const promoHasPool = shouldInheritPool(state, true);
+  const promoHasParking = shouldInheritParking(state);
+  const promoHasStorage = shouldInheritStorage(state);
   return [
     baseUnit({
       id: genUnitId(),
@@ -229,13 +268,12 @@ function generateMultipleUnifamiliar(state: WizardState): UnitData[] {
    * compartido para todas las tipologías · si no se definió, cae a
    * heurística por tipo. */
   const minPlot = state.promotionDefaults?.plot?.minSizeSqm;
-  /* Defaults de V5 · prioritarios sobre los flags legacy. */
-  const promoHasPool = state.promotionDefaults?.privatePool?.enabled
-    ?? state.piscinaPrivadaPorDefecto;
-  const promoHasParking = (state.promotionDefaults?.parking?.enabled ?? false)
-    || state.parkings > 0;
-  const promoHasStorage = (state.promotionDefaults?.storageRoom?.enabled ?? false)
-    || state.trasteros > 0;
+  /* Helpers canónicos · respetan appliesTo + registralKind. Pool solo
+   * inherit en villas independientes (no en pareados/adosados que
+   * casi nunca tienen piscina propia · de momento). */
+  const promoHasPool = shouldInheritPool(state, true);
+  const promoHasParking = shouldInheritParking(state);
+  const promoHasStorage = shouldInheritStorage(state);
   for (const tipologia of state.tipologiasSeleccionadas) {
     const isIndependiente = tipologia.tipo === "independiente";
     for (let i = 0; i < tipologia.cantidad; i++) {
@@ -454,6 +492,25 @@ export function CrearUnidadesStep({
   /* Modal ligero solo-fotos · disparado al click del thumbnail. */
   const [editPhotosUnitId, setEditPhotosUnitId] = useState<string | null>(null);
 
+  /* Sync · si V5 marcó parking/trastero como "separate" y state.parkings
+   *  / state.trasteros aún no tiene count, lo sembramos al entrar al
+   *  paso para que aparezcan en la sección "Anejos sueltos" del pie.
+   *  Sin esto, el user marcaba "separada" en V5 pero al llegar a
+   *  unidades no veía nada · tenía que abrir "+ Añadir anejos" y
+   *  duplicar lo que ya había declarado. */
+  useEffect(() => {
+    const pk = state.promotionDefaults?.parking;
+    if (pk?.enabled && pk.registralKind === "separate" && state.parkings === 0) {
+      const seed = Math.max(1, pk.spaces || 1);
+      update("parkings", seed);
+    }
+    const sr = state.promotionDefaults?.storageRoom;
+    if (sr?.enabled && sr.registralKind === "separate" && state.trasteros === 0) {
+      update("trasteros", 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Auto-generar al entrar si aún no hay unidades + migrar drafts
   // antiguos que no tengan los campos nuevos (ref, parcela, status,
   // piscinaPrivada). Evita crashes al renderizar la tabla.
@@ -527,7 +584,10 @@ export function CrearUnidadesStep({
         }
       }
       const minPlot = state.promotionDefaults?.plot?.minSizeSqm;
-      const v5HasPool = state.promotionDefaults?.privatePool?.enabled ?? false;
+      /* Helper canónico · respeta appliesTo === "all" · si el user
+       * marcó "algunas" o "decidir luego" NO propagamos al migrar
+       * (cada unidad existente conserva su flag, no se fuerza true). */
+      const v5InheritPool = shouldInheritPool(state, isUnifamiliar);
       update(
         "unidades",
         state.unidades.map((u, i) => ({
@@ -536,10 +596,11 @@ export function CrearUnidadesStep({
           /* Si el user puso "Parcela desde X" en V5 y la unidad
            * estaba en 0 (sin asignar), aplicamos el valor por defecto. */
           parcela: u.parcela && u.parcela > 0 ? u.parcela : (minPlot ?? 0),
-          /* Si V5 dice que hay piscina privada y es independiente,
-           * propagamos · si la unidad ya tenía piscina, mantener. */
+          /* Si V5 dice que hay piscina privada y aplica a todas, y
+           * la villa es independiente, propagamos · si ya tenía
+           * piscina, mantener. */
           piscinaPrivada: u.piscinaPrivada
-            || (v5HasPool && (u.tipologiaUnifamiliar === "independiente" || state.subVarias === "independiente")),
+            || (v5InheritPool && (u.tipologiaUnifamiliar === "independiente" || state.subVarias === "independiente")),
           status: u.status ?? "available",
           tipologiaUnifamiliar: u.tipologiaUnifamiliar
             ?? (isSingleHome ? (state.subVarias ?? undefined) : undefined)
@@ -585,11 +646,12 @@ export function CrearUnidadesStep({
 
     /* Defaults heredados de los pasos previos del wizard ·
      * tipología viene del paso sub_varias, parcela del V5,
-     * piscina/parking/trastero de extras-V5 (boolean por unidad). */
+     * piscina/parking/trastero respetan appliesTo + registralKind
+     * (helpers canónicos al inicio del archivo). */
     const minPlot = state.promotionDefaults?.plot?.minSizeSqm;
-    const promoHasPool = state.promotionDefaults?.privatePool?.enabled ?? false;
-    const promoHasParking = (state.promotionDefaults?.parking?.enabled ?? false) || state.parkings > 0;
-    const promoHasStorage = (state.promotionDefaults?.storageRoom?.enabled ?? false) || state.trasteros > 0;
+    const promoHasPool = shouldInheritPool(state, true);
+    const promoHasParking = shouldInheritParking(state);
+    const promoHasStorage = shouldInheritStorage(state);
     const newUnits: UnitData[] = [];
     (Object.entries(deltas) as [SubVarias, number][]).forEach(([tipo, delta]) => {
       const startIdx = existingByTipo[tipo] ?? 0;
@@ -636,8 +698,8 @@ export function CrearUnidadesStep({
     /* Defaults heredados de los pasos previos · igual que en
      * generateEdificio para que las unidades añadidas no sean
      * inconsistentes con las generadas iniciales. */
-    const promoHasParking = (state.promotionDefaults?.parking?.enabled ?? false) || state.parkings > 0;
-    const promoHasStorage = (state.promotionDefaults?.storageRoom?.enabled ?? false) || state.trasteros > 0;
+    const promoHasParking = shouldInheritParking(state);
+    const promoHasStorage = shouldInheritStorage(state);
     const newUnits: UnitData[] = [];
     (Object.entries(deltas) as [SubtipoUnidad, number][]).forEach(([subtipo, delta]) => {
       const label = subtipoUnidadOptions.find((o) => o.value === subtipo)?.label ?? "Unidad";

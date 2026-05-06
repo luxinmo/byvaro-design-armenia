@@ -20,6 +20,15 @@
 
 export type AppliesTo = "all" | "some" | "later";
 export type PriceMode = "included" | "optional" | "not_included";
+/** Tipo de unidad registral para parking / trastero.
+ *  · "inseparable" · forma parte del inmueble (propiedad horizontal · la
+ *    plaza/trastero está ligada a la vivienda · NO se vende suelta).
+ *    Cada unidad recibe el flag `parking` / `trastero` true al generarse.
+ *  · "separate" · unidad registral con escritura propia · se vende como
+ *    anejo suelto · aparece al final del paso "Crear unidades" en
+ *    Anejos sueltos con su propio precio para asociar a una vivienda.
+ *  · `null` · el user aún no ha decidido · `canContinue` lo bloquea. */
+export type RegistralKind = "separate" | "inseparable";
 
 export interface PromotionDefaults {
   privatePool: {
@@ -41,12 +50,19 @@ export interface PromotionDefaults {
     priceMode: PriceMode | null;
     appliesTo: AppliesTo | null;
     optionalPrice: number | null;
+    /** Tipo de unidad registral · ver `RegistralKind`. Obligatorio
+     *  cuando `enabled === true` · sin esto los generadores de
+     *  CrearUnidadesStep no saben si propagar a per-unit o
+     *  generar anejos sueltos. */
+    registralKind: RegistralKind | null;
   };
   storageRoom: {
     enabled: boolean;
     appliesTo: AppliesTo | null;
     priceMode: PriceMode | null;
     optionalPrice: number | null;
+    /** Idem `parking.registralKind`. */
+    registralKind: RegistralKind | null;
   };
   /** Sótano · típico en villa unifamiliar · puede tener uso polivalente
    *  (bodega, gimnasio, cine, etc.). Puede ser opcional con precio
@@ -159,8 +175,9 @@ export const defaultPromotionDefaults: PromotionDefaults = {
     priceMode: null,
     appliesTo: null,
     optionalPrice: null,
+    registralKind: null,
   },
-  storageRoom: { enabled: false, appliesTo: null, priceMode: null, optionalPrice: null },
+  storageRoom: { enabled: false, appliesTo: null, priceMode: null, optionalPrice: null, registralKind: null },
   basement: { enabled: false, appliesTo: null, priceMode: null, optionalPrice: null },
   solarium: { enabled: false, appliesTo: null, priceMode: null, optionalPrice: null },
   terraces: { enabled: false, covered: false, uncovered: false },

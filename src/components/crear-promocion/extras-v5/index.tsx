@@ -36,6 +36,7 @@ import {
   type PromotionDefaults,
   type AppliesTo,
   type PriceMode,
+  type RegistralKind,
 } from "./types";
 
 interface Props {
@@ -805,11 +806,22 @@ function CategoryBody({
     case "parking":
       return (
         <>
-          <Row label={isSingleHome ? "Plazas" : "Plazas por vivienda"}>
+          {/* Tipo de unidad registral · PRIMERO porque condiciona el
+              resto · si es "separada" no tiene sentido pedir "Aplicar
+              a" (no aplica a nadie · es anejo suelto). */}
+          <RegistralKindControl
+            label="Tipo de unidad registral"
+            value={defaults.parking.registralKind}
+            onChange={(v) => patch("parking", { registralKind: v })}
+          />
+          <Row label={isSingleHome
+            ? (defaults.parking.registralKind === "separate" ? "Plazas en total" : "Plazas")
+            : (defaults.parking.registralKind === "separate" ? "Plazas en total en la promoción" : "Plazas por vivienda")
+          }>
             <NumberStepper
               value={defaults.parking.spaces}
               min={1}
-              max={6}
+              max={defaults.parking.registralKind === "separate" ? 200 : 6}
               onChange={(v) => patch("parking", { spaces: v })}
             />
           </Row>
@@ -830,7 +842,10 @@ function CategoryBody({
             optionalPrice={defaults.parking.optionalPrice}
             onOptionalPriceChange={(v) => patch("parking", { optionalPrice: v })}
           />
-          {!isSingleHome && (
+          {/* Aplicar a · solo cuando es "inseparable" · si es "separate"
+              no aplica a viviendas (es anejo suelto · cada uno tiene su
+              propio precio que se asigna luego). */}
+          {!isSingleHome && defaults.parking.registralKind === "inseparable" && (
             <AppliesToControl
               value={defaults.parking.appliesTo}
               onChange={(v) => patch("parking", { appliesTo: v })}
@@ -842,7 +857,12 @@ function CategoryBody({
     case "storageRoom":
       return (
         <>
-          {!isSingleHome && (
+          <RegistralKindControl
+            label="Tipo de unidad registral"
+            value={defaults.storageRoom.registralKind}
+            onChange={(v) => patch("storageRoom", { registralKind: v })}
+          />
+          {!isSingleHome && defaults.storageRoom.registralKind === "inseparable" && (
             <AppliesToControl
               value={defaults.storageRoom.appliesTo}
               onChange={(v) => patch("storageRoom", { appliesTo: v })}
@@ -1207,6 +1227,44 @@ function AppliesToControl({
       ]}
       onChange={onChange}
     />
+  );
+}
+
+/* Control "Tipo de unidad registral" para parking / trastero ·
+ *  decide si la plaza/trastero forma parte del inmueble (inseparable ·
+ *  cada vivienda lo hereda como flag) o es unidad registral propia
+ *  (separate · se gestiona como anejo suelto al final del paso
+ *  "Crear unidades" con su precio independiente). El generador de
+ *  unidades en `CrearUnidadesStep` lee este campo para decidir.
+ *  Sin esto antes el wizard creaba siempre `parking: true` per-unit
+ *  aunque las plazas se vendieran sueltas (precios ya inflados al
+ *  precio base de la vivienda y los anejos sueltos no aparecían). */
+function RegistralKindControl({
+  value, onChange, label,
+}: {
+  value: RegistralKind | null;
+  onChange: (v: RegistralKind) => void;
+  label: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <SegmentedControl
+        label={label}
+        value={value ?? ""}
+        options={[
+          { value: "inseparable", label: "Inseparable" },
+          { value: "separate",    label: "Separada" },
+        ]}
+        onChange={onChange}
+      />
+      <p className="text-[11px] text-muted-foreground leading-snug">
+        {value === "inseparable"
+          ? "Forma parte del inmueble · ligada a la vivienda · NO se vende suelta."
+          : value === "separate"
+          ? "Unidad registral con escritura propia · se gestiona como anejo suelto al final del paso Unidades."
+          : "Elige cómo se vende esta plaza / trastero."}
+      </p>
+    </div>
   );
 }
 
